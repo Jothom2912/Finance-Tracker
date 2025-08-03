@@ -33,11 +33,12 @@ class Category(Base):
     type = Column(Enum(TransactionType), default=TransactionType.expense)
 
     transactions = relationship("Transaction", back_populates="category")
+    budgets = relationship("Budget", back_populates="category") # <-- TILFØJET: Relation til Budget
 
 class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True, index=True)
-    description = Column(String, index=True, nullable=True) # Jeg anbefaler nullable=True her, som du har
+    description = Column(String, index=True, nullable=True)
     amount = Column(Float)
     date = Column(Date)
     type = Column(Enum(TransactionType), default=TransactionType.expense)
@@ -50,6 +51,24 @@ class Transaction(Base):
     name = Column(String, nullable=True)
 
     category = relationship("Category", back_populates="transactions")
+
+# --- NY MODEL: Budget ---
+class Budget(Base):
+    __tablename__ = "budgets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, unique=False) # category_id, month, year should be unique together
+    amount = Column(Float, nullable=False)
+    month = Column(String, nullable=False) # 'MM' format (e.g., '01' for January)
+    year = Column(String, nullable=False)  # 'YYYY' format (e.g., '2024')
+
+    # Relation til Category
+    category = relationship("Category", back_populates="budgets")
+    
+    # Valgfrit, men anbefalet: Sikrer unikhed for category_id, month, year kombination
+    # from sqlalchemy import UniqueConstraint
+    # __table_args__ = (UniqueConstraint('category_id', 'month', 'year', name='_category_month_year_uc'),)
+
 
 # --- Database Funktioner ---
 

@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import create_db_tables # TransactionType er ikke nødvendig her mere
 
 # Importer dine nye routers
-from .routers import categories, transactions, dashboard
+from .routers import categories, transactions, dashboard, budgets
 
 app = FastAPI()
 
@@ -36,3 +36,4 @@ def read_root():
 app.include_router(categories.router)
 app.include_router(transactions.router)
 app.include_router(dashboard.router)
+app.include_router(budgets.router)

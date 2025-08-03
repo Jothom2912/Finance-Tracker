@@ -16,6 +16,18 @@ class Category(Base):
     type = Column(Enum(TransactionType), default=TransactionType.expense)
     transactions = relationship("Transaction", back_populates="category")
 
+class Budget(Base):
+    __tablename__ = "budgets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    month = Column(String, nullable=False) # Store as 'MM' string
+    year = Column(String, nullable=False) # Store as 'YYYY' string
+
+    # Relationship to Category (assuming you have a Category model)
+    category = relationship("Category") # Assumes a 'Category' model exists    
+
 class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True, index=True)

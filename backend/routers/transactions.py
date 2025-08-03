@@ -6,12 +6,12 @@ import pandas as pd
 import io
 
 # --- VIGTIGE ÆNDRINGER HER ---
-# Brug absolutte imports, da din app nu kører som en Python-pakke
-from backend import schemas
-# Du skal ikke længere importere "models", hvis alle dine SQLAlchemy-modeller er i database.py.
-# Importér i stedet de specifikke modeller direkte fra database.py
-from backend.database import get_db, Category, Transaction # <-- ÆNDRET!
-from backend.service.categorization import assign_category_automatically # <-- ÆNDRET!
+# Brug relative imports for moduler inden for pakken
+from ..schemas.category import Category as CategorySchema
+from ..schemas.transaction import Transaction as TransactionSchema, TransactionCreate # <-- Tilføjet/Rettet
+# Importér dine SQLAlchemy-modeller direkte fra database.py
+from ..database import get_db, Category, Transaction # <-- Rettet til relativ import
+from ..service.categorization import assign_category_automatically # <-- Rettet til relativ import
 
 router = APIRouter(
     prefix="/transactions",
@@ -19,8 +19,8 @@ router = APIRouter(
 )
 
 # --- Endpoint til at oprette en enkelt transaktion manuelt ---
-@router.post("/", response_model=schemas.Transaction)
-def create_transaction(transaction: schemas.TransactionCreate, db: Session = Depends(get_db)):
+@router.post("/", response_model=TransactionSchema) # <-- Rettet
+def create_transaction(transaction: TransactionCreate, db: Session = Depends(get_db)): # <-- Rettet
     """
     Opretter en ny transaktion manuelt.
     """
@@ -37,7 +37,7 @@ def create_transaction(transaction: schemas.TransactionCreate, db: Session = Dep
     return db_transaction
 
 ### Importér transaktioner fra CSV
-@router.post("/upload-csv/", response_model=List[schemas.Transaction])
+@router.post("/upload-csv/", response_model=List[TransactionSchema]) # <-- Rettet
 async def upload_transactions_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Uploader en CSV-fil med banktransaktioner, parser dem og gemmer dem i databasen.
@@ -77,7 +77,7 @@ async def upload_transactions_csv(file: UploadFile = File(...), db: Session = De
                 detail="Standardkategorien 'Anden' blev ikke fundet i databasen. Opret den venligst."
             )
 
-        created_transactions: List[schemas.Transaction] = []
+        created_transactions: List[TransactionSchema] = [] # <-- Rettet
         for index, row in df.iterrows():
             full_description = f"{row.get('Modtager', '')} {row.get('Afsender', '')} {row.get('Navn', '')} {row.get('Beskrivelse', '')}".strip()
             full_description = " ".join(full_description.split())
@@ -106,7 +106,7 @@ async def upload_transactions_csv(file: UploadFile = File(...), db: Session = De
             db.add(db_transaction)
             db.flush()
             db.refresh(db_transaction)
-            created_transactions.append(schemas.Transaction.model_validate(db_transaction))
+            created_transactions.append(TransactionSchema.model_validate(db_transaction)) # <-- Rettet
 
         db.commit()
         return created_transactions
@@ -134,7 +134,7 @@ async def upload_transactions_csv(file: UploadFile = File(...), db: Session = De
         )
 
 ### Hent transaktioner med filtrering
-@router.get("/", response_model=List[schemas.Transaction])
+@router.get("/", response_model=List[TransactionSchema]) # <-- Rettet
 def read_transactions(
     start_date: Optional[date] = Query(None, description="Startdato for filtrering (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="Slutdato for filtrering (YYYY-MM-DD)"),
@@ -161,7 +161,7 @@ def read_transactions(
     return transactions
 
 ### Hent en specifik transaktion
-@router.get("/{transaction_id}", response_model=schemas.Transaction)
+@router.get("/{transaction_id}", response_model=TransactionSchema) # <-- Rettet
 def read_transaction(transaction_id: int, db: Session = Depends(get_db)):
     """
     Henter detaljer for en specifik transaktion baseret på ID.
@@ -173,8 +173,8 @@ def read_transaction(transaction_id: int, db: Session = Depends(get_db)):
     return transaction
 
 ### Opdater en transaktion
-@router.put("/{transaction_id}", response_model=schemas.Transaction)
-def update_transaction(transaction_id: int, transaction: schemas.TransactionCreate, db: Session = Depends(get_db)):
+@router.put("/{transaction_id}", response_model=TransactionSchema) # <-- Rettet
+def update_transaction(transaction_id: int, transaction: TransactionCreate, db: Session = Depends(get_db)): # <-- Rettet
     """
     Opdaterer en eksisterende transaktion baseret på ID.
     """
@@ -195,4 +195,4 @@ def update_transaction(transaction_id: int, transaction: schemas.TransactionCrea
     db.add(db_transaction)
     db.commit()
     db.refresh(db_transaction)
-    return db_transactions
+    return db_transaction # <-- Rettet (var db_transactions)
