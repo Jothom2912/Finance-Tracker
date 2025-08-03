@@ -3,3 +3,5 @@ node_modules
 **/transectioner.csv
 
 **/.env
+
+package-lock.json
