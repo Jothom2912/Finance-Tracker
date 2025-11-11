@@ -1,10 +1,10 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import create_db_tables # TransactionType er ikke nødvendig her mere
+from backend.database import create_db_tables # TransactionType er ikke nødvendig her mere
 
 # Importer dine nye routers
-from routers import categories, transactions, dashboard, budgets
+from backend.routers import categories, transactions, dashboard, budgets
 
 app = FastAPI()
 
