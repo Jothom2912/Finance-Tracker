@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 class BudgetBase(BaseModel):
     category_id: int = Field(..., description="ID of the category this budget belongs to.")
@@ -22,3 +22,22 @@ class BudgetInDB(BudgetBase):
 
     class Config:
         from_attributes = True
+
+
+# -------- Summary Schemas --------
+class BudgetSummaryItem(BaseModel):
+    category_id: int
+    category_name: str
+    budget_amount: float
+    spent_amount: float
+    remaining_amount: float
+    percentage_used: float
+
+class BudgetSummary(BaseModel):
+    month: str
+    year: str
+    items: List[BudgetSummaryItem]
+    total_budget: float
+    total_spent: float
+    total_remaining: float
+    over_budget_count: int

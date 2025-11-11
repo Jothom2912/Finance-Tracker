@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func, extract
 from typing import List, Optional
 from datetime import date
 import pandas as pd
@@ -139,6 +140,9 @@ def read_transactions(
     start_date: Optional[date] = Query(None, description="Startdato for filtrering (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="Slutdato for filtrering (YYYY-MM-DD)"),
     category_id: Optional[int] = Query(None, description="Filtrer efter kategori ID"),
+    type: Optional[str] = Query(None, description="Filtrer efter type: 'income' eller 'expense'"),
+    month: Optional[str] = Query(None, description="Måned i MM format (f.eks. '01')"),
+    year: Optional[str] = Query(None, description="År i YYYY format (f.eks. '2024')"),
     skip: int = Query(0, description="Antal transaktioner der skal springes over (paginering)"),
     limit: int = Query(100, description="Maksimalt antal transaktioner der skal returneres (paginering)"),
     db: Session = Depends(get_db)
@@ -156,6 +160,24 @@ def read_transactions(
 
     if category_id is not None:
         query = query.filter(Transaction.category_id == category_id)
+
+    # Filter by transaction type if provided
+    if type is not None:
+        normalized_type = type.strip().lower()
+        if normalized_type not in {"income", "expense"}:
+            raise HTTPException(status_code=400, detail="Ugyldig type. Brug 'income' eller 'expense'.")
+        from ..database import TransactionType as TxType
+        query = query.filter(Transaction.type == (TxType.income if normalized_type == "income" else TxType.expense))
+
+    # Filter by month and year if provided (based on Transaction.date)
+    if month is not None:
+        if len(month) != 2:
+            raise HTTPException(status_code=400, detail="Ugyldig måned. Brug MM format, f.eks. '01'.")
+        query = query.filter(extract('month', Transaction.date) == int(month))
+    if year is not None:
+        if len(year) != 4:
+            raise HTTPException(status_code=400, detail="Ugyldigt år. Brug YYYY format, f.eks. '2024'.")
+        query = query.filter(extract('year', Transaction.date) == int(year))
 
     transactions = query.offset(skip).limit(limit).all()
     return transactions

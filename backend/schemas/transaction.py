@@ -9,7 +9,7 @@ from ..database import TransactionType
 from .category import Category # Dette er den Pydantic Category model
 
 class TransactionBase(BaseModel):
-    description: Optional[str] = None
+    description: Optional[str] = None   
     amount: float
     date: date
     type: TransactionType = TransactionType.expense # Bruger TransactionType enum'en
