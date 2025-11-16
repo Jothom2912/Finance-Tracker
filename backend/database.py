@@ -21,53 +21,49 @@ def get_db():
     finally:
         db.close() # Sikrer at sessionen lukkes efter brug
 
-# --- Model Definitioner ---
+# --- Enum Definitioner ---
 class TransactionType(enum.Enum):
     income = "income"
     expense = "expense"
 
+# --- Model Definitioner (matcher faktiske databasetabeller) ---
+
 class Category(Base):
     __tablename__ = "categories"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    type = Column(Enum(TransactionType), default=TransactionType.expense)
+    name = Column(String(255), unique=True, index=True, nullable=False)
+    type = Column(Enum(TransactionType), nullable=False)
 
     transactions = relationship("Transaction", back_populates="category")
-    budgets = relationship("Budget", back_populates="category") # <-- TILFØJET: Relation til Budget
+    budgets = relationship("Budget", back_populates="category")
 
 class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True, index=True)
-    description = Column(String, index=True, nullable=True)
-    amount = Column(Float)
-    date = Column(Date)
-    type = Column(Enum(TransactionType), default=TransactionType.expense)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True) 
-
+    amount = Column(Float, nullable=False)
+    description = Column(String(500), nullable=True, index=True)
+    date = Column(Date, nullable=True)
+    type = Column(Enum(TransactionType), nullable=False, default=TransactionType.expense)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    
+    # Ekstra felter til banktransaktioner
     balance_after = Column(Float, nullable=True)
-    currency = Column(String, default="DKK")
-    sender = Column(String, nullable=True)
-    recipient = Column(String, nullable=True)
-    name = Column(String, nullable=True)
+    currency = Column(String(10), default="DKK")
+    sender = Column(String(255), nullable=True)
+    recipient = Column(String(255), nullable=True)
+    name = Column(String(255), nullable=True)
 
     category = relationship("Category", back_populates="transactions")
 
-# --- NY MODEL: Budget ---
 class Budget(Base):
     __tablename__ = "budgets"
-
     id = Column(Integer, primary_key=True, index=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, unique=False) # category_id, month, year should be unique together
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     amount = Column(Float, nullable=False)
-    month = Column(String, nullable=False) # 'MM' format (e.g., '01' for January)
-    year = Column(String, nullable=False)  # 'YYYY' format (e.g., '2024')
+    month = Column(String(2), nullable=False)
+    year = Column(String(4), nullable=False)
 
-    # Relation til Category
     category = relationship("Category", back_populates="budgets")
-    
-    # Valgfrit, men anbefalet: Sikrer unikhed for category_id, month, year kombination
-    # from sqlalchemy import UniqueConstraint
-    # __table_args__ = (UniqueConstraint('category_id', 'month', 'year', name='_category_month_year_uc'),)
 
 
 # --- Database Funktioner ---

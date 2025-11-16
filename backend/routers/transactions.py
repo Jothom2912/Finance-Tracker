@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import func
 from typing import List, Optional
 from datetime import date
 import pandas as pd
 import io
+import math
 
 # --- VIGTIGE ÆNDRINGER HER ---
 # Brug relative imports for moduler inden for pakken
@@ -91,17 +92,30 @@ async def upload_transactions_csv(file: UploadFile = File(...), db: Session = De
                 category_name_to_id=category_name_to_id
             )
 
+            # Konverter nan til None (MySQL tillader ikke nan)
+            import math
+            sender = row.get('Afsender')
+            recipient = row.get('Modtager')
+            name = row.get('Navn')
+            balance_after = row.get('Saldo')
+            
+            # Tjek for nan og konverter til None
+            sender = None if (isinstance(sender, float) and math.isnan(sender)) else sender
+            recipient = None if (isinstance(recipient, float) and math.isnan(recipient)) else recipient
+            name = None if (isinstance(name, float) and math.isnan(name)) else name
+            balance_after = None if (isinstance(balance_after, float) and math.isnan(balance_after)) else balance_after
+
             # Brug den importerede Transaction-model direkte
             db_transaction = Transaction(
                 date=row['Bogføringsdato'].date(),
                 amount=row['Beløb'],
                 description=full_description,
                 category_id=transaction_category_id,
-                balance_after=row.get('Saldo'),
+                balance_after=balance_after,
                 currency=row.get('Valuta', 'DKK'),
-                sender=row.get('Afsender'),
-                recipient=row.get('Modtager'),
-                name=row.get('Navn')
+                sender=sender,
+                recipient=recipient,
+                name=name
             )
 
             db.add(db_transaction)
@@ -170,14 +184,15 @@ def read_transactions(
         query = query.filter(Transaction.type == (TxType.income if normalized_type == "income" else TxType.expense))
 
     # Filter by month and year if provided (based on Transaction.date)
+    # Use SQLite-compatible strftime via SQLAlchemy func for portability in this project
     if month is not None:
         if len(month) != 2:
             raise HTTPException(status_code=400, detail="Ugyldig måned. Brug MM format, f.eks. '01'.")
-        query = query.filter(extract('month', Transaction.date) == int(month))
+        query = query.filter(func.strftime('%m', Transaction.date) == month)
     if year is not None:
         if len(year) != 4:
             raise HTTPException(status_code=400, detail="Ugyldigt år. Brug YYYY format, f.eks. '2024'.")
-        query = query.filter(extract('year', Transaction.date) == int(year))
+        query = query.filter(func.strftime('%Y', Transaction.date) == year)
 
     transactions = query.offset(skip).limit(limit).all()
     return transactions
