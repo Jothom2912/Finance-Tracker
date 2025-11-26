@@ -1,0 +1,18 @@
+# FastAPI afhængigheder
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-multipart
+
+# Database afhængigheder
+sqlalchemy
+
+# MySQL Driver
+pymysql 
+
+# Datahåndtering (til CSV import i transaction_service)
+pandas
+
+# ANBEFALEDE TILLÆG
+python-dotenv 
+# pydantic[email] (Hvis du har brugere med e-mail validering)

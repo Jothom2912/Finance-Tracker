@@ -1,12 +1,21 @@
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.database import create_db_tables # TransactionType er ikke nødvendig her mere
+from backend.database import create_db_tables 
 
-# Importer dine nye routers
-from backend.routers import categories, transactions, dashboard, budgets
+# Importer ALLE dine routers
+from backend.routers import (
+    categories, 
+    transactions, 
+    dashboard, 
+    budgets,
+    users, 
+    accounts, 
+    goals, 
+    planned_transactions, 
+    account_groups,
+)
 
-app = FastAPI()
+app = FastAPI(title="Personlig Finans Tracker API") # Tilføjet en titel
 
 # --- CORS Konfiguration ---
 origins = [
@@ -26,14 +35,21 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     create_db_tables()
-    # Du kan stadig have din valgfrie kode til at indsætte standardkategorier her, hvis du ønsker
+    # Her kan du indsætte standarddata (f.eks. standardkategorier)
 
-@app.get("/")
+@app.get("/", tags=["Root"]) # Tilføjet tag
 def read_root():
     return {"message": "Velkommen til din Personlige Finans Tracker API!"}
 
-# Inkluder dine routers
+# Inkluder ALLE dine routers
 app.include_router(categories.router)
 app.include_router(transactions.router)
 app.include_router(dashboard.router)
 app.include_router(budgets.router)
+
+# De nye routers:
+app.include_router(users.router)
+app.include_router(accounts.router)
+app.include_router(goals.router)
+app.include_router(planned_transactions.router)
+app.include_router(account_groups.router)
