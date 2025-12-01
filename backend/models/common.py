@@ -1,34 +1,26 @@
-# backend/models/common.py
-
-from sqlalchemy import (
-    Column, Integer, String, Float, Date, DateTime, Enum, ForeignKey, Table, DECIMAL
-)
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, DECIMAL, ForeignKey, Table, DateTime, Date
 from sqlalchemy.sql import func
-from ..database import Base  # Antages at være den korrekte sti til Base
+from sqlalchemy.orm import relationship
 import enum
-from datetime import datetime
 
-# --- ENUMS ---
+# Importer Base fra base.py (ingen cirkulær import)
+from backend.models.base import Base
+
 class TransactionType(enum.Enum):
     income = "income"
     expense = "expense"
-    
-# --- JUNCTION TABLES ---
-# Disse defineres her, da de kun refererer til tabelnavne og ikke modelklasser.
 
+# Association tables
 budget_category_association = Table(
-    'Budget_has_Category',
+    'budget_category_association',
     Base.metadata,
-    Column('Budget_idBudget', Integer, ForeignKey('Budget.idBudget', ondelete='CASCADE'), primary_key=True),
-    Column('Category_idCategory', Integer, ForeignKey('Category.idCategory'), primary_key=True),
-    extend_existing=True 
+    Column('budget_id', Integer, ForeignKey('Budget.idBudget')),
+    Column('category_id', Integer, ForeignKey('Category.idCategory'))
 )
 
 account_group_user_association = Table(
-    'AccountGroups_has_User',
+    'account_group_user_association',
     Base.metadata,
-    Column('AccountGroups_idAccountGroups', Integer, ForeignKey('AccountGroups.idAccountGroups', ondelete='CASCADE'), primary_key=True),
-    Column('User_idUser', Integer, ForeignKey('User.idUser', ondelete='CASCADE'), primary_key=True),
-    extend_existing=True 
+    Column('account_group_id', Integer, ForeignKey('AccountGroups.idAccountGroups')),
+    Column('user_id', Integer, ForeignKey('User.idUser'))
 )

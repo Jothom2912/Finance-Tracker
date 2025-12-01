@@ -8,11 +8,12 @@ python-multipart
 sqlalchemy
 
 # MySQL Driver
-pymysql 
+pymysql
+cryptography
 
 # Datahåndtering (til CSV import i transaction_service)
 pandas
 
 # ANBEFALEDE TILLÆG
 python-dotenv 
-# pydantic[email] (Hvis du har brugere med e-mail validering)
+pydantic[email] (Hvis du har brugere med e-mail validering)

@@ -4,6 +4,7 @@ from backend.database import create_db_tables
 
 # Importer ALLE dine routers
 from backend.routers import (
+    authRouter,  # Ændret fra 'auth' til 'authRouter'
     categories, 
     transactions, 
     dashboard, 
@@ -15,11 +16,14 @@ from backend.routers import (
     account_groups,
 )
 
-app = FastAPI(title="Personlig Finans Tracker API") # Tilføjet en titel
+app = FastAPI(title="Personlig Finans Tracker API")
 
 # --- CORS Konfiguration ---
 origins = [
     "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
@@ -29,25 +33,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# --- Slut CORS Konfiguration ---
 
-# Opret databasetabeller, når applikationen starter
 @app.on_event("startup")
 def startup_event():
     create_db_tables()
-    # Her kan du indsætte standarddata (f.eks. standardkategorier)
 
-@app.get("/", tags=["Root"]) # Tilføjet tag
+@app.get("/", tags=["Root"])
 def read_root():
     return {"message": "Velkommen til din Personlige Finans Tracker API!"}
 
-# Inkluder ALLE dine routers
+# Inkluder routers
+app.include_router(authRouter.router)  # Ændret fra 'auth' til 'authRouter'
 app.include_router(categories.router)
 app.include_router(transactions.router)
 app.include_router(dashboard.router)
 app.include_router(budgets.router)
-
-# De nye routers:
 app.include_router(users.router)
 app.include_router(accounts.router)
 app.include_router(goals.router)
