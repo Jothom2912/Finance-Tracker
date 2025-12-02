@@ -1,6 +1,8 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field, field_validator, EmailStr
 from datetime import datetime
 from typing import Optional, List
+import re
+from ..validation_boundaries import USER_BVA
 
 # Forward references for relationships
 class AccountBase(BaseModel):
@@ -18,12 +20,62 @@ class AccountGroupsBase(BaseModel):
 
 # --- Base Schema ---
 class UserBase(BaseModel):
-    username: str
-    email: EmailStr
+    username: str = Field(
+        ...,
+        min_length=USER_BVA.username_min_length,      # 3 chars
+        max_length=USER_BVA.username_max_length,      # 20 chars
+        description="Username (3-20 characters, alphanumeric + underscore)"
+    )
+    email: EmailStr = Field(
+        ...,
+        description="Valid email address"
+    )
+
+    @field_validator('username')
+    @classmethod
+    def validate_username_format(cls, v: str) -> str:
+        """BVA: Username må kun indeholde alphanumeriske tegn og underscore"""
+        if not re.match(r"^\w+$", v):
+            raise ValueError("Username må kun indeholde bogstaver, tal og underscore (_)")
+        return v
+
+    @field_validator('username')
+    @classmethod
+    def validate_username_not_empty(cls, v: str) -> str:
+        """BVA: Username må ikke være tomt eller kun whitespace"""
+        if not v or v.strip() == "":
+            raise ValueError("Username må ikke være tomt")
+        return v.strip()
+
+    @field_validator('email')
+    @classmethod
+    def validate_email_format(cls, v: str) -> str:
+        """BVA: Email skal være valid format (valideres af EmailStr)"""
+        return v.lower()  # Normalisér til lowercase
+
 
 # --- Schema for creation (requires password) ---
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(
+        ...,
+        min_length=USER_BVA.password_min_length,      # 8 chars
+        description="Password (minimum 8 characters)"
+    )
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """BVA: Password skal være mindst 8 tegn
+        
+        Grænseværdier:
+        - 7 chars (ugyldig)
+        - 8 chars (gyldig)
+        - 9+ chars (gyldig)
+        """
+        if len(v) < USER_BVA.password_min_length:
+            raise ValueError(f"Password skal være mindst {USER_BVA.password_min_length} tegn")
+        return v
+
 
 # --- Schema for reading data (includes IDs and relationships) ---
 class User(UserBase):
@@ -35,5 +87,4 @@ class User(UserBase):
     account_groups: List[AccountGroupsBase] = []
 
     class Config:
-        # Erstattet `from_orm = True` med `from_attributes = True` for Pydantic v2
         from_attributes = True

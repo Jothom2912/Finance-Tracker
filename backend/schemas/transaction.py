@@ -1,11 +1,11 @@
-from pydantic import BaseModel, Field
-from datetime import datetime
+from pydantic import BaseModel, Field, field_validator
+from datetime import datetime, date
 from typing import Optional
 from decimal import Decimal
 import enum
+from ..validation_boundaries import TRANSACTION_BVA
 
 # --- ENUM for Type (Bruges til validering) ---
-# Genbruger TransactionType fra dit models/common.py
 class TransactionType(str, enum.Enum):
     income = "income"
     expense = "expense"
@@ -26,16 +26,53 @@ class AccountBase(BaseModel):
 # --- 1. Base Schema ---
 class TransactionBase(BaseModel):
     """Fælles felter for oprettelse og læsning"""
-    amount: Decimal = Field(..., gt=0, decimal_places=2) # Beløbet skal være større end 0
-    description: Optional[str] = Field(None, max_length=255)
-    date: Optional[datetime] = None # Valgfri, da databasen sætter default til func.now()
+    amount: float = Field(
+        ...,
+        description="Transaction amount. Must NOT be 0. Can be positive (income) or negative (expense)."
+    )
+    description: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Optional transaction description"
+    )
+    transaction_date: Optional[date] = Field(
+        default=None,
+        description="Transaction date (defaults to today if not provided)"
+    )
     
     # Validering af typen (sikrer at den er 'income' eller 'expense')
     type: TransactionType 
     
+    @field_validator('amount')
+    @classmethod
+    def validate_amount_not_zero(cls, v: float) -> float:
+        """BVA: Amount må IKKE være 0
+        
+        Grænseværdier:
+        - -0.01 (gyldig, ekspense)
+        - 0 (UGYLDIG)
+        - 0.01 (gyldig, indkomst)
+        """
+        if v == 0 or abs(v) < 0.001:  # Håndter floating point
+            raise ValueError("Transaction amount cannot be zero (0)")
+        return round(v, 2)
+
+    @field_validator('transaction_date')
+    @classmethod
+    def validate_transaction_date(cls, v: Optional[date]) -> Optional[date]:
+        """BVA: Transaction date skal være valid dato
+        
+        Typisk accept: historiske + dagens dato
+        (Ikke fremtid med mindre det er planlagte transaktioner)
+        """
+        if v is not None and v > date.today():
+            raise ValueError(
+                f"Transaction date cannot be in the future. Got: {v}, Today: {date.today()}"
+            )
+        return v
+    
     class Config:
         from_attributes = True
-        # Konfigurerer Pydantic til at håndtere Decimal (hvis det er nødvendigt for FastAPI)
         json_encoders = {
             Decimal: lambda v: float(v),
         }
@@ -43,7 +80,6 @@ class TransactionBase(BaseModel):
 # --- 2. Schema for Oprettelse (Bruges i POST) ---
 class TransactionCreate(TransactionBase):
     """Felter nødvendige for at oprette en ny transaktion"""
-    # Kræver ID'er for de relaterede tabeller
     Category_idCategory: int = Field(..., alias="category_id")
     Account_idAccount: int = Field(..., alias="account_id")
 
@@ -59,6 +95,12 @@ class Transaction(TransactionBase):
     # Relationsdata (valgfri i output, hvis de ikke er indlæst)
     category: Optional[CategoryBase] = None
     account: Optional[AccountBase] = None
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            Decimal: lambda v: float(v),
+        }
 
 # NB: Hvis du bruger din Transaction model til at læse data, 
 # er det Transaction-skemaet, du skal importere i din router.

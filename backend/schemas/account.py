@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from decimal import Decimal
+from ..validation_boundaries import ACCOUNT_BVA
 
 # Forward references for relationships (minimal info)
 class UserBase(BaseModel):
@@ -31,9 +32,30 @@ class GoalBase(BaseModel):
 
 # --- Base Schema ---
 class AccountBase(BaseModel):
-    name: str
-    # Brug float i Pydantic til at repræsentere Decimal for JSON-serialisering
-    saldo: float = Field(default=0.00, title="Current Account Balance")
+    name: str = Field(
+        ...,
+        min_length=ACCOUNT_BVA.name_min_length,       # 1 char
+        max_length=ACCOUNT_BVA.name_max_length,       # 30 chars
+        description="Account name (1-30 characters)"
+    )
+    saldo: float = Field(
+        default=0.00,
+        description="Current account balance (can be negative or positive)"
+    )
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """BVA: Account name må ikke være tomt eller kun mellemrum"""
+        if not v or v.strip() == "":
+            raise ValueError("Account name må ikke være tomt")
+        return v.strip()
+
+    @field_validator('saldo')
+    @classmethod
+    def validate_saldo(cls, v: float) -> float:
+        """BVA: Saldo skal være valideret (kan være negativ eller positiv)"""
+        return round(v, 2)
 
 # --- Schema for creation (requires User ID) ---
 class AccountCreate(AccountBase):
@@ -52,7 +74,6 @@ class Account(AccountBase):
 
     class Config:
         from_attributes = True
-        # Konfigurer Decimal-håndtering (vigtigt for præcisionen fra SQL)
         json_encoders = {
             Decimal: lambda v: float(v),
         }
