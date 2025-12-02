@@ -11,7 +11,7 @@ class User(Base):
     
     idUser = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(45), nullable=False, unique=True, index=True)
-    password = Column(String(255), nullable=False) 
+    password = Column(String(255), nullable=False)  # Hashed password
     email = Column(String(45), nullable=False, unique=True, index=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     

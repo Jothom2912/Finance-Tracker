@@ -88,3 +88,28 @@ class User(UserBase):
 
     class Config:
         from_attributes = True
+
+# --- Schema for login (email + password) ---
+class UserLogin(BaseModel):
+    """Schema for login request (email or username + password)"""
+    username_or_email: str = Field(
+        ...,
+        description="Username or email address"
+    )
+    password: str = Field(
+        ...,
+        description="Password"
+    )
+
+
+# --- Token response ---
+class TokenResponse(BaseModel):
+    """Response ved succesfuldt login"""
+    access_token: str
+    token_type: str
+    user_id: int
+    username: str
+    email: str
+    
+    class Config:
+        from_attributes = True
