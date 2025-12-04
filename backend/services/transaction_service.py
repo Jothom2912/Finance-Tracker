@@ -63,8 +63,14 @@ def create_transaction(db: Session, transaction: TransactionCreate) -> Transacti
     category = db.query(CategoryModel).filter(CategoryModel.idCategory == transaction.Category_idCategory).first()
     if not category:
         raise ValueError("Kategori med dette ID findes ikke.")
+    
+    # Map schema fields to model fields
+    transaction_data = transaction.model_dump(by_alias=False)
+    # Rename 'transaction_date' to 'date' for the SQLAlchemy model
+    if 'transaction_date' in transaction_data:
+        transaction_data['date'] = transaction_data.pop('transaction_date')
         
-    db_transaction = TransactionModel(**transaction.model_dump())
+    db_transaction = TransactionModel(**transaction_data)
     
     db.add(db_transaction)
     db.commit()
@@ -83,7 +89,10 @@ def update_transaction(db: Session, transaction_id: int, transaction_data: Trans
         if not category:
             raise ValueError("Kategori med dette ID findes ikke.")
 
-    update_data = transaction_data.model_dump(exclude_unset=True)
+    update_data = transaction_data.model_dump(exclude_unset=True, by_alias=False)
+    # Rename 'transaction_date' to 'date' for the SQLAlchemy model
+    if 'transaction_date' in update_data:
+        update_data['date'] = update_data.pop('transaction_date')
     for key, value in update_data.items():
         setattr(db_transaction, key, value)
     
