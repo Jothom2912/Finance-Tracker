@@ -133,13 +133,31 @@ def load_elasticsearch():
                 print(f"🗑️  Deleting existing index '{index_name}'...")
                 es.indices.delete(index=index_name)
             
+            # Try to load mapping from dump file first
+            mapping_file = os.path.join(DUMP_DIR, f"{index_name}.mapping.json")
+            mapping_to_use = None
+            
+            if os.path.exists(mapping_file):
+                try:
+                    with open(mapping_file, "r", encoding="utf-8") as f:
+                        mapping_data = json.load(f)
+                        mapping_to_use = mapping_data
+                    print(f"📋 Loaded mapping from {index_name}.mapping.json")
+                except Exception as e:
+                    print(f"⚠️  Could not load mapping file: {str(e)}")
+            
+            # Fallback to hardcoded mappings if dump mapping doesn't exist
+            if not mapping_to_use and index_name in INDEX_MAPPINGS:
+                mapping_to_use = INDEX_MAPPINGS[index_name]
+                print(f"📋 Using hardcoded mapping for {index_name}")
+            
             # Create index with mapping
-            if index_name in INDEX_MAPPINGS:
-                es.indices.create(index=index_name, body=INDEX_MAPPINGS[index_name])
+            if mapping_to_use:
+                es.indices.create(index=index_name, body=mapping_to_use)
                 print(f"✅ Created index '{index_name}' with mapping")
             else:
                 es.indices.create(index=index_name)
-                print(f"✅ Created index '{index_name}' (no mapping)")
+                print(f"⚠️  Created index '{index_name}' without mapping (using dynamic mapping)")
             
             # Bulk insert
             bulk_data = []

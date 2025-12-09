@@ -78,12 +78,28 @@ def dump_elasticsearch():
             if scroll_id:
                 es.clear_scroll(scroll_id=scroll_id)
             
-            # Save to JSON file
+            # Get index mapping (schema/structure)
+            try:
+                mapping = es.indices.get_mapping(index=index)
+                index_mapping = mapping[index].get("mappings", {})
+            except Exception as e:
+                print(f"⚠️  Could not get mapping for {index}: {str(e)}")
+                index_mapping = {}
+            
+            # Save documents to JSON file
             output_file = os.path.join(DUMP_DIR, f"{index}.json")
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(documents, f, indent=2, default=str, ensure_ascii=False)
             
-            print(f"✅ Saved {len(documents)} documents to {index}.json")
+            # Save mapping to separate file
+            if index_mapping:
+                mapping_file = os.path.join(DUMP_DIR, f"{index}.mapping.json")
+                with open(mapping_file, "w", encoding="utf-8") as f:
+                    json.dump({"mappings": index_mapping}, f, indent=2, ensure_ascii=False)
+                print(f"✅ Saved {len(documents)} documents + mapping to {index}.json")
+            else:
+                print(f"✅ Saved {len(documents)} documents to {index}.json")
+            
             total_documents += len(documents)
             
         except Exception as e:
