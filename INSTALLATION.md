@@ -14,7 +14,7 @@
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/finance-tracker.git
+git clone https://github.com/jothom2912/finance-tracker.git
 cd finance-tracker
 ```
 

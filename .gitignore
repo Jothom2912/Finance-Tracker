@@ -14,3 +14,17 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Database dumps (optional - remove if you want to commit dumps)
+dumps/
+*.dump
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
