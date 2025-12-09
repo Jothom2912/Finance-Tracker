@@ -3,6 +3,8 @@ fastapi
 uvicorn[standard]
 pydantic-settings
 python-multipart
+passlib[bcrypt]
+python-jose[cryptography]
 
 # Database afhængigheder
 sqlalchemy
@@ -12,6 +14,17 @@ pymysql
 
 # Datahåndtering (til CSV import i transaction_service)
 pandas
+tabulate
+
+# Elasticsearch (til søgning og analytics)
+elasticsearch
+
+# Neo4j (til graph database)
+neo4j
+
+# GraphQL (til GraphQL API)
+strawberry-graphql[fastapi]
+strawberry-graphql-django
 
 # ANBEFALEDE TILLÆG
 python-dotenv 

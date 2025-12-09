@@ -30,12 +30,17 @@ def get_transactions(
     tx_type: Optional[str] = None,
     month: Optional[str] = None,
     year: Optional[str] = None,
+    account_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100
 ) -> List[TransactionModel]:
     """Henter transaktioner med filtrering."""
     query = db.query(TransactionModel)
-
+    
+    # Filtrer på account_id hvis angivet
+    if account_id is not None:
+        query = query.filter(TransactionModel.Account_idAccount == account_id)
+    
     if start_date:
         query = query.filter(TransactionModel.date >= start_date)
     if end_date:
@@ -103,7 +108,7 @@ def delete_transaction(db: Session, transaction_id: int) -> bool:
 
 # --- CSV Import Logik ---
 
-def import_transactions_from_csv(db: Session, file_contents: bytes) -> List[TransactionModel]:
+def import_transactions_from_csv(db: Session, file_contents: bytes, account_id: int) -> List[TransactionModel]:
     """
     Udfører parsing og import af transaktioner fra en CSV-fil.
     """
@@ -126,48 +131,66 @@ def import_transactions_from_csv(db: Session, file_contents: bytes) -> List[Tran
     categories = db.query(CategoryModel).all()
     category_name_to_id = {cat.name.lower(): cat.idCategory for cat in categories}
 
+    # Opret "Anden" kategori hvis den mangler
     if "anden" not in category_name_to_id:
-        raise ValueError("Standardkategorien 'Anden' blev ikke fundet i databasen.")
+        try:
+            default_category = CategoryModel(
+                name="Anden",
+                type=TransactionType.expense.value
+            )
+            db.add(default_category)
+            db.commit()
+            db.refresh(default_category)
+            category_name_to_id["anden"] = default_category.idCategory
+        except Exception as e:
+            db.rollback()
+            raise ValueError(f"Kunne ikke oprette standardkategorien 'Anden': {str(e)}")
         
     created_transactions: List[TransactionModel] = []
 
-    # Anden: Iterer over rækker, kategoriser og gem
-    for _, row in df.iterrows():
-        full_description = f"{row.get('Modtager', '')} {row.get('Afsender', '')} {row.get('Navn', '')} {row.get('Beskrivelse', '')}".strip()
-        full_description = " ".join(full_description.split())
-        if not full_description:
-            full_description = "Ukendt beskrivelse"
+    try:
+        # Anden: Iterer over rækker, kategoriser og gem
+        for _, row in df.iterrows():
+            full_description = f"{row.get('Modtager', '')} {row.get('Afsender', '')} {row.get('Navn', '')} {row.get('Beskrivelse', '')}".strip()
+            full_description = " ".join(full_description.split())
+            if not full_description:
+                full_description = "Ukendt beskrivelse"
 
-        transaction_category_id = assign_category_automatically(
-            transaction_description=full_description,
-            amount=row['amount'],
-            category_name_to_id=category_name_to_id
-        )
-        
-        # Håndter NaN / None for kolonner, der ikke er nødvendige
-        def clean_value(val):
-            return None if (isinstance(val, float) and math.isnan(val)) else val
+            transaction_category_id = assign_category_automatically(
+                transaction_description=full_description,
+                amount=row['amount'],
+                category_name_to_id=category_name_to_id
+            )
+            
+            # Håndter NaN / None for kolonner, der ikke er nødvendige
+            def clean_value(val):
+                return None if (isinstance(val, float) and math.isnan(val)) else val
 
-        tx_type = TransactionType.income.value if row['amount'] >= 0 else TransactionType.expense.value
-        
-        db_transaction = TransactionModel(
-            date=row['date'].date(),
-            amount=row['amount'],
-            description=full_description,
-            type=tx_type,
-            Category_idCategory=transaction_category_id,
-            Account_idAccount=1, # Antag en standard Account_idAccount her
-            # Mapp ikke-nødvendige kolonner fra CSV:
-            # balance_after=clean_value(row.get('Saldo')),
-            # currency=row.get('Valuta', 'DKK'),
-            # sender=clean_value(row.get('Afsender')),
-            # recipient=clean_value(row.get('Modtager')),
-            # name=clean_value(row.get('Navn'))
-        )
+            tx_type = TransactionType.income.value if row['amount'] >= 0 else TransactionType.expense.value
+            
+            db_transaction = TransactionModel(
+                date=row['date'].date(),
+                amount=row['amount'],
+                description=full_description,
+                type=tx_type,
+                Category_idCategory=transaction_category_id,
+                Account_idAccount=account_id
+                # Mapp ikke-nødvendige kolonner fra CSV:
+                # balance_after=clean_value(row.get('Saldo')),
+                # currency=row.get('Valuta', 'DKK'),
+                # sender=clean_value(row.get('Afsender')),
+                # recipient=clean_value(row.get('Modtager')),
+                # name=clean_value(row.get('Navn'))
+            )
 
-        db.add(db_transaction)
-        db.flush() 
-        created_transactions.append(db_transaction)
-        
-    db.commit()
-    return created_transactions
+            db.add(db_transaction)
+            db.flush() 
+            created_transactions.append(db_transaction)
+            
+        db.commit()
+        print(f"✓ Succesfuldt importeret {len(created_transactions)} transaktioner til account_id={account_id}")
+        return created_transactions
+    except Exception as e:
+        db.rollback()
+        print(f"✗ Fejl ved import: {str(e)}")
+        raise ValueError(f"Fejl ved import af transaktioner: {str(e)}")

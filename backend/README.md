@@ -111,13 +111,6 @@ backend/
      docker.elastic.co/kibana/kibana:7.17.0
    ```
 
-4. **Konfigurer `.env`:**
-   ```bash
-   DATABASE_URL=mysql+pymysql://root:123456@localhost:3307/finans_tracker?charset=utf8mb4
-   ACTIVE_DB=mysql
-   ELASTICSEARCH_HOST=http://localhost:9200
-   SYNC_TO_ELASTICSEARCH=false
-   ```
 
 5. **Start backend:**
    ```bash
@@ -542,3 +535,4 @@ Hvis du støder på problemer:
 
 **Last updated:** November 2025  
 **Status:** ✅ Fully Functional (MySQL + Elasticsearch)
+

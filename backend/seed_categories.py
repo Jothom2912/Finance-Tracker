@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session # For type hint
 # Ingen sys.path.insert() her!
 
 # Importér moduler med den fulde pakke-sti
-from backend.database import SessionLocal, engine, Base, create_db_tables, Category # Eller kun hvad der er nødvendigt, hvis modeller er i database.py
-from backend.service.categorization import category_rules
+from backend.database import SessionLocal, engine, Base, create_db_tables
+from backend.models.category import Category
+from backend.services.categorization import category_rules
+from backend.models.common import TransactionType
 
 
 # Sørg for at databasetabellerne er oprettet
@@ -20,7 +22,18 @@ def seed_categories():
         categories_to_add = []
         for category_name in set(category_rules.values()):
             if category_name.lower() not in existing_categories:
-                categories_to_add.append(Category(name=category_name))
+                # Bestem type baseret på kategorinavn
+                category_type = TransactionType.expense.value
+                if any(keyword in category_name.lower() for keyword in ["indkomst", "løn", "støtte", "renter", "opsparing (ind)", "mobilepay ind", "betalinger fra andre"]):
+                    category_type = TransactionType.income.value
+                elif "mobilepay ud" in category_name.lower():
+                    category_type = TransactionType.expense.value
+                
+                categories_to_add.append(Category(name=category_name, type=category_type))
+        
+        # Sørg for at "Anden" kategori findes (fallback kategori) - tjek igen efter at have tilføjet andre
+        if "anden" not in existing_categories and "anden" not in {cat.lower() for cat in set(category_rules.values())}:
+            categories_to_add.append(Category(name="Anden", type=TransactionType.expense.value))
 
         if categories_to_add:
             db.add_all(categories_to_add)

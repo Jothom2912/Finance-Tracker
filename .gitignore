@@ -5,3 +5,12 @@ node_modules
 **/.env
 
 package-lock.json
+
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python

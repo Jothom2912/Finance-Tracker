@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status, Header
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
@@ -6,6 +6,7 @@ import pandas as pd
 
 from backend.database import get_db
 from backend.schemas.transaction import Transaction as TransactionSchema, TransactionCreate
+from backend.auth import decode_token
 
 # LØSNING: Importer funktioner direkte fra modulet i stedet for pakken.
 from backend.services.transaction_service import (
@@ -36,15 +37,46 @@ def create_transaction_route(transaction: TransactionCreate, db: Session = Depen
 
 # --- CSV Import ---
 @router.post("/upload-csv/", response_model=List[TransactionSchema])
-async def upload_transactions_csv_route(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_transactions_csv_route(
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
+    db: Session = Depends(get_db)
+):
     """Uploader og importerer transaktioner fra en CSV-fil."""
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ugyldig filtype. Kun CSV-filer er tilladt.")
 
+    # Hent account_id fra header eller fra user's første account
+    account_id = None
+    if x_account_id:
+        try:
+            account_id = int(x_account_id)
+        except ValueError:
+            pass
+    
+    # Hvis ingen account_id i header, find første account for brugeren
+    if not account_id and authorization:
+        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        token_data = decode_token(token)
+        if token_data:
+            from backend.services import account_service
+            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            if accounts:
+                account_id = accounts[0].idAccount
+    
+    if not account_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account ID mangler. Vælg en konto først."
+        )
+
     try:
         contents = await file.read()
-        # Kald funktionen direkte
-        created_transactions = import_transactions_from_csv(db, contents)
+        # Kald funktionen direkte med account_id
+        print(f"📤 Uploading CSV for account_id={account_id}")
+        created_transactions = import_transactions_from_csv(db, contents, account_id)
+        print(f"✅ Upload complete: {len(created_transactions)} transaktioner gemt")
         return created_transactions
     except pd.errors.EmptyDataError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Den uploadede CSV-fil er tom.")
@@ -66,14 +98,34 @@ def read_transactions_route(
     type: Optional[str] = Query(None, description="'income' eller 'expense'"),
     month: Optional[str] = Query(None, min_length=2, max_length=2),
     year: Optional[str] = Query(None, min_length=4, max_length=4),
+    account_id: Optional[int] = Query(None),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
     skip: int = Query(0),
     limit: int = Query(100),
     db: Session = Depends(get_db)
 ):
     """Henter en liste over transaktioner med filtrering."""
+    # Hent account_id fra query parameter, header, eller fra user's første account
+    final_account_id = account_id
+    if not final_account_id and x_account_id:
+        try:
+            final_account_id = int(x_account_id)
+        except ValueError:
+            pass
+    
+    if not final_account_id and authorization:
+        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        token_data = decode_token(token)
+        if token_data:
+            from backend.services import account_service
+            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            if accounts:
+                final_account_id = accounts[0].idAccount
+    
     # Kald funktionen direkte
     transactions = get_transactions(
-        db, start_date, end_date, category_id, type, month, year, skip, limit
+        db, start_date, end_date, category_id, type, month, year, final_account_id, skip, limit
     )
     return transactions
 

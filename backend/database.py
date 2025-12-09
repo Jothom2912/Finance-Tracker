@@ -8,7 +8,11 @@ from dotenv import load_dotenv
 load_dotenv() # Loader variabler fra .env filen
 DATABASE_URL = os.getenv("DATABASE_URL") # Henter fra .env
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,  # Tjekker forbindelser før brug
+    echo=False  # Sæt til True for at se SQL queries i console
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base() # Base-klasse for deklarative modeller
 

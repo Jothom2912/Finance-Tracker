@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.database import create_db_tables 
+from strawberry.fastapi import GraphQLRouter
+from backend.database import create_db_tables
+from backend.graphql.schema import schema 
 
 # Importer ALLE dine routers
 from backend.routers import (
@@ -55,3 +57,7 @@ app.include_router(accounts.router)
 app.include_router(goals.router)
 app.include_router(planned_transactions.router)
 app.include_router(account_groups.router)
+
+# GraphQL endpoint
+graphql_app = GraphQLRouter(schema)
+app.include_router(graphql_app, prefix="/graphql")
