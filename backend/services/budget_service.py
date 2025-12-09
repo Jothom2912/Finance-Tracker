@@ -60,23 +60,9 @@ def get_budgets_by_period(db: Session, account_id: int, start_date: str, end_dat
 def create_budget(db: Session, budget: BudgetCreate) -> BudgetModel:
     """Opretter et nyt budget."""
     
-    # Træk de relaterede Category IDs ud
-    category_ids = budget.category_ids
-    budget_data = budget.model_dump(exclude={"category_ids"})
-
-    # Tjek for duplikat (Hvis du har en unik kombination af dato/konto/kategori, skal dette tjekkes)
-    # Dette kræver en klar definition af unikhed i Budget-modellen, da Budget nu har mange-til-mange med Category.
-    # Vi ignorerer duplikat-tjekket her for at fokusere på servicestrukturen.
+    budget_data = budget.model_dump()
     
     db_budget = BudgetModel(**budget_data)
-    
-    # Hent Category objekter
-    categories = db.query(CategoryModel).filter(CategoryModel.idCategory.in_(category_ids)).all()
-    if len(categories) != len(category_ids):
-        # Dette bør håndteres i routeren som en 400 Bad Request
-        raise ValueError("Mindst én kategori ID er ugyldig.")
-        
-    db_budget.categories.extend(categories)
     
     try:
         db.add(db_budget)
@@ -85,7 +71,6 @@ def create_budget(db: Session, budget: BudgetCreate) -> BudgetModel:
         return db_budget
     except IntegrityError:
         db.rollback()
-        # Dette bør håndteres i routeren
         raise ValueError("Integritetsfejl: Kontroller Account_idAccount eller andre Foreign Keys.")
 
 
@@ -96,15 +81,8 @@ def update_budget(db: Session, budget_id: int, budget: BudgetUpdate) -> Optional
         return None
 
     update_data = budget.model_dump(exclude_unset=True)
-    
-    # Håndter opdatering af mange-til-mange relationen (categories)
-    if 'category_ids' in update_data:
-        new_category_ids = update_data.pop('category_ids')
-        categories = db.query(CategoryModel).filter(CategoryModel.idCategory.in_(new_category_ids)).all()
-        # Erstat de eksisterende kategorier
-        db_budget.categories = categories 
 
-    # Opdater de øvrige felter
+    # Opdater felterne
     for key, value in update_data.items():
         setattr(db_budget, key, value)
     
@@ -114,7 +92,6 @@ def update_budget(db: Session, budget_id: int, budget: BudgetUpdate) -> Optional
         return db_budget
     except IntegrityError:
         db.rollback()
-        # Dette bør håndteres i routeren
         raise ValueError("Integritetsfejl ved opdatering.")
 
 
