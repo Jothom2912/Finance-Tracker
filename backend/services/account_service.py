@@ -2,9 +2,9 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from sqlalchemy.exc import IntegrityError
 
-from ..models.account import Account as AccountModel
-from ..models.user import User as UserModel
-from ..schemas.account import AccountCreate, AccountBase
+from backend.models.mysql.account import Account as AccountModel
+from backend.models.mysql.user import User as UserModel
+from backend.shared.schemas.account import AccountCreate, AccountBase
 
 # --- CRUD Funktioner ---
 

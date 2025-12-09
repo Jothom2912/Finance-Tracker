@@ -3,16 +3,16 @@
 Script til at generere dummy data til test af migration og applikationen.
 Følger korrekt struktur: User → Account → Category → Transaction → Budget → Goal
 """
-from backend.database import SessionLocal, create_db_tables
-from backend.models.user import User
-from backend.models.account import Account
-from backend.models.category import Category
-from backend.models.transaction import Transaction
-from backend.models.budget import Budget
-from backend.models.goal import Goal
-from backend.models.planned_transactions import PlannedTransactions
-from backend.models.account_groups import AccountGroups
-from backend.models.common import TransactionType, budget_category_association, account_group_user_association
+from backend.database.mysql import SessionLocal, create_db_tables
+from backend.models.mysql.user import User
+from backend.models.mysql.account import Account
+from backend.models.mysql.category import Category
+from backend.models.mysql.transaction import Transaction
+from backend.models.mysql.budget import Budget
+from backend.models.mysql.goal import Goal
+from backend.models.mysql.planned_transactions import PlannedTransactions
+from backend.models.mysql.account_groups import AccountGroups
+from backend.models.mysql.common import TransactionType, budget_category_association, account_group_user_association
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import random

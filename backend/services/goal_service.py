@@ -2,9 +2,9 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from sqlalchemy.exc import IntegrityError
 
-from ..models.goal import Goal as GoalModel
-from ..models.account import Account as AccountModel
-from ..schemas.goal import GoalCreate, GoalBase
+from backend.models.mysql.goal import Goal as GoalModel
+from backend.models.mysql.account import Account as AccountModel
+from backend.shared.schemas.goal import GoalCreate, GoalBase
 
 # --- CRUD Funktioner ---
 

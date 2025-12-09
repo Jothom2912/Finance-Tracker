@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session # For type hint
 # Ingen sys.path.insert() her!
 
 # Importér moduler med den fulde pakke-sti
-from backend.database import SessionLocal, engine, Base, create_db_tables
-from backend.models.category import Category
+from backend.database.mysql import SessionLocal, engine, Base, create_db_tables
+from backend.models.mysql.category import Category
 from backend.services.categorization import category_rules
-from backend.models.common import TransactionType
+from backend.models.mysql.common import TransactionType
 
 
 # Sørg for at databasetabellerne er oprettet

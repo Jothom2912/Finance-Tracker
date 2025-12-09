@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from ..models.planned_transactions import PlannedTransactions as PTModel
-from ..schemas.planned_transactions import PlannedTransactionsCreate, PlannedTransactionsBase
+from backend.models.mysql.planned_transactions import PlannedTransactions as PTModel
+from backend.shared.schemas.planned_transactions import PlannedTransactionsCreate, PlannedTransactionsBase
 
 # --- CRUD Funktioner ---
 

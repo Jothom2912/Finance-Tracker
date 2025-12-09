@@ -1,6 +1,6 @@
 # backend/auth.py
 """
-Authentication module - Håndterer password hashing og JWT token generation
+Authentication module - Password hashing og JWT token generation + FastAPI integration
 """
 
 from datetime import datetime, timedelta
@@ -8,21 +8,18 @@ from typing import Optional
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from pydantic import BaseModel
+from fastapi import Depends, HTTPException, status, Header
+import bcrypt
 
 # ============================================================================
 # KONFIGURATION
 # ============================================================================
 
-# JWT Configuration
-SECRET_KEY = "your-secret-key-change-this-in-production"  # ⚠️ SKIFT DETTE I PRODUCTION
+SECRET_KEY = "your-secret-key-change-this-in-production"  # ⚠️ SKIFT I PRODUCTION
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60  # Token udløber efter 60 minutter
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# Password hashing configuration
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Import bcrypt directly for more control
-import bcrypt
 
 # ============================================================================
 # MODELS FOR AUTH
@@ -50,25 +47,17 @@ class Token(BaseModel):
 
 def hash_password(password: str) -> str:
     """Hash password using bcrypt. Bcrypt has a 72-byte limit."""
-    # Truncate password to 72 characters (before encoding to bytes)
     password = password[:72]
-    # Encode to bytes
     password_bytes = password.encode('utf-8')
-    # Hash using bcrypt directly
     hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt(rounds=12))
-    # Return as string
     return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify plain password against hashed password. Bcrypt has a 72-byte limit."""
-    # Truncate password to 72 characters (before encoding to bytes)
+    """Verify plain password against hashed password."""
     plain_password = plain_password[:72]
-    # Encode to bytes
     password_bytes = plain_password.encode('utf-8')
-    # Hash must be encoded as bytes too
     hashed_bytes = hashed_password.encode('utf-8')
-    # Use bcrypt directly
     return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 
@@ -82,24 +71,12 @@ def create_access_token(
     email: str,
     expires_delta: Optional[timedelta] = None
 ) -> str:
-    """
-    Opretter JWT access token for bruger
-    
-    Args:
-        user_id: Brugerens ID
-        username: Brugerens username
-        email: Brugerens email
-        expires_delta: Hvor længe token er gyldigt (default: 60 min)
-    
-    Returns:
-        JWT token som string
-    """
+    """Opretter JWT access token for bruger"""
     if expires_delta is None:
         expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
     expire = datetime.utcnow() + expires_delta
     
-    # Data der skal være i token
     to_encode = {
         "user_id": user_id,
         "username": username,
@@ -107,20 +84,11 @@ def create_access_token(
         "exp": expire
     }
     
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> Optional[TokenData]:
-    """
-    Dekoder JWT token og returnerer data
-    
-    Args:
-        token: JWT token
-    
-    Returns:
-        TokenData hvis valid, None hvis invalid
-    """
+    """Dekoder JWT token og returnerer data"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: int = payload.get("user_id")
@@ -133,6 +101,56 @@ def decode_token(token: str) -> Optional[TokenData]:
         return TokenData(user_id=user_id, username=username, email=email)
     except JWTError:
         return None
+
+
+# ============================================================================
+# FASTAPI DEPENDENCIES
+# ============================================================================
+
+def get_current_user_id(
+    authorization: Optional[str] = Header(None, alias="Authorization")
+) -> int:
+    """
+    FastAPI Dependency: Henter current user ID fra JWT token i Authorization header.
+    
+    Kan bruges i alle routers der kræver authentication.
+    
+    Args:
+        authorization: Authorization header fra request (format: "Bearer <token>")
+        
+    Returns:
+        user_id fra token
+        
+    Raises:
+        HTTPException 401 hvis token mangler eller er ugyldig
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Split "Bearer <token>"
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication format. Use: Bearer <token>",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    token = parts[1]
+    token_data = decode_token(token)
+    
+    if token_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return token_data.user_id
 
 
 # ============================================================================

@@ -2,9 +2,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 
-from ..models.category import Category as CategoryModel
+from backend.models.mysql.category import Category as CategoryModel
 # Fjernet importen af TransactionModel her for at undgå cirkulær import ved indlæsning.
-from ..schemas.category import CategoryCreate
+from backend.shared.schemas.category import CategoryCreate
 
 # --- CRUD Funktioner ---
 
@@ -64,7 +64,7 @@ def delete_category(db: Session, category_id: int) -> bool:
         return False
 
     # LØSNING PÅ CIRKULÆR IMPORT: Lazy Import af TransactionModel
-    from ..models.transaction import Transaction as TransactionModel 
+    from backend.models.mysql.transaction import Transaction as TransactionModel 
 
     try:
         # Sæt category_id til NULL for alle relaterede transaktioner

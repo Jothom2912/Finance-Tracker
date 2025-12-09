@@ -5,6 +5,7 @@ from enum import Enum
 class DatabaseType(Enum):
     MYSQL = "mysql"
     ELASTICSEARCH = "elasticsearch"
+    NEO4J = "neo4j"
     HYBRID = "hybrid"  # MySQL for writes, ES for reads
 
 # Læs fra environment eller default til MySQL

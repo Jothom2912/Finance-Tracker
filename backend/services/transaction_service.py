@@ -1,6 +1,6 @@
 # backend/services/transaction_service.py
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional, Dict
 from datetime import date
@@ -9,10 +9,10 @@ import io
 import math
 
 # --- KORREKTE IMPORTS TIL NY MODELSTRUKTUR ---
-from ..models.transaction import Transaction as TransactionModel
-from ..models.category import Category as CategoryModel
-from ..models.common import TransactionType  # <--- RETTET STED: HENTES FRA COMMON
-from ..schemas.transaction import TransactionCreate
+from backend.models.mysql.transaction import Transaction as TransactionModel
+from backend.models.mysql.category import Category as CategoryModel
+from backend.models.mysql.common import TransactionType  # <--- RETTET STED: HENTES FRA COMMON
+from backend.shared.schemas.transaction import TransactionCreate
 
 from .categorization import assign_category_automatically
 
@@ -20,7 +20,10 @@ from .categorization import assign_category_automatically
 
 def get_transaction_by_id(db: Session, transaction_id: int) -> Optional[TransactionModel]:
     """Henter en transaktion baseret på ID."""
-    return db.query(TransactionModel).filter(TransactionModel.idTransaction == transaction_id).first()
+    return db.query(TransactionModel).options(
+        joinedload(TransactionModel.category),
+        joinedload(TransactionModel.account)
+    ).filter(TransactionModel.idTransaction == transaction_id).first()
 
 def get_transactions(
     db: Session,
@@ -35,11 +38,18 @@ def get_transactions(
     limit: int = 100
 ) -> List[TransactionModel]:
     """Henter transaktioner med filtrering."""
-    query = db.query(TransactionModel)
+    # KRITISK: account_id er påkrævet for at undgå at hente ALLE transaktioner
+    if account_id is None:
+        raise ValueError("Account ID er påkrævet for at hente transaktioner.")
     
-    # Filtrer på account_id hvis angivet
-    if account_id is not None:
-        query = query.filter(TransactionModel.Account_idAccount == account_id)
+    # Eager load relationships for at undgå N+1 queries
+    query = db.query(TransactionModel).options(
+        joinedload(TransactionModel.category),
+        joinedload(TransactionModel.account)
+    )
+    
+    # Filtrer på account_id (altid påkrævet)
+    query = query.filter(TransactionModel.Account_idAccount == account_id)
     
     if start_date:
         query = query.filter(TransactionModel.date >= start_date)
@@ -68,6 +78,10 @@ def create_transaction(db: Session, transaction: TransactionCreate) -> Transacti
     category = db.query(CategoryModel).filter(CategoryModel.idCategory == transaction.Category_idCategory).first()
     if not category:
         raise ValueError("Kategori med dette ID findes ikke.")
+    
+    # Validering af account_id
+    if not transaction.Account_idAccount:
+        raise ValueError("Account ID er påkrævet for at oprette en transaktion.")
     
     # Map schema fields to model fields
     transaction_data = transaction.model_dump(by_alias=False)

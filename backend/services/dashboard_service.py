@@ -1,20 +1,25 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, extract
 from typing import Dict, List, Any, Optional
 from datetime import date, timedelta
 
-from ..models.transaction import Transaction as TransactionModel
-from ..models.category import Category as CategoryModel # Denne skal loades
-from ..models.common import TransactionType # <-- RETTET: Brug den nye 'common' sti
-from ..schemas.dashboard import FinancialOverview
+from backend.models.mysql.transaction import Transaction as TransactionModel
+from backend.models.mysql.category import Category as CategoryModel # Denne skal loades
+from backend.models.mysql.common import TransactionType # <-- RETTET: Brug den nye 'common' sti
+from backend.shared.schemas.dashboard import FinancialOverview
 # --- Finansiel Oversigt Funktioner ---
 
 def get_financial_overview(
     db: Session,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    account_id: Optional[int] = None
 ) -> FinancialOverview:
-    """Beregner et finansielt overblik for en given periode."""
+    """Beregner et finansielt overblik for en given periode og account."""
+
+    # KRITISK: account_id er påkrævet
+    if not account_id:
+        raise ValueError("Account ID er påkrævet for at hente finansielt overblik.")
 
     # Sæt standard datoer
     if not end_date:
@@ -25,35 +30,60 @@ def get_financial_overview(
     if start_date > end_date:
         raise ValueError("Startdato kan ikke være efter slutdato.")
 
-    # 1. Hent alle transaktioner i perioden
-    transactions_in_period = db.query(TransactionModel).filter(
+    # Base filter med account_id (altid påkrævet)
+    base_filter = [TransactionModel.Account_idAccount == account_id]
+
+    # 1. Brug database aggregation for at beregne totals (meget hurtigere end at hente alle transaktioner)
+    # Beregn total income (positive amounts)
+    income_query = db.query(func.sum(TransactionModel.amount)).filter(
         TransactionModel.date >= start_date,
-        TransactionModel.date <= end_date
-    ).all()
-
-    total_income = 0.0
-    total_expenses = 0.0
-    category_expenses: Dict[str, float] = {}
+        TransactionModel.date <= end_date,
+        TransactionModel.amount > 0
+    )
+    if base_filter:
+        income_query = income_query.filter(*base_filter)
+    total_income_result = income_query.scalar()
+    total_income = float(total_income_result) if total_income_result else 0.0
     
-    # 2. Aggreger indtægter og udgifter pr. kategori
-    for t in transactions_in_period:
-        amount = float(t.amount)
-        if amount > 0:
-            total_income += amount
-        else:
-            total_expenses += amount # amount er negativ
-            
-            # Find kategorinavnet for udgiften
-            category_name = "Ukategoriseret"
-            if t.category: # Antager at Category er loaded via relationship, ellers skal det joines.
-                category_name = t.category.name
-            
-            category_expenses[category_name] = category_expenses.get(category_name, 0.0) + abs(amount)
-
+    # Beregn total expenses (negative amounts)
+    expenses_query = db.query(func.sum(TransactionModel.amount)).filter(
+        TransactionModel.date >= start_date,
+        TransactionModel.date <= end_date,
+        TransactionModel.amount < 0
+    )
+    if base_filter:
+        expenses_query = expenses_query.filter(*base_filter)
+    total_expenses_result = expenses_query.scalar()
+    total_expenses = float(total_expenses_result) if total_expenses_result else 0.0
+    
     net_change_in_period = total_income + total_expenses
 
-    # 3. Beregn den nuværende totale saldo (Aggreger over alle transaktioner i databasen)
-    total_balance_result = db.query(func.sum(TransactionModel.amount)).scalar()
+    # 2. Hent expenses by category (kun for expenses, eager load category)
+    expenses_with_categories_query = db.query(
+        TransactionModel,
+        CategoryModel.name.label('category_name')
+    ).join(
+        CategoryModel, TransactionModel.Category_idCategory == CategoryModel.idCategory
+    ).filter(
+        TransactionModel.date >= start_date,
+        TransactionModel.date <= end_date,
+        TransactionModel.amount < 0
+    )
+    if base_filter:
+        expenses_with_categories_query = expenses_with_categories_query.filter(*base_filter)
+    expenses_with_categories = expenses_with_categories_query.all()
+    
+    category_expenses: Dict[str, float] = {}
+    for t, category_name in expenses_with_categories:
+        category_name = category_name or "Ukategoriseret"
+        amount = abs(float(t.amount))
+        category_expenses[category_name] = category_expenses.get(category_name, 0.0) + amount
+
+    # 3. Beregn den nuværende totale saldo (kun for den aktuelle account)
+    balance_query = db.query(func.sum(TransactionModel.amount))
+    if base_filter:
+        balance_query = balance_query.filter(*base_filter)
+    total_balance_result = balance_query.scalar()
     current_account_balance = float(total_balance_result) if total_balance_result else 0.0
 
     # 4. Returner skemaet

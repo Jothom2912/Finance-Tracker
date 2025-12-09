@@ -4,30 +4,19 @@ GraphQL resolvers - Håndterer data hentning fra Neo4j eller MySQL
 """
 from typing import List, Optional
 from datetime import datetime
-from backend.database import SessionLocal
-from backend.models.transaction import Transaction as TransactionModel
-from backend.models.category import Category as CategoryModel
-from backend.models.account import Account as AccountModel
-from backend.models.user import User as UserModel
-from backend.models.budget import Budget as BudgetModel
-from backend.models.goal import Goal as GoalModel
+from backend.database.mysql import SessionLocal
+from backend.models.mysql.transaction import Transaction as TransactionModel
+from backend.models.mysql.category import Category as CategoryModel
+from backend.models.mysql.account import Account as AccountModel
+from backend.models.mysql.user import User as UserModel
+from backend.models.mysql.budget import Budget as BudgetModel
+from backend.models.mysql.goal import Goal as GoalModel
 from backend.graphql.schema import (
     User, Category, Account, Transaction, Budget, Goal,
     TransactionFilter, TransactionCreate
 )
-from neo4j import GraphDatabase
-import os
-
-# Neo4j konfiguration
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
-
-USE_NEO4J = os.getenv("USE_NEO4J", "false").lower() == "true"
-
-def get_neo4j_driver():
-    """Opretter Neo4j driver"""
-    return GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+from backend.database.neo4j import get_neo4j_driver
+from backend.config import USE_NEO4J
 
 # ============================================================================
 # USER RESOLVERS

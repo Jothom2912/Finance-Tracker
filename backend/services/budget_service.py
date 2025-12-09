@@ -3,22 +3,23 @@ from sqlalchemy import func, extract
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Dict, Any
 
-from ..models.budget import Budget as BudgetModel # Antag at du bruger alias for at undgå navnekollision
-from ..models.category import Category as CategoryModel
-from ..models.transaction import Transaction as TransactionModel
-from ..schemas.budget import BudgetCreate, BudgetUpdate, BudgetSummary, BudgetSummaryItem
+from backend.models.mysql.budget import Budget as BudgetModel # Antag at du bruger alias for at undgå navnekollision
+from backend.models.mysql.category import Category as CategoryModel
+from backend.models.mysql.transaction import Transaction as TransactionModel
+from backend.shared.schemas.budget import BudgetCreate, BudgetUpdate, BudgetSummary, BudgetSummaryItem
 
 # --- Hjælpefunktioner ---
 
-def _get_category_expenses_for_period(db: Session, month: int, year: int) -> Dict[int, float]:
+def _get_category_expenses_for_period(db: Session, month: int, year: int, account_id: int) -> Dict[int, float]:
     """Henter aggregerede udgifter for hver kategori for en given måned og år."""
     
-    # Filtrer for at sikre, at vi kun tager udgifter (amount < 0)
+    # Filtrer for at sikre, at vi kun tager udgifter (amount < 0) og kun fra den specifikke account
     # Aggreger efter Category_idCategory
     expenses_by_category = db.query(
         TransactionModel.Category_idCategory.label('category_id'),
         func.sum(TransactionModel.amount).label('total_spent')
     ).filter(
+        TransactionModel.Account_idAccount == account_id,  # KRITISK: Filtrer på account_id
         extract('month', TransactionModel.date) == month,
         extract('year', TransactionModel.date) == year,
         TransactionModel.amount < 0 # Udgifter er negative
@@ -59,6 +60,10 @@ def get_budgets_by_period(db: Session, account_id: int, start_date: str, end_dat
 
 def create_budget(db: Session, budget: BudgetCreate) -> BudgetModel:
     """Opretter et nyt budget."""
+    
+    # Validering af account_id
+    if not budget.Account_idAccount:
+        raise ValueError("Account ID er påkrævet for at oprette et budget.")
     
     budget_data = budget.model_dump()
     
@@ -126,8 +131,8 @@ def get_budget_summary(db: Session, account_id: int, month: int, year: int) -> B
         extract('year', BudgetModel.budget_date) == year
     ).all()
     
-    # 2. Hent de aggregerede udgifter for perioden
-    expenses_by_category = _get_category_expenses_for_period(db, month, year)
+    # 2. Hent de aggregerede udgifter for perioden (kun for denne account)
+    expenses_by_category = _get_category_expenses_for_period(db, month, year, account_id)
     
     items: List[BudgetSummaryItem] = []
     total_budget = 0.0
