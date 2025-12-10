@@ -42,16 +42,45 @@ def read_accounts_route(
     return accounts
 
 @router.get("/{account_id}", response_model=AccountSchema)
-def read_account_route(account_id: int, db: Session = Depends(get_db)):
-    """Henter detaljer for en specifik konto."""
+def read_account_route(
+    account_id: int, 
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """Henter detaljer for en specifik konto. Kræver authentication og at kontoen tilhører brugeren."""
     db_account = account_service.get_account_by_id(db, account_id)
     if db_account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Konto ikke fundet.")
+    
+    # Tjek at kontoen tilhører den aktuelle bruger
+    if db_account.User_idUser != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Du kan kun se dine egne konti."
+        )
+    
     return db_account
 
 @router.put("/{account_id}", response_model=AccountSchema)
-def update_account_route(account_id: int, account_data: AccountBase, db: Session = Depends(get_db)):
-    """Opdaterer saldo og navn på en konto."""
+def update_account_route(
+    account_id: int, 
+    account_data: AccountBase, 
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """Opdaterer saldo og navn på en konto. Kræver authentication og at kontoen tilhører brugeren."""
+    # Tjek først at kontoen eksisterer og tilhører brugeren
+    db_account = account_service.get_account_by_id(db, account_id)
+    if db_account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Konto ikke fundet.")
+    
+    # Tjek at kontoen tilhører den aktuelle bruger
+    if db_account.User_idUser != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Du kan kun opdatere dine egne konti."
+        )
+    
     try:
         updated_account = account_service.update_account(db, account_id, account_data)
         if updated_account is None:

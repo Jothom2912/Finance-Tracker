@@ -66,11 +66,11 @@ class Account(AccountBase):
     idAccount: int
     User_idUser: int
     
-    # Relationships
+    # Relationships - user er påkrævet (bliver loaded via joinedload), resten er optional
     user: UserBase
-    transactions: List[TransactionBase] = []
-    budgets: List[BudgetBase] = []
-    goals: List[GoalBase] = []
+    transactions: Optional[List[TransactionBase]] = []
+    budgets: Optional[List[BudgetBase]] = []
+    goals: Optional[List[GoalBase]] = []
 
     class Config:
         from_attributes = True

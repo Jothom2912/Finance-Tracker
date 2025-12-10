@@ -15,9 +15,28 @@ import bcrypt
 # KONFIGURATION
 # ============================================================================
 
-SECRET_KEY = "your-secret-key-change-this-in-production"  # ⚠️ SKIFT I PRODUCTION
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Find .env filen - tjek både root mappen og backend mappen
+env_path = Path(__file__).parent.parent / ".env"
+if not env_path.exists():
+    # Hvis ikke i root, prøv i backend mappen
+    env_path = Path(__file__).parent / ".env"
+
+load_dotenv(dotenv_path=env_path)
+
+# Læs SECRET_KEY fra environment variabel
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError(
+        "SECRET_KEY must be set in environment variables. "
+        "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    )
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

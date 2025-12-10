@@ -1,7 +1,7 @@
 # backend/services/transaction_service.py
 
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, extract
 from typing import List, Optional, Dict
 from datetime import date
 import pandas as pd
@@ -66,9 +66,11 @@ def get_transactions(
             query = query.filter(TransactionModel.type == TransactionType.expense.value)
 
     if month is not None:
-        query = query.filter(func.strftime('%m', TransactionModel.date) == month)
+        # MySQL bruger extract i stedet for strftime
+        query = query.filter(extract('month', TransactionModel.date) == int(month))
     if year is not None:
-        query = query.filter(func.strftime('%Y', TransactionModel.date) == year)
+        # MySQL bruger extract i stedet for strftime
+        query = query.filter(extract('year', TransactionModel.date) == int(year))
 
     return query.offset(skip).limit(limit).all()
 

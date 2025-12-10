@@ -4,6 +4,7 @@ GraphQL resolvers - Håndterer data hentning fra Neo4j eller MySQL
 """
 from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
 from backend.database.mysql import SessionLocal
 from backend.models.mysql.transaction import Transaction as TransactionModel
 from backend.models.mysql.category import Category as CategoryModel
@@ -34,7 +35,6 @@ async def get_users() -> List[User]:
                 email=record["u"]["email"],
                 created_at=datetime.fromisoformat(record["u"]["created_at"]) if record["u"].get("created_at") else None
             ) for record in result]
-        driver.close()
         return users
     else:
         db = SessionLocal()
@@ -64,7 +64,6 @@ async def get_user(id: int) -> Optional[User]:
                     email=u["email"],
                     created_at=datetime.fromisoformat(u["created_at"]) if u.get("created_at") else None
                 )
-        driver.close()
         return None
     else:
         db = SessionLocal()
@@ -96,7 +95,6 @@ async def get_categories() -> List[Category]:
                 name=record["c"]["name"],
                 type=record["c"]["type"]
             ) for record in result]
-        driver.close()
         return categories
     else:
         db = SessionLocal()
@@ -124,7 +122,6 @@ async def get_category(id: int) -> Optional[Category]:
                     name=c["name"],
                     type=c["type"]
                 )
-        driver.close()
         return None
     else:
         db = SessionLocal()
@@ -174,7 +171,6 @@ async def get_accounts(user_id: Optional[int] = None) -> List[Account]:
                     saldo=a["saldo"],
                     user=user
                 ))
-        driver.close()
         return accounts
     else:
         db = SessionLocal()
@@ -224,7 +220,6 @@ async def get_account(id: int) -> Optional[Account]:
                     saldo=a["saldo"],
                     user=user
                 )
-        driver.close()
         return None
     else:
         db = SessionLocal()
@@ -305,7 +300,6 @@ async def get_transactions(filter: Optional[TransactionFilter] = None) -> List[T
                         saldo=a["saldo"]
                     )
                 ))
-        driver.close()
         return transactions
     else:
         db = SessionLocal()
@@ -375,7 +369,6 @@ async def get_transaction(id: int) -> Optional[Transaction]:
                         saldo=a["saldo"]
                     )
                 )
-        driver.close()
         return None
     else:
         db = SessionLocal()

@@ -57,3 +57,17 @@ def update_goal(db: Session, goal_id: int, goal_data: GoalBase) -> Optional[Goal
     except IntegrityError:
         db.rollback()
         raise ValueError("Integritetsfejl ved opdatering af mål.")
+
+def delete_goal(db: Session, goal_id: int) -> bool:
+    """Sletter et mål."""
+    db_goal = get_goal_by_id(db, goal_id)
+    if not db_goal:
+        return False
+    
+    try:
+        db.delete(db_goal)
+        db.commit()
+        return True
+    except IntegrityError:
+        db.rollback()
+        raise ValueError("Integritetsfejl ved sletning af mål.")

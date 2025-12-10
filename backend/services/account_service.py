@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
 from sqlalchemy.exc import IntegrityError
 
@@ -10,12 +10,17 @@ from backend.shared.schemas.account import AccountCreate, AccountBase
 
 def get_account_by_id(db: Session, account_id: int) -> Optional[AccountModel]:
     """Henter en konto baseret på ID."""
-    # Loader User, Transactions, Budgets og Goals via joinedload hvis nødvendigt
-    return db.query(AccountModel).filter(AccountModel.idAccount == account_id).first()
+    # Loader User relationship via joinedload for at undgå lazy loading problemer
+    return db.query(AccountModel).options(
+        joinedload(AccountModel.user)
+    ).filter(AccountModel.idAccount == account_id).first()
 
 def get_accounts_by_user(db: Session, user_id: int) -> List[AccountModel]:
     """Henter alle konti tilknyttet en bruger."""
-    return db.query(AccountModel).filter(AccountModel.User_idUser == user_id).all()
+    # Loader User relationship via joinedload for at undgå lazy loading problemer
+    return db.query(AccountModel).options(
+        joinedload(AccountModel.user)
+    ).filter(AccountModel.User_idUser == user_id).all()
 
 def create_account(db: Session, account: AccountCreate) -> AccountModel:
     """Opretter en ny konto og tilknytter den til en bruger."""
@@ -33,7 +38,10 @@ def create_account(db: Session, account: AccountCreate) -> AccountModel:
         db.add(db_account)
         db.commit()
         db.refresh(db_account)
-        return db_account
+        # Reload med user relationship for at sikre korrekt serialisering
+        return db.query(AccountModel).options(
+            joinedload(AccountModel.user)
+        ).filter(AccountModel.idAccount == db_account.idAccount).first()
     except IntegrityError:
         db.rollback()
         raise ValueError("Integritetsfejl ved oprettelse af konto.")
@@ -50,7 +58,10 @@ def update_account(db: Session, account_id: int, account_data: AccountBase) -> O
     try:
         db.commit()
         db.refresh(db_account)
-        return db_account
+        # Reload med user relationship for at sikre korrekt serialisering
+        return db.query(AccountModel).options(
+            joinedload(AccountModel.user)
+        ).filter(AccountModel.idAccount == account_id).first()
     except IntegrityError:
         db.rollback()
         raise ValueError("Integritetsfejl ved opdatering af konto.")
