@@ -29,3 +29,7 @@ strawberry-graphql-django
 # ANBEFALEDE TILLÆG
 python-dotenv 
 # pydantic[email] (Hvis du har brugere med e-mail validering)
+
+# TESTING AFHÆNGIGHEDER
+pytest
+pytest-cov
