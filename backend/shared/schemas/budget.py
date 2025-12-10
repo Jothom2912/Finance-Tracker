@@ -26,6 +26,11 @@ class BudgetBase(BaseModel):
 
 class BudgetCreate(BudgetBase):
     Account_idAccount: Optional[int] = Field(None, description="ID of the account. Optional - backend tilføjer det automatisk fra header.")
+    # Support for month/year format from frontend (ikke i modellen, kun for input)
+    month: Optional[str] = Field(None, description="Month (MM format) - will be converted to budget_date")
+    year: Optional[str] = Field(None, description="Year (YYYY format) - will be converted to budget_date")
+    # Support for category_id from frontend (ikke i modellen, kun for input)
+    category_id: Optional[int] = Field(None, description="Category ID - will be linked via association table")
 
 
 class BudgetUpdate(BaseModel):
@@ -33,6 +38,11 @@ class BudgetUpdate(BaseModel):
     amount: Optional[float] = None
     budget_date: Optional[date] = None
     Account_idAccount: Optional[int] = None
+    # Support for month/year format from frontend
+    month: Optional[str] = None
+    year: Optional[str] = None
+    # Support for category_id from frontend
+    category_id: Optional[int] = None
 
 class BudgetInDB(BudgetBase):
     idBudget: int = Field(..., description="Unique ID of the budget.")

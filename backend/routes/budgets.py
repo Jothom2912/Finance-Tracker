@@ -126,6 +126,25 @@ async def create_budget_route(
     
     # Tilføj account_id til budget data hvis det ikke allerede er sat
     budget_dict = budget.model_dump()
+    
+    # Konverter month/year til budget_date hvis budget_date ikke er sat
+    if not budget_dict.get('budget_date'):
+        month = budget_dict.get('month')
+        year = budget_dict.get('year')
+        if month and year:
+            try:
+                from datetime import date
+                budget_dict['budget_date'] = date(int(year), int(month), 1)
+            except (ValueError, TypeError) as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Ugyldig måned/år: {month}/{year}"
+                )
+    
+    # Fjern month/year fra dict da de ikke er i modellen
+    budget_dict.pop('month', None)
+    budget_dict.pop('year', None)
+    
     if 'Account_idAccount' not in budget_dict or budget_dict.get('Account_idAccount') is None:
         budget_dict['Account_idAccount'] = account_id
     
@@ -149,8 +168,30 @@ async def update_budget_route(budget_id: int, budget: BudgetUpdate, db: Session 
     Update an existing budget.
     """
     try:
+        # Konverter month/year til budget_date hvis budget_date ikke er sat
+        budget_dict = budget.model_dump(exclude_unset=True)
+        if not budget_dict.get('budget_date'):
+            month = budget_dict.get('month')
+            year = budget_dict.get('year')
+            if month and year:
+                try:
+                    from datetime import date
+                    budget_dict['budget_date'] = date(int(year), int(month), 1)
+                except (ValueError, TypeError) as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Ugyldig måned/år: {month}/{year}"
+                    )
+        
+        # Fjern month/year fra dict
+        budget_dict.pop('month', None)
+        budget_dict.pop('year', None)
+        
+        # Opret BudgetUpdate med konverteret data
+        budget_with_date = BudgetUpdate(**budget_dict)
+        
         # RETTET: Kald funktionen direkte
-        updated_budget = update_budget(db, budget_id, budget)
+        updated_budget = update_budget(db, budget_id, budget_with_date)
         if not updated_budget:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
         return updated_budget

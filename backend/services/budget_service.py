@@ -65,12 +65,37 @@ def create_budget(db: Session, budget: BudgetCreate) -> BudgetModel:
     if not budget.Account_idAccount:
         raise ValueError("Account ID er påkrævet for at oprette et budget.")
     
-    budget_data = budget.model_dump()
+    budget_data = budget.model_dump(exclude={'month', 'year', 'category_id'})
+    
+    # Hent category_id hvis det er angivet (fra frontend)
+    category_id = None
+    if hasattr(budget, 'category_id') and budget.category_id:
+        category_id = budget.category_id
     
     db_budget = BudgetModel(**budget_data)
     
     try:
         db.add(db_budget)
+        db.flush()  # Få ID før vi tilføjer categories
+        
+        # Tilføj kategori til budget via association table hvis category_id er angivet
+        if category_id:
+            from backend.models.mysql.common import budget_category_association
+            
+            # Valider at kategorien eksisterer
+            category = db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
+            if not category:
+                db.rollback()
+                raise ValueError(f"Kategori med ID {category_id} findes ikke.")
+            
+            # Tilføj via association table
+            db.execute(
+                budget_category_association.insert().values(
+                    Budget_idBudget=db_budget.idBudget,
+                    Category_idCategory=category_id
+                )
+            )
+        
         db.commit()
         db.refresh(db_budget)
         return db_budget
@@ -86,6 +111,42 @@ def update_budget(db: Session, budget_id: int, budget: BudgetUpdate) -> Optional
         return None
 
     update_data = budget.model_dump(exclude_unset=True)
+    
+    # Håndter month/year konvertering
+    if 'month' in update_data or 'year' in update_data:
+        month = update_data.pop('month', None)
+        year = update_data.pop('year', None)
+        if month and year:
+            try:
+                from datetime import date
+                update_data['budget_date'] = date(int(year), int(month), 1)
+            except (ValueError, TypeError):
+                pass
+    
+    # Håndter category_id - opdater association table
+    category_id = update_data.pop('category_id', None)
+    if category_id is not None:
+        from backend.models.mysql.common import budget_category_association
+        
+        # Valider at kategorien eksisterer
+        category = db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
+        if not category:
+            raise ValueError(f"Kategori med ID {category_id} findes ikke.")
+        
+        # Fjern eksisterende kategorier
+        db.execute(
+            budget_category_association.delete().where(
+                budget_category_association.c.Budget_idBudget == budget_id
+            )
+        )
+        
+        # Tilføj ny kategori
+        db.execute(
+            budget_category_association.insert().values(
+                Budget_idBudget=budget_id,
+                Category_idCategory=category_id
+            )
+        )
 
     # Opdater felterne
     for key, value in update_data.items():
@@ -122,14 +183,25 @@ def get_budget_summary(db: Session, account_id: int, month: int, year: int) -> B
     # og derefter slå op i `Transaction` for matchende `Category_idCategory`
     
     # Filtrerer efter den konto, det budget er tilknyttet
+    # Håndter både budgetter med og uden budget_date
     budgets_query = db.query(BudgetModel).options(
         joinedload(BudgetModel.categories)
     ).filter(
-        BudgetModel.Account_idAccount == account_id,
-        # Filtrer BudgetModel efter budget_date (vi antager det er i den måned/år)
-        extract('month', BudgetModel.budget_date) == month,
-        extract('year', BudgetModel.budget_date) == year
+        BudgetModel.Account_idAccount == account_id
     ).all()
+    
+    # Filtrer manuelt efter month/year hvis budget_date er sat
+    # Hvis budget_date er None, inkluder budgettet (for bagudkompatibilitet)
+    filtered_budgets = []
+    for budget in budgets_query:
+        if budget.budget_date:
+            budget_month = budget.budget_date.month
+            budget_year = budget.budget_date.year
+            if budget_month == month and budget_year == year:
+                filtered_budgets.append(budget)
+        # Hvis budget_date er None, inkluder det ikke (kræver budget_date for at matche periode)
+    
+    budgets_query = filtered_budgets
     
     # 2. Hent de aggregerede udgifter for perioden (kun for denne account)
     expenses_by_category = _get_category_expenses_for_period(db, month, year, account_id)
