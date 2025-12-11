@@ -76,7 +76,6 @@ def test_base_saldo_negative_value():
     assert account.saldo == expected_saldo
 
 
-
 # AccountCreate Must have a User ID
 REQUIRED_USER_ID = 1
 
@@ -95,7 +94,7 @@ def test_create_user_id_valid():
     account = AccountCreate(name="Savings", saldo=100.0, User_idUser=valid_id)
     assert account.User_idUser == valid_id
 
-# --- B. Inheritance Confirmation ---
+# Inheritance Confirmation 
 
 # Inheritance Check - Name Max Length (Confirming AccountBase logic is inherited)
 def test_create_inheritance_name_max_length_invalid():
