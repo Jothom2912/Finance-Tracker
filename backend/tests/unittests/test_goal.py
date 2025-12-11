@@ -92,7 +92,7 @@ def test_base_name_max_length_invalid():
 
 REQUIRED_ACCOUNT_ID = 1
 
-# 12. Required Field - Missing Account ID - INVALID
+# Required Field - Missing Account ID - INVALID
 def test_create_missing_account_id_invalid():
     # ACT & ASSERT (Account_idAccount is required)
     with pytest.raises(ValidationError) as excinfo:
@@ -100,12 +100,12 @@ def test_create_missing_account_id_invalid():
     
     assert "Account_idAccount" in str(excinfo.value)
 
-# 13. Required Field - Valid Account ID - VALID
+# Required Field - Valid Account ID - VALID
 def test_create_account_id_valid():
     goal = GoalCreate(target_amount=VALID_TARGET, Account_idAccount=REQUIRED_ACCOUNT_ID)
     assert goal.Account_idAccount == REQUIRED_ACCOUNT_ID
 
-# 14. Inheritance Check - Target Date (Confirming GoalBase logic is inherited)
+# Inheritance Check - Target Date (Confirming GoalBase logic is inherited)
 def test_create_inheritance_target_date_today_invalid():
     today = date.today()
     # ACT & ASSERT (This confirms the validate_target_date logic is active in GoalCreate)
