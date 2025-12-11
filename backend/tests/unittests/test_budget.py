@@ -75,7 +75,7 @@ class BudgetUpdate(BaseModel):
     Account_idAccount: Optional[int] = None
 
 
-# 10. Update Schema - All Fields Omitted - VALID
+# Update Schema - All Fields Omitted - VALID
 def test_update_all_fields_omitted_valid():
     # ACT
     update_data = BudgetUpdate()
@@ -85,7 +85,7 @@ def test_update_all_fields_omitted_valid():
     assert update_data.budget_date is None
     assert update_data.Account_idAccount is None
 
-# 11. Update Schema - Partial Update (Only amount is provided) - VALID
+# Update Schema - Partial Update (Only amount is provided) - VALID
 def test_update_partial_update_valid():
     # ACT
     update_data = BudgetUpdate(amount=500.55)
