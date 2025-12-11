@@ -1,9 +1,11 @@
 import pytest
 from pydantic import ValidationError
-from backend.shared.schemas.category import CategoryCreate # Assume this is your actual import
+from backend.shared.schemas.category import CategoryCreate
 
 
 # ARRANGE: Define the boundaries (implicit in CategoryCreate's definition)
+
+#Category Name Boundary Value Tests
 
 # 1. Lower Boundary (N-1) - INVALID
 def test_name_min_length_below_boundary_invalid():
@@ -39,10 +41,42 @@ def test_name_max_length_above_boundary_invalid():
     with pytest.raises(ValidationError):
         CategoryCreate(name="A" * 31, type="income")
 
-# Optional: You could combine the two valid cases for efficiency if desired
-@pytest.mark.parametrize("name", ["A", "A" * 30])
-def test_name_valid_boundaries(name):
+# Equivilence Patritioning
+
+def test_type_valid_value_income():
+    # ARRANGE: Define the valid type
+    valid_type = "income"
+
     # ACT
-    valid_category = CategoryCreate(name=name, type="income")
+    valid_category = CategoryCreate(name="Salary", type=valid_type)
+
     # ASSERT
-    assert valid_category.name == name
+    assert valid_category.type == valid_type
+
+def test_type_valid_value_expense():
+    # Arange
+    valid_type = "expense"
+
+    # ACT
+    valid_cateory = CategoryCreate(name="Groceries", type=valid_type)
+
+    # ASSERT
+    assert valid_cateory.type == valid_type
+
+
+def test_type_invalid_value_unknown():
+    # ARRANGE: Define an invalid type
+    invalid_type = "transfer" # Neither 'income' nor 'expense'
+
+    # ACT & ASSERT
+    with pytest.raises(ValueError, match="Type må være en af"):
+        CategoryCreate(name="Invalid", type=invalid_type)
+
+
+def test_type_invalid_value_case_sensitive():
+    # ARRANGE: Test a case that violates strict match (e.g., uppercase)
+    invalid_type = "Income"
+
+    # ACT & ASSERT
+    with pytest.raises(ValueError, match="Type må være en af"):
+        CategoryCreate(name="Invalid Case", type=invalid_type)

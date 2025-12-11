@@ -15,6 +15,7 @@ from pydantic import ValidationError
 # CATEGORY BVA TESTS (4.1)
 # ============================================================================
 
+#done
 def test_category_name_boundary_values():
     """BVA: Name længde grænseværdier: 0, 1, 30, 31"""
     from backend.shared.schemas.category import CategoryCreate
