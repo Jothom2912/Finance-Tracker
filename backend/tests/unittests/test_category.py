@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 from backend.shared.schemas.category import CategoryCreate # Assume this is your actual import
 
+
 # ARRANGE: Define the boundaries (implicit in CategoryCreate's definition)
 
 # 1. Lower Boundary (N-1) - INVALID
