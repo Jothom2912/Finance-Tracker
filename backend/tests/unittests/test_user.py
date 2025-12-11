@@ -69,6 +69,7 @@ def test_base_email_format_invalid():
     # ACT & ASSERT (Pydantic's EmailStr handles this)
     with pytest.raises(ValidationError):
         UserBase(username="testuser", email="invalid-email")
+        
 
 # Email - Normalization to Lowercase
 def test_base_email_normalization_valid():
