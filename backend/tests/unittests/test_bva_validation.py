@@ -112,67 +112,59 @@ def test_budget_amount_boundary_values():
 
 
 def test_budget_period_boundary_values():
-    """BVA: Period må være weekly, monthly eller yearly"""
+    """BVA: Budget amount skal være >= 0 (test different amount values)"""
     from backend.shared.schemas.budget import BudgetCreate
     
     today = date.today()
-    tomorrow = today + timedelta(days=1)
     
-    # Valid periods
-    for period in ["weekly", "monthly", "yearly"]:
+    # Valid amounts - test boundary values
+    for amount in [0.0, 0.01, 100.0, 1000.0]:
         valid = BudgetCreate(
-            category_id=1,
-            amount=100.0,
-            start_date=today,
-            end_date=tomorrow,
-            period=period
+            amount=amount,
+            budget_date=today
         )
-        assert valid.period == period
+        assert abs(valid.amount - amount) < 0.001
     
-    # Invalid periods
-    for invalid_period in ["quarterly", "daily", "annual", "MONTHLY", ""]:
-        with pytest.raises(ValidationError):
-            BudgetCreate(
-                category_id=1,
-                amount=100.0,
-                start_date=today,
-                end_date=tomorrow,
-                period=invalid_period
-            )
+    # Invalid amount (negative)
+    with pytest.raises(ValidationError):
+        BudgetCreate(
+            amount=-0.01,
+            budget_date=today
+        )
 
 
 def test_budget_date_boundary_values():
-    """BVA: end_date grænseværdier relateret til start_date"""
+    """BVA: Budget date validation"""
     from backend.shared.schemas.budget import BudgetCreate
     
     today = date.today()
+    yesterday = today - timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
     
-    # end_date samme som start_date - INVALID
-    with pytest.raises(ValidationError):
-        BudgetCreate(
-            category_id=1,
-            amount=100.0,
-            start_date=today,
-            end_date=today
-        )
-    
-    # end_date før start_date - INVALID
-    with pytest.raises(ValidationError):
-        BudgetCreate(
-            category_id=1,
-            amount=100.0,
-            start_date=today,
-            end_date=today - timedelta(days=1)
-        )
-    
-    # end_date = start_date + 1 dag - VALID (grænse)
+    # Valid budget dates (can be any date - past, present, or future)
     valid = BudgetCreate(
-        category_id=1,
         amount=100.0,
-        start_date=today,
-        end_date=today + timedelta(days=1)
+        budget_date=today
     )
-    assert valid.end_date == today + timedelta(days=1)
+    assert valid.budget_date == today
+    
+    valid = BudgetCreate(
+        amount=100.0,
+        budget_date=yesterday
+    )
+    assert valid.budget_date == yesterday
+    
+    valid = BudgetCreate(
+        amount=100.0,
+        budget_date=tomorrow
+    )
+    assert valid.budget_date == tomorrow
+    
+    # Valid without date (optional)
+    valid = BudgetCreate(
+        amount=100.0
+    )
+    assert valid.budget_date is None
 
 
 # ============================================================================
@@ -288,25 +280,28 @@ def test_transaction_amount_cannot_be_zero():
         TransactionCreate(
             amount=0,
             transaction_date=today,
-            Category_idCategory=1,
-            Account_idAccount=1
+            type="expense",
+            category_id=1,
+            account_id=1
         )
     
-    # -0.01 - VALID (negative)
+    # -0.01 - VALID (negative/expense)
     valid = TransactionCreate(
         amount=-0.01,
         transaction_date=today,
-        Category_idCategory=1,
-        Account_idAccount=1
+        type="expense",
+        category_id=1,
+        account_id=1
     )
     assert abs(valid.amount - (-0.01)) < 0.001
     
-    # 0.01 - VALID (positive)
+    # 0.01 - VALID (positive/income)
     valid = TransactionCreate(
         amount=0.01,
         transaction_date=today,
-        Category_idCategory=1,
-        Account_idAccount=1
+        type="income",
+        category_id=1,
+        account_id=1
     )
     assert abs(valid.amount - 0.01) < 0.001
 
