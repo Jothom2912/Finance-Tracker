@@ -58,10 +58,10 @@ def test_type_valid_value_expense():
     valid_type = "expense"
 
     # ACT
-    valid_cateory = CategoryCreate(name="Groceries", type=valid_type)
+    valid_category = CategoryCreate(name="Groceries", type=valid_type)
 
     # ASSERT
-    assert valid_cateory.type == valid_type
+    assert valid_category.type == valid_type
 
 
 def test_type_invalid_value_unknown():
