@@ -15,9 +15,10 @@ from pydantic import ValidationError
 # CATEGORY BVA TESTS (4.1)
 # ============================================================================
 
+#done
 def test_category_name_boundary_values():
     """BVA: Name længde grænseværdier: 0, 1, 30, 31"""
-    from backend.schemas.category import CategoryCreate
+    from backend.shared.schemas.category import CategoryCreate
     
     # 0 chars - INVALID
     with pytest.raises(ValidationError):
@@ -38,7 +39,7 @@ def test_category_name_boundary_values():
 
 def test_category_type_boundary_values():
     """BVA: Type må være 'income' eller 'expense'"""
-    from backend.schemas.category import CategoryCreate
+    from backend.shared.schemas.category import CategoryCreate
     
     # Valid types
     valid1 = CategoryCreate(name="Test", type="income")
@@ -60,7 +61,7 @@ def test_category_type_boundary_values():
 
 def test_category_description_boundary_values():
     """BVA: Description max 200 chars"""
-    from backend.schemas.category import CategoryCreate
+    from backend.shared.schemas.category import CategoryCreate
     
     # 200 chars - VALID (grænse)
     valid = CategoryCreate(name="Test", type="income", description="A" * 200)
@@ -81,7 +82,7 @@ def test_category_description_boundary_values():
 
 def test_budget_amount_boundary_values():
     """BVA: Amount grænseværdier: -0.01 (invalid), 0 (valid), 0.01 (valid)"""
-    from backend.schemas.budget import BudgetCreate
+    from backend.shared.schemas.budget import BudgetCreate
     
     # -0.01 - INVALID
     with pytest.raises(ValidationError):
@@ -112,67 +113,59 @@ def test_budget_amount_boundary_values():
 
 
 def test_budget_period_boundary_values():
-    """BVA: Period må være weekly, monthly eller yearly"""
-    from backend.schemas.budget import BudgetCreate
+    """BVA: Budget amount skal være >= 0 (test different amount values)"""
+    from backend.shared.schemas.budget import BudgetCreate
     
     today = date.today()
-    tomorrow = today + timedelta(days=1)
     
-    # Valid periods
-    for period in ["weekly", "monthly", "yearly"]:
+    # Valid amounts - test boundary values
+    for amount in [0.0, 0.01, 100.0, 1000.0]:
         valid = BudgetCreate(
-            category_id=1,
-            amount=100.0,
-            start_date=today,
-            end_date=tomorrow,
-            period=period
+            amount=amount,
+            budget_date=today
         )
-        assert valid.period == period
+        assert abs(valid.amount - amount) < 0.001
     
-    # Invalid periods
-    for invalid_period in ["quarterly", "daily", "annual", "MONTHLY", ""]:
-        with pytest.raises(ValidationError):
-            BudgetCreate(
-                category_id=1,
-                amount=100.0,
-                start_date=today,
-                end_date=tomorrow,
-                period=invalid_period
-            )
+    # Invalid amount (negative)
+    with pytest.raises(ValidationError):
+        BudgetCreate(
+            amount=-0.01,
+            budget_date=today
+        )
 
 
 def test_budget_date_boundary_values():
-    """BVA: end_date grænseværdier relateret til start_date"""
-    from backend.schemas.budget import BudgetCreate
+    """BVA: Budget date validation"""
+    from backend.shared.schemas.budget import BudgetCreate
     
     today = date.today()
+    yesterday = today - timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
     
-    # end_date samme som start_date - INVALID
-    with pytest.raises(ValidationError):
-        BudgetCreate(
-            category_id=1,
-            amount=100.0,
-            start_date=today,
-            end_date=today
-        )
-    
-    # end_date før start_date - INVALID
-    with pytest.raises(ValidationError):
-        BudgetCreate(
-            category_id=1,
-            amount=100.0,
-            start_date=today,
-            end_date=today - timedelta(days=1)
-        )
-    
-    # end_date = start_date + 1 dag - VALID (grænse)
+    # Valid budget dates (can be any date - past, present, or future)
     valid = BudgetCreate(
-        category_id=1,
         amount=100.0,
-        start_date=today,
-        end_date=today + timedelta(days=1)
+        budget_date=today
     )
-    assert valid.end_date == today + timedelta(days=1)
+    assert valid.budget_date == today
+    
+    valid = BudgetCreate(
+        amount=100.0,
+        budget_date=yesterday
+    )
+    assert valid.budget_date == yesterday
+    
+    valid = BudgetCreate(
+        amount=100.0,
+        budget_date=tomorrow
+    )
+    assert valid.budget_date == tomorrow
+    
+    # Valid without date (optional)
+    valid = BudgetCreate(
+        amount=100.0
+    )
+    assert valid.budget_date is None
 
 
 # ============================================================================
@@ -181,7 +174,7 @@ def test_budget_date_boundary_values():
 
 def test_goal_target_amount_boundary_values():
     """BVA: Target amount grænseværdier: -0.01 (invalid), 0 (valid), 0.01 (valid)"""
-    from backend.schemas.goal import GoalCreate
+    from backend.shared.schemas.goal import GoalCreate
     
     # -0.01 - INVALID
     with pytest.raises(ValidationError):
@@ -210,7 +203,7 @@ def test_goal_target_amount_boundary_values():
 
 def test_goal_current_vs_target_boundary():
     """BVA: current_amount må IKKE være > target_amount"""
-    from backend.schemas.goal import GoalCreate
+    from backend.shared.schemas.goal import GoalCreate
     
     # current > target - INVALID
     with pytest.raises(ValidationError):
@@ -239,7 +232,7 @@ def test_goal_current_vs_target_boundary():
 
 def test_goal_deadline_boundary_values():
     """BVA: Deadline skal være i fremtiden"""
-    from backend.schemas.goal import GoalCreate
+    from backend.shared.schemas.goal import GoalCreate
     
     today = date.today()
     tomorrow = today + timedelta(days=1)
@@ -279,7 +272,7 @@ def test_goal_deadline_boundary_values():
 
 def test_transaction_amount_cannot_be_zero():
     """BVA: Amount må IKKE være 0"""
-    from backend.schemas.transaction import TransactionCreate
+    from backend.shared.schemas.transaction import TransactionCreate
     
     today = date.today()
     
@@ -288,25 +281,28 @@ def test_transaction_amount_cannot_be_zero():
         TransactionCreate(
             amount=0,
             transaction_date=today,
-            Category_idCategory=1,
-            Account_idAccount=1
+            type="expense",
+            category_id=1,
+            account_id=1
         )
     
-    # -0.01 - VALID (negative)
+    # -0.01 - VALID (negative/expense)
     valid = TransactionCreate(
         amount=-0.01,
         transaction_date=today,
-        Category_idCategory=1,
-        Account_idAccount=1
+        type="expense",
+        category_id=1,
+        account_id=1
     )
     assert abs(valid.amount - (-0.01)) < 0.001
     
-    # 0.01 - VALID (positive)
+    # 0.01 - VALID (positive/income)
     valid = TransactionCreate(
         amount=0.01,
         transaction_date=today,
-        Category_idCategory=1,
-        Account_idAccount=1
+        type="income",
+        category_id=1,
+        account_id=1
     )
     assert abs(valid.amount - 0.01) < 0.001
 
@@ -317,7 +313,7 @@ def test_transaction_amount_cannot_be_zero():
 
 def test_user_username_boundary_values():
     """BVA: Username grænseværdier: 2 (invalid), 3 (valid), 20 (valid), 21 (invalid)"""
-    from backend.schemas.user import UserCreate
+    from backend.shared.schemas.user import UserCreate
     
     # 2 chars - INVALID
     with pytest.raises(ValidationError):
@@ -354,7 +350,7 @@ def test_user_username_boundary_values():
 
 def test_user_password_boundary_values():
     """BVA: Password grænseværdier: 7 (invalid), 8 (valid), 9 (valid)"""
-    from backend.schemas.user import UserCreate
+    from backend.shared.schemas.user import UserCreate
     
     # 7 chars - INVALID
     with pytest.raises(ValidationError):

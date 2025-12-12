@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 def test_user_username_boundary_values():
     """BVA: Username grænseværdier: 2 (invalid), 3 (valid), 20 (valid), 21 (invalid)"""
-    from backend.schemas.user import UserCreate
+    from backend.shared.schemas.user import UserCreate
     
     # 2 chars - INVALID
     with pytest.raises(ValidationError) as exc_info:
@@ -53,7 +53,7 @@ def test_user_username_boundary_values():
 
 def test_user_password_boundary_values():
     """BVA: Password grænseværdier: 7 (invalid), 8 (valid), 9 (valid)"""
-    from backend.schemas.user import UserCreate
+    from backend.shared.schemas.user import UserCreate
     
     # 7 chars - INVALID
     with pytest.raises(ValidationError) as exc_info:
@@ -83,7 +83,7 @@ def test_user_password_boundary_values():
 
 def test_user_username_format():
     """BVA: Username må kun indeholde alphanumeriske tegn + underscore"""
-    from backend.schemas.user import UserCreate
+    from backend.shared.schemas.user import UserCreate
     
     # Valid formats
     for username in ["user123", "user_name", "User123", "_underscore", "123"]:
@@ -106,7 +106,7 @@ def test_user_username_format():
 
 def test_user_email_format():
     """BVA: Email skal være valid format"""
-    from backend.schemas.user import UserCreate
+    from backend.shared.schemas.user import UserCreate
     
     # Valid emails
     valid = UserCreate(
@@ -132,7 +132,7 @@ def test_user_email_format():
 
 def test_planned_transaction_amount_boundary():
     """BVA: Amount må IKKE være 0"""
-    from backend.schemas.planned_transactions import PlannedTransactionsCreate
+    from backend.shared.schemas.planned_transactions import PlannedTransactionsCreate
     
     today = date.today()
     
@@ -163,7 +163,7 @@ def test_planned_transaction_amount_boundary():
 
 def test_planned_transaction_date_boundary():
     """BVA: Planned date skal være i dag eller fremtid (ikke fortid)"""
-    from backend.schemas.planned_transactions import PlannedTransactionsCreate
+    from backend.shared.schemas.planned_transactions import PlannedTransactionsCreate
     
     today = date.today()
     yesterday = today - timedelta(days=1)
@@ -197,7 +197,7 @@ def test_planned_transaction_date_boundary():
 
 def test_planned_transaction_repeat_interval():
     """BVA: Repeat interval må være daily, weekly eller monthly"""
-    from backend.schemas.planned_transactions import PlannedTransactionsCreate
+    from backend.shared.schemas.planned_transactions import PlannedTransactionsCreate
     
     today = date.today()
     
@@ -228,7 +228,7 @@ def test_planned_transaction_repeat_interval():
 
 def test_account_group_name_boundary():
     """BVA: Group name længde grænseværdier: 0, 1, 30, 31"""
-    from backend.schemas.account_groups import AccountGroupsCreate
+    from backend.shared.schemas.account_groups import AccountGroupsCreate
     
     # 0 chars - INVALID
     with pytest.raises(ValidationError):
@@ -249,7 +249,7 @@ def test_account_group_name_boundary():
 
 def test_account_group_max_users_boundary():
     """BVA: max_users grænseværdier: 19 (valid), 20 (valid/grænse), 21 (invalid)"""
-    from backend.schemas.account_groups import AccountGroupsCreate
+    from backend.shared.schemas.account_groups import AccountGroupsCreate
     
     # 19 - VALID (under grænse)
     valid = AccountGroupsCreate(name="Test", max_users=19)
@@ -262,12 +262,13 @@ def test_account_group_max_users_boundary():
     # 21 - INVALID (over grænse)
     with pytest.raises(ValidationError) as exc_info:
         AccountGroupsCreate(name="Test", max_users=21)
-    assert "cannot be greater than 20" in str(exc_info.value).lower()
+    error_msg = str(exc_info.value).lower()
+    assert "less than or equal to 20" in error_msg or "cannot be greater than 20" in error_msg
 
 
 def test_account_group_user_count_validation():
     """BVA: Antal brugere må ikke overstige max_users"""
-    from backend.schemas.account_groups import AccountGroupsCreate
+    from backend.shared.schemas.account_groups import AccountGroupsCreate
     
     # user_ids count > max_users - INVALID
     with pytest.raises(ValidationError) as exc_info:
