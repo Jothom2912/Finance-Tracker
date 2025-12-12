@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
-import pandas as pd 
+import pandas as pd
 
 from backend.database import get_db
 from backend.shared.schemas.transaction import Transaction as TransactionSchema, TransactionCreate
@@ -39,7 +39,7 @@ def create_transaction_route(
             account_id = int(x_account_id)
         except ValueError:
             pass
-    
+
     # Hvis ingen account_id i header, find første account for brugeren
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -49,21 +49,21 @@ def create_transaction_route(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
-    
+
     if not account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
-    
+
     # Tilføj account_id til transaction data hvis det ikke allerede er sat
     transaction_dict = transaction.model_dump()
     if 'account_id' not in transaction_dict or transaction_dict.get('account_id') is None:
         transaction_dict['account_id'] = account_id
-    
+
     # Opret ny TransactionCreate med account_id
     transaction_with_account = TransactionCreate(**transaction_dict)
-    
+
     try:
         # Kald funktionen direkte
         db_transaction = create_transaction(db, transaction_with_account)
@@ -91,7 +91,7 @@ async def upload_transactions_csv_route(
             account_id = int(x_account_id)
         except ValueError:
             pass
-    
+
     # Hvis ingen account_id i header, find første account for brugeren
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -101,7 +101,7 @@ async def upload_transactions_csv_route(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
-    
+
     if not account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -150,7 +150,7 @@ def read_transactions_route(
             final_account_id = int(x_account_id)
         except ValueError:
             pass
-    
+
     if not final_account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
         token_data = decode_token(token)
@@ -159,14 +159,14 @@ def read_transactions_route(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 final_account_id = accounts[0].idAccount
-    
+
     # KRITISK: Hvis ingen account_id, fejl - vi kan ikke hente ALLE transaktioner
     if not final_account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
-    
+
     # Kald funktionen direkte
     transactions = get_transactions(
         db, start_date, end_date, category_id, type, month, year, final_account_id, skip, limit
@@ -186,7 +186,7 @@ def read_transaction_route(transaction_id: int, db: Session = Depends(get_db)):
 # --- Opdater transaktion ---
 @router.put("/{transaction_id}", response_model=TransactionSchema)
 def update_transaction_route(
-    transaction_id: int, 
+        transaction_id: int,
     transaction: TransactionCreate,
     authorization: Optional[str] = Header(None, alias="Authorization"),
     x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
@@ -200,7 +200,7 @@ def update_transaction_route(
             account_id = int(x_account_id)
         except ValueError:
             pass
-    
+
     # Hvis ingen account_id i header, find første account for brugeren
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -210,16 +210,16 @@ def update_transaction_route(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
-    
+
     # Tilføj account_id til transaction data hvis det ikke allerede er sat
     transaction_dict = transaction.model_dump()
     if 'account_id' not in transaction_dict or transaction_dict.get('account_id') is None:
         if account_id:
             transaction_dict['account_id'] = account_id
-    
+
     # Opret ny TransactionCreate med account_id
     transaction_with_account = TransactionCreate(**transaction_dict)
-    
+
     try:
         # Kald funktionen direkte
         updated_transaction = update_transaction(db, transaction_id, transaction_with_account)

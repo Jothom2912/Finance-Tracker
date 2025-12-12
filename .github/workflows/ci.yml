@@ -33,4 +33,4 @@ jobs:
       - name: Run tests
         run: |
           pip install pytest
-          pytest -q
+          python -m pytest backend/tests/ -v

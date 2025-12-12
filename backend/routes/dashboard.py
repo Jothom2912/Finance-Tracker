@@ -27,7 +27,7 @@ def get_account_id_from_headers(
 ) -> Optional[int]:
     """Henter account_id fra X-Account-ID header eller fra user's første account."""
     account_id = None
-    
+
     # Først prøv at hente fra X-Account-ID header
     if x_account_id:
         try:
@@ -35,7 +35,7 @@ def get_account_id_from_headers(
             return account_id
         except ValueError:
             pass
-    
+
     # Hvis ikke fundet, prøv at hente fra user's første account
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -45,7 +45,7 @@ def get_account_id_from_headers(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
-    
+
     return account_id
 
 @router.get("/overview/", response_model=FinancialOverview)
@@ -63,7 +63,7 @@ def get_financial_overview_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
-    
+
     try:
         # Kald funktionen direkte med account_id
         overview = get_financial_overview(db, start_date, end_date, account_id)

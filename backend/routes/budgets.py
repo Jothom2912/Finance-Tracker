@@ -9,11 +9,11 @@ from backend.auth import decode_token
 
 # KORREKT: Direkte import af funktionerne
 from backend.services.budget_service import (
-    get_budgets_by_period, 
-    get_budget_by_id, 
-    create_budget, 
-    update_budget, 
-    delete_budget, 
+    get_budgets_by_period,
+    get_budget_by_id,
+    create_budget,
+    update_budget,
+    delete_budget,
     get_budget_summary
 )
 
@@ -30,7 +30,7 @@ def get_account_id_from_headers(
 ) -> Optional[int]:
     """Henter account_id fra X-Account-ID header eller fra user's første account."""
     account_id = None
-    
+
     # Først prøv at hente fra X-Account-ID header
     if x_account_id:
         try:
@@ -38,7 +38,7 @@ def get_account_id_from_headers(
             return account_id
         except ValueError:
             pass
-    
+
     # Hvis ikke fundet, prøv at hente fra user's første account
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -48,7 +48,7 @@ def get_account_id_from_headers(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
-    
+
     return account_id
 
 # --- Hentning af Budgetter (Filtreret af måned/år/konto) ---
@@ -67,7 +67,7 @@ async def get_budgets_for_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
-    
+
     # RETTET: Kald funktionen direkte
     budgets = get_budgets_by_period(db, account_id=account_id, start_date=None, end_date=None)
     return budgets
@@ -107,7 +107,7 @@ async def create_budget_route(
             account_id = int(x_account_id)
         except ValueError:
             pass
-    
+
     # Hvis ingen account_id i header, find første account for brugeren
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -117,16 +117,16 @@ async def create_budget_route(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
-    
+
     if not account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
-    
+
     # Tilføj account_id til budget data hvis det ikke allerede er sat
     budget_dict = budget.model_dump()
-    
+
     # Konverter month/year til budget_date hvis budget_date ikke er sat
     if not budget_dict.get('budget_date'):
         month = budget_dict.get('month')
@@ -140,17 +140,17 @@ async def create_budget_route(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Ugyldig måned/år: {month}/{year}"
                 )
-    
+
     # Fjern month/year fra dict da de ikke er i modellen
     budget_dict.pop('month', None)
     budget_dict.pop('year', None)
-    
+
     if 'Account_idAccount' not in budget_dict or budget_dict.get('Account_idAccount') is None:
         budget_dict['Account_idAccount'] = account_id
-    
+
     # Opret ny BudgetCreate med account_id
     budget_with_account = BudgetCreate(**budget_dict)
-    
+
     try:
         # RETTET: Kald funktionen direkte
         new_budget = create_budget(db, budget_with_account)
@@ -182,14 +182,14 @@ async def update_budget_route(budget_id: int, budget: BudgetUpdate, db: Session 
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Ugyldig måned/år: {month}/{year}"
                     )
-        
+
         # Fjern month/year fra dict
         budget_dict.pop('month', None)
         budget_dict.pop('year', None)
-        
+
         # Opret BudgetUpdate med konverteret data
         budget_with_date = BudgetUpdate(**budget_dict)
-        
+
         # RETTET: Kald funktionen direkte
         updated_budget = update_budget(db, budget_id, budget_with_date)
         if not updated_budget:
@@ -210,7 +210,7 @@ async def delete_budget_route(budget_id: int, db: Session = Depends(get_db)):
     # RETTET: Kald funktionen direkte
     if not delete_budget(db, budget_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
-    return 
+    return
 
 
 # --- Budget Opsummering ---
@@ -229,7 +229,7 @@ async def get_budget_summary_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
-    
+
     # RETTET: Kald funktionen direkte
     summary = get_budget_summary(db, account_id, month, year)
     return summary
