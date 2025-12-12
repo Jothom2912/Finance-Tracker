@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional
 from backend.validation_boundaries import CATEGORY_BVA
 
@@ -7,14 +7,12 @@ class TransactionBase(BaseModel):
     idTransaction: int
     amount: float
     type: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BudgetBase(BaseModel):
     idBudget: int
     amount: float
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Base Schema ---
@@ -72,5 +70,4 @@ class Category(CategoryBase):
     transactions: List[TransactionBase] = []
     budgets: List[BudgetBase] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

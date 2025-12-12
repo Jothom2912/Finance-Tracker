@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from decimal import Decimal
 from backend.validation_boundaries import ACCOUNT_BVA
@@ -7,28 +7,24 @@ from backend.validation_boundaries import ACCOUNT_BVA
 class UserBase(BaseModel):
     idUser: int
     username: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TransactionBase(BaseModel):
     idTransaction: int
     amount: float
     type: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
         
 class BudgetBase(BaseModel):
     idBudget: int
     amount: float
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GoalBase(BaseModel):
     idGoal: int
     name: Optional[str] = None
     status: Optional[str] = None
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Base Schema ---
 class AccountBase(BaseModel):
@@ -72,8 +68,9 @@ class Account(AccountBase):
     budgets: Optional[List[BudgetBase]] = []
     goals: Optional[List[GoalBase]] = []
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             Decimal: lambda v: float(v),
         }
+    )

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import date, datetime
 from typing import Optional
 from decimal import Decimal
@@ -8,8 +8,7 @@ from backend.validation_boundaries import GOAL_BVA
 class AccountBase(BaseModel):
     idAccount: int
     name: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Base Schema ---
 class GoalBase(BaseModel):
@@ -104,8 +103,9 @@ class Goal(GoalBase):
     # Relationship
     account: AccountBase
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             Decimal: lambda v: float(v),
         }
+    )

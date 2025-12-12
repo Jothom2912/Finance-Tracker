@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator, EmailStr
+from pydantic import BaseModel, Field, field_validator, EmailStr, ConfigDict
 from datetime import datetime
 from typing import Optional, List
 import re
@@ -9,14 +9,12 @@ class AccountBase(BaseModel):
     idAccount: int
     name: str
     saldo: float
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AccountGroupsBase(BaseModel):
     idAccountGroups: int
     name: Optional[str] = None
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Base Schema ---
 class UserBase(BaseModel):
@@ -86,8 +84,7 @@ class User(UserBase):
     accounts: List[AccountBase] = []
     account_groups: List[AccountGroupsBase] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Schema for login (email + password) ---
 class UserLogin(BaseModel):
@@ -112,5 +109,4 @@ class TokenResponse(BaseModel):
     email: str
     account_id: Optional[int] = None  # Første account ID hvis brugeren har accounts
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

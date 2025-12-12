@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime, date
 from typing import Optional
 from decimal import Decimal
@@ -14,14 +14,12 @@ class TransactionType(str, enum.Enum):
 class CategoryBase(BaseModel):
     idCategory: int
     name: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AccountBase(BaseModel):
     idAccount: int
     name: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- 1. Base Schema ---
 class TransactionBase(BaseModel):
@@ -71,11 +69,12 @@ class TransactionBase(BaseModel):
             )
         return v
     
-    class Config:
-        from_attributes = True
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             Decimal: lambda v: float(v),
         }
+    )
 
 # --- 2. Schema for Oprettelse (Bruges i POST) ---
 class TransactionCreate(TransactionBase):
@@ -96,11 +95,12 @@ class Transaction(TransactionBase):
     category: Optional[CategoryBase] = None
     account: Optional[AccountBase] = None
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             Decimal: lambda v: float(v),
         }
+    )
 
 # NB: Hvis du bruger din Transaction model til at læse data, 
 # er det Transaction-skemaet, du skal importere i din router.

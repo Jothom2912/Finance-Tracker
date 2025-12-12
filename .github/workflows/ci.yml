@@ -32,5 +32,6 @@ jobs:
 
       - name: Run tests
         run: |
-          pip install pytest
           python -m pytest backend/tests/ -v
+        env:
+          ACTIVE_DB: mysql

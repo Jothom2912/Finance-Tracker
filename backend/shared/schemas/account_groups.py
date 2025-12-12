@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from backend.validation_boundaries import ACCOUNT_GROUP_BVA
 
@@ -6,8 +6,7 @@ from backend.validation_boundaries import ACCOUNT_GROUP_BVA
 class UserBase(BaseModel):
     idUser: int
     username: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Base Schema ---
 class AccountGroupsBase(BaseModel):
@@ -70,5 +69,4 @@ class AccountGroups(AccountGroupsBase):
     # Relationships
     users: List[UserBase] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

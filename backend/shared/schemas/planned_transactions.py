@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
@@ -8,8 +8,7 @@ from backend.validation_boundaries import PLANNED_TRANSACTION_BVA
 class TransactionBase(BaseModel):
     idTransaction: int
     description: Optional[str] = None
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Base Schema ---
 class PlannedTransactionsBase(BaseModel):
@@ -88,8 +87,9 @@ class PlannedTransactions(PlannedTransactionsBase):
     # Relationship
     transaction: Optional[TransactionBase] = None  # Kan være NULL
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             Decimal: lambda v: float(v),
         }
+    )
