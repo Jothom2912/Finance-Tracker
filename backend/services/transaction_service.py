@@ -76,26 +76,39 @@ def get_transactions(
 
 def create_transaction(db: Session, transaction: TransactionCreate) -> TransactionModel:
     """Opretter en enkelt transaktion manuelt."""
+    print(f"DEBUG create_transaction service: Modtaget transaction = {transaction.model_dump()}")
+    print(f"DEBUG create_transaction service: transaction.Account_idAccount = {transaction.Account_idAccount}")
+    print(f"DEBUG create_transaction service: transaction.Category_idCategory = {transaction.Category_idCategory}")
+
     # Validering af kategori
     category = db.query(CategoryModel).filter(CategoryModel.idCategory == transaction.Category_idCategory).first()
     if not category:
+        print(f"DEBUG create_transaction service: Kategori {transaction.Category_idCategory} findes ikke!")
         raise ValueError("Kategori med dette ID findes ikke.")
+    print(f"DEBUG create_transaction service: Kategori fundet: {category.name}")
     
     # Validering af account_id
     if not transaction.Account_idAccount:
+        print(f"DEBUG create_transaction service: Account_idAccount er None eller 0 - fejler!")
         raise ValueError("Account ID er påkrævet for at oprette en transaktion.")
+    print(f"DEBUG create_transaction service: Account_idAccount er OK: {transaction.Account_idAccount}")
     
     # Map schema fields to model fields
     transaction_data = transaction.model_dump(by_alias=False)
+    print(f"DEBUG create_transaction service: transaction_data (by_alias=False) = {transaction_data}")
+
     # Rename 'transaction_date' to 'date' for the SQLAlchemy model
     if 'transaction_date' in transaction_data:
         transaction_data['date'] = transaction_data.pop('transaction_date')
-        
+        print(f"DEBUG create_transaction service: Renamed transaction_date to date")
+
+    print(f"DEBUG create_transaction service: Final transaction_data = {transaction_data}")
     db_transaction = TransactionModel(**transaction_data)
     
     db.add(db_transaction)
     db.commit()
     db.refresh(db_transaction)
+    print(f"DEBUG create_transaction service: Transaktion oprettet med ID: {db_transaction.idTransaction}")
     return db_transaction
 
 def update_transaction(db: Session, transaction_id: int, transaction_data: TransactionCreate) -> Optional[TransactionModel]:

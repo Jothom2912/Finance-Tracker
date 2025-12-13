@@ -30,10 +30,15 @@ def _resolve_account_id(
     db: Session
 ) -> Optional[int]:
     """Helper: Hent account_id fra header eller token."""
+    print(f"DEBUG _resolve_account_id: x_account_id = {x_account_id} (type: {type(x_account_id)})")
+
     if x_account_id:
         try:
-            return int(x_account_id)
-        except ValueError:
+            account_id = int(x_account_id)
+            print(f"DEBUG _resolve_account_id: Konverteret x_account_id til int: {account_id}")
+            return account_id
+        except ValueError as e:
+            print(f"DEBUG _resolve_account_id: Fejl ved konvertering af x_account_id: {e}")
             pass
 
     if authorization:
@@ -43,7 +48,11 @@ def _resolve_account_id(
             from backend.services import account_service
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
-                return accounts[0].idAccount
+                account_id = accounts[0].idAccount
+                print(f"DEBUG _resolve_account_id: Hentet account_id fra token: {account_id}")
+                return account_id
+
+    print(f"DEBUG _resolve_account_id: Returnerer None - ingen account_id fundet")
     return None
 
 # --- Opret manuel transaktion ---
@@ -55,21 +64,40 @@ def create_transaction_route(
     db: Session = Depends(get_db)
 ):
     """Opretter en ny transaktion manuelt."""
+    print(f"DEBUG create_transaction_route: x_account_id header = {x_account_id}")
+    print(f"DEBUG create_transaction_route: authorization header = {authorization[:50] if authorization else None}...")
+
     account_id = _resolve_account_id(x_account_id, authorization, db)
+    print(f"DEBUG create_transaction_route: resolved account_id = {account_id}")
 
     if not account_id:
+        print(f"DEBUG create_transaction_route: account_id er None - fejler!")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
 
-    # ✅ FIX: Brug model_copy() i stedet for at oprette ny instans
+    # ✅ DEBUG: Tjek transaction før opdatering
+    print(f"DEBUG create_transaction_route: transaction.Account_idAccount BEFORE = {transaction.Account_idAccount}")
+    print(f"DEBUG create_transaction_route: transaction input = {transaction.model_dump()}")
+    print(f"DEBUG create_transaction_route: transaction input (by_alias=False) = {transaction.model_dump(by_alias=False)}")
+
+    # ✅ FIX: Brug model_copy() med det korrekte feltnavn (Account_idAccount, ikke account_id alias)
     if transaction.Account_idAccount is None:
-        transaction = transaction.model_copy(update={"account_id": account_id})
+        # model_copy(update={...}) bruger field navne, ikke aliases
+        transaction = transaction.model_copy(update={"Account_idAccount": account_id})
+        print(f"DEBUG create_transaction_route: Opdateret transaction med Account_idAccount = {account_id}")
+
+    print(f"DEBUG create_transaction_route: transaction.Account_idAccount AFTER = {transaction.Account_idAccount}")
+    print(f"DEBUG create_transaction_route: transaction final = {transaction.model_dump()}")
+    print(f"DEBUG create_transaction_route: transaction final (by_alias=False) = {transaction.model_dump(by_alias=False)}")
 
     try:
-        return create_transaction(db, transaction)
+        result = create_transaction(db, transaction)
+        print(f"DEBUG create_transaction_route: create_transaction returnerede: {result.idTransaction if result else None}")
+        return result
     except ValueError as e:
+        print(f"DEBUG create_transaction_route: ValueError fra create_transaction = {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
@@ -160,9 +188,9 @@ def update_transaction_route(
     """Opdaterer en eksisterende transaktion."""
     account_id = _resolve_account_id(x_account_id, authorization, db)
 
-    # ✅ FIX: Brug model_copy() i stedet for at oprette ny instans
+    # ✅ FIX: Brug model_copy() med det korrekte feltnavn (Account_idAccount, ikke account_id alias)
     if transaction.Account_idAccount is None and account_id:
-        transaction = transaction.model_copy(update={"account_id": account_id})
+        transaction = transaction.model_copy(update={"Account_idAccount": account_id})
 
     try:
         updated = update_transaction(db, transaction_id, transaction)
