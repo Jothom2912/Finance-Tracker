@@ -23,6 +23,29 @@ router = APIRouter(
     tags=["Transactions"],
 )
 
+
+def _resolve_account_id(
+    x_account_id: Optional[str],
+    authorization: Optional[str],
+    db: Session
+) -> Optional[int]:
+    """Helper: Hent account_id fra header eller token."""
+    if x_account_id:
+        try:
+            return int(x_account_id)
+        except ValueError:
+            pass
+
+    if authorization:
+        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        token_data = decode_token(token)
+        if token_data:
+            from backend.services import account_service
+            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            if accounts:
+                return accounts[0].idAccount
+    return None
+
 # --- Opret manuel transaktion ---
 @router.post("/", response_model=TransactionSchema, status_code=status.HTTP_201_CREATED)
 def create_transaction_route(
@@ -32,23 +55,7 @@ def create_transaction_route(
     db: Session = Depends(get_db)
 ):
     """Opretter en ny transaktion manuelt."""
-    # Hent account_id fra header eller fra user's første account
-    account_id = None
-    if x_account_id:
-        try:
-            account_id = int(x_account_id)
-        except ValueError:
-            pass
-
-    # Hvis ingen account_id i header, find første account for brugeren
-    if not account_id and authorization:
-        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        token_data = decode_token(token)
-        if token_data:
-            from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
-            if accounts:
-                account_id = accounts[0].idAccount
+    account_id = _resolve_account_id(x_account_id, authorization, db)
 
     if not account_id:
         raise HTTPException(
@@ -56,18 +63,12 @@ def create_transaction_route(
             detail="Account ID mangler. Vælg en konto først."
         )
 
-    # Tilføj account_id til transaction data hvis det ikke allerede er sat
-    transaction_dict = transaction.model_dump()
-    if 'account_id' not in transaction_dict or transaction_dict.get('account_id') is None:
-        transaction_dict['account_id'] = account_id
-
-    # Opret ny TransactionCreate med account_id
-    transaction_with_account = TransactionCreate(**transaction_dict)
+    # ✅ FIX: Brug model_copy() i stedet for at oprette ny instans
+    if transaction.Account_idAccount is None:
+        transaction = transaction.model_copy(update={"account_id": account_id})
 
     try:
-        # Kald funktionen direkte
-        db_transaction = create_transaction(db, transaction_with_account)
-        return db_transaction
+        return create_transaction(db, transaction)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -84,24 +85,7 @@ async def upload_transactions_csv_route(
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ugyldig filtype. Kun CSV-filer er tilladt.")
 
-    # Hent account_id fra header eller fra user's første account
-    account_id = None
-    if x_account_id:
-        try:
-            account_id = int(x_account_id)
-        except ValueError:
-            pass
-
-    # Hvis ingen account_id i header, find første account for brugeren
-    if not account_id and authorization:
-        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        token_data = decode_token(token)
-        if token_data:
-            from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
-            if accounts:
-                account_id = accounts[0].idAccount
-
+    account_id = _resolve_account_id(x_account_id, authorization, db)
     if not account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -110,11 +94,10 @@ async def upload_transactions_csv_route(
 
     try:
         contents = await file.read()
-        # Kald funktionen direkte med account_id
-        print(f"📤 Uploading CSV for account_id={account_id}")
+        # ✅ FIX: Konverter SQLAlchemy objekter til Pydantic schemas
         created_transactions = import_transactions_from_csv(db, contents, account_id)
-        print(f"✅ Upload complete: {len(created_transactions)} transaktioner gemt")
-        return created_transactions
+        # Konverter til schemas for response serialization
+        return [TransactionSchema.model_validate(t) for t in created_transactions]
     except pd.errors.EmptyDataError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Den uploadede CSV-fil er tom.")
     except (pd.errors.ParserError, KeyError) as e:
@@ -143,35 +126,17 @@ def read_transactions_route(
     db: Session = Depends(get_db)
 ):
     """Henter en liste over transaktioner med filtrering."""
-    # Hent account_id fra query parameter, header, eller fra user's første account
-    final_account_id = account_id
-    if not final_account_id and x_account_id:
-        try:
-            final_account_id = int(x_account_id)
-        except ValueError:
-            pass
+    final_account_id = account_id or _resolve_account_id(x_account_id, authorization, db)
 
-    if not final_account_id and authorization:
-        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        token_data = decode_token(token)
-        if token_data:
-            from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
-            if accounts:
-                final_account_id = accounts[0].idAccount
-
-    # KRITISK: Hvis ingen account_id, fejl - vi kan ikke hente ALLE transaktioner
     if not final_account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
 
-    # Kald funktionen direkte
-    transactions = get_transactions(
+    return get_transactions(
         db, start_date, end_date, category_id, type, month, year, final_account_id, skip, limit
     )
-    return transactions
 
 # --- Hent specifik transaktion ---
 @router.get("/{transaction_id}", response_model=TransactionSchema)
@@ -186,46 +151,24 @@ def read_transaction_route(transaction_id: int, db: Session = Depends(get_db)):
 # --- Opdater transaktion ---
 @router.put("/{transaction_id}", response_model=TransactionSchema)
 def update_transaction_route(
-        transaction_id: int,
+    transaction_id: int,
     transaction: TransactionCreate,
     authorization: Optional[str] = Header(None, alias="Authorization"),
     x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
     db: Session = Depends(get_db)
 ):
     """Opdaterer en eksisterende transaktion."""
-    # Hent account_id fra header eller fra user's første account
-    account_id = None
-    if x_account_id:
-        try:
-            account_id = int(x_account_id)
-        except ValueError:
-            pass
+    account_id = _resolve_account_id(x_account_id, authorization, db)
 
-    # Hvis ingen account_id i header, find første account for brugeren
-    if not account_id and authorization:
-        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        token_data = decode_token(token)
-        if token_data:
-            from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
-            if accounts:
-                account_id = accounts[0].idAccount
-
-    # Tilføj account_id til transaction data hvis det ikke allerede er sat
-    transaction_dict = transaction.model_dump()
-    if 'account_id' not in transaction_dict or transaction_dict.get('account_id') is None:
-        if account_id:
-            transaction_dict['account_id'] = account_id
-
-    # Opret ny TransactionCreate med account_id
-    transaction_with_account = TransactionCreate(**transaction_dict)
+    # ✅ FIX: Brug model_copy() i stedet for at oprette ny instans
+    if transaction.Account_idAccount is None and account_id:
+        transaction = transaction.model_copy(update={"account_id": account_id})
 
     try:
-        # Kald funktionen direkte
-        updated_transaction = update_transaction(db, transaction_id, transaction_with_account)
-        if updated_transaction is None:
+        updated = update_transaction(db, transaction_id, transaction)
+        if not updated:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaktion ikke fundet.")
-        return updated_transaction
+        return updated
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
