@@ -12,7 +12,7 @@ from backend.shared.schemas.budget import BudgetCreate, BudgetUpdate, BudgetSumm
 
 def _get_category_expenses_for_period(db: Session, month: int, year: int, account_id: int) -> Dict[int, float]:
     """Henter aggregerede udgifter for hver kategori for en given måned og år."""
-    
+
     # Filtrer for at sikre, at vi kun tager udgifter (amount < 0) og kun fra den specifikke account
     # Aggreger efter Category_idCategory
     expenses_by_category = db.query(
@@ -43,62 +43,68 @@ def get_budget_by_id(db: Session, budget_id: int):
 
 def get_budgets_by_period(db: Session, account_id: int, start_date: str, end_date: str) -> List[BudgetModel]:
     """Henter budgetter for en given periode og Account ID (juster dette baseret på din Budget model)."""
-    
+
     # Bemærk: Din Budget-model i den gamle kode havde 'month' og 'year',
     # men Budget-modellen fra din nye SQLAlchemy-struktur har kun `budget_date`.
     # Jeg antager, at du enten filtrerer på `budget_date` eller på den konto, de er knyttet til.
     # Jeg bruger her en generisk tilgang til at hente alt for en konto.
-    
+
     query = db.query(BudgetModel).options(
         joinedload(BudgetModel.categories) # Inkluderer relaterede kategorier
     ).filter(
         BudgetModel.Account_idAccount == account_id # Filtrer på Account ID
         # Hvis du vil filtrere på dato: BudgetModel.budget_date.between(start_date, end_date)
     )
-    
+
     return query.all()
 
 def create_budget(db: Session, budget: BudgetCreate) -> BudgetModel:
     """Opretter et nyt budget."""
-    
-    # Validering af account_id
+
     if not budget.Account_idAccount:
         raise ValueError("Account ID er påkrævet for at oprette et budget.")
-    
+
+    # ✅ Hent category_id direkte fra objektet (det er et normalt felt)
+    category_id = budget.category_id
+
+    if not category_id:
+        raise ValueError("category_id er påkrævet for at oprette et budget.")
+
+    # Fjern felter der ikke skal i Budget tabellen
     budget_data = budget.model_dump(exclude={'month', 'year', 'category_id'})
-    
-    # Hent category_id hvis det er angivet (fra frontend)
-    category_id = None
-    if hasattr(budget, 'category_id') and budget.category_id:
-        category_id = budget.category_id
-    
+
+    print(f"DEBUG: category_id={category_id}, budget_data={budget_data}")
+
     db_budget = BudgetModel(**budget_data)
-    
+
     try:
         db.add(db_budget)
-        db.flush()  # Få ID før vi tilføjer categories
-        
-        # Tilføj kategori til budget via association table hvis category_id er angivet
-        if category_id:
-            from backend.models.mysql.common import budget_category_association
-            
-            # Valider at kategorien eksisterer
-            category = db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
-            if not category:
-                db.rollback()
-                raise ValueError(f"Kategori med ID {category_id} findes ikke.")
-            
-            # Tilføj via association table
-            db.execute(
-                budget_category_association.insert().values(
-                    Budget_idBudget=db_budget.idBudget,
-                    Category_idCategory=category_id
-                )
-            )
-        
+        db.flush()
+
+        # Tilføj kategori via association table
+        from backend.models.mysql.common import budget_category_association
+
+        category = db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
+        if not category:
+            db.rollback()
+            raise ValueError(f"Kategori med ID {category_id} findes ikke.")
+
+        stmt = budget_category_association.insert().values(
+            Budget_idBudget=db_budget.idBudget,
+            Category_idCategory=category_id
+        )
+        db.execute(stmt)
+
         db.commit()
-        db.refresh(db_budget)
+
+        # Reload med categories
+        db_budget = db.query(BudgetModel).options(
+            joinedload(BudgetModel.categories)
+        ).filter(BudgetModel.idBudget == db_budget.idBudget).first()
+
+        print(f"DEBUG: Budget {db_budget.idBudget} oprettet med {len(db_budget.categories)} kategorier")
         return db_budget
+
     except IntegrityError:
         db.rollback()
         raise ValueError("Integritetsfejl: Kontroller Account_idAccount eller andre Foreign Keys.")
@@ -111,7 +117,8 @@ def update_budget(db: Session, budget_id: int, budget: BudgetUpdate) -> Optional
         return None
 
     update_data = budget.model_dump(exclude_unset=True)
-    
+    print(f"DEBUG update_budget: Modtaget update_data={update_data}")
+
     # Håndter month/year konvertering
     if 'month' in update_data or 'year' in update_data:
         month = update_data.pop('month', None)
@@ -122,39 +129,47 @@ def update_budget(db: Session, budget_id: int, budget: BudgetUpdate) -> Optional
                 update_data['budget_date'] = date(int(year), int(month), 1)
             except (ValueError, TypeError):
                 pass
-    
-    # Håndter category_id - opdater association table
+
+    # ✅ Hent category_id direkte fra objektet (det er et normalt felt)
     category_id = update_data.pop('category_id', None)
+    print(f"DEBUG update_budget: category_id={category_id}")
     if category_id is not None:
         from backend.models.mysql.common import budget_category_association
-        
+
         # Valider at kategorien eksisterer
         category = db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
         if not category:
             raise ValueError(f"Kategori med ID {category_id} findes ikke.")
-        
+
         # Fjern eksisterende kategorier
-        db.execute(
-            budget_category_association.delete().where(
-                budget_category_association.c.Budget_idBudget == budget_id
-            )
+        delete_stmt = budget_category_association.delete().where(
+            budget_category_association.c.Budget_idBudget == budget_id
         )
-        
+        result = db.execute(delete_stmt)
+        print(f"DEBUG update_budget: Fjernet {result.rowcount} eksisterende kategorier fra budget {budget_id}")
+
         # Tilføj ny kategori
-        db.execute(
-            budget_category_association.insert().values(
-                Budget_idBudget=budget_id,
-                Category_idCategory=category_id
-            )
+        insert_stmt = budget_category_association.insert().values(
+            Budget_idBudget=budget_id,
+            Category_idCategory=category_id
         )
+        db.execute(insert_stmt)
+        print(f"DEBUG update_budget: Tilføjet kategori {category_id} til budget {budget_id}")
 
     # Opdater felterne
     for key, value in update_data.items():
         setattr(db_budget, key, value)
-    
+
     try:
         db.commit()
         db.refresh(db_budget)
+
+        # Reload med categories for at sikre de er loaded
+        db_budget = db.query(BudgetModel).options(
+            joinedload(BudgetModel.categories)
+        ).filter(BudgetModel.idBudget == budget_id).first()
+
+        print(f"DEBUG update_budget: Budget {budget_id} opdateret med {len(db_budget.categories) if db_budget.categories else 0} kategorier")
         return db_budget
     except IntegrityError:
         db.rollback()
@@ -166,7 +181,7 @@ def delete_budget(db: Session, budget_id: int) -> bool:
     db_budget = get_budget_by_id(db, budget_id)
     if not db_budget:
         return False
-        
+
     db.delete(db_budget)
     db.commit()
     return True
@@ -176,12 +191,12 @@ def delete_budget(db: Session, budget_id: int) -> bool:
 
 def get_budget_summary(db: Session, account_id: int, month: int, year: int) -> BudgetSummary:
     """Beregner en detaljeret budgetopsummering for en specifik måned/år og konto."""
-    
+
     # 1. Hent budgetter, der er knyttet til den pågældende konto og dækker perioden
     # Da din Budget-model nu har en many-to-many relation til Category,
     # antager jeg, at du vil summere budgetter baseret på `Account_idAccount`
     # og derefter slå op i `Transaction` for matchende `Category_idCategory`
-    
+
     # Filtrerer efter den konto, det budget er tilknyttet
     # Håndter både budgetter med og uden budget_date
     budgets_query = db.query(BudgetModel).options(
@@ -189,23 +204,28 @@ def get_budget_summary(db: Session, account_id: int, month: int, year: int) -> B
     ).filter(
         BudgetModel.Account_idAccount == account_id
     ).all()
-    
+
     # Filtrer manuelt efter month/year hvis budget_date er sat
     # Hvis budget_date er None, inkluder budgettet (for bagudkompatibilitet)
     filtered_budgets = []
+    print(f"DEBUG: Fandt {len(budgets_query)} budgetter for account_id={account_id}")
     for budget in budgets_query:
+        print(f"DEBUG: Budget {budget.idBudget}: amount={budget.amount}, budget_date={budget.budget_date}, categories count={len(budget.categories) if budget.categories else 0}")
         if budget.budget_date:
             budget_month = budget.budget_date.month
             budget_year = budget.budget_date.year
+            print(f"DEBUG: Budget {budget.idBudget}: month={budget_month}, year={budget_year}, søger month={month}, year={year}")
             if budget_month == month and budget_year == year:
                 filtered_budgets.append(budget)
+                print(f"DEBUG: Budget {budget.idBudget} matcher periode")
         # Hvis budget_date er None, inkluder det ikke (kræver budget_date for at matche periode)
-    
+
+    print(f"DEBUG: Efter filtrering: {len(filtered_budgets)} budgetter matcher periode")
     budgets_query = filtered_budgets
-    
+
     # 2. Hent de aggregerede udgifter for perioden (kun for denne account)
     expenses_by_category = _get_category_expenses_for_period(db, month, year, account_id)
-    
+
     items: List[BudgetSummaryItem] = []
     total_budget = 0.0
     total_spent = 0.0
@@ -218,29 +238,50 @@ def get_budget_summary(db: Session, account_id: int, month: int, year: int) -> B
         # Baseret på din gamle kode, som havde en 1:1 relation, antager jeg,
         # at hvert BudgetModel i virkeligheden kun dækker én kategori for perioden.
         # Hvis det er 1:M, skal denne logik justeres.
-        
+
         # Vi behandler det som 1:1, hvor Budget.categories[0] er den relevante kategori for simplicitet
         # BEMÆRK: Dette er en antagelse, da din modelstruktur har ændret sig til M:M.
-        
+
         relevant_categories = budget.categories
-        
+        print(f"DEBUG: Budget {budget.idBudget}: relevant_categories count={len(relevant_categories) if relevant_categories else 0}")
+
+        # Hvis budgettet ikke har kategorier, prøv at hente dem direkte fra association table
         if not relevant_categories:
-            continue # Spring budgetter uden kategorier over
-            
+            print(f"DEBUG: Budget {budget.idBudget} har ingen kategorier i relationship - prøver at hente direkte fra association table")
+            from backend.models.mysql.common import budget_category_association
+            from sqlalchemy import select
+
+            # Hent kategorier direkte fra association table
+            stmt = select(budget_category_association.c.Category_idCategory).where(
+                budget_category_association.c.Budget_idBudget == budget.idBudget
+            )
+            result = db.execute(stmt).fetchall()
+            category_ids = [row[0] for row in result]
+
+            if category_ids:
+                print(f"DEBUG: Fandt {len(category_ids)} kategorier i association table for budget {budget.idBudget}")
+                # Hent kategorierne
+                relevant_categories = db.query(CategoryModel).filter(
+                    CategoryModel.idCategory.in_(category_ids)
+                ).all()
+            else:
+                print(f"DEBUG: Budget {budget.idBudget} har INGEN kategorier i association table - springer over")
+                continue # Spring budgetter uden kategorier over
+
         for category in relevant_categories:
-            
+
             # Tjek for duplikat for at undgå at behandle samme kategori to gange (hvis flere budgetter peger på samme kategori)
             if category.idCategory in budget_category_ids:
                 continue
             budget_category_ids.add(category.idCategory)
-            
+
             spent = expenses_by_category.get(category.idCategory, 0.0)
             remaining = float(budget.amount) - spent
             percentage_used = (spent / float(budget.amount) * 100.0) if float(budget.amount) > 0 else 0.0
-            
+
             if remaining < 0:
                 over_budget_count += 1
-                
+
             items.append(BudgetSummaryItem(
                 category_id=category.idCategory,
                 category_name=category.name,
@@ -256,11 +297,11 @@ def get_budget_summary(db: Session, account_id: int, month: int, year: int) -> B
     # 4. Inkluder kategorier med udgifter, men uden budget
     category_ids_with_expense = {cid for cid in expenses_by_category.keys() if cid is not None}
     missing_budget_category_ids = category_ids_with_expense - budget_category_ids
-    
+
     if missing_budget_category_ids:
         categories = db.query(CategoryModel).filter(CategoryModel.idCategory.in_(missing_budget_category_ids)).all()
         id_to_name = {c.idCategory: c.name for c in categories}
-        
+
         for cid in missing_budget_category_ids:
             spent = expenses_by_category.get(cid, 0.0)
             items.append(BudgetSummaryItem(

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Annotated
 
 # VIGTIGT: Importér Service laget og dine Pydantic Skemaer
 from backend.database import get_db
@@ -73,6 +73,52 @@ async def get_budgets_for_account(
     return budgets
 
 
+# --- Budget Opsummering ---
+# VIGTIGT: Denne route skal være FØR /{budget_id} for at undgå route-konflikt
+@router.get("/summary", response_model=BudgetSummary)
+async def get_budget_summary_route(
+    month: Annotated[str, Query(..., description="Month (1-12).")],
+    year: Annotated[str, Query(..., description="Year (YYYY format).")],
+    account_id: Optional[int] = Depends(get_account_id_from_headers),
+    db: Session = Depends(get_db)
+):
+    """
+    Generates a detailed budget summary for a specific account, month, and year.
+    """
+    if not account_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account ID mangler. Vælg en konto først."
+        )
+
+    # Konverter og valider month og year
+    try:
+        month_int = int(month)
+        year_int = int(year)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Ugyldige værdier: month og year skal være heltal. Fik month={month} (type: {type(month).__name__}), year={year} (type: {type(year).__name__})"
+        )
+
+    # Valider ranges
+    if month_int < 1 or month_int > 12:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Month skal være mellem 1 og 12. Fik: {month_int}"
+        )
+
+    if year_int < 2000 or year_int > 9999:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Year skal være mellem 2000 og 9999. Fik: {year_int}"
+        )
+
+    # Kald funktionen direkte
+    summary = get_budget_summary(db, account_id, month_int, year_int)
+    return summary
+
+
 # --- Hentning af et specifikt Budget ---
 @router.get("/{budget_id}", response_model=BudgetSchema)
 async def get_budget_by_id_route( # Omdøbt for at undgå navnekonflikt
@@ -127,6 +173,9 @@ async def create_budget_route(
     # Tilføj account_id til budget data hvis det ikke allerede er sat
     budget_dict = budget.model_dump()
 
+    print(f"DEBUG create_budget_route: Modtaget budget_dict={budget_dict}")
+    print(f"DEBUG create_budget_route: category_id i budget_dict={budget_dict.get('category_id')}")
+
     # Konverter month/year til budget_date hvis budget_date ikke er sat
     if not budget_dict.get('budget_date'):
         month = budget_dict.get('month')
@@ -148,17 +197,31 @@ async def create_budget_route(
     if 'Account_idAccount' not in budget_dict or budget_dict.get('Account_idAccount') is None:
         budget_dict['Account_idAccount'] = account_id
 
-    # Opret ny BudgetCreate med account_id
+    # SIKRER at category_id bevares
+    category_id = budget_dict.get('category_id')
+    print(f"DEBUG create_budget_route: category_id efter cleanup={category_id}")
+
+    # Opret ny BudgetCreate med account_id og category_id
     budget_with_account = BudgetCreate(**budget_dict)
+    print(f"DEBUG create_budget_route: budget_with_account.category_id={getattr(budget_with_account, 'category_id', 'NOT SET')}")
 
     try:
         # RETTET: Kald funktionen direkte
         new_budget = create_budget(db, budget_with_account)
         return new_budget
     except ValueError as e:
-        if "Integritetsfejl" in str(e) or "ugyldig" in str(e):
-             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not create budget.")
+        error_msg = str(e)
+        # Send specifikke fejlbeskeder til frontend
+        if "category_id" in error_msg.lower() or "kategori" in error_msg.lower():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+        if "Integritetsfejl" in error_msg or "ugyldig" in error_msg.lower():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create budget: {error_msg}")
+    except Exception as e:
+        import traceback
+        print(f"ERROR create_budget_route: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create budget: {str(e)}")
 
 
 # --- Opdatering af Budget ---
@@ -170,6 +233,9 @@ async def update_budget_route(budget_id: int, budget: BudgetUpdate, db: Session 
     try:
         # Konverter month/year til budget_date hvis budget_date ikke er sat
         budget_dict = budget.model_dump(exclude_unset=True)
+        print(f"DEBUG update_budget_route: Modtaget budget_dict={budget_dict}")
+        print(f"DEBUG update_budget_route: category_id i budget_dict={budget_dict.get('category_id')}")
+
         if not budget_dict.get('budget_date'):
             month = budget_dict.get('month')
             year = budget_dict.get('year')
@@ -187,8 +253,13 @@ async def update_budget_route(budget_id: int, budget: BudgetUpdate, db: Session 
         budget_dict.pop('month', None)
         budget_dict.pop('year', None)
 
+        # SIKRER at category_id bevares
+        category_id = budget_dict.get('category_id')
+        print(f"DEBUG update_budget_route: category_id efter cleanup={category_id}")
+
         # Opret BudgetUpdate med konverteret data
         budget_with_date = BudgetUpdate(**budget_dict)
+        print(f"DEBUG update_budget_route: budget_with_date.category_id={getattr(budget_with_date, 'category_id', 'NOT SET')}")
 
         # RETTET: Kald funktionen direkte
         updated_budget = update_budget(db, budget_id, budget_with_date)
@@ -211,25 +282,3 @@ async def delete_budget_route(budget_id: int, db: Session = Depends(get_db)):
     if not delete_budget(db, budget_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
     return
-
-
-# --- Budget Opsummering ---
-@router.get("/summary", response_model=BudgetSummary)
-async def get_budget_summary_route(
-    month: int = Query(..., description="Month in MM format (e.g., 1).", ge=1, le=12),
-    year: int = Query(..., description="Year in YYYY format (e.g., 2024).", ge=2000),
-    account_id: Optional[int] = Depends(get_account_id_from_headers),
-    db: Session = Depends(get_db)
-):
-    """
-    Generates a detailed budget summary for a specific account, month, and year.
-    """
-    if not account_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account ID mangler. Vælg en konto først."
-        )
-
-    # RETTET: Kald funktionen direkte
-    summary = get_budget_summary(db, account_id, month, year)
-    return summary
