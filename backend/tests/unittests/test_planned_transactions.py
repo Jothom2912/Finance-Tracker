@@ -69,64 +69,104 @@ def test_base_amount_rounding():
 
 #Planned Date Validation Future or Current Date
 
-#Date - Past Date (invalid)
+# Past Date (invalid)
 def test_base_planned_date_past_invalid():
+    # Arrange
     past_date = date.today() - timedelta(days=1)
+
+    # Act & Assert
     with pytest.raises(ValueError, match="Planned date må ikke være i fortiden"):
         PlannedTransactionsBase(amount=VALID_AMOUNT, planned_date=past_date)
 
-# Date - Today's Date (valid)
+
+# Today's Date (valid)
 def test_base_planned_date_today_valid():
+    # Arrange
     today = date.today()
+
+    # Act
     txn = PlannedTransactionsBase(amount=VALID_AMOUNT, planned_date=today)
+
+    # Assert
     assert txn.planned_date == today
 
-# Date - Future Date (valid)
-def test_base_planned_date_future_valid():
-    future_date = date.today() + timedelta(days=1)
-    txn = PlannedTransactionsBase(amount=VALID_AMOUNT, planned_date=future_date)
-    assert txn.planned_date == future_date
 
+# Future Date (valid)
+def test_base_planned_date_future_valid():
+    # Arrange
+    future_date = date.today() + timedelta(days=1)
+
+    # Act
+    txn = PlannedTransactionsBase(amount=VALID_AMOUNT, planned_date=future_date)
+
+    # Assert
+    assert txn.planned_date == future_date
 
 # Repeat Interval Validation 
 
-# Interval - Valid Value 'weekly'
+# Weekly is valid
 def test_base_repeat_interval_weekly_valid():
+    # Arrange
     interval = "weekly"
+
+    # Act
     txn = PlannedTransactionsBase(amount=VALID_AMOUNT, repeat_interval=interval)
+
+    # Assert
     assert txn.repeat_interval == interval
 
-# Interval - Invalid Value (Uses the mocked list)
+
+# Invalid interval
 def test_base_repeat_interval_invalid_value():
+    # Arrange
     invalid_interval = "yearly"
+
+    # Act & Assert
     with pytest.raises(ValueError, match="Repeat interval må være en af"):
         PlannedTransactionsBase(amount=VALID_AMOUNT, repeat_interval=invalid_interval)
 
-# Interval - Valid Value None (Optional field)
+
+# None is valid
 def test_base_repeat_interval_none_valid():
-    txn = PlannedTransactionsBase(amount=VALID_AMOUNT, repeat_interval=None)
+    # Arrange
+    interval = None
+
+    # Act
+    txn = PlannedTransactionsBase(amount=VALID_AMOUNT, repeat_interval=interval)
+
+    # Assert
     assert txn.repeat_interval is None
 
 
-#Name Field Validation 
+# Name Field Validation
 
-#Name - Max Length Check (Max length is 45)
 def test_base_name_max_length_invalid():
+    # Arrange
+    name = "A" * 46
+
+    # Act & Assert
     with pytest.raises(ValidationError):
-        PlannedTransactionsBase(amount=VALID_AMOUNT, name="A" * 46)
+        PlannedTransactionsBase(amount=VALID_AMOUNT, name=name)
 
 
+# Integration Tests (PlannedTransactionsCreate)
 
-# Derived Integration Tests (Using PlannedTransactionsCreate)
-
-#Basic Instantiation Check (VALID)
 def test_create_schema_basic_instantiation_valid():
-    # Confirms that the derived schema is correctly constructed
-    txn = PlannedTransactionsCreate(amount=VALID_AMOUNT, name="Rent")
-    assert txn.name == "Rent"
+    # Arrange
+    amount = VALID_AMOUNT
+    name = "Rent"
 
-#Inheritance Check - Past Date (Confirming Base logic is inherited)
+    # Act
+    txn = PlannedTransactionsCreate(amount=amount, name=name)
+
+    # Assert
+    assert txn.name == name
+
+
 def test_create_inheritance_past_date_invalid():
+    # Arrange
     past_date = date.today() - timedelta(days=1)
+
+    # Act & Assert
     with pytest.raises(ValueError, match="Planned date må ikke være i fortiden"):
         PlannedTransactionsCreate(amount=VALID_AMOUNT, planned_date=past_date)
