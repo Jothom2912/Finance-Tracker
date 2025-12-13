@@ -76,6 +76,7 @@ services:
       NEO4J_PASSWORD: 12345678
       ACTIVE_DB: mysql
       PYTHONUNBUFFERED: 1
+      PYTHONPATH: /app
     ports:
       - "8080:8080"
     volumes:

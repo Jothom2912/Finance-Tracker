@@ -54,6 +54,42 @@ The database tables will be created automatically on first request, or you can r
 docker exec finance-mysql mysql -u root -p123456 finans_tracker < dumps/mysql/finans_tracker.sql
 ```
 
+### 4.1. Seed Categories (REQUIRED)
+
+**⚠️ IMPORTANT:** You **must** seed categories before using the application. Categories are required for:
+- Creating transactions
+- Creating budgets
+- Categorizing transactions
+
+```bash
+# Seed categories from category rules
+docker exec finance-backend python seed_categories.py
+```
+
+This will create all necessary categories (expense and income) based on the categorization rules. You should see output like:
+```
+Tilføjet X nye kategorier til databasen.
+```
+
+### 4.2. Generate Test Data (Optional)
+
+If you want test data (users, accounts, transactions, budgets, etc.):
+
+```bash
+# Generate dummy data for testing
+docker exec finance-backend python generate_dummy_data.py
+```
+
+This creates:
+- **3 test users** (johan, marie, testuser - all with password: `test123`)
+- Test accounts
+- Test categories (if not already seeded)
+- Test transactions
+- Test budgets
+- Test goals
+
+**Note:** If you already seeded categories in step 4.1, the script will use existing categories instead of creating duplicates.
+
 ### 5. Load Elasticsearch Data (Optional)
 
 If you have Elasticsearch dumps:
