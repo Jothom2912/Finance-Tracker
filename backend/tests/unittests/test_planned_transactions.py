@@ -2,10 +2,10 @@ from pydantic import ValidationError
 import pytest
 from datetime import date, timedelta
 from typing import Optional
-# Assuming you will import your schemas from your main file
-from backend.shared.schemas.planned_transactions import PlannedTransactionsBase, PlannedTransactionsCreate 
-from backend.shared.schemas.transaction import TransactionBase 
-from backend.shared.schemas.planned_transactions import TransactionBase 
+
+from backend.shared.schemas.planned_transactions import PlannedTransactionsBase, PlannedTransactionsCreate
+from backend.shared.schemas.transaction import TransactionBase
+
 
 
 # MOCK DEPENDENCY 
@@ -14,7 +14,7 @@ from backend.shared.schemas.planned_transactions import TransactionBase
 class PLANNED_TRANSACTION_BVA:
     valid_intervals = ["daily", "weekly", "monthly"]
 
-# --- HELPER CONSTANTS ---
+#HELPER CONSTANTS
 VALID_AMOUNT = 100.00
 
 
@@ -24,25 +24,46 @@ VALID_AMOUNT = 100.00
 
 # Zero Amount (invalid)
 def test_base_amount_is_zero_invalid():
-    with pytest.raises(ValueError, match="Amount må IKKE være 0"):
-        PlannedTransactionsBase(amount=0.00)
+    # Arrange
+    amount = 0.00
 
-#Near-Zero Amount (Floating Point Handling) (valid)
+    # Act & Assert
+    with pytest.raises(ValueError, match="Amount må IKKE være 0"):
+        PlannedTransactionsBase(amount=amount)
+
+
+# Near-Zero Amount (Floating Point Handling) (invalid)
 def test_base_amount_near_zero_invalid():
-    with pytest.raises(ValueError, match="Amount må IKKE være 0"):
-        PlannedTransactionsBase(amount=0.0000001)
+    # Arrange
+    amount = 0.0000001
 
-#Lower Boundary: -0.01 (valid)
+    # Act & Assert
+    with pytest.raises(ValueError, match="Amount må IKKE være 0"):
+        PlannedTransactionsBase(amount=amount)
+
+
+# Lower Boundary: -0.01 (valid)
 def test_base_amount_negative_boundary_valid():
+    # Arrange
     amount = -0.01
-    valid_txn = PlannedTransactionsBase(amount=amount)
-    assert valid_txn.amount == amount
+
+    # Act
+    txn = PlannedTransactionsBase(amount=amount)
+
+    # Assert
+    assert txn.amount == amount
+
 
 # Amount Rounding Check
 def test_base_amount_rounding():
+    # Arrange
     input_amount = 123.456
     expected_amount = 123.46
+
+    # Act
     txn = PlannedTransactionsBase(amount=input_amount)
+
+    # Assert
     assert txn.amount == expected_amount
 
 
