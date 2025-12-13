@@ -1,132 +1,194 @@
-from pydantic import ValidationError, EmailStr
 import pytest
-import re
 from pydantic import ValidationError
 from backend.shared.schemas.user import UserBase, UserCreate
 
 
-# USER_BVA constants are available (min=3, max=20)
+# -------------------------
+# Helper Constants
+# -------------------------
 
 VALID_EMAIL = "test@example.com"
+VALID_USERNAME = "validuser"
+MIN_PASSWORD_LENGTH = 8  # From USER_BVA
+
+
+# -------------------------
+# UserBase — Username BVA
+# -------------------------
 
 # Min Length (N-1) - INVALID (2 chars)
 def test_base_username_min_length_below_boundary_invalid():
-    # ACT & ASSERT
+    # Arrange
+    username = "ab"
+
+    # Act & Assert
     with pytest.raises(ValidationError):
-        UserBase(username="ab", email=VALID_EMAIL)
+        UserBase(username=username, email=VALID_EMAIL)
+
 
 # Min Length (N) - VALID (3 chars)
 def test_base_username_min_length_at_boundary_valid():
+    # Arrange
     username = "abc"
+
+    # Act
     user = UserBase(username=username, email=VALID_EMAIL)
+
+    # Assert
     assert user.username == username
+
 
 # Max Length (M) - VALID (20 chars)
 def test_base_username_max_length_at_boundary_valid():
+    # Arrange
     username = "a" * 20
+
+    # Act
     user = UserBase(username=username, email=VALID_EMAIL)
+
+    # Assert
     assert len(user.username) == 20
+
 
 # Max Length (M+1) - INVALID (21 chars)
 def test_base_username_max_length_above_boundary_invalid():
-    # ACT & ASSERT
+    # Arrange
+    username = "a" * 21
+
+    # Act & Assert
     with pytest.raises(ValidationError):
-        UserBase(username="a" * 21, email=VALID_EMAIL)
+        UserBase(username=username, email=VALID_EMAIL)
 
 
-# Username Format Tests
+# -------------------------
+# UserBase — Username Format Validation
+# -------------------------
 
-# Format - Invalid Characters (e.g., spaces) - INVALID
+# Invalid Characters (contains space)
 def test_base_username_format_invalid_characters():
-    # ACT & ASSERT (Contains space, violating r"^\w+$")
-    with pytest.raises(ValueError, match="Username må kun indeholde bogstaver, tal og underscore"):
-        UserBase(username="user name", email=VALID_EMAIL)
+    # Arrange
+    username = "user name"
 
-# Format - Valid Characters (Alphanumeric + Underscore) - VALID
+    # Act & Assert
+    with pytest.raises(
+        ValueError,
+        match="Username må kun indeholde bogstaver, tal og underscore",
+    ):
+        UserBase(username=username, email=VALID_EMAIL)
+
+
+# Valid Characters (alphanumeric + underscore)
 def test_base_username_format_valid_characters():
+    # Arrange
     username = "user_name_123"
+
+    # Act
     user = UserBase(username=username, email=VALID_EMAIL)
+
+    # Assert
     assert user.username == username
 
-# Emptiness - Whitespace Only (UGYLDIG)
+
+# Whitespace Only (INVALID)
 def test_base_username_whitespace_only_invalid():
-    # ACT & ASSERT (It will fail the FORMAT check first because space is not \w)
-    with pytest.raises(ValueError, match="Username må kun indeholde bogstaver, tal og underscore"):
-        UserBase(username="   ", email=VALID_EMAIL)
+    # Arrange
+    username = "   "
 
-#FIXME:
-# Emptiness - Leading/Trailing Whitespace (Valid and stripped) 
-#def test_base_username_whitespace_stripped_valid():
-    #input_username = " username "
-    #expected_username = "username"
-    #user = UserBase(username=input_username, email=VALID_EMAIL)
-    #assert user.username == expected_username
+    # Act & Assert
+    with pytest.raises(
+        ValueError,
+        match="Username må kun indeholde bogstaver, tal og underscore",
+    ):
+        UserBase(username=username, email=VALID_EMAIL)
 
-# Email Validation Tests
 
-# Email - Invalid Format (Missing @ or domain) - INVALID
+# -------------------------
+# UserBase — Email Validation
+# -------------------------
+
+# Invalid Email Format
 def test_base_email_format_invalid():
-    # ACT & ASSERT (Pydantic's EmailStr handles this)
-    with pytest.raises(ValidationError):
-        UserBase(username="testuser", email="invalid-email")
-        
+    # Arrange
+    invalid_email = "invalid-email"
 
-# Email - Normalization to Lowercase
+    # Act & Assert
+    with pytest.raises(ValidationError):
+        UserBase(username="testuser", email=invalid_email)
+
+
+# Email Normalization to Lowercase
 def test_base_email_normalization_valid():
+    # Arrange
     input_email = "Test.User@Example.com"
     expected_email = "test.user@example.com"
+
+    # Act
     user = UserBase(username="testuser", email=input_email)
-    # The validate_email_format validator should normalize this
+
+    # Assert
     assert user.email == expected_email
 
 
-#  UserCreate Schema Tests
+# -------------------------
+# UserCreate Tests
+# -------------------------
 
-# Helper data for valid creation
-VALID_USERNAME = "validuser"
-VALID_EMAIL = "valid@example.com"
-MIN_PASSWORD_LENGTH = 8 # Assuming 8 from USER_BVA
-
-# Required Field - Missing Password - INVALID
+# Missing Password (INVALID)
 def test_create_missing_password_invalid():
-    # ACT & ASSERT (Password is required in UserCreate)
+    # Act & Assert
     with pytest.raises(ValidationError) as excinfo:
         UserCreate(username=VALID_USERNAME, email=VALID_EMAIL)
-    
+
+    # Assert
     assert "password" in str(excinfo.value)
 
 
-# 12. Password Min Length (N-1) - INVALID (7 chars)
+# Password Min Length (N-1) - INVALID
 def test_create_password_min_length_below_boundary_invalid():
-    # ARRANGE: Use a password that is too short (7 characters)
-    password = "a" * (MIN_PASSWORD_LENGTH - 1) 
+    # Arrange
+    password = "a" * (MIN_PASSWORD_LENGTH - 1)
 
-    # ACT & ASSERT: Expect the standard Pydantic ValidationError
+    # Act & Assert
     with pytest.raises(ValidationError) as excinfo:
         UserCreate(
-            username=VALID_USERNAME, 
-            email=VALID_EMAIL, 
-            password=password
+            username=VALID_USERNAME,
+            email=VALID_EMAIL,
+            password=password,
         )
-    
-    # Assert that the error is for the 'password' field 
-    # and contains the specific message generated by the min_length constraint.
-    assert 'password' in str(excinfo.value)
-    # Asserting for the exact phrase Pydantic V2 gives you:
-    assert f"String should have at least {MIN_PASSWORD_LENGTH} characters" in str(excinfo.value)
 
-# Password Min Length (N) - VALID (8 chars)
+    # Assert
+    assert "password" in str(excinfo.value)
+    assert (
+        f"String should have at least {MIN_PASSWORD_LENGTH} characters"
+        in str(excinfo.value)
+    )
+
+
+# Password Min Length (N) - VALID
 def test_create_password_min_length_at_boundary_valid():
+    # Arrange
     password = "a" * MIN_PASSWORD_LENGTH
-    user = UserCreate(username=VALID_USERNAME, email=VALID_EMAIL, password=password)
+
+    # Act
+    user = UserCreate(
+        username=VALID_USERNAME,
+        email=VALID_EMAIL,
+        password=password,
+    )
+
+    # Assert
     assert len(user.password) == MIN_PASSWORD_LENGTH
 
-# Inheritance Check - Username Max Length (Confirming UserBase logic is inherited)
+
+# Inheritance Check — Username Max Length
 def test_create_inheritance_username_max_length_invalid():
-    # ACT & ASSERT (Confirms max_length=20 constraint is active in UserCreate)
+    # Arrange
+    username = "a" * 21
+
+    # Act & Assert
     with pytest.raises(ValidationError):
         UserCreate(
-            username="a" * 21,  # INVALID length
+            username=username,
             email=VALID_EMAIL,
-            password="a" * MIN_PASSWORD_LENGTH
+            password="a" * MIN_PASSWORD_LENGTH,
         )
