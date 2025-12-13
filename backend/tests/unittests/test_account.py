@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
-from backend.shared.schemas.account import AccountCreate
-from backend.shared.schemas.account import AccountBase
+from backend.shared.schemas.account import AccountCreate, AccountBase
+
 
 #Account Name Length Boundary Value Analysis
 
@@ -28,77 +28,115 @@ def test_base_name_min_length_at_boundary_valid():
 
 
 # Upper Boundary (M) - VALID (30 chars)
-def test_base_name_max_length_at_boundary_valid():    
-    # ARRANGE
+def test_base_name_max_length_at_boundary_valid():
+    # Arrange
     name = "A" * 30
-    
-    # ACT
+
+    # Act
     valid_account = AccountBase(name=name, saldo=100.0)
-    
-    # ASSERT
+
+    # Assert
     assert len(valid_account.name) == 30
+
 
 # Upper Boundary (M+1) - INVALID (31 chars)
 def test_base_name_max_length_above_boundary_invalid():
-        # ACT & ASSERT
+    # Arrange
+    name = "A" * 31
+
+    # Act & Assert
     with pytest.raises(ValidationError):
-        AccountBase(name="A" * 31, saldo=100.0)
+        AccountBase(name=name, saldo=100.0)
 
 # Name Content Validation
 
-# Name Content - Whitespace Only - INVALID
+# Whitespace Only - INVALID
 def test_base_name_whitespace_only_invalid():
+    # Arrange
+    name = "   "
+
+    # Act & Assert
     with pytest.raises(ValueError, match="Account name må ikke være tomt"):
-        AccountBase(name="   ", saldo=100.0)
+        AccountBase(name=name, saldo=100.0)
 
 
-# Name Content - Leading/Trailing Whitespace - VALID (and stripped)
+# Leading/Trailing Whitespace - VALID (and stripped)
 def test_base_name_whitespace_stripped_valid():
+    # Arrange
     input_name = " My Account "
     expected_name = "My Account"
+
+    # Act
     valid_account = AccountBase(name=input_name, saldo=100.0)
+
+    # Assert
     assert valid_account.name == expected_name
+
 
 #Saldo/Balance Validation
 
-# Saldo - Standard Rounding UP
+# Rounding Up
 def test_base_saldo_rounding_up():
+    # Arrange
     input_saldo = 123.456
     expected_saldo = 123.46
+
+    # Act
     account = AccountBase(name="Test", saldo=input_saldo)
+
+    # Assert
     assert account.saldo == expected_saldo
 
-# Saldo - Negative Value
+
+# Negative Value Rounding
 def test_base_saldo_negative_value():
+    # Arrange
     input_saldo = -50.783
     expected_saldo = -50.78
+
+    # Act
     account = AccountBase(name="Test", saldo=input_saldo)
+
+    # Assert
     assert account.saldo == expected_saldo
 
 
-# AccountCreate Must have a User ID
+
+# AccountCreate. Must have a User ID
 REQUIRED_USER_ID = 1
 
-# User ID - Missing Field - INVALID (Focus on AccountCreate's unique requirement)
+# Missing User ID - INVALID
 def test_create_missing_user_id_invalid():
-    # ACT & ASSERT
+    # Arrange
+    name = "Checking"
+    saldo = 100.0
+
+    # Act & Assert
     with pytest.raises(ValidationError) as excinfo:
-        # Omitting the required User_idUser field
-        AccountCreate(name="Checking", saldo=100.0)
-    
+        AccountCreate(name=name, saldo=saldo)
+
+    # Assert
     assert "User_idUser" in str(excinfo.value)
 
-# User ID - Valid Positive Integer - VALID
+
+# Valid User ID - VALID
 def test_create_user_id_valid():
+    # Arrange
     valid_id = 5
+
+    # Act
     account = AccountCreate(name="Savings", saldo=100.0, User_idUser=valid_id)
+
+    # Assert
     assert account.User_idUser == valid_id
+
 
 # Inheritance Confirmation 
 
-# Inheritance Check - Name Max Length (Confirming AccountBase logic is inherited)
 def test_create_inheritance_name_max_length_invalid():
-    # ACT & ASSERT
-    # This confirms that the max_length=30 logic from AccountBase is active in AccountCreate
+    # Arrange
+    name = "A" * 31
+
+    # Act & Assert
     with pytest.raises(ValidationError):
-        AccountCreate(name="A" * 31, saldo=100.0, User_idUser=REQUIRED_USER_ID)
+        AccountCreate(name=name, saldo=100.0, User_idUser=REQUIRED_USER_ID)
