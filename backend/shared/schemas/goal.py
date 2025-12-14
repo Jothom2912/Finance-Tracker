@@ -90,9 +90,9 @@ class GoalBase(BaseModel):
         return v
 
 
-# --- Schema for creation (requires Account ID) ---
+# --- Schema for creation (Account ID kan være None - backend tilføjer det automatisk fra header) ---
 class GoalCreate(GoalBase):
-    Account_idAccount: int
+    Account_idAccount: Optional[int] = None
 
 
 # --- Schema for reading data (includes relationship) ---
