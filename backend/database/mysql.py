@@ -15,31 +15,76 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Valider DATABASE_URL
-if not DATABASE_URL:
+# Base kan oprettes uden DATABASE_URL (bruges i tests)
+Base = declarative_base()
+
+# Check if we're running in pytest or CI environment (tests don't need real DATABASE_URL)
+import sys
+import inspect
+
+def _is_test_environment():
+    """Check if we're running in a test environment"""
+    # Check environment variables set by pytest
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return True
+
+    # Check if pytest is in sys.modules
+    if "pytest" in sys.modules:
+        return True
+
+    # Check if we're being imported from a test file by examining the call stack
+    try:
+        stack = inspect.stack()
+        for frame_info in stack:
+            filename = frame_info.filename
+            if filename and ("test" in filename.lower() or "pytest" in filename.lower()):
+                return True
+    except Exception:
+        pass
+
+    # Check command line arguments
+    if any("pytest" in str(arg).lower() for arg in sys.argv):
+        return True
+
+    return False
+
+_is_pytest = _is_test_environment()
+
+# Valider DATABASE_URL kun hvis vi IKKE er i pytest
+# I pytest miljøer bruger tests deres egen in-memory database
+if not DATABASE_URL and not _is_pytest:
     logger.error("❌ DATABASE_URL not found in environment!")
     raise ValueError("DATABASE_URL must be set in .env file")
 
-logger.info(f"🔗 Database URL: {DATABASE_URL.split('@')[0]}@***")  # Log uden password
-
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    echo=False,
-    connect_args={
-        "connect_timeout": 10,  # Øget til 10 sekunder
-    },
-    pool_timeout=10,
-    pool_size=5,
-    max_overflow=10,
-    pool_recycle=3600,
-)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# Opret engine og SessionLocal kun hvis DATABASE_URL er sat
+# I pytest miljøer vil disse være None, men det er OK fordi tests bruger deres egen database
+if DATABASE_URL:
+    logger.info(f"🔗 Database URL: {DATABASE_URL.split('@')[0]}@***")  # Log uden password
+    
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        echo=False,
+        connect_args={
+            "connect_timeout": 10,  # Øget til 10 sekunder
+        },
+        pool_timeout=10,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=3600,
+    )
+    
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+else:
+    # I pytest miljøer, sæt disse til None
+    # Tests vil override get_db() dependency alligevel
+    engine = None
+    SessionLocal = None
 
 def get_db():
     """Dependency til at få en database session"""
+    if SessionLocal is None:
+        raise RuntimeError("Database not initialized. DATABASE_URL must be set in .env file")
     db = SessionLocal()
     try:
         yield db
@@ -51,6 +96,8 @@ def test_database_connection():
     Test database connection uden at oprette tabeller.
     Returns: (success: bool, error_message: str)
     """
+    if engine is None:
+        return False, "Database not initialized. DATABASE_URL must be set in .env file"
     try:
         logger.info("🔍 Tester database forbindelse...")
         with engine.connect() as conn:
@@ -102,6 +149,10 @@ def create_db_tables():
             return False
         
         # Step 3: Opret tabeller
+        if engine is None:
+            logger.warning("⚠️ Database engine not initialized - skipping table creation")
+            return False
+        
         logger.info("🏗️  Opretter/tjekker tabeller...")
         Base.metadata.create_all(bind=engine)
         
@@ -132,6 +183,8 @@ def create_db_tables():
 
 def drop_all_tables():
     """Sletter alle tabeller - BRUG MED FORSIGTIGHED!"""
+    if engine is None:
+        raise RuntimeError("Database not initialized. DATABASE_URL must be set in .env file")
     logger.warning("⚠️ DROPPING ALL TABLES - THIS WILL DELETE ALL DATA!")
     try:
         from backend.models.mysql import (
