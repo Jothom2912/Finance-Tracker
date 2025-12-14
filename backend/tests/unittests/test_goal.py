@@ -1,7 +1,7 @@
 from pydantic import ValidationError
 import pytest
 from datetime import date, timedelta
-from backend.shared.schemas.goal import GoalBase, GoalCreate 
+from backend.shared.schemas.goal import GoalBase, GoalCreate
 
 
 # Helper data for valid goal creation

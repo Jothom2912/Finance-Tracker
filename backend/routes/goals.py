@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header, Body
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from backend.database import get_db
 from backend.shared.schemas.goal import Goal as GoalSchema, GoalCreate, GoalBase
@@ -19,7 +19,7 @@ def get_account_id_from_headers(
 ) -> Optional[int]:
     """Henter account_id fra X-Account-ID header eller fra user's første account."""
     account_id = None
-    
+
     # Først prøv at hente fra X-Account-ID header
     if x_account_id:
         try:
@@ -27,7 +27,7 @@ def get_account_id_from_headers(
             return account_id
         except ValueError:
             pass
-    
+
     # Hvis ikke fundet, prøv at hente fra user's første account
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -37,12 +37,12 @@ def get_account_id_from_headers(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
-    
+
     return account_id
 
 @router.post("/", response_model=GoalSchema, status_code=status.HTTP_201_CREATED)
 def create_goal_route(
-    goal: GoalCreate, 
+    goal_data: Dict[str, Any] = Body(...),
     authorization: Optional[str] = Header(None, alias="Authorization"),
     x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
     db: Session = Depends(get_db)
@@ -55,7 +55,7 @@ def create_goal_route(
             account_id = int(x_account_id)
         except ValueError:
             pass
-    
+
     # Hvis ingen account_id i header, find første account for brugeren
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -65,18 +65,26 @@ def create_goal_route(
             accounts = account_service.get_accounts_by_user(db, token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
-    
-    # Hvis goal ikke har account_id, tilføj det fra header/token
-    if not goal.Account_idAccount and account_id:
-        goal_dict = goal.model_dump()
-        goal_dict['Account_idAccount'] = account_id
-        goal = GoalCreate(**goal_dict)
-    elif not goal.Account_idAccount:
+
+    # Hvis goal_data ikke har account_id, tilføj det fra header/token
+    if 'Account_idAccount' not in goal_data or goal_data.get('Account_idAccount') is None:
+        if not account_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account ID mangler. Vælg en konto først."
+            )
+        goal_data['Account_idAccount'] = account_id
+    # Hvis body har Account_idAccount, brug det (frontend sender det korrekt)
+
+    # Valider og opret GoalCreate objekt
+    try:
+        goal = GoalCreate(**goal_data)
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account ID mangler. Vælg en konto først."
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Valideringsfejl: {str(e)}"
         )
-    
+
     try:
         db_goal = goal_service.create_goal(db, goal)
         return db_goal
@@ -93,13 +101,13 @@ def read_goals_route(
     """Henter alle mål tilknyttet en specifik konto."""
     # Brug account_id fra query parameter, eller fra header hvis ikke angivet
     final_account_id = account_id or account_id_from_header
-    
+
     if not final_account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først."
         )
-    
+
     goals = goal_service.get_goals_by_account(db, final_account_id)
     return goals
 

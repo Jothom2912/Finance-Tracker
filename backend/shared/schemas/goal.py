@@ -56,7 +56,7 @@ class GoalBase(BaseModel):
     @classmethod
     def validate_current_vs_target(cls, v: float, info) -> float:
         """BVA: currentAmount må IKKE være større end targetAmount
-        
+
         Grænseværdier:
         - Target = 100, Current = 101 (ugyldig)
         - Target = 100, Current = 100 (gyldig)
@@ -74,7 +74,7 @@ class GoalBase(BaseModel):
     @classmethod
     def validate_target_date(cls, v: Optional[date]) -> Optional[date]:
         """BVA: Target date skal være i fremtiden (future date)
-        
+
         Grænseværdier:
         - Dato i fortiden (ugyldig)
         - Dato i dag (ugyldig)
@@ -90,16 +90,16 @@ class GoalBase(BaseModel):
         return v
 
 
-# --- Schema for creation (Account ID kan være None - backend tilføjer det automatisk fra header) ---
+# --- Schema for creation (requires Account ID) ---
 class GoalCreate(GoalBase):
-    Account_idAccount: Optional[int] = None
+    Account_idAccount: int
 
 
 # --- Schema for reading data (includes relationship) ---
 class Goal(GoalBase):
     idGoal: int
     Account_idAccount: int
-    
+
     # Relationship
     account: AccountBase
 
