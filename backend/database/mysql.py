@@ -3,8 +3,7 @@
 MySQL Database Connection
 """
 from sqlalchemy import create_engine, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 from dotenv import load_dotenv
 import logging
@@ -60,7 +59,7 @@ if not DATABASE_URL and not _is_pytest:
 # I pytest miljøer vil disse være None, men det er OK fordi tests bruger deres egen database
 if DATABASE_URL:
     logger.info(f"🔗 Database URL: {DATABASE_URL.split('@')[0]}@***")  # Log uden password
-    
+
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
@@ -73,7 +72,7 @@ if DATABASE_URL:
         max_overflow=10,
         pool_recycle=3600,
     )
-    
+
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 else:
     # I pytest miljøer, sæt disse til None
@@ -120,14 +119,14 @@ def create_db_tables():
         logger.info("=" * 60)
         logger.info("📋 STARTER DATABASE TABLE CREATION")
         logger.info("=" * 60)
-        
+
         # Step 1: Test connection først
         success, error = test_database_connection()
         if not success:
             logger.warning(f"⚠️ Database ikke tilgængelig: {error}")
             logger.warning("⚠️ Springer table creation over - vil prøve igen ved første request")
             return False
-        
+
         # Step 2: Import models
         logger.info("📦 Importerer models...")
         try:
@@ -147,15 +146,15 @@ def create_db_tables():
             import traceback
             logger.error(traceback.format_exc())
             return False
-        
+
         # Step 3: Opret tabeller
         if engine is None:
             logger.warning("⚠️ Database engine not initialized - skipping table creation")
             return False
-        
+
         logger.info("🏗️  Opretter/tjekker tabeller...")
         Base.metadata.create_all(bind=engine)
-        
+
         # Step 4: Verificer at tabeller blev oprettet
         with engine.connect() as conn:
             result = conn.execute(text(
@@ -164,12 +163,12 @@ def create_db_tables():
             ))
             table_count = result.fetchone()[0]
             logger.info(f"✅ Database indeholder {table_count} tabeller")
-        
+
         logger.info("=" * 60)
         logger.info("✅ DATABASE TABLE CREATION COMPLETED")
         logger.info("=" * 60)
         return True
-        
+
     except Exception as e:
         logger.error("=" * 60)
         logger.error("❌ FEJL VED DATABASE TABLE CREATION")

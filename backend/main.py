@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 # MIDLERTIDIGT DEAKTIVERET for at teste
@@ -13,22 +14,34 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger(__name__) 
+logger = logging.getLogger(__name__)
 
 # Importer ALLE dine routers
 from backend.routes import (
     users,  # VIGTIGT for registrering
-    categories, 
-    transactions, 
-    dashboard, 
+    categories,
+    transactions,
+    dashboard,
     budgets,
-    accounts, 
-    goals, 
-    planned_transactions, 
+    accounts,
+    goals,
+    planned_transactions,
     account_groups,
 )
 
-app = FastAPI(title="Personlig Finans Tracker API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup logic
+    logger.info("🚀 Starter FastAPI applikation...")
+    logger.info("✅ Backend klar - database vil blive initialiseret ved første request")
+    # Database init er fjernet fra startup for at undgå at backend hænger
+    # Tabeller oprettes automatisk ved første database query
+    yield
+    # Shutdown logic (kan tilføjes senere hvis nødvendigt)
+    logger.info("🛑 Stopper FastAPI applikation...")
+
+app = FastAPI(title="Personlig Finans Tracker API", lifespan=lifespan)
 
 # --- CORS Konfiguration (skal være FØRSTE middleware!) ---
 logger.info("🔧 Konfigurerer CORS middleware...")
@@ -54,13 +67,13 @@ logger.info("✅ CORS middleware konfigureret")
 # async def log_requests(request: Request, call_next):
 #     """Logger alle indkommende requests - MEGET SIMPLIFICERET"""
 #     start_time = time.time()
-#     
+#
 #     # Log request - MEGET SIMPLIFICERET for at undgå at hænge
 #     try:
 #         logger.info(f"📥 {request.method} {request.url.path}")
 #     except:
 #         pass  # Hvis logging fejler, fortsæt alligevel
-#     
+#
 #     # Process request - IKKE læs body eller headers her, det kan hænge
 #     try:
 #         response = await call_next(request)
@@ -72,15 +85,6 @@ logger.info("✅ CORS middleware konfigureret")
 #         logger.error(f"❌ ERROR: {str(e)} ({process_time:.2f}s)")
 #         raise
 # --- Slut Request Logging Middleware ---
-
-# Opret databasetabeller, når applikationen starter
-@app.on_event("startup")
-async def startup_event():
-    """Startup event - FJERNET database init for at undgå at hænge"""
-    logger.info("🚀 Starter FastAPI applikation...")
-    logger.info("✅ Backend klar - database vil blive initialiseret ved første request")
-    # Database init er fjernet fra startup for at undgå at backend hænger
-    # Tabeller oprettes automatisk ved første database query
 
 @app.get("/", tags=["Root"]) # Tilføjet tag
 def read_root():
