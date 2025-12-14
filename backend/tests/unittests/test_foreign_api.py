@@ -1,4 +1,5 @@
-from requests import patch
+from unittest.mock import patch
+from backend.services.currency_service import get_rate, convert_currency
 
 
 def test_get_latest_rate_mocked():
@@ -13,7 +14,7 @@ def test_get_latest_rate_mocked():
         mock_get.return_value.json.return_value = mock_response
         mock_get.return_value.raise_for_status.return_value = None
 
-        rate = get_latest_rate("EUR", "USD")
+        rate = get_rate("EUR", "USD")
 
         assert rate == 1.08
         
