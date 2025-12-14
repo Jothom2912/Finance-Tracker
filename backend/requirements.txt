@@ -12,6 +12,8 @@ sqlalchemy
 # MySQL Driver
 pymysql 
 
+requests
+
 # Datahåndtering (til CSV import i transaction_service)
 pandas
 tabulate
