@@ -43,6 +43,8 @@ def update_category_route(category_id: int, category: CategoryCreate, db: Sessio
         if updated_category is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kategori ikke fundet.")
         return updated_category
+    except HTTPException:
+        raise  # Re-raise HTTPException uændret
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
