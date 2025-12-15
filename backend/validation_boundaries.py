@@ -13,7 +13,7 @@ from decimal import Decimal
 # ============================================================================
 @dataclass
 class CategoryBoundaries:
-    name_min_length: int = 1
+    name_min_length: int = 5
     name_max_length: int = 30
     description_max_length: int = 200
     valid_types: Tuple[str, ...] = ("income", "expense")
