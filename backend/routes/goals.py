@@ -14,8 +14,7 @@ router = APIRouter(
 
 def get_account_id_from_headers(
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db)
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ) -> Optional[int]:
     """Henter account_id fra X-Account-ID header eller fra user's første account."""
     account_id = None
@@ -34,7 +33,7 @@ def get_account_id_from_headers(
         token_data = decode_token(token)
         if token_data:
             from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            accounts = account_service.get_accounts_by_user( token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
 
@@ -44,8 +43,7 @@ def get_account_id_from_headers(
 def create_goal_route(
     goal_data: Dict[str, Any] = Body(...),
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db)
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ):
     """Opretter et nyt mål tilknyttet en konto."""
     # Hent account_id fra header eller fra user's første account
@@ -62,7 +60,7 @@ def create_goal_route(
         token_data = decode_token(token)
         if token_data:
             from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            accounts = account_service.get_accounts_by_user(token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
 
@@ -86,7 +84,7 @@ def create_goal_route(
         )
 
     try:
-        db_goal = goal_service.create_goal(db, goal)
+        db_goal = goal_service.create_goal(goal)
         return db_goal
     except ValueError as e:
         # F.eks. "Konto med dette ID findes ikke."
@@ -95,8 +93,7 @@ def create_goal_route(
 @router.get("/", response_model=List[GoalSchema])
 def read_goals_route(
     account_id: Optional[int] = Query(None, description="Filtrer mål efter konto ID."),
-    account_id_from_header: Optional[int] = Depends(get_account_id_from_headers),
-    db: Session = Depends(get_db)
+    account_id_from_header: Optional[int] = Depends(get_account_id_from_headers)
 ):
     """Henter alle mål tilknyttet en specifik konto."""
     # Brug account_id fra query parameter, eller fra header hvis ikke angivet
@@ -108,22 +105,22 @@ def read_goals_route(
             detail="Account ID mangler. Vælg en konto først."
         )
 
-    goals = goal_service.get_goals_by_account(db, final_account_id)
+    goals = goal_service.get_goals_by_account(final_account_id)
     return goals
 
 @router.get("/{goal_id}", response_model=GoalSchema)
-def read_goal_route(goal_id: int, db: Session = Depends(get_db)):
+def read_goal_route(goal_id: int):
     """Henter et mål baseret på ID."""
-    db_goal = goal_service.get_goal_by_id(db, goal_id)
+    db_goal = goal_service.get_goal_by_id(goal_id)
     if db_goal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mål ikke fundet.")
     return db_goal
 
 @router.put("/{goal_id}", response_model=GoalSchema)
-def update_goal_route(goal_id: int, goal_data: GoalBase, db: Session = Depends(get_db)):
+def update_goal_route(goal_id: int, goal_data: GoalBase):
     """Opdaterer et mål."""
     try:
-        updated_goal = goal_service.update_goal(db, goal_id, goal_data)
+        updated_goal = goal_service.update_goal(goal_id, goal_data)
         if updated_goal is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mål ikke fundet.")
         return updated_goal
@@ -131,10 +128,10 @@ def update_goal_route(goal_id: int, goal_data: GoalBase, db: Session = Depends(g
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.delete("/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_goal_route(goal_id: int, db: Session = Depends(get_db)):
+def delete_goal_route(goal_id: int):
     """Sletter et mål."""
     try:
-        deleted = goal_service.delete_goal(db, goal_id)
+        deleted = goal_service.delete_goal(goal_id)
         if not deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mål ikke fundet.")
         return None

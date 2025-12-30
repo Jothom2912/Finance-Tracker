@@ -1,3 +1,4 @@
+from backend.repositories import get_budget_repository
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, extract
 from sqlalchemy.exc import IntegrityError
@@ -33,13 +34,10 @@ def _get_category_expenses_for_period(db: Session, month: int, year: int, accoun
 
 # --- CRUD/Hentningsfunktioner ---
 
-def get_budget_by_id(db: Session, budget_id: int):
+def get_budget_by_id(budget_id: int):
     """Henter et specifikt budget ud fra ID."""
-    return db.query(BudgetModel).options(
-        joinedload(BudgetModel.categories)
-    ).filter(
-        BudgetModel.idBudget == budget_id
-    ).first()
+    repo= get_budget_repository()
+    return repo.get_by_id(budget_id)
 
 def get_budgets_by_period(db: Session, account_id: int, start_date: str, end_date: str) -> List[BudgetModel]:
     """Henter budgetter for en given periode og Account ID (juster dette baseret på din Budget model)."""
@@ -178,11 +176,12 @@ def update_budget(db: Session, budget_id: int, budget: BudgetUpdate) -> Optional
 
 def delete_budget(db: Session, budget_id: int) -> bool:
     """Sletter et budget."""
-    db_budget = get_budget_by_id(db, budget_id)
+    repo= get_budget_repository()
+    db_budget = get_budget_by_id(budget_id)
     if not db_budget:
         return False
 
-    db.delete(db_budget)
+    repo.delete(budget_id)
     db.commit()
     return True
 

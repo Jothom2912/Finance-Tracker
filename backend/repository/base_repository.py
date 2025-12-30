@@ -81,3 +81,110 @@ class ICategoryRepository(ABC):
     def delete(self, category_id: int) -> bool:
         """Delete category."""
         pass
+
+class IBudgetRepository(ABC):
+    
+    @abstractmethod
+    def getall(self) -> List[Dict]:
+        """ get all budgets """
+        pass
+    
+    @abstractmethod
+    def getOne(self) ->  Optional[Dict]:
+        """get one budget"""
+        pass
+    
+    @abstractmethod
+    def Delete(self,budget_id: int) -> bool:
+        """delete one budget """
+        pass
+    
+    @abstractmethod
+    def Create(self) -> Dict:
+        """create one budget """
+        pass
+    
+    @abstractmethod
+    def update(self,budget_id: int) -> Dict:
+        """ update one budget """
+        
+class IGoalRepository(ABC):
+    
+    @abstractmethod
+    def getall(self) -> List[Dict]:
+        """ get all goals """
+        pass
+    
+    @abstractmethod
+    def getOne(self,goal_id: int) ->  Optional[Dict]:
+        """get one goal"""
+        pass
+    
+    @abstractmethod
+    def Delete(self,goal_id: int) -> bool:
+        """delete one goal """
+        pass
+    
+    @abstractmethod
+    def Create(self) -> Dict:
+        """create one goal """
+        pass
+    
+    @abstractmethod
+    def update(self,goal_id: int) -> Dict:
+        """ update one goal """
+        
+class IUserRepository(ABC):
+    
+    @abstractmethod
+    def getall(self) -> List[Dict]:
+        """ get all users """
+        pass
+    
+    @abstractmethod
+    def getOne(self,user_id: int) -> Optional[Dict]:
+        """get one user"""
+        pass
+    
+    @abstractmethod
+    def Delete(self,user_id: int) -> bool:
+        """delete one user """
+        pass
+    
+    @abstractmethod
+    def Create(self) -> Dict:
+        """create one user """
+        pass
+    
+    @abstractmethod
+    def update(self,user_id: int) -> Dict:
+        """ update one user """
+        
+class IAccountRepository(ABC):
+    
+    @abstractmethod
+    def getall(self) -> Dict:
+        """ get all accounts """
+        pass
+    
+    @abstractmethod
+    def getOne(self,account_id: int) ->  Optional[Dict]:
+        """get one account"""
+        pass
+    
+    @abstractmethod
+    def Delete(self,account_id: int) -> bool:
+        """delete one account """
+        pass
+    
+    @abstractmethod
+    def Create(self) -> Dict:
+        """create one account """
+        pass
+    
+    @abstractmethod
+    def update(self,account_id: int) -> Dict:
+        """ update one account """
+        
+        
+        

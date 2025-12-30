@@ -2,7 +2,7 @@
 from typing import List, Dict, Optional
 from datetime import date
 from elasticsearch import Elasticsearch
-from backend.repository.base_repository import ITransactionRepository, ICategoryRepository
+from backend.repository.base_repository import ITransactionRepository, ICategoryRepository,IBudgetRepository,IUserRepository, IAccountRepository, IGoalRepository
 
 class ElasticsearchTransactionRepository(ITransactionRepository):
     """Elasticsearch implementation of transaction repository."""
@@ -247,3 +247,262 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
         except Exception as e:
             print(f"Error deleting category {category_id}: {e}")
             return False
+        
+    def update(self, category_id: int, category_data: Dict) -> Dict:
+        """Update transaction in Elasticsearch."""
+        try:
+            self.es.update(
+                index=self.index,
+                id=category_id,
+                body={"doc": category_data},
+                refresh=True
+            )
+            return self.get_by_id(category_id) or category_data
+        except Exception as e:
+            print(f"Error updating transaction {category_id}: {e}")
+            return category_data
+        
+
+class ElasticsearchBudgetRepository(IBudgetRepository):
+    
+    def get_all(self) -> List[Dict]:
+        """Get all budgets from Elasticsearch."""
+        try:
+            response = self.es.search(
+                index=self.index,
+                body={"query": {"match_all": {}}, "size": 10000}
+            )
+            return [hit["_source"] for hit in response["hits"]["hits"]]
+        except Exception as e:
+            print(f"Error getting all budgets: {e}")
+            return []
+        
+    def get_by_id(self, category_id: int) -> Optional[Dict]:
+        """Get category by ID from Elasticsearch."""
+        try:
+            response = self.es.get(index=self.index, id=category_id)
+            return response["_source"]
+        except Exception as e:
+            print(f"Error getting category {category_id}: {e}")
+            return None
+        
+    def create(self, name: str) -> Dict:
+        """Create new category in Elasticsearch."""
+        category_data = {"name": name, "type": "expense"}
+        try:
+            response = self.es.index(
+                index=self.index,
+                body=category_data,
+                refresh=True
+            )
+            category_data["id"] = response["_id"]
+            return category_data
+        except Exception as e:
+            print(f"Error creating category: {e}")
+            return category_data
+        
+    def delete(self, transaction_id: int) -> bool:
+        """Delete transaction from Elasticsearch."""
+        try:
+            self.es.delete(index=self.index, id=transaction_id, refresh=True)
+            return True
+        except Exception as e:
+            print(f"Error deleting transaction {transaction_id}: {e}")
+            return False
+        
+    def update(self, transaction_id: int, transaction_data: Dict) -> Dict:
+        """Update transaction in Elasticsearch."""
+        try:
+            self.es.update(
+                index=self.index,
+                id=transaction_id,
+                body={"doc": transaction_data},
+                refresh=True
+            )
+            return self.get_by_id(transaction_id) or transaction_data
+        except Exception as e:
+            print(f"Error updating transaction {transaction_id}: {e}")
+            return transaction_data
+        
+class ElasticsearchUserRepository(IUserRepository):
+    def get_all(self) -> List[Dict]:
+        """Get all users from Elasticsearch."""
+        try:
+            response = self.es.search(
+                index=self.index,
+                body={"query": {"match_all": {}}, "size": 10000}
+            )
+            return [hit["_source"] for hit in response["hits"]["hits"]]
+        except Exception as e:
+            print(f"Error getting all users: {e}")
+            return []
+        
+    def get_by_id(self, category_id: int) -> Optional[Dict]:
+        """Get category by ID from Elasticsearch."""
+        try:
+            response = self.es.get(index=self.index, id=category_id)
+            return response["_source"]
+        except Exception as e:
+            print(f"Error getting category {category_id}: {e}")
+            return None
+        
+    def delete(self, transaction_id: int) -> bool:
+        """Delete transaction from Elasticsearch."""
+        try:
+            self.es.delete(index=self.index, id=transaction_id, refresh=True)
+            return True
+        except Exception as e:
+            print(f"Error deleting transaction {transaction_id}: {e}")
+            return False
+        
+    def create(self, name: str) -> Dict:
+        """Create new category in Elasticsearch."""
+        category_data = {"name": name, "type": "expense"}
+        try:
+            response = self.es.index(
+                index=self.index,
+                body=category_data,
+                refresh=True
+            )
+            category_data["id"] = response["_id"]
+            return category_data
+        except Exception as e:
+            print(f"Error creating category: {e}")
+            return category_data
+
+    def update(self, category_id: int, category_data: Dict) -> Dict:
+        """Update category in Elasticsearch."""
+        try:
+            self.es.update(
+                index=self.index,
+                id=category_id,
+                body={"doc": category_data},
+                refresh=True
+            )
+            return self.get_by_id(category_id) or category_data
+        except Exception as e:
+            print(f"Error updating category {category_id}: {e}")
+            return category_data
+
+class ElasticsearchAccountRepository(IAccountRepository):
+    
+    def get_all(self) -> List[Dict]:
+        """Get all budgets from Elasticsearch."""
+        try:
+            response = self.es.search(
+                index=self.index,
+                body={"query": {"match_all": {}}, "size": 10000}
+            )
+            return [hit["_source"] for hit in response["hits"]["hits"]]
+        except Exception as e:
+            print(f"Error getting all budgets: {e}")
+            return []
+        
+    def get_by_id(self, category_id: int) -> Optional[Dict]:
+        """Get category by ID from Elasticsearch."""
+        try:
+            response = self.es.get(index=self.index, id=category_id)
+            return response["_source"]
+        except Exception as e:
+            print(f"Error getting category {category_id}: {e}")
+            return None
+    
+    def delete(self, transaction_id: int) -> bool:
+        """Delete transaction from Elasticsearch."""
+        try:
+            self.es.delete(index=self.index, id=transaction_id, refresh=True)
+            return True
+        except Exception as e:
+            print(f"Error deleting transaction {transaction_id}: {e}")
+            return False
+        
+    def create(self, name: str) -> Dict:
+        """Create new category in Elasticsearch."""
+        category_data = {"name": name, "type": "expense"}
+        try:
+            response = self.es.index(
+                index=self.index,
+                body=category_data,
+                refresh=True
+            )
+            category_data["id"] = response["_id"]
+            return category_data
+        except Exception as e:
+            print(f"Error creating category: {e}")
+            return category_data
+
+    def update(self, category_id: int, category_data: Dict) -> Dict:
+        """Update category in Elasticsearch."""
+        try:
+            self.es.update(
+                index=self.index,
+                id=category_id,
+                body={"doc": category_data},
+                refresh=True
+            )
+            return self.get_by_id(category_id) or category_data
+        except Exception as e:
+            print(f"Error updating category {category_id}: {e}")
+            return category_data
+
+class ElasticsearchGoalRepository(IGoalRepository):
+    
+    def get_all(self) -> List[Dict]:
+        """Get all goals from Elasticsearch."""
+        try:
+            response = self.es.search(
+                index=self.index,
+                body={"query": {"match_all": {}}, "size": 10000}
+            )
+            return [hit["_source"] for hit in response["hits"]["hits"]]
+        except Exception as e:
+            print(f"Error getting all goals: {e}")
+            return []
+        
+    def get_by_id(self, category_id: int) -> Optional[Dict]:
+        """Get category by ID from Elasticsearch."""
+        try:
+            response = self.es.get(index=self.index, id=category_id)
+            return response["_source"]
+        except Exception as e:
+            print(f"Error getting category {category_id}: {e}")
+            return None
+        
+    
+    def delete(self, transaction_id: int) -> bool:
+        """Delete transaction from Elasticsearch."""
+        try:
+            self.es.delete(index=self.index, id=transaction_id, refresh=True)
+            return True
+        except Exception as e:
+            print(f"Error deleting transaction {transaction_id}: {e}")
+            return False
+        
+    def create(self, name: str) -> Dict:
+        """Create new category in Elasticsearch."""
+        category_data = {"name": name, "type": "expense"}
+        try:
+            response = self.es.index(
+                index=self.index,
+                body=category_data,
+                refresh=True
+            )
+            category_data["id"] = response["_id"]
+            return category_data
+        except Exception as e:
+            print(f"Error creating category: {e}")
+            return category_data
+
+    def update(self, category_id: int, category_data: Dict) -> Dict:
+        """Update category in Elasticsearch."""
+        try:
+            self.es.update(
+                index=self.index,
+                id=category_id,
+                body={"doc": category_data},
+                refresh=True
+            )
+            return self.get_by_id(category_id) or category_data
+        except Exception as e:
+            print(f"Error updating category {category_id}: {e}")
+            return category_data

@@ -1,3 +1,4 @@
+from backend.repositories import get_user_repository
 from sqlalchemy.orm import Session, noload
 from typing import Optional, List, Tuple
 from sqlalchemy.exc import IntegrityError
@@ -9,34 +10,36 @@ from ..auth import hash_password, verify_password, create_access_token, Token
 
 # --- CRUD Funktioner ---
 
-def get_user_by_id(db: Session, user_id: int) -> Optional[UserModel]:
+def get_user_by_id(user_id: int) -> Optional[UserModel]:
     """Henter en bruger baseret på ID."""
     # Brug noload for at undgå at loade relationships (forbedrer performance)
-    return db.query(UserModel).options(
-        noload(UserModel.accounts),
-        noload(UserModel.account_groups)
-    ).filter(UserModel.idUser == user_id).first()
+    repo= get_user_repository()
+    return repo.get_by_id(user_id)
 
-def get_user_by_username(db: Session, username: str) -> Optional[UserModel]:
+def get_user_by_username(username: str) -> Optional[UserModel]:
     """Henter en bruger baseret på username."""
-    return db.query(UserModel).filter(UserModel.username == username).first()
+    repo= get_user_repository()
+    return repo.get_by_username(username)
 
 def get_user_by_email(db: Session, email: str) -> Optional[UserModel]:
     """Henter en bruger baseret på e-mail."""
-    return db.query(UserModel).filter(UserModel.email == email).first()
+    repo= get_user_repository()
+    return repo.get_by_email(email)
 
 def get_users(db: Session, skip: int = 0, limit: int = 100) -> List[UserModel]:
     """Henter en pagineret liste over brugere."""
-    return db.query(UserModel).offset(skip).limit(limit).all()
+    repo= get_user_repository()
+    return repo.get_all(skip=skip, limit=limit)
 
 def create_user(db: Session, user: UserCreate) -> UserModel:
     """Opretter en ny bruger og en default account."""
+    repo= get_user_repository()
     # Check if email exists
-    if get_user_by_email(db, user.email):
+    if repo.get_user_by_email(user.email):
         raise ValueError("Bruger med denne e-mail eksisterer allerede.")
     
     # Check if username exists
-    if get_user_by_username(db, user.username):
+    if repo.get_user_by_username(user.username):
         raise ValueError("Brugernavn er allerede taget.")
     
     # Hash password

@@ -1,3 +1,4 @@
+from backend.repositories import get_goal_repository
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from sqlalchemy.exc import IntegrityError
@@ -8,16 +9,19 @@ from backend.shared.schemas.goal import GoalCreate, GoalBase
 
 # --- CRUD Funktioner ---
 
-def get_goal_by_id(db: Session, goal_id: int) -> Optional[GoalModel]:
+def get_goal_by_id( goal_id: int) -> Optional[GoalModel]:
     """Henter et mål baseret på ID."""
-    return db.query(GoalModel).filter(GoalModel.idGoal == goal_id).first()
+    repo= get_goal_repository()
+    return repo.get_by_id(goal_id)
 
-def get_goals_by_account(db: Session, account_id: int) -> List[GoalModel]:
+def get_goals_by_account( account_id: int) -> List[GoalModel]:
     """Henter alle mål tilknyttet en specifik konto."""
-    return db.query(GoalModel).filter(GoalModel.Account_idAccount == account_id).all()
+    repo= get_goal_repository()
+    return repo.get_goals_by_account(account_id)
 
 def create_goal(db: Session, goal: GoalCreate) -> GoalModel:
     """Opretter et nyt mål tilknyttet en konto."""
+    repo= get_goal_repository()
     account = db.query(AccountModel).filter(AccountModel.idAccount == goal.Account_idAccount).first()
     if not account:
         raise ValueError("Konto med dette ID findes ikke.")
@@ -32,17 +36,15 @@ def create_goal(db: Session, goal: GoalCreate) -> GoalModel:
     )
     
     try:
-        db.add(db_goal)
-        db.commit()
-        db.refresh(db_goal)
+        repo.create(db_goal)
         return db_goal
     except IntegrityError:
-        db.rollback()
         raise ValueError("Integritetsfejl ved oprettelse af mål.")
 
-def update_goal(db: Session, goal_id: int, goal_data: GoalBase) -> Optional[GoalModel]:
+def update_goal(goal_id: int, goal_data: GoalBase) -> Optional[GoalModel]:
     """Opdaterer et mål."""
-    db_goal = get_goal_by_id(db, goal_id)
+    repo = get_goal_repository()
+    db_goal = repo.get_by_id(goal_id)
     if not db_goal:
         return None
 
@@ -51,23 +53,20 @@ def update_goal(db: Session, goal_id: int, goal_data: GoalBase) -> Optional[Goal
         setattr(db_goal, key, value)
     
     try:
-        db.commit()
-        db.refresh(db_goal)
+        repo.update(db_goal)
         return db_goal
     except IntegrityError:
-        db.rollback()
         raise ValueError("Integritetsfejl ved opdatering af mål.")
 
-def delete_goal(db: Session, goal_id: int) -> bool:
+def delete_goal(goal_id: int) -> bool:
     """Sletter et mål."""
-    db_goal = get_goal_by_id(db, goal_id)
+    repo = get_goal_repository()
+    db_goal = repo.get_by_id(goal_id)
     if not db_goal:
         return False
     
     try:
-        db.delete(db_goal)
-        db.commit()
+        repo.delete(goal_id)
         return True
     except IntegrityError:
-        db.rollback()
         raise ValueError("Integritetsfejl ved sletning af mål.")
