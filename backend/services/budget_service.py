@@ -39,26 +39,18 @@ def get_budget_by_id(budget_id: int):
     repo= get_budget_repository()
     return repo.get_by_id(budget_id)
 
-def get_budgets_by_period(db: Session, account_id: int, start_date: str, end_date: str) -> List[BudgetModel]:
+def get_budgets_by_period( account_id: int, start_date: str, end_date: str) -> List[dict]:
     """Henter budgetter for en given periode og Account ID (juster dette baseret på din Budget model)."""
-
+    repo= get_budget_repository()
     # Bemærk: Din Budget-model i den gamle kode havde 'month' og 'year',
     # men Budget-modellen fra din nye SQLAlchemy-struktur har kun `budget_date`.
     # Jeg antager, at du enten filtrerer på `budget_date` eller på den konto, de er knyttet til.
     # Jeg bruger her en generisk tilgang til at hente alt for en konto.
+    return repo.get_all(account_id, start_date, end_date)
 
-    query = db.query(BudgetModel).options(
-        joinedload(BudgetModel.categories) # Inkluderer relaterede kategorier
-    ).filter(
-        BudgetModel.Account_idAccount == account_id # Filtrer på Account ID
-        # Hvis du vil filtrere på dato: BudgetModel.budget_date.between(start_date, end_date)
-    )
-
-    return query.all()
-
-def create_budget(db: Session, budget: BudgetCreate) -> BudgetModel:
+def create_budget( budget: BudgetCreate) -> BudgetModel:
     """Opretter et nyt budget."""
-
+    repo= get_budget_repository()
     if not budget.Account_idAccount:
         raise ValueError("Account ID er påkrævet for at oprette et budget.")
 
@@ -76,8 +68,7 @@ def create_budget(db: Session, budget: BudgetCreate) -> BudgetModel:
     db_budget = BudgetModel(**budget_data)
 
     try:
-        db.add(db_budget)
-        db.flush()
+        repo.create(db_budget)
 
         # Tilføj kategori via association table
         from backend.models.mysql.common import budget_category_association
@@ -174,7 +165,7 @@ def update_budget(db: Session, budget_id: int, budget: BudgetUpdate) -> Optional
         raise ValueError("Integritetsfejl ved opdatering.")
 
 
-def delete_budget(db: Session, budget_id: int) -> bool:
+def delete_budget( budget_id: int) -> bool:
     """Sletter et budget."""
     repo= get_budget_repository()
     db_budget = get_budget_by_id(budget_id)
@@ -182,7 +173,6 @@ def delete_budget(db: Session, budget_id: int) -> bool:
         return False
 
     repo.delete(budget_id)
-    db.commit()
     return True
 
 

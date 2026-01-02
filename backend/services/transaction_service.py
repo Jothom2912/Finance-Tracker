@@ -1,6 +1,6 @@
 # backend/services/transaction_service.py
 
-from backend.repository import get_transaction_repository
+from backend.repository import get_category_repository, get_transaction_repository
 from typing import List, Optional, Dict
 from datetime import date
 import pandas as pd
@@ -52,7 +52,7 @@ def delete_transaction( transaction_id: int) -> bool:
 
 # --- CSV Import Logik ---
 
-def import_transactions_from_csv(db: Session, file_contents: bytes, account_id: int) -> List[TransactionModel]:
+def import_transactions_from_csv( file_contents: bytes, account_id: int) -> List[TransactionModel]:
     """
     Udfører parsing og import af transaktioner fra en CSV-fil.
     """
@@ -72,28 +72,23 @@ def import_transactions_from_csv(db: Session, file_contents: bytes, account_id: 
     df['amount'] = df['Beløb'].str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     
     # Hent kategorier
-    categories = db.query(CategoryModel).all()
+    repo = get_category_repository()
+    categories = repo.get_all()
     category_name_to_id = {cat.name.lower(): cat.idCategory for cat in categories}
 
     # Opret "Anden" kategori hvis den mangler
     if "anden" not in category_name_to_id:
-        try:
-            default_category = CategoryModel(
-                name="Anden",
-                type=TransactionType.expense.value
+        default_category = CategoryModel(
+            name="Anden",
+            type=TransactionType.expense.value
             )
-            db.add(default_category)
-            db.commit()
-            db.refresh(default_category)
-            category_name_to_id["anden"] = default_category.idCategory
-        except Exception as e:
-            db.rollback()
-            raise ValueError(f"Kunne ikke oprette standardkategorien 'Anden': {str(e)}")
+        repo.create(default_category)
         
     created_transactions: List[TransactionModel] = []
 
     try:
         # Anden: Iterer over rækker, kategoriser og gem
+        repo = get_transaction_repository()
         for _, row in df.iterrows():
             full_description = f"{row.get('Modtager', '')} {row.get('Afsender', '')} {row.get('Navn', '')} {row.get('Beskrivelse', '')}".strip()
             full_description = " ".join(full_description.split())
@@ -127,14 +122,11 @@ def import_transactions_from_csv(db: Session, file_contents: bytes, account_id: 
                 # name=clean_value(row.get('Navn'))
             )
 
-            db.add(db_transaction)
-            db.flush() 
+            repo.create(db_transaction)
             created_transactions.append(db_transaction)
             
-        db.commit()
         print(f"✓ Succesfuldt importeret {len(created_transactions)} transaktioner til account_id={account_id}")
         return created_transactions
     except Exception as e:
-        db.rollback()
         print(f"✗ Fejl ved import: {str(e)}")
         raise ValueError(f"Fejl ved import af transaktioner: {str(e)}")

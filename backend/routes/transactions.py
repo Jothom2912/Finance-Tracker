@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status, Header
-from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 import pandas as pd
@@ -26,8 +25,7 @@ router = APIRouter(
 
 def _resolve_account_id(
     x_account_id: Optional[str],
-    authorization: Optional[str],
-    db: Session
+    authorization: Optional[str]
 ) -> Optional[int]:
     """Helper: Hent account_id fra header eller token."""
     print(f"DEBUG _resolve_account_id: x_account_id = {x_account_id} (type: {type(x_account_id)})")
@@ -46,7 +44,7 @@ def _resolve_account_id(
         token_data = decode_token(token)
         if token_data:
             from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            accounts = account_service.get_accounts_by_user(token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
                 print(f"DEBUG _resolve_account_id: Hentet account_id fra token: {account_id}")
@@ -60,14 +58,13 @@ def _resolve_account_id(
 def create_transaction_route(
     transaction: TransactionCreate,
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db)
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ):
     """Opretter en ny transaktion manuelt."""
     print(f"DEBUG create_transaction_route: x_account_id header = {x_account_id}")
     print(f"DEBUG create_transaction_route: authorization header = {authorization[:50] if authorization else None}...")
 
-    account_id = _resolve_account_id(x_account_id, authorization, db)
+    account_id = _resolve_account_id(x_account_id, authorization)
     print(f"DEBUG create_transaction_route: resolved account_id = {account_id}")
 
     if not account_id:
@@ -93,7 +90,7 @@ def create_transaction_route(
     print(f"DEBUG create_transaction_route: transaction final (by_alias=False) = {transaction.model_dump(by_alias=False)}")
 
     try:
-        result = create_transaction(db, transaction)
+        result = create_transaction(transaction)
         print(f"DEBUG create_transaction_route: create_transaction returnerede: {result.idTransaction if result else None}")
         return result
     except ValueError as e:
@@ -106,14 +103,13 @@ def create_transaction_route(
 async def upload_transactions_csv_route(
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db)
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ):
     """Uploader og importerer transaktioner fra en CSV-fil."""
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ugyldig filtype. Kun CSV-filer er tilladt.")
 
-    account_id = _resolve_account_id(x_account_id, authorization, db)
+    account_id = _resolve_account_id(x_account_id, authorization)
     if not account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -123,7 +119,7 @@ async def upload_transactions_csv_route(
     try:
         contents = await file.read()
         # ✅ FIX: Konverter SQLAlchemy objekter til Pydantic schemas
-        created_transactions = import_transactions_from_csv(db, contents, account_id)
+        created_transactions = import_transactions_from_csv(contents, account_id)
         # Konverter til schemas for response serialization
         return [TransactionSchema.model_validate(t) for t in created_transactions]
     except pd.errors.EmptyDataError:
@@ -150,11 +146,10 @@ def read_transactions_route(
     authorization: Optional[str] = Header(None, alias="Authorization"),
     x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
     skip: int = Query(0),
-    limit: int = Query(100),
-    db: Session = Depends(get_db)
+    limit: int = Query(100)
 ):
     """Henter en liste over transaktioner med filtrering."""
-    final_account_id = account_id or _resolve_account_id(x_account_id, authorization, db)
+    final_account_id = account_id or _resolve_account_id(x_account_id, authorization)
 
     if not final_account_id:
         raise HTTPException(
@@ -163,15 +158,15 @@ def read_transactions_route(
         )
 
     return get_transactions(
-        db, start_date, end_date, category_id, type, month, year, final_account_id, skip, limit
+         start_date, end_date, category_id, type, month, year, final_account_id, skip, limit
     )
 
 # --- Hent specifik transaktion ---
 @router.get("/{transaction_id}", response_model=TransactionSchema)
-def read_transaction_route(transaction_id: int, db: Session = Depends(get_db)):
+def read_transaction_route(transaction_id: int):
     """Henter detaljer for en specifik transaktion baseret på ID."""
     # Kald funktionen direkte
-    transaction = get_transaction_by_id(db, transaction_id)
+    transaction = get_transaction_by_id(transaction_id)
     if transaction is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaktion ikke fundet.")
     return transaction
@@ -182,18 +177,17 @@ def update_transaction_route(
     transaction_id: int,
     transaction: TransactionCreate,
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db)
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ):
     """Opdaterer en eksisterende transaktion."""
-    account_id = _resolve_account_id(x_account_id, authorization, db)
+    account_id = _resolve_account_id(x_account_id, authorization)
 
     # ✅ FIX: Brug model_copy() med det korrekte feltnavn (Account_idAccount, ikke account_id alias)
     if transaction.Account_idAccount is None and account_id:
         transaction = transaction.model_copy(update={"Account_idAccount": account_id})
 
     try:
-        updated = update_transaction(db, transaction_id, transaction)
+        updated = update_transaction(transaction_id, transaction)
         if not updated:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaktion ikke fundet.")
         return updated
@@ -202,9 +196,9 @@ def update_transaction_route(
 
 # --- Slet transaktion ---
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_transaction_route(transaction_id: int, db: Session = Depends(get_db)):
+def delete_transaction_route(transaction_id: int):
     """Sletter en transaktion."""
     # Kald funktionen direkte
-    if not delete_transaction(db, transaction_id):
+    if not delete_transaction(transaction_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaktion ikke fundet.")
     return None

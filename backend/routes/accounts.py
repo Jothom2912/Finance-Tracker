@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from typing import List, Optional
 
-from backend.database import get_db
+
 from backend.shared.schemas.account import Account as AccountSchema, AccountCreate, AccountBase
 from backend.services import account_service
 from backend.auth import decode_token, get_current_user_id
@@ -49,7 +49,7 @@ def read_account_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Konto ikke fundet.")
     
     # Tjek at kontoen tilhører den aktuelle bruger
-    if db_account.User_idUser != current_user_id:
+    if db_account["User_idUser"] != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="Du kan kun se dine egne konti."
@@ -70,7 +70,7 @@ def update_account_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Konto ikke fundet.")
     
     # Tjek at kontoen tilhører den aktuelle bruger
-    if db_account.User_idUser != current_user_id:
+    if db_account["User_idUser"] != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="Du kan kun opdatere dine egne konti."

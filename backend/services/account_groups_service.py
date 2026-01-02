@@ -1,28 +1,38 @@
-from sqlalchemy.orm import Session
-from typing import Optional, List
-from sqlalchemy.exc import IntegrityError
+from backend.repositories import get_account_group_repository
+from typing import Optional, List, Dict
 
+from backend.repositories.mysql.groupAccount_repository import MySQGroupAccountRepository
+from backend.repositories.base import IGroupAccountRepository
 from backend.models.mysql.account_groups import AccountGroups as AGModel
 from backend.models.mysql.user import User as UserModel
 from backend.shared.schemas.account_groups import AccountGroupsCreate, AccountGroupsBase
 
 # --- CRUD Funktioner ---
 
-def get_group_by_id(db: Session, group_id: int) -> Optional[AGModel]:
+def get_group_by_id(group_id: int) -> Optional[dict]:
     """Henter en kontogruppe baseret på ID."""
-    return db.query(AGModel).filter(AGModel.idAccountGroups == group_id).first()
+    repo=  get_account_group_repository()
+    data = repo.get_by_id(group_id)
+    return data
 
-def get_groups(db: Session, skip: int = 0, limit: int = 100) -> List[AGModel]:
+def get_groups() -> List[dict]:
     """Henter en pagineret liste over kontogrupper."""
-    return db.query(AGModel).offset(skip).limit(limit).all()
+    repo: IGroupAccountRepository = get_account_group_repository()
+    all_groups = repo.get_all()
+    return all_groups
 
-def create_group(db: Session, group_data: AccountGroupsCreate) -> AGModel:
+def create_group( group_data: AccountGroupsCreate) -> dict:
     """Opretter en ny kontogruppe og tilknytter brugere."""
     
     user_ids = group_data.user_ids
     group_info = group_data.model_dump(exclude={"user_ids"})
 
-    db_group = AGModel(**group_info)
+    repo: IGroupAccountRepository = get_account_group_repository()
+    result = repo.create(group_info)
+    group_id = result['idAccountGroups']
+    
+    # Get the created group from db to add users
+    db_group = db.query(AGModel).filter(AGModel.idAccountGroups == group_id).first()
     
     # Tilknyt brugere
     users = db.query(UserModel).filter(UserModel.idUser.in_(user_ids)).all()
@@ -31,40 +41,23 @@ def create_group(db: Session, group_data: AccountGroupsCreate) -> AGModel:
         raise ValueError("Mindst én bruger ID er ugyldig.")
         
     db_group.users.extend(users)
-    
-    try:
-        db.add(db_group)
-        db.commit()
-        db.refresh(db_group)
-        return db_group
-    except IntegrityError:
-        db.rollback()
-        raise ValueError("Integritetsfejl ved oprettelse af gruppe.")
 
-def update_group(db: Session, group_id: int, group_data: AccountGroupsCreate) -> Optional[AGModel]:
+    return db_group
+
+def update_group(group_id: int, group_data: AccountGroupsCreate) -> Optional[dict]:
     """Opdaterer en kontogruppe (inkl. dens tilknyttede brugere)."""
-    db_group = get_group_by_id(db, group_id)
-    if not db_group:
-        return None
-
+    repo: IGroupAccountRepository = get_account_group_repository()
+    
     update_data = group_data.model_dump(exclude_unset=True)
-    
-    if 'user_ids' in update_data:
-        new_user_ids = update_data.pop('user_ids')
-        users = db.query(UserModel).filter(UserModel.idUser.in_(new_user_ids)).all()
-        if len(users) != len(new_user_ids):
-            raise ValueError("Mindst én ny bruger ID er ugyldig.")
-        # Erstat de eksisterende brugere
-        db_group.users = users 
 
-    # Opdater de øvrige felter
-    for key, value in update_data.items():
-        setattr(db_group, key, value)
+    # Update the basic fields using repo
+    if update_data:
+        repo.update(group_id, update_data)
     
-    try:
-        db.commit()
-        db.refresh(db_group)
-        return db_group
-    except IntegrityError:
-        db.rollback()
-        raise ValueError("Integritetsfejl ved opdatering af gruppe.")
+    # Refresh and return
+    return update_data
+
+def delete_group( group_id: int) -> bool:
+    """Sletter en kontogruppe."""
+    repo= get_account_group_repository()
+    return repo.delete(group_id)

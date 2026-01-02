@@ -201,4 +201,62 @@ class IGoalRepository(ABC):
     def delete(self, goal_id: int) -> bool:
         """Delete goal."""
         pass
+    
+class IPlannedTransaction(ABC):
+    """Abstract interface for planned transaction repository."""
+
+    @abstractmethod
+    def get_all(self, account_id: Optional[int] = None) -> List[Dict]:
+        """Get all planned transactions, optionally filtered by account_id."""
+        pass
+    
+    @abstractmethod
+    def get_by_id(self, planned_transaction_id: int) -> Optional[Dict]:
+        """Get planned transaction by ID."""
+        pass
+    
+    @abstractmethod
+    def create(self, planned_transaction_data: Dict) -> Dict:
+        """Create new planned transaction."""
+        pass
+    
+    @abstractmethod
+    def update(self, planned_transaction_id: int, planned_transaction_data: Dict) -> Dict:
+        """Update planned transaction."""
+        pass
+    
+    @abstractmethod
+    def delete(self, planned_transaction_id: int) -> bool:
+        """Delete planned transaction."""
+        pass
+
+
+class IGroupAccountRepository(ABC):
+    """Abstract interface for group account repository."""
+
+    @abstractmethod
+    def get_all(self, account_id: Optional[int] = None) -> List[Dict]:
+        """Get all group accounts, optionally filtered by account_id."""
+        pass
+    
+    @abstractmethod
+    def get_by_id(self, group_account_id: int) -> Optional[Dict]:
+        """Get group account by ID."""
+        pass
+    
+    @abstractmethod
+    def create(self, group_account_data: Dict) -> Dict:
+        """Create new group account."""
+        pass
+    
+    @abstractmethod
+    def update(self, group_account_id: int, group_account_data: Dict) -> Dict:
+        """Update group account."""
+        pass
+    
+    @abstractmethod
+    def delete(self, group_account_id: int) -> bool:
+        """Delete group account."""
+        pass
+
 

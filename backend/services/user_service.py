@@ -1,8 +1,5 @@
-from backend.repositories import get_user_repository
-from sqlalchemy.orm import Session, noload
+from backend.repositories import get_account_repository, get_user_repository
 from typing import Optional, List, Tuple
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import or_
 
 from backend.models.mysql.user import User as UserModel
 from backend.shared.schemas.user import UserCreate
@@ -21,17 +18,17 @@ def get_user_by_username(username: str) -> Optional[UserModel]:
     repo= get_user_repository()
     return repo.get_by_username(username)
 
-def get_user_by_email(db: Session, email: str) -> Optional[UserModel]:
+def get_user_by_email(email: str) -> Optional[UserModel]:
     """Henter en bruger baseret på e-mail."""
     repo= get_user_repository()
     return repo.get_by_email(email)
 
-def get_users(db: Session, skip: int = 0, limit: int = 100) -> List[UserModel]:
+def get_users(skip: int = 0, limit: int = 100) -> List[UserModel]:
     """Henter en pagineret liste over brugere."""
     repo= get_user_repository()
     return repo.get_all(skip=skip, limit=limit)
 
-def create_user(db: Session, user: UserCreate) -> UserModel:
+def create_user(user: UserCreate) -> UserModel:
     """Opretter en ny bruger og en default account."""
     repo= get_user_repository()
     # Check if email exists
@@ -53,26 +50,21 @@ def create_user(db: Session, user: UserCreate) -> UserModel:
     )
     
     try:
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
+        repo.create(db_user)
         
         # Opret automatisk en default account for den nye bruger
         from backend.models.mysql.account import Account as AccountModel
+        repo= get_account_repository()
         default_account = AccountModel(
             name="Min Konto",
             saldo=0.0,
             User_idUser=db_user.idUser
         )
-        db.add(default_account)
-        db.commit()
+        repo.create(default_account)
         
         # Reload user med noload options for at undgå lazy loading problemer
         user_id = db_user.idUser
-        db_user = db.query(UserModel).options(
-            noload(UserModel.accounts),
-            noload(UserModel.account_groups)
-        ).filter(UserModel.idUser == user_id).first()
+        db_user = get_user_repository().get_by_id(user_id)
         
         # Sæt relationships til tomme lister for at undgå lazy loading ved serialisering
         if db_user:
@@ -80,17 +72,13 @@ def create_user(db: Session, user: UserCreate) -> UserModel:
             db_user.account_groups = []
         
         return db_user
-    except IntegrityError:
-        db.rollback()
-        raise ValueError("Integritetsfejl ved oprettelse af bruger.")
     except Exception as e:
-        db.rollback()
         # Re-raise the original exception instead of wrapping it
         raise
 
 # --- Authentication Functions ---
 
-def login_user(db: Session, username_or_email: str, password: str) -> dict:
+def login_user( username_or_email: str, password: str) -> dict:
     """
     Autentificer bruger og returnér JWT token med account_id hvis tilgængelig
     

@@ -4,21 +4,28 @@ Repository Factory - Vælg hvilken database der skal bruges
 """
 from backend.config import DatabaseType, ACTIVE_DB
 from backend.repositories.base import (
+    IGroupAccountRepository,
+    IPlannedTransaction,
     ITransactionRepository,
     ICategoryRepository,
     IAccountRepository,
     IUserRepository,
     IBudgetRepository,
     IGoalRepository
+    
 )
 
 # Import alle repository implementations
+from backend.repositories.elasticsearch.group_account_repository import ElasticsearchGroupAccountRepository
+from backend.repositories.elasticsearch.planned_transaction_repository import ElasticsearchPlannedTransactionRepository
+from backend.repositories.mysql.plannedTransaction_repository import MySQLPlannedTransactionRepository
 from backend.repositories.mysql.transaction_repository import MySQLTransactionRepository
 from backend.repositories.mysql.category_repository import MySQLCategoryRepository
 from backend.repositories.mysql.account_repository import MySQLAccountRepository
 from backend.repositories.mysql.user_repository import MySQLUserRepository
 from backend.repositories.mysql.budget_repository import MySQLBudgetRepository
 from backend.repositories.mysql.goal_repository import MySQLGoalRepository
+from backend.repositories.mysql.groupAccount_repository import MySQGroupAccountRepository
 
 from backend.repositories.elasticsearch.transaction_repository import ElasticsearchTransactionRepository
 from backend.repositories.elasticsearch.category_repository import ElasticsearchCategoryRepository
@@ -27,6 +34,8 @@ from backend.repositories.elasticsearch.user_repository import ElasticsearchUser
 from backend.repositories.elasticsearch.budget_repository import ElasticsearchBudgetRepository
 from backend.repositories.elasticsearch.goal_repository import ElasticsearchGoalRepository
 
+from backend.repositories.neo4j.group_account_repository import Neo4jGroupAccountRepository
+from backend.repositories.neo4j.plannedTransaction_Repository import Neo4jPlannedTransactionRepository
 from backend.repositories.neo4j.transaction_repository import Neo4jTransactionRepository
 from backend.repositories.neo4j.category_repository import Neo4jCategoryRepository
 from backend.repositories.neo4j.account_repository import Neo4jAccountRepository
@@ -102,3 +111,24 @@ def get_goal_repository() -> IGoalRepository:
     else:
         return MySQLGoalRepository()
 
+def get_planned_transaction_repository() -> IPlannedTransaction:
+    """Factory function to get the active planned transaction repository."""
+    if ACTIVE_DB == DatabaseType.MYSQL.value:
+        return MySQLPlannedTransactionRepository()
+    elif ACTIVE_DB == DatabaseType.ELASTICSEARCH.value:
+        return ElasticsearchPlannedTransactionRepository()
+    elif ACTIVE_DB == DatabaseType.NEO4J.value:
+        return Neo4jPlannedTransactionRepository()
+    else:
+        return MySQLPlannedTransactionRepository()
+
+def get_account_group_repository() -> IGroupAccountRepository:
+    """Factory function to get the active account group repository."""
+    if ACTIVE_DB == DatabaseType.MYSQL.value:
+        return MySQGroupAccountRepository()
+    elif ACTIVE_DB == DatabaseType.ELASTICSEARCH.value:
+        return ElasticsearchGroupAccountRepository()
+    elif ACTIVE_DB == DatabaseType.NEO4J.value:
+        return Neo4jGroupAccountRepository()
+    else:
+        return MySQGroupAccountRepository()

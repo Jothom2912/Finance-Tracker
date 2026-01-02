@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
-from sqlalchemy.orm import Session
 from typing import List, Optional, Annotated
 
 # VIGTIGT: Importér Service laget og dine Pydantic Skemaer
@@ -25,8 +24,7 @@ router = APIRouter(
 
 def get_account_id_from_headers(
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db)
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ) -> Optional[int]:
     """Henter account_id fra X-Account-ID header eller fra user's første account."""
     account_id = None
@@ -45,7 +43,7 @@ def get_account_id_from_headers(
         token_data = decode_token(token)
         if token_data:
             from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            accounts = account_service.get_accounts_by_user( token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
 
@@ -56,8 +54,7 @@ def get_account_id_from_headers(
 async def get_budgets_for_account(
     month: Optional[str] = Query(None, description="Month filter (MM format)"),
     year: Optional[str] = Query(None, description="Year filter (YYYY format)"),
-    account_id: Optional[int] = Depends(get_account_id_from_headers),
-    db: Session = Depends(get_db)
+    account_id: Optional[int] = Depends(get_account_id_from_headers)
 ):
     """
     Retrieve all budgets for a specific account.
@@ -69,7 +66,7 @@ async def get_budgets_for_account(
         )
 
     # RETTET: Kald funktionen direkte
-    budgets = get_budgets_by_period(db, account_id=account_id, start_date=None, end_date=None)
+    budgets = get_budgets_by_period( account_id=account_id, start_date=None, end_date=None)
     return budgets
 
 
@@ -79,8 +76,7 @@ async def get_budgets_for_account(
 async def get_budget_summary_route(
     month: Annotated[str, Query(..., description="Month (1-12).")],
     year: Annotated[str, Query(..., description="Year (YYYY format).")],
-    account_id: Optional[int] = Depends(get_account_id_from_headers),
-    db: Session = Depends(get_db)
+    account_id: Optional[int] = Depends(get_account_id_from_headers)
 ):
     """
     Generates a detailed budget summary for a specific account, month, and year.
@@ -115,21 +111,20 @@ async def get_budget_summary_route(
         )
 
     # Kald funktionen direkte
-    summary = get_budget_summary(db, account_id, month_int, year_int)
+    summary = get_budget_summary( account_id, month_int, year_int)
     return summary
 
 
 # --- Hentning af et specifikt Budget ---
 @router.get("/{budget_id}", response_model=BudgetSchema)
 async def get_budget_by_id_route( # Omdøbt for at undgå navnekonflikt
-    budget_id: int,
-    db: Session = Depends(get_db)
+    budget_id: int
 ):
     """
     Retrieve details for a specific budget by its ID.
     """
     # RETTET: Kald funktionen direkte
-    budget = get_budget_by_id(db, budget_id)
+    budget = get_budget_by_id(budget_id)
     if not budget:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
     return budget
@@ -140,8 +135,7 @@ async def get_budget_by_id_route( # Omdøbt for at undgå navnekonflikt
 async def create_budget_route(
     budget: BudgetCreate,
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db)
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ):
     """
     Create a new budget.
@@ -160,7 +154,7 @@ async def create_budget_route(
         token_data = decode_token(token)
         if token_data:
             from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            accounts = account_service.get_accounts_by_user( token_data.user_id)
             if accounts:
                 account_id = accounts[0].idAccount
 
@@ -207,7 +201,7 @@ async def create_budget_route(
 
     try:
         # RETTET: Kald funktionen direkte
-        new_budget = create_budget(db, budget_with_account)
+        new_budget = create_budget( budget_with_account)
         return new_budget
     except ValueError as e:
         error_msg = str(e)
@@ -226,7 +220,7 @@ async def create_budget_route(
 
 # --- Opdatering af Budget ---
 @router.put("/{budget_id}", response_model=BudgetSchema)
-async def update_budget_route(budget_id: int, budget: BudgetUpdate, db: Session = Depends(get_db)):
+async def update_budget_route(budget_id: int, budget: BudgetUpdate):
     """
     Update an existing budget.
     """
@@ -262,7 +256,7 @@ async def update_budget_route(budget_id: int, budget: BudgetUpdate, db: Session 
         print(f"DEBUG update_budget_route: budget_with_date.category_id={getattr(budget_with_date, 'category_id', 'NOT SET')}")
 
         # RETTET: Kald funktionen direkte
-        updated_budget = update_budget(db, budget_id, budget_with_date)
+        updated_budget = update_budget( budget_id, budget_with_date)
         if not updated_budget:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
         return updated_budget
@@ -274,11 +268,11 @@ async def update_budget_route(budget_id: int, budget: BudgetUpdate, db: Session 
 
 # --- Sletning af Budget ---
 @router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_budget_route(budget_id: int, db: Session = Depends(get_db)):
+async def delete_budget_route(budget_id: int):
     """
     Delete a specific budget.
     """
     # RETTET: Kald funktionen direkte
-    if not delete_budget(db, budget_id):
+    if not delete_budget(budget_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
     return
