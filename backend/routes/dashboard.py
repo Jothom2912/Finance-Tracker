@@ -1,19 +1,14 @@
-# backend/routers/dashboard.py
-
 from fastapi import APIRouter, Depends, Query, HTTPException, status, Header
-from sqlalchemy.orm import Session
 from typing import Dict, List, Any, Optional
 from datetime import date
 
-from backend.database import get_db
 from backend.shared.schemas.dashboard import FinancialOverview
-from backend.auth import decode_token
-
-# LØSNING: Importer funktioner direkte fra modulet i stedet for pakken.
+from backend.auth import decode_token, get_current_user_id
 from backend.services.dashboard_service import (
-    get_financial_overview, # <-- Tilføj de funktioner, routeren bruger
+    get_financial_overview,
     get_expenses_by_month
 )
+from backend.repository import get_account_repository
 
 router = APIRouter(
     prefix="/dashboard",
@@ -22,13 +17,11 @@ router = APIRouter(
 
 def get_account_id_from_headers(
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db)
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ) -> Optional[int]:
     """Henter account_id fra X-Account-ID header eller fra user's første account."""
     account_id = None
 
-    # Først prøv at hente fra X-Account-ID header
     if x_account_id:
         try:
             account_id = int(x_account_id)
@@ -36,58 +29,37 @@ def get_account_id_from_headers(
         except ValueError:
             pass
 
-    # Hvis ikke fundet, prøv at hente fra user's første account
     if not account_id and authorization:
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
         token_data = decode_token(token)
         if token_data:
-            from backend.services import account_service
-            accounts = account_service.get_accounts_by_user(db, token_data.user_id)
+            account_repo = get_account_repository()
+            accounts = account_repo.get_all(user_id=token_data.user_id)
             if accounts:
-                account_id = accounts[0].idAccount
+                account_id = accounts[0]["idAccount"]
 
     return account_id
 
 @router.get("/overview/", response_model=FinancialOverview)
 def get_financial_overview_route(
-    start_date: Optional[date] = Query(None, description="Startdato (YYYY-MM-DD). Standard er 30 dage tilbage."),
-    end_date: Optional[date] = Query(None, description="Slutdato (YYYY-MM-DD). Standard er i dag."),
-    account_id: Optional[int] = Depends(get_account_id_from_headers),
-    db: Session = Depends(get_db)
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    account_id: Optional[int] = Depends(get_account_id_from_headers)
 ):
-    """
-    Henter et finansielt overblik for en given periode.
-    """
     if not account_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account ID mangler. Vælg en konto først."
-        )
-
-    try:
-        # Kald funktionen direkte med account_id
-        overview = get_financial_overview(db, start_date, end_date, account_id)
-        return overview
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Uventet fejl: {e}")
-
+        raise HTTPException(status_code=400, detail="Account ID mangler. Vælg en konto først.")
+    
+    overview = get_financial_overview(start_date, end_date, account_id)
+    return overview
 
 @router.get("/expenses-by-month/", response_model=List[Dict[str, Any]])
 def get_expenses_by_month_route(
-    start_date: Optional[date] = Query(None, description="Startdato for filtrering (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="Slutdato for filtrering (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    account_id: Optional[int] = Depends(get_account_id_from_headers)
 ):
-    """
-    Henter månedlige udgifter for en given periode, grupperet efter måned og år.
-    """
-    try:
-        # Kald funktionen direkte
-        results = get_expenses_by_month(db, start_date, end_date)
-        return results
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Uventet fejl: {e}")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="Account ID mangler. Vælg en konto først.")
+    
+    results = get_expenses_by_month(start_date, end_date, account_id)
+    return results

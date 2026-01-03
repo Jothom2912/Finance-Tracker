@@ -29,10 +29,10 @@ def options_login():
     return {"message": "OK"}
 
 @router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
-def create_user_route(user: UserCreate, db: Session = Depends(get_db)):
+def create_user_route(user: UserCreate):
     """Opretter en ny bruger."""
     try:
-        db_user = user_service.create_user(db, user)
+        db_user = user_service.create_user(user)
         return db_user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

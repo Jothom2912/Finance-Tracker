@@ -98,10 +98,10 @@ class GoalCreate(GoalBase):
 # --- Schema for reading data (includes relationship) ---
 class Goal(GoalBase):
     idGoal: int
-    Account_idAccount: int
+    Account_idAccount: Optional[int] = None  # Gør optional
 
-    # Relationship
-    account: AccountBase
+    # Relationship - optional for repository compatibility
+    account: Optional[AccountBase] = None  # Gør optional
 
     model_config = ConfigDict(
         from_attributes=True,

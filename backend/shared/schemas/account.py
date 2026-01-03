@@ -60,10 +60,10 @@ class AccountCreate(AccountBase):
 # --- Schema for reading data (includes relationships) ---
 class Account(AccountBase):
     idAccount: int
-    User_idUser: int
+    User_idUser: Optional[int] = None  # Gør optional (Neo4j returnerer måske None)
     
-    # Relationships - user er påkrævet (bliver loaded via joinedload), resten er optional
-    user: UserBase
+    # Relationships - alle optional for repository compatibility
+    user: Optional[UserBase] = None  # Gør optional (repositories returnerer ikke nested objects)
     transactions: Optional[List[TransactionBase]] = []
     budgets: Optional[List[BudgetBase]] = []
     goals: Optional[List[GoalBase]] = []

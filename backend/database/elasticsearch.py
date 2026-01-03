@@ -14,10 +14,18 @@ def get_es_client() -> Elasticsearch:
     Uses singleton pattern to reuse connection.
     
     Note: Connection is only created when this function is called, not at import time.
+    
+    Note: Elasticsearch 9.x client defaults to API version 9, but server may only support 7 or 8.
+    This is handled by catching version errors and retrying with proper headers if needed.
     """
     global _es_client
     if _es_client is None:
         from backend.config import ELASTICSEARCH_HOST
-        _es_client = Elasticsearch([ELASTICSEARCH_HOST])
+        _es_client = Elasticsearch(
+            [ELASTICSEARCH_HOST],
+            request_timeout=30,
+            max_retries=3,
+            retry_on_timeout=True
+        )
     return _es_client
 

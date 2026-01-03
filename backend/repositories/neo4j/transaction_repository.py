@@ -4,6 +4,16 @@ from datetime import date
 from backend.database.neo4j import get_neo4j_driver
 from backend.repositories.base import ITransactionRepository
 
+def _convert_neo4j_date(value):
+    """Konverter Neo4j date til Python date/string."""
+    if value is None:
+        return None
+    if hasattr(value, 'to_native'):
+        return value.to_native()
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
 class Neo4jTransactionRepository(ITransactionRepository):
     """Neo4j implementation of transaction repository."""
     
@@ -62,7 +72,7 @@ class Neo4jTransactionRepository(ITransactionRepository):
                     "idTransaction": t["idTransaction"],
                     "amount": t["amount"],
                     "description": t.get("description"),
-                    "date": t.get("date"),
+                    "date": _convert_neo4j_date(t.get("date")),
                     "type": t["type"],
                     "Category_idCategory": c["idCategory"],
                     "category_name": c["name"],
@@ -88,7 +98,7 @@ class Neo4jTransactionRepository(ITransactionRepository):
                     "idTransaction": t["idTransaction"],
                     "amount": t["amount"],
                     "description": t.get("description"),
-                    "date": t.get("date"),
+                    "date": _convert_neo4j_date(t.get("date")),
                     "type": t["type"],
                     "Category_idCategory": c["idCategory"],
                     "category_name": c["name"],
@@ -205,7 +215,7 @@ class Neo4jTransactionRepository(ITransactionRepository):
                     "idTransaction": t["idTransaction"],
                     "amount": t["amount"],
                     "description": t.get("description"),
-                    "date": t.get("date"),
+                    "date": _convert_neo4j_date(t.get("date")),
                     "type": t["type"]
                 })
             return transactions

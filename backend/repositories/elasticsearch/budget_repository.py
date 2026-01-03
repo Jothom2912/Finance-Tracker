@@ -17,11 +17,13 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
     
     def _ensure_index(self):
         """Ensure the budgets index exists."""
-        if not self.es.indices.exists(index=self.index):
-            self.es.indices.create(
-                index=self.index,
-                body={
-                    "mappings": {
+        try:
+            self.es.search(index=self.index, size=0)
+        except Exception:
+            try:
+                self.es.indices.create(
+                    index=self.index,
+                    mappings={
                         "properties": {
                             "idBudget": {"type": "integer"},
                             "amount": {"type": "float"},
@@ -29,8 +31,9 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
                             "Account_idAccount": {"type": "integer"}
                         }
                     }
-                }
-            )
+                )
+            except Exception as e:
+                print(f"Note: Index {self.index} setup: {e}")
     
     def get_all(self, account_id: Optional[int] = None) -> List[Dict]:
         """Get all budgets from Elasticsearch, optionally filtered by account_id."""
@@ -45,16 +48,28 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             }
         }
         
-        search_body = {
-            "query": query,
-            "sort": [{"idBudget": "asc"}]
-        }
-        
         try:
-            response = self.es.search(index=self.index, body=search_body)
+            response = self.es.search(
+                index=self.index,
+                query=query,
+                sort=[{"idBudget": "asc"}]
+            )
             budgets = []
             for hit in response["hits"]["hits"]:
-                budgets.append(hit["_source"])
+                source = hit["_source"].copy()
+                # Ensure idBudget is set (use _id as fallback if idBudget is missing)
+                if "idBudget" not in source or source.get("idBudget") is None:
+                    try:
+                        doc_id = hit.get("_id")
+                        if doc_id is not None:
+                            source["idBudget"] = int(doc_id)
+                        else:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                else:
+                    source["idBudget"] = int(source["idBudget"])
+                budgets.append(source)
             return budgets
         except Exception as e:
             return []
@@ -63,12 +78,39 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
         """Get budget by ID from Elasticsearch."""
         try:
             response = self.es.get(index=self.index, id=budget_id)
-            return response["_source"]
+            source = response["_source"].copy()
+            # Ensure idBudget is set (use _id as fallback if idBudget is missing)
+            if "idBudget" not in source or source.get("idBudget") is None:
+                try:
+                    doc_id = response.get("_id")
+                    if doc_id is not None:
+                        source["idBudget"] = int(doc_id)
+                    else:
+                        source["idBudget"] = budget_id
+                except (ValueError, TypeError):
+                    source["idBudget"] = budget_id
+            else:
+                source["idBudget"] = int(source["idBudget"])
+            return source
         except Exception:
             return None
     
     def create(self, budget_data: Dict) -> Dict:
         """Create new budget in Elasticsearch."""
+        # Generate ID if not provided
+        if "idBudget" not in budget_data or budget_data.get("idBudget") is None:
+            try:
+                # Get max ID from existing budgets
+                response = self.es.search(
+                    index=self.index,
+                    size=0,
+                    aggs={"max_id": {"max": {"field": "idBudget"}}}
+                )
+                max_id = response.get("aggregations", {}).get("max_id", {}).get("value")
+                budget_data["idBudget"] = int(max_id or 0) + 1
+            except Exception:
+                budget_data["idBudget"] = 1
+        
         doc = {
             "idBudget": budget_data.get("idBudget"),
             "amount": budget_data.get("amount"),
@@ -80,21 +122,21 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             self.es.index(
                 index=self.index,
                 id=doc["idBudget"],
-                body=doc
+                document=doc,
+                refresh=True
             )
-            self.es.indices.refresh(index=self.index)
+            # Ensure idBudget is set in returned data
+            doc["idBudget"] = int(doc.get("idBudget"))
             return doc
         except Exception as e:
             raise ValueError(f"Failed to create budget: {str(e)}")
     
     def update(self, budget_id: int, budget_data: Dict) -> Dict:
         """Update budget in Elasticsearch."""
-        # Get existing budget
         existing = self.get_by_id(budget_id)
         if not existing:
             raise ValueError(f"Budget {budget_id} not found")
         
-        # Merge updates
         updated = existing.copy()
         if "amount" in budget_data:
             updated["amount"] = budget_data["amount"]
@@ -107,9 +149,9 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             self.es.index(
                 index=self.index,
                 id=budget_id,
-                body=updated
+                document=updated,
+                refresh=True
             )
-            self.es.indices.refresh(index=self.index)
             return updated
         except Exception as e:
             raise ValueError(f"Failed to update budget: {str(e)}")
@@ -117,9 +159,7 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
     def delete(self, budget_id: int) -> bool:
         """Delete budget from Elasticsearch."""
         try:
-            response = self.es.delete(index=self.index, id=budget_id)
-            self.es.indices.refresh(index=self.index)
+            response = self.es.delete(index=self.index, id=budget_id, refresh=True)
             return response["result"] in ["deleted", "not_found"]
         except Exception:
             return False
-

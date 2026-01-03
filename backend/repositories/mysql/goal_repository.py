@@ -23,14 +23,7 @@ class MySQLGoalRepository(IGoalRepository):
         return self._serialize_goal(goal) if goal else None
     
     def create(self, goal_data: Dict) -> Dict:
-        goal = GoalModel(
-            name=goal_data.get("name"),
-            target_amount=goal_data.get("target_amount"),
-            current_amount=goal_data.get("current_amount", 0.0),
-            target_date=goal_data.get("target_date"),
-            status=goal_data.get("status", "active"),
-            Account_idAccount=goal_data.get("Account_idAccount")
-        )
+        goal = GoalModel(**goal_data)
         self.db.add(goal)
         self.db.commit()
         self.db.refresh(goal)
@@ -40,18 +33,8 @@ class MySQLGoalRepository(IGoalRepository):
         goal = self.db.query(GoalModel).filter(GoalModel.idGoal == goal_id).first()
         if not goal:
             raise ValueError(f"Goal {goal_id} not found")
-        
-        if "name" in goal_data:
-            goal.name = goal_data["name"]
-        if "target_amount" in goal_data:
-            goal.target_amount = goal_data["target_amount"]
-        if "current_amount" in goal_data:
-            goal.current_amount = goal_data["current_amount"]
-        if "target_date" in goal_data:
-            goal.target_date = goal_data["target_date"]
-        if "status" in goal_data:
-            goal.status = goal_data["status"]
-        
+        for key, value in goal_data.items():
+            setattr(goal, key, value)
         self.db.commit()
         self.db.refresh(goal)
         return self._serialize_goal(goal)
@@ -69,7 +52,7 @@ class MySQLGoalRepository(IGoalRepository):
         return {
             "idGoal": goal.idGoal,
             "name": goal.name,
-            "target_amount": float(goal.target_amount) if goal.target_amount else None,
+            "target_amount": float(goal.target_amount) if goal.target_amount else 0.0,
             "current_amount": float(goal.current_amount) if goal.current_amount else 0.0,
             "target_date": goal.target_date.isoformat() if goal.target_date else None,
             "status": goal.status,

@@ -143,6 +143,16 @@ class IUserRepository(ABC):
     def create(self, user_data: Dict) -> Dict:
         """Create new user."""
         pass
+    
+    @abstractmethod
+    def get_by_username_for_auth(self, username: str) -> Optional[Dict]:
+        """Get user by username INCLUDING password - kun til authentication."""
+        pass
+    
+    @abstractmethod
+    def get_by_email_for_auth(self, email: str) -> Optional[Dict]:
+        """Get user by email INCLUDING password - kun til authentication."""
+        pass
 
 
 class IBudgetRepository(ABC):

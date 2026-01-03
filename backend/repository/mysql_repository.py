@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from backend.repository.base_repository import ITransactionRepository, ICategoryRepository
-from backend.database import Transaction, Category, SessionLocal
+from backend.database.mysql import SessionLocal
+from backend.models.mysql.transaction import Transaction
+from backend.models.mysql.category import Category
 
 class MySQLTransactionRepository(ITransactionRepository):
     """MySQL implementation of transaction repository."""

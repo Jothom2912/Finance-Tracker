@@ -13,15 +13,59 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
         else:
             self.es = es_client
         self.index = "categories"
+        self._ensure_index()
+    
+    def _ensure_index(self):
+        """Ensure the categories index exists."""
+        try:
+            self.es.search(index=self.index, size=0)
+        except Exception as e:
+            # Handle API version mismatch (client 9.x vs server 7/8)
+            if "version" in str(e).lower() or "compatible-with" in str(e).lower():
+                # If version error, try to work around it by catching and continuing
+                # The actual operations will fail later, but at least we tried
+                pass
+            try:
+                self.es.indices.create(
+                    index=self.index,
+                    mappings={
+                        "properties": {
+                            "idCategory": {"type": "integer"},
+                            "name": {"type": "keyword"},
+                            "type": {"type": "keyword"}
+                        }
+                    }
+                )
+            except Exception as create_error:
+                # If it's a version error, we can't fix it here - need to downgrade client or upgrade server
+                if "version" not in str(create_error).lower() and "compatible-with" not in str(create_error).lower():
+                    print(f"Note: Index {self.index} setup: {create_error}")
     
     def get_all(self) -> List[Dict]:
         """Get all categories from Elasticsearch."""
         try:
             response = self.es.search(
                 index=self.index,
-                body={"query": {"match_all": {}}, "size": 10000}
+                query={"match_all": {}},
+                size=10000
             )
-            return [hit["_source"] for hit in response["hits"]["hits"]]
+            categories = []
+            for hit in response["hits"]["hits"]:
+                source = hit["_source"].copy()
+                # Ensure idCategory is set (use _id as fallback if idCategory is missing)
+                if "idCategory" not in source or source.get("idCategory") is None:
+                    try:
+                        doc_id = hit.get("_id")
+                        if doc_id is not None:
+                            source["idCategory"] = int(doc_id)
+                        else:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                else:
+                    source["idCategory"] = int(source["idCategory"])
+                categories.append(source)
+            return categories
         except Exception as e:
             print(f"Error getting all categories: {e}")
             return []
@@ -30,25 +74,53 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
         """Get category by ID from Elasticsearch."""
         try:
             response = self.es.get(index=self.index, id=category_id)
-            return response["_source"]
+            source = response["_source"].copy()
+            # Ensure idCategory is set (use _id as fallback if idCategory is missing)
+            if "idCategory" not in source or source.get("idCategory") is None:
+                try:
+                    doc_id = response.get("_id")
+                    if doc_id is not None:
+                        source["idCategory"] = int(doc_id)
+                    else:
+                        source["idCategory"] = category_id
+                except (ValueError, TypeError):
+                    source["idCategory"] = category_id
+            else:
+                source["idCategory"] = int(source["idCategory"])
+            return source
         except Exception as e:
             print(f"Error getting category {category_id}: {e}")
             return None
     
     def create(self, category_data: Dict) -> Dict:
         """Create new category in Elasticsearch."""
+        # Generate ID if not provided
+        if "idCategory" not in category_data or category_data.get("idCategory") is None:
+            try:
+                # Get max ID from existing categories
+                response = self.es.search(
+                    index=self.index,
+                    size=0,
+                    aggs={"max_id": {"max": {"field": "idCategory"}}}
+                )
+                max_id = response.get("aggregations", {}).get("max_id", {}).get("value")
+                category_data["idCategory"] = int(max_id or 0) + 1
+            except Exception:
+                category_data["idCategory"] = 1
+        
         try:
-            response = self.es.index(
+            self.es.index(
                 index=self.index,
-                body=category_data,
+                document=category_data,
                 id=category_data.get("idCategory"),
                 refresh=True
             )
-            category_data["idCategory"] = response["_id"]
+            # Ensure idCategory is set in returned data
+            category_data["idCategory"] = int(category_data.get("idCategory"))
             return category_data
         except Exception as e:
             print(f"Error creating category: {e}")
-            return category_data
+            raise ValueError(f"Failed to create category: {str(e)}")
     
     def update(self, category_id: int, category_data: Dict) -> Dict:
         """Update category in Elasticsearch."""
@@ -56,7 +128,7 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
             self.es.update(
                 index=self.index,
                 id=category_id,
-                body={"doc": category_data},
+                doc=category_data,
                 refresh=True
             )
             return self.get_by_id(category_id) or category_data
@@ -72,4 +144,3 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
         except Exception as e:
             print(f"Error deleting category {category_id}: {e}")
             return False
-

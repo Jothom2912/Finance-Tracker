@@ -3,6 +3,17 @@ from typing import List, Dict, Optional
 from backend.database.neo4j import get_neo4j_driver
 from backend.repositories.base import IGoalRepository
 
+
+def _convert_neo4j_date(value):
+    """Konverter Neo4j date til Python date/string."""
+    if value is None:
+        return None
+    if hasattr(value, 'to_native'):
+        return value.to_native()  # Konverterer neo4j.time.Date til datetime.date
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
 class Neo4jGoalRepository(IGoalRepository):
     """Neo4j implementation of goal repository."""
     
@@ -37,9 +48,9 @@ class Neo4jGoalRepository(IGoalRepository):
                 goals.append({
                     "idGoal": g["idGoal"],
                     "name": g.get("name"),
-                    "target_amount": g.get("target_amount"),
-                    "current_amount": g.get("current_amount", 0.0),
-                    "target_date": g.get("target_date"),
+                    "target_amount": float(g.get("target_amount", 0.0)),
+                    "current_amount": float(g.get("current_amount", 0.0)),
+                    "target_date": _convert_neo4j_date(g.get("target_date")),
                     "status": g.get("status"),
                     "Account_idAccount": record.get("a", {}).get("idAccount") if "a" in record else None
                 })
@@ -59,9 +70,9 @@ class Neo4jGoalRepository(IGoalRepository):
                 return {
                     "idGoal": g["idGoal"],
                     "name": g.get("name"),
-                    "target_amount": g.get("target_amount"),
-                    "current_amount": g.get("current_amount", 0.0),
-                    "target_date": g.get("target_date"),
+                    "target_amount": float(g.get("target_amount", 0.0)),
+                    "current_amount": float(g.get("current_amount", 0.0)),
+                    "target_date": _convert_neo4j_date(g.get("target_date")),
                     "status": g.get("status"),
                     "Account_idAccount": record["a"]["idAccount"] if "a" in record else None
                 }
@@ -69,6 +80,15 @@ class Neo4jGoalRepository(IGoalRepository):
     
     def create(self, goal_data: Dict) -> Dict:
         """Create new goal in Neo4j."""
+        # Generate ID if not provided
+        if "idGoal" not in goal_data:
+            query_max = "MATCH (g:Goal) RETURN MAX(g.idGoal) as max_id"
+            with self._get_session() as session:
+                result = session.run(query_max)
+                record = result.single()
+                max_id = record["max_id"] if record and record["max_id"] else 0
+                goal_data["idGoal"] = max_id + 1
+        
         query = """
         MATCH (a:Account {idAccount: $Account_idAccount})
         CREATE (g:Goal {
@@ -83,7 +103,16 @@ class Neo4jGoalRepository(IGoalRepository):
         RETURN g, a
         """
         with self._get_session() as session:
-            result = session.run(query, **goal_data)
+            result = session.run(
+                query,
+                idGoal=goal_data.get("idGoal"),
+                name=goal_data.get("name"),
+                target_amount=goal_data.get("target_amount"),
+                current_amount=goal_data.get("current_amount", 0.0),
+                target_date=goal_data.get("target_date"),
+                status=goal_data.get("status", "active"),
+                Account_idAccount=goal_data.get("Account_idAccount")
+            )
             record = result.single()
             if record:
                 return self.get_by_id(goal_data["idGoal"])

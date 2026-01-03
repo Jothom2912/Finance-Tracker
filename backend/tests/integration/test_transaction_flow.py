@@ -1,5 +1,6 @@
 """Integration tests for transaction flow."""
 import pytest
+import os
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
@@ -18,6 +19,29 @@ from backend.models.mysql import (
 
 
 # === TEST DATABASE SETUP ===
+
+@pytest.fixture(scope="function")
+def mock_repositories(monkeypatch, test_db):
+    """Mock repository factories to use MySQL with test_db session."""
+    from backend.repositories.mysql.category_repository import MySQLCategoryRepository
+    from backend.repositories.mysql.transaction_repository import MySQLTransactionRepository
+    from backend.repositories.mysql.account_repository import MySQLAccountRepository
+    from backend.repositories.mysql.budget_repository import MySQLBudgetRepository
+    from backend.repositories.mysql.user_repository import MySQLUserRepository
+    
+    # Create repository instances with test_db
+    cat_repo = MySQLCategoryRepository(db=test_db)
+    trans_repo = MySQLTransactionRepository(db=test_db)
+    acc_repo = MySQLAccountRepository(db=test_db)
+    budget_repo = MySQLBudgetRepository(db=test_db)
+    user_repo = MySQLUserRepository(db=test_db)
+    
+    # Mock all repository factories
+    monkeypatch.setattr("backend.repository.get_category_repository", lambda: cat_repo)
+    monkeypatch.setattr("backend.repository.get_transaction_repository", lambda: trans_repo)
+    monkeypatch.setattr("backend.repository.get_account_repository", lambda: acc_repo)
+    monkeypatch.setattr("backend.repository.get_budget_repository", lambda: budget_repo)
+    monkeypatch.setattr("backend.repository.get_user_repository", lambda: user_repo)
 
 @pytest.fixture(scope="function")
 def test_engine():
@@ -109,7 +133,7 @@ class Factory:
 class TestTransactionCreation:
     """Tests for manual transaction creation."""
 
-    def test_create_transaction_updates_budget(self, test_client, test_db):
+    def test_create_transaction_updates_budget(self, test_client, test_db, mock_repositories):
         # Arrange
         user = Factory.user(test_db)
         account = Factory.account(test_db, user.idUser)
@@ -139,7 +163,7 @@ class TestTransactionCreation:
 class TestCsvUpload:
     """Tests for CSV upload functionality."""
 
-    def test_csv_upload_creates_transactions(self, test_client, test_db):
+    def test_csv_upload_creates_transactions(self, test_client, test_db, mock_repositories):
         # Arrange
         user = Factory.user(test_db)
         account = Factory.account(test_db, user.idUser)

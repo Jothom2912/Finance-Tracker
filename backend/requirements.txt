@@ -19,7 +19,9 @@ pandas
 tabulate
 
 # Elasticsearch (til søgning og analytics)
-elasticsearch
+# Version 8.x required for compatibility with Elasticsearch server 7/8
+# Version 9.x uses API version 9 which is not compatible with older servers
+elasticsearch<9.0.0
 
 # Neo4j (til graph database)
 neo4j

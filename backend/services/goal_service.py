@@ -1,73 +1,47 @@
-from sqlalchemy.orm import Session
-from typing import Optional, List
-from sqlalchemy.exc import IntegrityError
-
-from backend.models.mysql.goal import Goal as GoalModel
-from backend.models.mysql.account import Account as AccountModel
+from typing import List, Dict, Optional
+from backend.repository import get_goal_repository, get_account_repository
 from backend.shared.schemas.goal import GoalCreate, GoalBase
 
-# --- CRUD Funktioner ---
+def get_goal_by_id(goal_id: int) -> Optional[Dict]:
+    repo = get_goal_repository()
+    return repo.get_by_id(goal_id)
 
-def get_goal_by_id(db: Session, goal_id: int) -> Optional[GoalModel]:
-    """Henter et mål baseret på ID."""
-    return db.query(GoalModel).filter(GoalModel.idGoal == goal_id).first()
+def get_goals_by_account(account_id: int) -> List[Dict]:
+    repo = get_goal_repository()
+    return repo.get_all(account_id=account_id)
 
-def get_goals_by_account(db: Session, account_id: int) -> List[GoalModel]:
-    """Henter alle mål tilknyttet en specifik konto."""
-    return db.query(GoalModel).filter(GoalModel.Account_idAccount == account_id).all()
-
-def create_goal(db: Session, goal: GoalCreate) -> GoalModel:
-    """Opretter et nyt mål tilknyttet en konto."""
-    account = db.query(AccountModel).filter(AccountModel.idAccount == goal.Account_idAccount).first()
+def create_goal(goal: GoalCreate) -> Dict:
+    account_repo = get_account_repository()
+    account = account_repo.get_by_id(goal.Account_idAccount)
     if not account:
         raise ValueError("Konto med dette ID findes ikke.")
-        
-    db_goal = GoalModel(
-        name=goal.name,
-        target_amount=goal.target_amount,
-        current_amount=goal.current_amount,
-        target_date=goal.target_date,
-        status=goal.status,
-        Account_idAccount=goal.Account_idAccount
-    )
     
-    try:
-        db.add(db_goal)
-        db.commit()
-        db.refresh(db_goal)
-        return db_goal
-    except IntegrityError:
-        db.rollback()
-        raise ValueError("Integritetsfejl ved oprettelse af mål.")
+    repo = get_goal_repository()
+    goal_data = {
+        "name": goal.name,
+        "target_amount": goal.target_amount,
+        "current_amount": goal.current_amount or 0.0,
+        "target_date": goal.target_date.isoformat() if goal.target_date else None,
+        "status": goal.status or "active",
+        "Account_idAccount": goal.Account_idAccount
+    }
+    return repo.create(goal_data)
 
-def update_goal(db: Session, goal_id: int, goal_data: GoalBase) -> Optional[GoalModel]:
-    """Opdaterer et mål."""
-    db_goal = get_goal_by_id(db, goal_id)
-    if not db_goal:
+def update_goal(goal_id: int, goal_data: GoalBase) -> Optional[Dict]:
+    repo = get_goal_repository()
+    existing = repo.get_by_id(goal_id)
+    if not existing:
         return None
-
-    update_data = goal_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_goal, key, value)
     
-    try:
-        db.commit()
-        db.refresh(db_goal)
-        return db_goal
-    except IntegrityError:
-        db.rollback()
-        raise ValueError("Integritetsfejl ved opdatering af mål.")
+    update_data = {
+        "name": goal_data.name,
+        "target_amount": goal_data.target_amount,
+        "current_amount": goal_data.current_amount,
+        "target_date": goal_data.target_date.isoformat() if goal_data.target_date else None,
+        "status": goal_data.status
+    }
+    return repo.update(goal_id, update_data)
 
-def delete_goal(db: Session, goal_id: int) -> bool:
-    """Sletter et mål."""
-    db_goal = get_goal_by_id(db, goal_id)
-    if not db_goal:
-        return False
-    
-    try:
-        db.delete(db_goal)
-        db.commit()
-        return True
-    except IntegrityError:
-        db.rollback()
-        raise ValueError("Integritetsfejl ved sletning af mål.")
+def delete_goal(goal_id: int) -> bool:
+    repo = get_goal_repository()
+    return repo.delete(goal_id)

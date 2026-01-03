@@ -2,7 +2,6 @@
 from typing import List, Dict, Optional
 from datetime import date
 from elasticsearch import Elasticsearch
-from backend.config import ELASTICSEARCH_HOST
 from backend.database.elasticsearch import get_es_client
 from backend.repositories.base import ITransactionRepository
 
@@ -43,16 +42,31 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             }
         }
         
-        search_body = {
-            "query": query,
-            "sort": [{"date": "desc"}],
-            "from": offset,
-            "size": limit
-        }
-        
         try:
-            response = self.es.search(index=self.index, body=search_body)
-            return [hit["_source"] for hit in response["hits"]["hits"]]
+            response = self.es.search(
+                index=self.index,
+                query=query,
+                sort=[{"date": "desc"}],
+                from_=offset,
+                size=limit
+            )
+            transactions = []
+            for hit in response["hits"]["hits"]:
+                source = hit["_source"].copy()
+                # Ensure idTransaction is set (use _id as fallback if idTransaction is missing)
+                if "idTransaction" not in source or source.get("idTransaction") is None:
+                    try:
+                        doc_id = hit.get("_id")
+                        if doc_id is not None:
+                            source["idTransaction"] = int(doc_id)
+                        else:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                else:
+                    source["idTransaction"] = int(source["idTransaction"])
+                transactions.append(source)
+            return transactions
         except Exception as e:
             print(f"Error searching Elasticsearch: {e}")
             return []
@@ -61,25 +75,53 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
         """Get single transaction by ID from Elasticsearch."""
         try:
             response = self.es.get(index=self.index, id=transaction_id)
-            return response["_source"]
+            source = response["_source"].copy()
+            # Ensure idTransaction is set (use _id as fallback if idTransaction is missing)
+            if "idTransaction" not in source or source.get("idTransaction") is None:
+                try:
+                    doc_id = response.get("_id")
+                    if doc_id is not None:
+                        source["idTransaction"] = int(doc_id)
+                    else:
+                        source["idTransaction"] = transaction_id
+                except (ValueError, TypeError):
+                    source["idTransaction"] = transaction_id
+            else:
+                source["idTransaction"] = int(source["idTransaction"])
+            return source
         except Exception as e:
             print(f"Error getting transaction {transaction_id}: {e}")
             return None
     
     def create(self, transaction_data: Dict) -> Dict:
         """Create new transaction in Elasticsearch."""
+        # Generate ID if not provided
+        if "idTransaction" not in transaction_data or transaction_data.get("idTransaction") is None:
+            try:
+                # Get max ID from existing transactions
+                response = self.es.search(
+                    index=self.index,
+                    size=0,
+                    aggs={"max_id": {"max": {"field": "idTransaction"}}}
+                )
+                max_id = response.get("aggregations", {}).get("max_id", {}).get("value")
+                transaction_data["idTransaction"] = int(max_id or 0) + 1
+            except Exception:
+                transaction_data["idTransaction"] = 1
+        
         try:
             response = self.es.index(
                 index=self.index,
-                body=transaction_data,
+                document=transaction_data,
                 id=transaction_data.get("idTransaction"),
                 refresh=True
             )
-            transaction_data["idTransaction"] = response["_id"]
+            # Ensure idTransaction is set in returned data
+            transaction_data["idTransaction"] = int(transaction_data.get("idTransaction"))
             return transaction_data
         except Exception as e:
             print(f"Error creating transaction: {e}")
-            return transaction_data
+            raise ValueError(f"Failed to create transaction: {str(e)}")
     
     def update(self, transaction_id: int, transaction_data: Dict) -> Dict:
         """Update transaction in Elasticsearch."""
@@ -87,7 +129,7 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             self.es.update(
                 index=self.index,
                 id=transaction_id,
-                body={"doc": transaction_data},
+                doc=transaction_data,
                 refresh=True
             )
             return self.get_by_id(transaction_id) or transaction_data
@@ -136,15 +178,30 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             }
         }
         
-        search_body = {
-            "query": query,
-            "sort": [{"date": "desc"}],
-            "size": 1000
-        }
-        
         try:
-            response = self.es.search(index=self.index, body=search_body)
-            return [hit["_source"] for hit in response["hits"]["hits"]]
+            response = self.es.search(
+                index=self.index,
+                query=query,
+                sort=[{"date": "desc"}],
+                size=1000
+            )
+            transactions = []
+            for hit in response["hits"]["hits"]:
+                source = hit["_source"].copy()
+                # Ensure idTransaction is set (use _id as fallback if idTransaction is missing)
+                if "idTransaction" not in source or source.get("idTransaction") is None:
+                    try:
+                        doc_id = hit.get("_id")
+                        if doc_id is not None:
+                            source["idTransaction"] = int(doc_id)
+                        else:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                else:
+                    source["idTransaction"] = int(source["idTransaction"])
+                transactions.append(source)
+            return transactions
         except Exception as e:
             print(f"Error searching Elasticsearch: {e}")
             return []
@@ -168,22 +225,21 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             }
         }
         
-        search_body = {
-            "query": query,
-            "aggs": {
-                "by_category": {
-                    "terms": {"field": "category_name", "size": 100},
-                    "aggs": {
-                        "total_amount": {"sum": {"field": "amount"}},
-                        "count": {"value_count": {"field": "idTransaction"}}
-                    }
-                }
-            },
-            "size": 0
-        }
-        
         try:
-            response = self.es.search(index=self.index, body=search_body)
+            response = self.es.search(
+                index=self.index,
+                query=query,
+                aggs={
+                    "by_category": {
+                        "terms": {"field": "category_name", "size": 100},
+                        "aggs": {
+                            "total_amount": {"sum": {"field": "amount"}},
+                            "count": {"value_count": {"field": "idTransaction"}}
+                        }
+                    }
+                },
+                size=0
+            )
             summary = {}
             
             for bucket in response["aggregations"]["by_category"]["buckets"]:
@@ -197,4 +253,3 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
         except Exception as e:
             print(f"Error getting category summary: {e}")
             return {}
-

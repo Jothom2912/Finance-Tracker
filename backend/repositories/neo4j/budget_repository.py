@@ -3,6 +3,16 @@ from typing import List, Dict, Optional
 from backend.database.neo4j import get_neo4j_driver
 from backend.repositories.base import IBudgetRepository
 
+def _convert_neo4j_date(value):
+    """Konverter Neo4j date til Python date/string."""
+    if value is None:
+        return None
+    if hasattr(value, 'to_native'):
+        return value.to_native()
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
 class Neo4jBudgetRepository(IBudgetRepository):
     """Neo4j implementation of budget repository."""
     
@@ -36,8 +46,8 @@ class Neo4jBudgetRepository(IBudgetRepository):
                 b = record["b"]
                 budgets.append({
                     "idBudget": b["idBudget"],
-                    "amount": b["amount"],
-                    "budget_date": b.get("budget_date"),
+                    "amount": float(b.get("amount", 0.0)),
+                    "budget_date": _convert_neo4j_date(b.get("budget_date")),
                     "Account_idAccount": record.get("a", {}).get("idAccount") if "a" in record else None
                 })
             return budgets
@@ -55,14 +65,23 @@ class Neo4jBudgetRepository(IBudgetRepository):
                 b = record["b"]
                 return {
                     "idBudget": b["idBudget"],
-                    "amount": b["amount"],
-                    "budget_date": b.get("budget_date"),
+                    "amount": float(b.get("amount", 0.0)),
+                    "budget_date": _convert_neo4j_date(b.get("budget_date")),
                     "Account_idAccount": record["a"]["idAccount"] if "a" in record else None
                 }
             return None
     
     def create(self, budget_data: Dict) -> Dict:
         """Create new budget in Neo4j."""
+        # Generate ID if not provided
+        if "idBudget" not in budget_data or budget_data.get("idBudget") is None:
+            query_max = "MATCH (b:Budget) RETURN MAX(b.idBudget) as max_id"
+            with self._get_session() as session:
+                result = session.run(query_max)
+                record = result.single()
+                max_id = record["max_id"] if record and record["max_id"] else 0
+                budget_data["idBudget"] = max_id + 1
+        
         query = """
         MATCH (a:Account {idAccount: $Account_idAccount})
         CREATE (b:Budget {
@@ -74,7 +93,13 @@ class Neo4jBudgetRepository(IBudgetRepository):
         RETURN b, a
         """
         with self._get_session() as session:
-            result = session.run(query, **budget_data)
+            result = session.run(
+                query,
+                idBudget=budget_data.get("idBudget"),
+                amount=budget_data.get("amount"),
+                budget_date=budget_data.get("budget_date"),
+                Account_idAccount=budget_data.get("Account_idAccount")
+            )
             record = result.single()
             if record:
                 return self.get_by_id(budget_data["idBudget"])
@@ -84,8 +109,8 @@ class Neo4jBudgetRepository(IBudgetRepository):
         """Update budget in Neo4j."""
         query = """
         MATCH (b:Budget {idBudget: $id})
-        SET b.amount = $amount,
-            b.budget_date = $budget_date
+        SET b.amount = COALESCE($amount, b.amount),
+            b.budget_date = COALESCE($budget_date, b.budget_date)
         RETURN b
         """
         with self._get_session() as session:
@@ -109,4 +134,3 @@ class Neo4jBudgetRepository(IBudgetRepository):
         with self._get_session() as session:
             result = session.run(query, id=budget_id)
             return result.consume().counters.nodes_deleted > 0
-

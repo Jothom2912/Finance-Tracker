@@ -45,7 +45,8 @@ class Neo4jAccountRepository(IAccountRepository):
     def get_by_id(self, account_id: int) -> Optional[Dict]:
         """Get account by ID from Neo4j."""
         query = """
-        MATCH (u:User)-[:OWNS]->(a:Account {idAccount: $id})
+        MATCH (a:Account {idAccount: $id})
+        OPTIONAL MATCH (u:User)-[:OWNS]->(a)
         RETURN a, u
         """
         with self._get_session() as session:
@@ -56,25 +57,43 @@ class Neo4jAccountRepository(IAccountRepository):
                 return {
                     "idAccount": a["idAccount"],
                     "name": a["name"],
-                    "saldo": a["saldo"],
-                    "User_idUser": record["u"]["idUser"]
+                    "saldo": float(a.get("saldo", 0.0)),
+                    "User_idUser": a.get("User_idUser") or (record["u"]["idUser"] if "u" in record and record["u"] else None)
                 }
             return None
     
     def create(self, account_data: Dict) -> Dict:
         """Create new account in Neo4j."""
+        # Generate ID if not provided
+        if "idAccount" not in account_data or account_data.get("idAccount") is None:
+            query_max = "MATCH (a:Account) RETURN MAX(a.idAccount) as max_id"
+            with self._get_session() as session:
+                result = session.run(query_max)
+                record = result.single()
+                max_id = record["max_id"] if record and record["max_id"] else 0
+                account_data["idAccount"] = max_id + 1
+        
+        # Store User_idUser as property on Account node for easier querying
+        user_id = account_data.get("User_idUser") or account_data.get("user_id")
         query = """
         MATCH (u:User {idUser: $user_id})
         CREATE (a:Account {
             idAccount: $idAccount,
             name: $name,
-            saldo: $saldo
+            saldo: $saldo,
+            User_idUser: $user_id
         })
         CREATE (u)-[:OWNS]->(a)
         RETURN a, u
         """
         with self._get_session() as session:
-            result = session.run(query, **account_data)
+            result = session.run(
+                query,
+                idAccount=account_data.get("idAccount"),
+                name=account_data.get("name"),
+                saldo=account_data.get("saldo", 0.0),
+                user_id=user_id
+            )
             record = result.single()
             if record:
                 return self.get_by_id(account_data["idAccount"])

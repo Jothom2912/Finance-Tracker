@@ -1,32 +1,22 @@
 # backend/services/transaction_service.py
 
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, extract
 from typing import List, Optional, Dict
 from datetime import date
 import pandas as pd
 import io
 import math
 
-# --- KORREKTE IMPORTS TIL NY MODELSTRUKTUR ---
-from backend.models.mysql.transaction import Transaction as TransactionModel
-from backend.models.mysql.category import Category as CategoryModel
-from backend.models.mysql.common import TransactionType  # <--- RETTET STED: HENTES FRA COMMON
+from backend.repository import get_transaction_repository, get_category_repository
 from backend.shared.schemas.transaction import TransactionCreate
-
+from backend.models.mysql.common import TransactionType
 from .categorization import assign_category_automatically
 
-# --- (RESTEN AF DIN KODE FOR TRANSACTION SERVICE) ---
-
-def get_transaction_by_id(db: Session, transaction_id: int) -> Optional[TransactionModel]:
+def get_transaction_by_id(transaction_id: int) -> Optional[Dict]:
     """Henter en transaktion baseret på ID."""
-    return db.query(TransactionModel).options(
-        joinedload(TransactionModel.category),
-        joinedload(TransactionModel.account)
-    ).filter(TransactionModel.idTransaction == transaction_id).first()
+    repo = get_transaction_repository()
+    return repo.get_by_id(transaction_id)
 
 def get_transactions(
-    db: Session,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     category_id: Optional[int] = None,
@@ -36,56 +26,66 @@ def get_transactions(
     account_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100
-) -> List[TransactionModel]:
+) -> List[Dict]:
     """Henter transaktioner med filtrering."""
     # KRITISK: account_id er påkrævet for at undgå at hente ALLE transaktioner
     if account_id is None:
         raise ValueError("Account ID er påkrævet for at hente transaktioner.")
     
-    # Eager load relationships for at undgå N+1 queries
-    query = db.query(TransactionModel).options(
-        joinedload(TransactionModel.category),
-        joinedload(TransactionModel.account)
+    repo = get_transaction_repository()
+    
+    # Hent alle transaktioner med filtre
+    transactions = repo.get_all(
+        start_date=start_date,
+        end_date=end_date,
+        category_id=category_id,
+        account_id=account_id,
+        limit=limit,
+        offset=skip
     )
     
-    # Filtrer på account_id (altid påkrævet)
-    query = query.filter(TransactionModel.Account_idAccount == account_id)
-    
-    if start_date:
-        query = query.filter(TransactionModel.date >= start_date)
-    if end_date:
-        query = query.filter(TransactionModel.date <= end_date)
-    if category_id is not None:
-        query = query.filter(TransactionModel.Category_idCategory == category_id)
-
+    # Filtrer på type hvis angivet
     if tx_type:
         normalized_type = tx_type.strip().lower()
-        if normalized_type == "income":
-            query = query.filter(TransactionModel.type == TransactionType.income.value)
-        elif normalized_type == "expense":
-            query = query.filter(TransactionModel.type == TransactionType.expense.value)
+        transactions = [t for t in transactions if t.get("type", "").lower() == normalized_type]
+    
+    # Filtrer på måned/år hvis angivet
+    if month is not None or year is not None:
+        filtered = []
+        for t in transactions:
+            t_date = t.get("date")
+            if t_date:
+                if isinstance(t_date, str):
+                    from datetime import datetime
+                    try:
+                        t_date = datetime.fromisoformat(t_date.replace('Z', '+00:00')).date()
+                    except:
+                        continue
+                elif hasattr(t_date, 'date'):
+                    t_date = t_date.date()
+                
+                if month is not None and t_date.month != int(month):
+                    continue
+                if year is not None and t_date.year != int(year):
+                    continue
+                filtered.append(t)
+        transactions = filtered
+    
+    return transactions
 
-    if month is not None:
-        # MySQL bruger extract i stedet for strftime
-        query = query.filter(extract('month', TransactionModel.date) == int(month))
-    if year is not None:
-        # MySQL bruger extract i stedet for strftime
-        query = query.filter(extract('year', TransactionModel.date) == int(year))
-
-    return query.offset(skip).limit(limit).all()
-
-def create_transaction(db: Session, transaction: TransactionCreate) -> TransactionModel:
+def create_transaction(transaction: TransactionCreate) -> Dict:
     """Opretter en enkelt transaktion manuelt."""
     print(f"DEBUG create_transaction service: Modtaget transaction = {transaction.model_dump()}")
     print(f"DEBUG create_transaction service: transaction.Account_idAccount = {transaction.Account_idAccount}")
     print(f"DEBUG create_transaction service: transaction.Category_idCategory = {transaction.Category_idCategory}")
 
     # Validering af kategori
-    category = db.query(CategoryModel).filter(CategoryModel.idCategory == transaction.Category_idCategory).first()
+    category_repo = get_category_repository()
+    category = category_repo.get_by_id(transaction.Category_idCategory)
     if not category:
         print(f"DEBUG create_transaction service: Kategori {transaction.Category_idCategory} findes ikke!")
         raise ValueError("Kategori med dette ID findes ikke.")
-    print(f"DEBUG create_transaction service: Kategori fundet: {category.name}")
+    print(f"DEBUG create_transaction service: Kategori fundet: {category.get('name')}")
     
     # Validering af account_id
     if not transaction.Account_idAccount:
@@ -93,60 +93,59 @@ def create_transaction(db: Session, transaction: TransactionCreate) -> Transacti
         raise ValueError("Account ID er påkrævet for at oprette en transaktion.")
     print(f"DEBUG create_transaction service: Account_idAccount er OK: {transaction.Account_idAccount}")
     
-    # Map schema fields to model fields
+    # Map schema fields to repository fields
     transaction_data = transaction.model_dump(by_alias=False)
     print(f"DEBUG create_transaction service: transaction_data (by_alias=False) = {transaction_data}")
 
-    # Rename 'transaction_date' to 'date' for the SQLAlchemy model
+    # Rename 'transaction_date' to 'date' for repository
     if 'transaction_date' in transaction_data:
         transaction_data['date'] = transaction_data.pop('transaction_date')
         print(f"DEBUG create_transaction service: Renamed transaction_date to date")
 
-    print(f"DEBUG create_transaction service: Final transaction_data = {transaction_data}")
-    db_transaction = TransactionModel(**transaction_data)
-    
-    db.add(db_transaction)
-    db.commit()
-    db.refresh(db_transaction)
-    print(f"DEBUG create_transaction service: Transaktion oprettet med ID: {db_transaction.idTransaction}")
-    return db_transaction
+    # Convert type enum to string if needed
+    if 'type' in transaction_data and hasattr(transaction_data['type'], 'value'):
+        transaction_data['type'] = transaction_data['type'].value
 
-def update_transaction(db: Session, transaction_id: int, transaction_data: TransactionCreate) -> Optional[TransactionModel]:
+    print(f"DEBUG create_transaction service: Final transaction_data = {transaction_data}")
+    
+    repo = get_transaction_repository()
+    created = repo.create(transaction_data)
+    print(f"DEBUG create_transaction service: Transaktion oprettet med ID: {created.get('idTransaction')}")
+    return created
+
+def update_transaction(transaction_id: int, transaction_data: TransactionCreate) -> Optional[Dict]:
     """Opdaterer en eksisterende transaktion."""
-    db_transaction = get_transaction_by_id(db, transaction_id)
-    if not db_transaction:
+    repo = get_transaction_repository()
+    existing = repo.get_by_id(transaction_id)
+    if not existing:
         return None
         
     # Validering af kategori, hvis den opdateres
-    if db_transaction.Category_idCategory != transaction_data.Category_idCategory:
-        category = db.query(CategoryModel).filter(CategoryModel.idCategory == transaction_data.Category_idCategory).first()
+    if existing.get("Category_idCategory") != transaction_data.Category_idCategory:
+        category_repo = get_category_repository()
+        category = category_repo.get_by_id(transaction_data.Category_idCategory)
         if not category:
             raise ValueError("Kategori med dette ID findes ikke.")
 
     update_data = transaction_data.model_dump(exclude_unset=True, by_alias=False)
-    # Rename 'transaction_date' to 'date' for the SQLAlchemy model
+    # Rename 'transaction_date' to 'date' for repository
     if 'transaction_date' in update_data:
         update_data['date'] = update_data.pop('transaction_date')
-    for key, value in update_data.items():
-        setattr(db_transaction, key, value)
     
-    db.commit()
-    db.refresh(db_transaction)
-    return db_transaction
+    # Convert type enum to string if needed
+    if 'type' in update_data and hasattr(update_data['type'], 'value'):
+        update_data['type'] = update_data['type'].value
+    
+    return repo.update(transaction_id, update_data)
 
-def delete_transaction(db: Session, transaction_id: int) -> bool:
+def delete_transaction(transaction_id: int) -> bool:
     """Sletter en transaktion."""
-    db_transaction = get_transaction_by_id(db, transaction_id)
-    if not db_transaction:
-        return False
-        
-    db.delete(db_transaction)
-    db.commit()
-    return True
+    repo = get_transaction_repository()
+    return repo.delete(transaction_id)
 
 # --- CSV Import Logik ---
 
-def import_transactions_from_csv(db: Session, file_contents: bytes, account_id: int) -> List[TransactionModel]:
+def import_transactions_from_csv(file_contents: bytes, account_id: int) -> List[Dict]:
     """
     Udfører parsing og import af transaktioner fra en CSV-fil.
     """
@@ -166,25 +165,23 @@ def import_transactions_from_csv(db: Session, file_contents: bytes, account_id: 
     df['amount'] = df['Beløb'].str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     
     # Hent kategorier
-    categories = db.query(CategoryModel).all()
-    category_name_to_id = {cat.name.lower(): cat.idCategory for cat in categories}
+    category_repo = get_category_repository()
+    categories = category_repo.get_all()
+    category_name_to_id = {cat.get("name", "").lower(): cat.get("idCategory") for cat in categories if cat.get("name")}
 
     # Opret "Anden" kategori hvis den mangler
     if "anden" not in category_name_to_id:
         try:
-            default_category = CategoryModel(
-                name="Anden",
-                type=TransactionType.expense.value
-            )
-            db.add(default_category)
-            db.commit()
-            db.refresh(default_category)
-            category_name_to_id["anden"] = default_category.idCategory
+            default_category = category_repo.create({
+                "name": "Anden",
+                "type": TransactionType.expense.value
+            })
+            category_name_to_id["anden"] = default_category.get("idCategory")
         except Exception as e:
-            db.rollback()
             raise ValueError(f"Kunne ikke oprette standardkategorien 'Anden': {str(e)}")
         
-    created_transactions: List[TransactionModel] = []
+    created_transactions: List[Dict] = []
+    transaction_repo = get_transaction_repository()
 
     try:
         # Anden: Iterer over rækker, kategoriser og gem
@@ -206,29 +203,20 @@ def import_transactions_from_csv(db: Session, file_contents: bytes, account_id: 
 
             tx_type = TransactionType.income.value if row['amount'] >= 0 else TransactionType.expense.value
             
-            db_transaction = TransactionModel(
-                date=row['date'].date(),
-                amount=row['amount'],
-                description=full_description,
-                type=tx_type,
-                Category_idCategory=transaction_category_id,
-                Account_idAccount=account_id
-                # Mapp ikke-nødvendige kolonner fra CSV:
-                # balance_after=clean_value(row.get('Saldo')),
-                # currency=row.get('Valuta', 'DKK'),
-                # sender=clean_value(row.get('Afsender')),
-                # recipient=clean_value(row.get('Modtager')),
-                # name=clean_value(row.get('Navn'))
-            )
+            transaction_data = {
+                "date": row['date'].date().isoformat() if hasattr(row['date'], 'date') else str(row['date']),
+                "amount": float(row['amount']),
+                "description": full_description,
+                "type": tx_type,
+                "Category_idCategory": transaction_category_id,
+                "Account_idAccount": account_id
+            }
 
-            db.add(db_transaction)
-            db.flush() 
-            created_transactions.append(db_transaction)
+            created = transaction_repo.create(transaction_data)
+            created_transactions.append(created)
             
-        db.commit()
         print(f"✓ Succesfuldt importeret {len(created_transactions)} transaktioner til account_id={account_id}")
         return created_transactions
     except Exception as e:
-        db.rollback()
         print(f"✗ Fejl ved import: {str(e)}")
         raise ValueError(f"Fejl ved import af transaktioner: {str(e)}")
