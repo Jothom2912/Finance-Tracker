@@ -9,6 +9,9 @@ from datetime import date
 from decimal import Decimal
 import io
 
+# Force MySQL for tests - set ACTIVE_DB before importing anything that uses it
+os.environ["ACTIVE_DB"] = "mysql"
+
 from backend.main import app
 from backend.database.mysql import Base
 from backend.database import get_db
@@ -19,6 +22,16 @@ from backend.models.mysql import (
 
 
 # === TEST DATABASE SETUP ===
+
+@pytest.fixture(scope="function", autouse=True)
+def set_mysql_for_tests(monkeypatch):
+    """Force ACTIVE_DB to MySQL for all tests."""
+    # Set environment variable
+    monkeypatch.setenv("ACTIVE_DB", "mysql")
+    
+    # Also patch the config module if it's already imported
+    import backend.config
+    monkeypatch.setattr(backend.config, "ACTIVE_DB", "mysql")
 
 @pytest.fixture(scope="function")
 def mock_repositories(monkeypatch, test_db):
@@ -184,6 +197,13 @@ class TestCsvUpload:
 
         # Assert
         assert response.status_code == 200
-        # Verificer i database
-        transactions = test_db.query(Transaction).all()
+        # Verificer response indeholder transaktioner
+        response_data = response.json()
+        assert isinstance(response_data, list)
+        assert len(response_data) == 2
+        
+        # Verificer gennem repository (ikke direkte SQLAlchemy query)
+        from backend.repository import get_transaction_repository
+        transaction_repo = get_transaction_repository()
+        transactions = transaction_repo.get_all(account_id=account.idAccount)
         assert len(transactions) == 2
