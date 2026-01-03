@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
-from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from backend.database import get_db
@@ -29,10 +28,10 @@ def options_login():
     return {"message": "OK"}
 
 @router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
-def create_user_route(user: UserCreate, db: Session = Depends(get_db)):
+def create_user_route(user: UserCreate):
     """Opretter en ny bruger."""
     try:
-        db_user = user_service.create_user(db, user)
+        db_user = user_service.create_user(user)
         return db_user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -49,17 +48,15 @@ def create_user_route(user: UserCreate, db: Session = Depends(get_db)):
 def read_users_route(
     skip: int = 0, 
     limit: int = 100, 
-    db: Session = Depends(get_db),
     current_user_id: int = Depends(get_current_user_id)
 ):
     """Henter en liste over brugere. Kræver authentication."""
     # Kun admin bør kunne se alle brugere, men for nu tillader vi authenticated users
-    return user_service.get_users(db, skip=skip, limit=limit)
+    return user_service.get_users(skip=skip, limit=limit)
 
 @router.get("/{user_id}", response_model=UserSchema)
 def read_user_route(
     user_id: int, 
-    db: Session = Depends(get_db),
     current_user_id: int = Depends(get_current_user_id)
 ):
     """Henter detaljer for en specifik bruger. Kræver authentication."""
@@ -70,16 +67,16 @@ def read_user_route(
             detail="Du kan kun se din egen brugerinformation."
         )
     
-    db_user = user_service.get_user_by_id(db, user_id)
+    db_user = user_service.get_user_by_id(user_id)
     if db_user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bruger ikke fundet.")
     return db_user
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-def login_route(credentials: UserLogin, db: Session = Depends(get_db)):
+def login_route(credentials: UserLogin):
     """Login bruger med username/email og password. Returnér JWT token."""
     try:
-        token = user_service.login_user(db, credentials.username_or_email, credentials.password)
+        token = user_service.login_user(credentials.username_or_email, credentials.password)
         return token
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))

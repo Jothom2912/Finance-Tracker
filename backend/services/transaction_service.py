@@ -8,8 +8,6 @@ import io
 import math
 
 # --- KORREKTE IMPORTS TIL NY MODELSTRUKTUR ---
-from backend.models.mysql.transaction import Transaction as TransactionModel
-from backend.models.mysql.category import Category as CategoryModel
 from backend.models.mysql.common import TransactionType  # <--- RETTET STED: HENTES FRA COMMON
 from backend.shared.schemas.transaction import TransactionCreate
 
@@ -17,15 +15,28 @@ from .categorization import assign_category_automatically
 
 # --- (RESTEN AF DIN KODE FOR TRANSACTION SERVICE) ---
 
-def get_transaction_by_id(transaction_id: int) -> Optional[TransactionModel]:
+def get_transaction_by_id(transaction_id: int) -> Optional[Dict]:
     """Get transaction by ID using active database"""
     repo = get_transaction_repository()
     return repo.get_by_id(transaction_id)
 
-def get_transactions(account_id: int, skip: int = 0, limit: int = 100) -> List[Dict]:
+def get_transactions(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    category_id: Optional[int] = None,
+    type: Optional[str] = None,
+    month: Optional[str] = None,
+    year: Optional[str] = None,
+    account_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100
+) -> List[Dict]:
     """Get transactions using active database"""
     repo = get_transaction_repository()
     return repo.get_all(
+        start_date=start_date,
+        end_date=end_date,
+        category_id=category_id,
         account_id=account_id,
         limit=limit,
         offset=skip
@@ -36,23 +47,19 @@ def create_transaction(transaction_data: Dict) -> Dict:
     repo = get_transaction_repository()
     return repo.create(transaction_data)
 
-def update_transaction( transaction_id: int, transaction_data: TransactionCreate) -> Optional[TransactionModel]:
-    """Create transaction using active database"""
+def update_transaction(transaction_id: int, transaction_data: Dict) -> Optional[Dict]:
+    """Update transaction using active database"""
     repo = get_transaction_repository()
-    return repo.update(transaction_data, transaction_id)
+    return repo.update(transaction_id, transaction_data)
 
-def delete_transaction( transaction_id: int) -> bool:
+def delete_transaction(transaction_id: int) -> bool:
     """Sletter en transaktion."""
     repo = get_transaction_repository()
-    db_transaction = get_transaction_by_id(transaction_id)
-    if not db_transaction:
-        return False
-    repo.delete(transaction_id)
-    return True
+    return repo.delete(transaction_id)
 
 # --- CSV Import Logik ---
 
-def import_transactions_from_csv( file_contents: bytes, account_id: int) -> List[TransactionModel]:
+def import_transactions_from_csv(file_contents: bytes, account_id: int) -> List[Dict]:
     """
     Udfører parsing og import af transaktioner fra en CSV-fil.
     """
@@ -74,17 +81,18 @@ def import_transactions_from_csv( file_contents: bytes, account_id: int) -> List
     # Hent kategorier
     repo = get_category_repository()
     categories = repo.get_all()
-    category_name_to_id = {cat.name.lower(): cat.idCategory for cat in categories}
+    category_name_to_id = {cat["name"].lower(): cat["idCategory"] for cat in categories}
 
     # Opret "Anden" kategori hvis den mangler
     if "anden" not in category_name_to_id:
-        default_category = CategoryModel(
-            name="Anden",
-            type=TransactionType.expense.value
-            )
-        repo.create(default_category)
+        default_category_data = {
+            "name": "Anden",
+            "type": TransactionType.expense.value
+        }
+        created_category = repo.create(default_category_data)
+        category_name_to_id["anden"] = created_category["idCategory"]
         
-    created_transactions: List[TransactionModel] = []
+    created_transactions: List[Dict] = []
 
     try:
         # Anden: Iterer over rækker, kategoriser og gem
@@ -107,23 +115,23 @@ def import_transactions_from_csv( file_contents: bytes, account_id: int) -> List
 
             tx_type = TransactionType.income.value if row['amount'] >= 0 else TransactionType.expense.value
             
-            db_transaction = TransactionModel(
-                date=row['date'].date(),
-                amount=row['amount'],
-                description=full_description,
-                type=tx_type,
-                Category_idCategory=transaction_category_id,
-                Account_idAccount=account_id
+            transaction_data = {
+                "date": row['date'].date().isoformat(),
+                "amount": row['amount'],
+                "description": full_description,
+                "type": tx_type,
+                "Category_idCategory": transaction_category_id,
+                "Account_idAccount": account_id
                 # Mapp ikke-nødvendige kolonner fra CSV:
                 # balance_after=clean_value(row.get('Saldo')),
                 # currency=row.get('Valuta', 'DKK'),
                 # sender=clean_value(row.get('Afsender')),
                 # recipient=clean_value(row.get('Modtager')),
                 # name=clean_value(row.get('Navn'))
-            )
+            }
 
-            repo.create(db_transaction)
-            created_transactions.append(db_transaction)
+            created_transaction = repo.create(transaction_data)
+            created_transactions.append(created_transaction)
             
         print(f"✓ Succesfuldt importeret {len(created_transactions)} transaktioner til account_id={account_id}")
         return created_transactions

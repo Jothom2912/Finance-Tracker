@@ -40,7 +40,7 @@ def get_account_id_from_headers(
 
 @router.post("/", response_model=GoalSchema, status_code=status.HTTP_201_CREATED)
 def create_goal_route(
-    goal_data: Dict[str, Any] = Body(...),
+    goal: GoalCreate,
     authorization: Optional[str] = Header(None, alias="Authorization"),
     x_account_id: Optional[str] = Header(None, alias="X-Account-ID")
 ):
@@ -61,26 +61,17 @@ def create_goal_route(
             from backend.services import account_service
             accounts = account_service.get_accounts_by_user(token_data.user_id)
             if accounts:
-                account_id = accounts[0].idAccount
+                account_id = accounts[0]["idAccount"]
 
-    # Hvis goal_data ikke har account_id, tilføj det fra header/token
-    if 'Account_idAccount' not in goal_data or goal_data.get('Account_idAccount') is None:
-        if not account_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Account ID mangler. Vælg en konto først."
-            )
-        goal_data['Account_idAccount'] = account_id
-    # Hvis body har Account_idAccount, brug det (frontend sender det korrekt)
-
-    # Valider og opret GoalCreate objekt
-    try:
-        goal = GoalCreate(**goal_data)
-    except Exception as e:
+    if not account_id:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Valideringsfejl: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account ID mangler. Vælg en konto først."
         )
+
+    # Set account_id on goal if not already set
+    if goal.Account_idAccount is None:
+        goal = goal.model_copy(update={"Account_idAccount": account_id})
 
     try:
         db_goal = goal_service.create_goal(goal)

@@ -60,6 +60,22 @@ class Neo4jUserRepository(IUserRepository):
                 }
             return None
     
+    def get_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email from Neo4j."""
+        query = "MATCH (u:User {email: $email}) RETURN u"
+        with self._get_session() as session:
+            result = session.run(query, email=email)
+            record = result.single()
+            if record:
+                u = record["u"]
+                return {
+                    "idUser": u["idUser"],
+                    "username": u["username"],
+                    "email": u["email"],
+                    "created_at": u.get("created_at")
+                }
+            return None
+    
     def create(self, user_data: Dict) -> Dict:
         """Create new user in Neo4j."""
         query = """
@@ -83,4 +99,9 @@ class Neo4jUserRepository(IUserRepository):
                     "created_at": u.get("created_at")
                 }
             return user_data
+    
+    def authenticate_user(self, username_or_email: str) -> Optional[Dict]:
+        """Get user data including password for authentication."""
+        # Neo4j doesn't store passwords for security reasons
+        return None
 

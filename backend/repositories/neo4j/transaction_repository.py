@@ -23,6 +23,9 @@ class Neo4jTransactionRepository(ITransactionRepository):
         end_date: Optional[date] = None,
         category_id: Optional[int] = None,
         account_id: Optional[int] = None,
+        type: Optional[str] = None,
+        month: Optional[str] = None,
+        year: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
     ) -> List[Dict]:
@@ -43,6 +46,9 @@ class Neo4jTransactionRepository(ITransactionRepository):
         if end_date:
             conditions.append("t.date <= $end_date")
             params["end_date"] = end_date.isoformat()
+        if type:
+            conditions.append("t.type = $type")
+            params["type"] = type
         
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -249,4 +255,30 @@ class Neo4jTransactionRepository(ITransactionRepository):
                     "total": record["total"]
                 }
             return summary
+    
+    def get_expenses_by_category_for_period(
+        self,
+        month: int,
+        year: int,
+        account_id: int
+    ) -> Dict[int, float]:
+        """Get aggregated expenses by category for a specific month/year and account from Neo4j."""
+        query = """
+        MATCH (a:Account {idAccount: $account_id})-[:HAS_TRANSACTION]->(t:Transaction)-[:BELONGS_TO_CATEGORY]->(c:Category)
+        WHERE t.amount < 0 
+          AND date(t.date).month = $month 
+          AND date(t.date).year = $year
+        RETURN c.idCategory as category_id, 
+               ABS(SUM(t.amount)) as total_spent
+        ORDER BY total_spent DESC
+        """
+        
+        with self._get_session() as session:
+            result = session.run(query, account_id=account_id, month=month, year=year)
+            expenses = {}
+            for record in result:
+                category_id = record["category_id"]
+                total_spent = record["total_spent"]
+                expenses[category_id] = total_spent
+            return expenses
 

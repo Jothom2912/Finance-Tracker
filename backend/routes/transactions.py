@@ -90,8 +90,9 @@ def create_transaction_route(
     print(f"DEBUG create_transaction_route: transaction final (by_alias=False) = {transaction.model_dump(by_alias=False)}")
 
     try:
-        result = create_transaction(transaction)
-        print(f"DEBUG create_transaction_route: create_transaction returnerede: {result.idTransaction if result else None}")
+        transaction_dict = transaction.model_dump()
+        result = create_transaction(transaction_dict)
+        print(f"DEBUG create_transaction_route: create_transaction returnerede: {result.get('idTransaction') if result else None}")
         return result
     except ValueError as e:
         print(f"DEBUG create_transaction_route: ValueError fra create_transaction = {e}")
@@ -118,10 +119,10 @@ async def upload_transactions_csv_route(
 
     try:
         contents = await file.read()
-        # ✅ FIX: Konverter SQLAlchemy objekter til Pydantic schemas
+        # ✅ FIX: import_transactions_from_csv now returns List[Dict]
         created_transactions = import_transactions_from_csv(contents, account_id)
-        # Konverter til schemas for response serialization
-        return [TransactionSchema.model_validate(t) for t in created_transactions]
+        # Return the dicts directly - Pydantic will handle the conversion
+        return created_transactions
     except pd.errors.EmptyDataError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Den uploadede CSV-fil er tom.")
     except (pd.errors.ParserError, KeyError) as e:
@@ -187,7 +188,8 @@ def update_transaction_route(
         transaction = transaction.model_copy(update={"Account_idAccount": account_id})
 
     try:
-        updated = update_transaction(transaction_id, transaction)
+        transaction_dict = transaction.model_dump()
+        updated = update_transaction(transaction_id, transaction_dict)
         if not updated:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaktion ikke fundet.")
         return updated

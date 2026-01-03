@@ -156,7 +156,7 @@ async def create_budget_route(
             from backend.services import account_service
             accounts = account_service.get_accounts_by_user( token_data.user_id)
             if accounts:
-                account_id = accounts[0].idAccount
+                account_id = accounts[0]["idAccount"]
 
     if not account_id:
         raise HTTPException(
@@ -164,57 +164,17 @@ async def create_budget_route(
             detail="Account ID mangler. Vælg en konto først."
         )
 
-    # Tilføj account_id til budget data hvis det ikke allerede er sat
-    budget_dict = budget.model_dump()
-
-    print(f"DEBUG create_budget_route: Modtaget budget_dict={budget_dict}")
-    print(f"DEBUG create_budget_route: category_id i budget_dict={budget_dict.get('category_id')}")
-
-    # Konverter month/year til budget_date hvis budget_date ikke er sat
-    if not budget_dict.get('budget_date'):
-        month = budget_dict.get('month')
-        year = budget_dict.get('year')
-        if month and year:
-            try:
-                from datetime import date
-                budget_dict['budget_date'] = date(int(year), int(month), 1)
-            except (ValueError, TypeError) as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Ugyldig måned/år: {month}/{year}"
-                )
-
-    # Fjern month/year fra dict da de ikke er i modellen
-    budget_dict.pop('month', None)
-    budget_dict.pop('year', None)
-
-    if 'Account_idAccount' not in budget_dict or budget_dict.get('Account_idAccount') is None:
-        budget_dict['Account_idAccount'] = account_id
-
-    # SIKRER at category_id bevares
-    category_id = budget_dict.get('category_id')
-    print(f"DEBUG create_budget_route: category_id efter cleanup={category_id}")
-
-    # Opret ny BudgetCreate med account_id og category_id
-    budget_with_account = BudgetCreate(**budget_dict)
-    print(f"DEBUG create_budget_route: budget_with_account.category_id={getattr(budget_with_account, 'category_id', 'NOT SET')}")
+    # Set account_id on budget if not already set
+    if budget.Account_idAccount is None:
+        budget = budget.model_copy(update={"Account_idAccount": account_id})
 
     try:
-        # RETTET: Kald funktionen direkte
-        new_budget = create_budget( budget_with_account)
+        # Call service function directly
+        new_budget = create_budget(budget)
         return new_budget
     except ValueError as e:
-        error_msg = str(e)
-        # Send specifikke fejlbeskeder til frontend
-        if "category_id" in error_msg.lower() or "kategori" in error_msg.lower():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
-        if "Integritetsfejl" in error_msg or "ugyldig" in error_msg.lower():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create budget: {error_msg}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        import traceback
-        print(f"ERROR create_budget_route: {e}")
-        print(traceback.format_exc())
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create budget: {str(e)}")
 
 
@@ -224,46 +184,9 @@ async def update_budget_route(budget_id: int, budget: BudgetUpdate):
     """
     Update an existing budget.
     """
-    try:
-        # Konverter month/year til budget_date hvis budget_date ikke er sat
-        budget_dict = budget.model_dump(exclude_unset=True)
-        print(f"DEBUG update_budget_route: Modtaget budget_dict={budget_dict}")
-        print(f"DEBUG update_budget_route: category_id i budget_dict={budget_dict.get('category_id')}")
-
-        if not budget_dict.get('budget_date'):
-            month = budget_dict.get('month')
-            year = budget_dict.get('year')
-            if month and year:
-                try:
-                    from datetime import date
-                    budget_dict['budget_date'] = date(int(year), int(month), 1)
-                except (ValueError, TypeError) as e:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Ugyldig måned/år: {month}/{year}"
-                    )
-
-        # Fjern month/year fra dict
-        budget_dict.pop('month', None)
-        budget_dict.pop('year', None)
-
-        # SIKRER at category_id bevares
-        category_id = budget_dict.get('category_id')
-        print(f"DEBUG update_budget_route: category_id efter cleanup={category_id}")
-
-        # Opret BudgetUpdate med konverteret data
-        budget_with_date = BudgetUpdate(**budget_dict)
-        print(f"DEBUG update_budget_route: budget_with_date.category_id={getattr(budget_with_date, 'category_id', 'NOT SET')}")
-
-        # RETTET: Kald funktionen direkte
-        updated_budget = update_budget( budget_id, budget_with_date)
-        if not updated_budget:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
-        return updated_budget
-    except ValueError as e:
-          raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred during update.")
+     # Call service function directly
+    updated_budget = update_budget(budget_id, budget)
+    return updated_budget
 
 
 # --- Sletning af Budget ---

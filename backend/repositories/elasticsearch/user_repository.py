@@ -93,6 +93,29 @@ class ElasticsearchUserRepository(IUserRepository):
         except Exception:
             return None
     
+    def get_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email from Elasticsearch."""
+        search_body = {
+            "query": {
+                "term": {"email": email}
+            }
+        }
+        
+        try:
+            response = self.es.search(index=self.index, body=search_body)
+            if response["hits"]["total"]["value"] > 0:
+                source = response["hits"]["hits"][0]["_source"]
+                # IKKE inkluder password!
+                return {
+                    "idUser": source.get("idUser"),
+                    "username": source.get("username"),
+                    "email": source.get("email"),
+                    "created_at": source.get("created_at")
+                }
+            return None
+        except Exception:
+            return None
+    
     def create(self, user_data: Dict) -> Dict:
         """Create new user in Elasticsearch."""
         doc = {
@@ -118,4 +141,9 @@ class ElasticsearchUserRepository(IUserRepository):
             }
         except Exception as e:
             raise ValueError(f"Failed to create user: {str(e)}")
+    
+    def authenticate_user(self, username_or_email: str) -> Optional[Dict]:
+        """Get user data including password for authentication."""
+        # Elasticsearch doesn't store passwords for security reasons
+        return None
 

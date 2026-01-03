@@ -19,64 +19,116 @@ class Neo4jGroupAccountRepository(IGroupAccountRepository):
     
     def get_all(self, account_id: Optional[int] = None) -> List[Dict]:
         """Get all group accounts from Neo4j."""
-        query = "MATCH (ag:AccountGroups) RETURN ag ORDER BY ag.idAccountGroups"
+        query = """
+        MATCH (ag:AccountGroups)
+        OPTIONAL MATCH (ag)-[:HAS_MEMBER]->(u:User)
+        RETURN ag, collect(u) as users
+        ORDER BY ag.idAccountGroups
+        """
         with self._get_session() as session:
             result = session.run(query)
             group_accounts = []
             for record in result:
                 ag = record["ag"]
+                users = record["users"]
                 group_accounts.append({
                     "idAccountGroups": ag["idAccountGroups"],
-                    "name": ag["name"]
+                    "name": ag["name"],
+                    "max_users": ag.get("max_users", 20),  # Default to 20 if not set
+                    "users": [{"idUser": u["idUser"], "username": u.get("username", ""), "email": u.get("email", "")} for u in users if u]
                 })
             return group_accounts
     
     def get_by_id(self, group_account_id: int) -> Optional[Dict]:
         """Get group account by ID from Neo4j."""
-        query = "MATCH (ag:AccountGroups {idAccountGroups: $id}) RETURN ag"
+        query = """
+        MATCH (ag:AccountGroups {idAccountGroups: $id})
+        OPTIONAL MATCH (ag)-[:HAS_MEMBER]->(u:User)
+        RETURN ag, collect(u) as users
+        """
         with self._get_session() as session:
             result = session.run(query, id=group_account_id)
             record = result.single()
             if record:
                 ag = record["ag"]
+                users = record["users"]
                 return {
                     "idAccountGroups": ag["idAccountGroups"],
-                    "name": ag["name"]
+                    "name": ag["name"],
+                    "max_users": ag.get("max_users", 20),  # Default to 20 if not set
+                    "users": [{"idUser": u["idUser"], "username": u.get("username", ""), "email": u.get("email", "")} for u in users if u]
                 }
             return None
     
     def create(self, group_account_data: Dict) -> Dict:
         """Create new group account in Neo4j."""
+        from backend.validation_boundaries import ACCOUNT_GROUP_BVA
         query = """
         CREATE (ag:AccountGroups {
             idAccountGroups: $idAccountGroups,
-            name: $name
+            name: $name,
+            max_users: $max_users
         })
         RETURN ag
         """
         with self._get_session() as session:
             result = session.run(query, 
                 idAccountGroups=group_account_data.get("idAccountGroups"),
-                name=group_account_data.get("name")
+                name=group_account_data.get("name"),
+                max_users=ACCOUNT_GROUP_BVA.max_users
             )
             record = result.single()
             if record:
-                return self.get_by_id(group_account_data.get("idAccountGroups"))
+                group_account_id = group_account_data.get("idAccountGroups")
+                # Handle user association if user_ids is provided
+                user_ids = group_account_data.get("user_ids")
+                if user_ids:
+                    user_query = """
+                    MATCH (ag:AccountGroups {idAccountGroups: $group_id}), (u:User)
+                    WHERE u.idUser IN $user_ids
+                    CREATE (ag)-[:HAS_MEMBER]->(u)
+                    """
+                    session.run(user_query, group_id=group_account_id, user_ids=user_ids)
+                
+                return self.get_by_id(group_account_id)
             return group_account_data
     
     def update(self, group_account_id: int, group_account_data: Dict) -> Dict:
         """Update group account in Neo4j."""
         query = """
         MATCH (ag:AccountGroups {idAccountGroups: $id})
-        SET ag.name = $name
+        SET ag.name = $name,
+            ag.max_users = $max_users
         RETURN ag
         """
         with self._get_session() as session:
-            session.run(query,
+            result = session.run(query,
                 id=group_account_id,
-                name=group_account_data.get("name")
+                name=group_account_data.get("name"),
+                max_users=group_account_data.get("max_users")
             )
-            return self.get_by_id(group_account_id) or group_account_data
+            record = result.single()
+            if record:
+                # Handle user association update if user_ids is provided
+                user_ids = group_account_data.get("user_ids")
+                if user_ids is not None:
+                    # Remove existing user relationships
+                    delete_query = """
+                    MATCH (ag:AccountGroups {idAccountGroups: $group_id})-[r:HAS_MEMBER]-()
+                    DELETE r
+                    """
+                    session.run(delete_query, group_id=group_account_id)
+                    
+                    # Add new user relationships
+                    user_query = """
+                    MATCH (ag:AccountGroups {idAccountGroups: $group_id}), (u:User)
+                    WHERE u.idUser IN $user_ids
+                    CREATE (ag)-[:HAS_MEMBER]->(u)
+                    """
+                    session.run(user_query, group_id=group_account_id, user_ids=user_ids)
+                
+                return self.get_by_id(group_account_id)
+            raise ValueError(f"Group account {group_account_id} not found")
     
     def delete(self, group_account_id: int) -> bool:
         """Delete group account from Neo4j."""

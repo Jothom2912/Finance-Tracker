@@ -35,6 +35,23 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
             print(f"Error getting category {category_id}: {e}")
             return None
     
+    def get_by_name(self, name: str) -> Optional[Dict]:
+        """Get category by name from Elasticsearch."""
+        try:
+            response = self.es.search(
+                index=self.index,
+                body={
+                    "query": {"term": {"name": name}},
+                    "size": 1
+                }
+            )
+            if response["hits"]["hits"]:
+                return response["hits"]["hits"][0]["_source"]
+            return None
+        except Exception as e:
+            print(f"Error getting category by name {name}: {e}")
+            return None
+    
     def create(self, category_data: Dict) -> Dict:
         """Create new category in Elasticsearch."""
         try:

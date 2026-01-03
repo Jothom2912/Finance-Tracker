@@ -1,9 +1,6 @@
-from requests import Session
 from backend.repositories import get_goal_repository
 from typing import Optional, List
 
-from backend.models.mysql.goal import Goal as GoalModel
-from backend.models.mysql.account import Account as AccountModel
 from backend.shared.schemas.goal import GoalCreate, GoalBase
 
 # --- CRUD Funktioner ---
@@ -16,14 +13,11 @@ def get_goal_by_id( goal_id: int) -> Optional[dict]:
 def get_goals_by_account( account_id: int) -> List[dict]:
     """Henter alle mål tilknyttet en specifik konto."""
     repo= get_goal_repository()
-    return repo.get_goals_by_account(account_id)
+    return repo.get_all(account_id=account_id)
 
 def create_goal( goal: GoalCreate) -> dict:
     """Opretter et nyt mål tilknyttet en konto."""
     repo= get_goal_repository()
-    account= repo.get_account_by_id(goal.Account_idAccount)
-    if not account:
-        raise ValueError("Konto med dette ID findes ikke.")
         
     db_goal = dict(
         name=goal.name,
@@ -44,10 +38,9 @@ def update_goal(goal_id: int, goal_data: GoalBase) -> Optional[dict]:
         return None
 
     update_data = goal_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_goal, key, value)
+    db_goal.update(update_data)
     
-    repo.update(db_goal)
+    repo.update(goal_id, db_goal)
     return db_goal
 
 def delete_goal(goal_id: int) -> bool:

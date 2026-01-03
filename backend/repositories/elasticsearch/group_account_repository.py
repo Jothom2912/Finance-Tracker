@@ -18,13 +18,23 @@ class ElasticsearchGroupAccountRepository(IGroupAccountRepository):
     def _ensure_index(self):
         """Ensure the group_accounts index exists."""
         if not self.es.indices.exists(index=self.index):
+            from backend.validation_boundaries import ACCOUNT_GROUP_BVA
             self.es.indices.create(
                 index=self.index,
                 body={
                     "mappings": {
                         "properties": {
                             "idAccountGroups": {"type": "integer"},
-                            "name": {"type": "text"}
+                            "name": {"type": "text"},
+                            "max_users": {"type": "integer"},
+                            "users": {
+                                "type": "nested",
+                                "properties": {
+                                    "idUser": {"type": "integer"},
+                                    "username": {"type": "text"},
+                                    "email": {"type": "text"}
+                                }
+                            }
                         }
                     }
                 }
@@ -59,10 +69,20 @@ class ElasticsearchGroupAccountRepository(IGroupAccountRepository):
     
     def create(self, group_account_data: Dict) -> Dict:
         """Create new group account in Elasticsearch."""
+        from backend.validation_boundaries import ACCOUNT_GROUP_BVA
         doc = {
             "idAccountGroups": group_account_data.get("idAccountGroups"),
-            "name": group_account_data.get("name")
+            "name": group_account_data.get("name"),
+            "max_users": ACCOUNT_GROUP_BVA.max_users,
+            "users": group_account_data.get("users", [])
         }
+        
+        # Handle user association if user_ids is provided
+        user_ids = group_account_data.get("user_ids")
+        if user_ids:
+            # For simplicity, add user_ids to users list
+            # In a real implementation, you might want to fetch user details
+            doc["users"] = [{"idUser": uid} for uid in user_ids]
         
         try:
             self.es.index(
@@ -86,6 +106,14 @@ class ElasticsearchGroupAccountRepository(IGroupAccountRepository):
         updated = existing.copy()
         if "name" in group_account_data:
             updated["name"] = group_account_data["name"]
+        if "max_users" in group_account_data:
+            updated["max_users"] = group_account_data["max_users"]
+        
+        # Handle user association update if user_ids is provided
+        user_ids = group_account_data.get("user_ids")
+        if user_ids is not None:
+            # Replace users with new ones
+            updated["users"] = [{"idUser": uid} for uid in user_ids]
         
         try:
             self.es.index(

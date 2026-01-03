@@ -2,7 +2,6 @@ from backend.repositories import get_planned_transaction_repository
 from typing import Optional, List
 
 from backend.repositories.base import IPlannedTransaction
-from backend.models.mysql.planned_transactions import PlannedTransactions as PTModel
 from backend.shared.schemas.planned_transactions import PlannedTransactionsCreate, PlannedTransactionsBase
 
 
@@ -14,11 +13,11 @@ def get_planned_transaction_by_id(pt_id: int) -> Optional[dict]:
     data = repo.get_by_id(pt_id)
     return data
 
-def get_planned_transactions( skip: int = 0, limit: int = 100) -> List[dict]:
+def get_planned_transactions(account_id: Optional[int] = None, skip: int = 0, limit: int = 100) -> List[dict]:
     """Henter en pagineret liste over planlagte transaktioner."""
     repo = get_planned_transaction_repository()
-    all_pts = repo.get_all()
-    return [PTModel(**pt) for pt in all_pts[skip:skip + limit]]
+    all_pts = repo.get_all(account_id=account_id)
+    return all_pts[skip:skip + limit]
 
 def create_planned_transaction( pt_data: PlannedTransactionsCreate) -> dict:
     """Opretter en ny planlagt transaktion."""

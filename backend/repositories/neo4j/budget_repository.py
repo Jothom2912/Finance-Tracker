@@ -21,12 +21,18 @@ class Neo4jBudgetRepository(IBudgetRepository):
         if account_id:
             query = """
             MATCH (a:Account {idAccount: $account_id})-[:HAS_BUDGET]->(b:Budget)
-            RETURN b, a
+            OPTIONAL MATCH (b)-[:BELONGS_TO_CATEGORY]->(c:Category)
+            RETURN b, a, collect(c) as categories
             ORDER BY b.idBudget
             """
             params = {"account_id": account_id}
         else:
-            query = "MATCH (b:Budget) RETURN b ORDER BY b.idBudget"
+            query = """
+            MATCH (a:Account)-[:HAS_BUDGET]->(b:Budget)
+            OPTIONAL MATCH (b)-[:BELONGS_TO_CATEGORY]->(c:Category)
+            RETURN b, a, collect(c) as categories
+            ORDER BY b.idBudget
+            """
             params = {}
         
         with self._get_session() as session:
@@ -34,11 +40,13 @@ class Neo4jBudgetRepository(IBudgetRepository):
             budgets = []
             for record in result:
                 b = record["b"]
+                categories = record["categories"]
                 budgets.append({
                     "idBudget": b["idBudget"],
                     "amount": b["amount"],
                     "budget_date": b.get("budget_date"),
-                    "Account_idAccount": record.get("a", {}).get("idAccount") if "a" in record else None
+                    "Account_idAccount": record.get("a", {}).get("idAccount") if "a" in record else None,
+                    "categories": [{"idCategory": c["idCategory"], "name": c.get("name", "")} for c in categories if c]
                 })
             return budgets
     
@@ -46,18 +54,21 @@ class Neo4jBudgetRepository(IBudgetRepository):
         """Get budget by ID from Neo4j."""
         query = """
         MATCH (a:Account)-[:HAS_BUDGET]->(b:Budget {idBudget: $id})
-        RETURN b, a
+        OPTIONAL MATCH (b)-[:BELONGS_TO_CATEGORY]->(c:Category)
+        RETURN b, a, collect(c) as categories
         """
         with self._get_session() as session:
             result = session.run(query, id=budget_id)
             record = result.single()
             if record:
                 b = record["b"]
+                categories = record["categories"]
                 return {
                     "idBudget": b["idBudget"],
                     "amount": b["amount"],
                     "budget_date": b.get("budget_date"),
-                    "Account_idAccount": record["a"]["idAccount"] if "a" in record else None
+                    "Account_idAccount": record["a"]["idAccount"] if "a" in record else None,
+                    "categories": [{"idCategory": c["idCategory"], "name": c.get("name", "")} for c in categories if c]
                 }
             return None
     
@@ -77,7 +88,17 @@ class Neo4jBudgetRepository(IBudgetRepository):
             result = session.run(query, **budget_data)
             record = result.single()
             if record:
-                return self.get_by_id(budget_data["idBudget"])
+                budget_id = budget_data["idBudget"]
+                # Handle category association if category_id is provided
+                category_id = budget_data.get("category_id")
+                if category_id:
+                    category_query = """
+                    MATCH (b:Budget {idBudget: $budget_id}), (c:Category {idCategory: $category_id})
+                    CREATE (b)-[:BELONGS_TO_CATEGORY]->(c)
+                    """
+                    session.run(category_query, budget_id=budget_id, category_id=category_id)
+                
+                return self.get_by_id(budget_id)
             return budget_data
     
     def update(self, budget_id: int, budget_data: Dict) -> Dict:
@@ -97,6 +118,23 @@ class Neo4jBudgetRepository(IBudgetRepository):
             )
             record = result.single()
             if record:
+                # Handle category association update if category_id is provided
+                category_id = budget_data.get("category_id")
+                if category_id is not None:
+                    # Remove existing category relationships
+                    delete_query = """
+                    MATCH (b:Budget {idBudget: $budget_id})-[r:BELONGS_TO_CATEGORY]-()
+                    DELETE r
+                    """
+                    session.run(delete_query, budget_id=budget_id)
+                    
+                    # Add new category relationship
+                    category_query = """
+                    MATCH (b:Budget {idBudget: $budget_id}), (c:Category {idCategory: $category_id})
+                    CREATE (b)-[:BELONGS_TO_CATEGORY]->(c)
+                    """
+                    session.run(category_query, budget_id=budget_id, category_id=category_id)
+                
                 return self.get_by_id(budget_id)
             raise ValueError(f"Budget {budget_id} not found")
     

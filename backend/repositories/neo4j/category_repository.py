@@ -41,6 +41,21 @@ class Neo4jCategoryRepository(ICategoryRepository):
                 }
             return None
     
+    def get_by_name(self, name: str) -> Optional[Dict]:
+        """Get category by name from Neo4j."""
+        query = "MATCH (c:Category {name: $name}) RETURN c"
+        with self._get_session() as session:
+            result = session.run(query, name=name)
+            record = result.single()
+            if record:
+                c = record["c"]
+                return {
+                    "idCategory": c["idCategory"],
+                    "name": c["name"],
+                    "type": c["type"]
+                }
+            return None
+    
     def create(self, category_data: Dict) -> Dict:
         """Create new category in Neo4j."""
         query = """

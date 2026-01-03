@@ -21,6 +21,12 @@ class MySQLCategoryRepository(ICategoryRepository):
         ).first()
         return self._serialize_category(category) if category else None
     
+    def get_by_name(self, name: str) -> Optional[Dict]:
+        category = self.db.query(CategoryModel).filter(
+            CategoryModel.name == name
+        ).first()
+        return self._serialize_category(category) if category else None
+    
     def create(self, category_data: Dict) -> Dict:
         category = CategoryModel(
             name=category_data.get("name"),

@@ -22,6 +22,9 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
         end_date: Optional[date] = None,
         category_id: Optional[int] = None,
         account_id: Optional[int] = None,
+        type: Optional[str] = None,
+        month: Optional[str] = None,
+        year: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
     ) -> List[Dict]:
@@ -36,6 +39,12 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             must_clauses.append({"term": {"Category_idCategory": category_id}})
         if account_id is not None:
             must_clauses.append({"term": {"Account_idAccount": account_id}})
+        if type:
+            must_clauses.append({"term": {"type": type}})
+        if month:
+            must_clauses.append({"term": {"month": month}})
+        if year:
+            must_clauses.append({"term": {"year": year}})
         
         query = {
             "bool": {
@@ -194,6 +203,53 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
                 }
             
             return summary
+    
+    def get_expenses_by_category_for_period(
+        self,
+        month: int,
+        year: int,
+        account_id: int
+    ) -> Dict[int, float]:
+        """Get aggregated expenses by category for a specific month/year and account from Elasticsearch."""
+        must_clauses = [
+            {"term": {"Account_idAccount": account_id}},
+            {"range": {"amount": {"lt": 0}}},  # Expenses are negative
+            {"range": {"date": {
+                "gte": f"{year:04d}-{month:02d}-01",
+                "lt": f"{year:04d}-{month+1:02d}-01" if month < 12 else f"{year+1:04d}-01-01"
+            }}}
+        ]
+        
+        search_body = {
+            "query": {
+                "bool": {
+                    "must": must_clauses
+                }
+            },
+            "aggs": {
+                "by_category": {
+                    "terms": {"field": "Category_idCategory", "size": 100},
+                    "aggs": {
+                        "total_spent": {"sum": {"field": "amount"}}
+                    }
+                }
+            },
+            "size": 0
+        }
+        
+        try:
+            response = self.es.search(index=self.index, body=search_body)
+            expenses = {}
+            
+            for bucket in response["aggregations"]["by_category"]["buckets"]:
+                category_id = bucket["key"]
+                total_spent = abs(bucket["total_spent"]["value"])  # Make positive
+                expenses[category_id] = total_spent
+            
+            return expenses
+        except Exception as e:
+            print(f"Error getting expenses by category: {e}")
+            return {}
         except Exception as e:
             print(f"Error getting category summary: {e}")
             return {}

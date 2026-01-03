@@ -2,6 +2,7 @@
 from typing import List, Dict, Optional
 from datetime import date
 from sqlalchemy.orm import Session
+from sqlalchemy import extract, func
 from backend.database.mysql import SessionLocal
 from backend.models.mysql.transaction import Transaction as TransactionModel
 from backend.models.mysql.category import Category as CategoryModel
@@ -19,6 +20,9 @@ class MySQLTransactionRepository(ITransactionRepository):
         end_date: Optional[date] = None,
         category_id: Optional[int] = None,
         account_id: Optional[int] = None,
+        type: Optional[str] = None,
+        month: Optional[str] = None,
+        year: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
     ) -> List[Dict]:
@@ -32,6 +36,12 @@ class MySQLTransactionRepository(ITransactionRepository):
             query = query.filter(TransactionModel.Category_idCategory == category_id)
         if account_id:
             query = query.filter(TransactionModel.Account_idAccount == account_id)
+        if type:
+            query = query.filter(TransactionModel.type == type)
+        if month:
+            query = query.filter(extract('month', TransactionModel.date) == int(month))
+        if year:
+            query = query.filter(extract('year', TransactionModel.date) == int(year))
         
         transactions = query.order_by(TransactionModel.date.desc()).offset(offset).limit(limit).all()
         return [self._serialize_transaction(t) for t in transactions]
@@ -125,8 +135,27 @@ class MySQLTransactionRepository(ITransactionRepository):
         
         return summary
     
-    @staticmethod
-    def _serialize_transaction(transaction: TransactionModel) -> Dict:
+    def get_expenses_by_category_for_period(
+        self,
+        month: int,
+        year: int,
+        account_id: int
+    ) -> Dict[int, float]:
+        """Get aggregated expenses by category for a specific month/year and account."""
+        expenses_by_category = self.db.query(
+            TransactionModel.Category_idCategory.label('category_id'),
+            func.sum(TransactionModel.amount).label('total_spent')
+        ).filter(
+            TransactionModel.Account_idAccount == account_id,
+            extract('month', TransactionModel.date) == month,
+            extract('year', TransactionModel.date) == year,
+            TransactionModel.amount < 0  # Expenses are negative
+        ).group_by(
+            TransactionModel.Category_idCategory
+        ).all()
+
+        # Return as {category_id: total_spent} (positive number for expense)
+        return {row.category_id: abs(float(row.total_spent)) for row in expenses_by_category if row.category_id is not None}
         return {
             "idTransaction": transaction.idTransaction,
             "amount": float(transaction.amount) if transaction.amount else 0.0,

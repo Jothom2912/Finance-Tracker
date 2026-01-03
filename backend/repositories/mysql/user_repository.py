@@ -23,6 +23,10 @@ class MySQLUserRepository(IUserRepository):
         user = self.db.query(UserModel).filter(UserModel.username == username).first()
         return self._serialize_user(user) if user else None
     
+    def get_by_email(self, email: str) -> Optional[Dict]:
+        user = self.db.query(UserModel).filter(UserModel.email == email).first()
+        return self._serialize_user(user) if user else None
+    
     def create(self, user_data: Dict) -> Dict:
         user = UserModel(
             username=user_data.get("username"),
@@ -33,6 +37,21 @@ class MySQLUserRepository(IUserRepository):
         self.db.commit()
         self.db.refresh(user)
         return self._serialize_user(user)
+    
+    def authenticate_user(self, username_or_email: str) -> Optional[Dict]:
+        """Get user data including password for authentication."""
+        user = self.db.query(UserModel).filter(
+            (UserModel.username == username_or_email) | (UserModel.email == username_or_email)
+        ).first()
+        if user:
+            return {
+                "idUser": user.idUser,
+                "username": user.username,
+                "email": user.email,
+                "password": user.password,  # Include password for authentication
+                "created_at": user.created_at.isoformat() if user.created_at else None
+            }
+        return None
     
     @staticmethod
     def _serialize_user(user: UserModel) -> Dict:

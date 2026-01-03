@@ -26,7 +26,14 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
                             "idBudget": {"type": "integer"},
                             "amount": {"type": "float"},
                             "budget_date": {"type": "date"},
-                            "Account_idAccount": {"type": "integer"}
+                            "Account_idAccount": {"type": "integer"},
+                            "categories": {
+                                "type": "nested",
+                                "properties": {
+                                    "idCategory": {"type": "integer"},
+                                    "name": {"type": "text"}
+                                }
+                            }
                         }
                     }
                 }
@@ -73,8 +80,16 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             "idBudget": budget_data.get("idBudget"),
             "amount": budget_data.get("amount"),
             "budget_date": budget_data.get("budget_date"),
-            "Account_idAccount": budget_data.get("Account_idAccount")
+            "Account_idAccount": budget_data.get("Account_idAccount"),
+            "categories": budget_data.get("categories", [])
         }
+        
+        # Handle category association if category_id is provided
+        category_id = budget_data.get("category_id")
+        if category_id:
+            # For simplicity, add the category_id to categories list
+            # In a real implementation, you might want to fetch category details
+            doc["categories"].append({"idCategory": category_id})
         
         try:
             self.es.index(
@@ -102,6 +117,12 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             updated["budget_date"] = budget_data["budget_date"]
         if "Account_idAccount" in budget_data:
             updated["Account_idAccount"] = budget_data["Account_idAccount"]
+        
+        # Handle category association update if category_id is provided
+        category_id = budget_data.get("category_id")
+        if category_id is not None:
+            # Replace categories with new one
+            updated["categories"] = [{"idCategory": category_id}]
         
         try:
             self.es.index(

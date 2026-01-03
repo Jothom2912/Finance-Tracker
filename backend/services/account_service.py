@@ -15,13 +15,20 @@ def get_accounts_by_user(user_id: int) -> List[dict]:
     repo = get_account_repository()
     return repo.get_all(user_id=user_id)
 
-def create_account( account: AccountCreate) -> dict:
+def create_account(account: AccountCreate) -> dict:
     """Opretter en ny konto og tilknytter den til en bruger."""
     repo = get_account_repository()
-    new_account = repo.create(account)
+    account_data = account.model_dump()
+    new_account = repo.create(account_data)
     return new_account
 
-def update_account( account_id: int, account_data: AccountBase) -> Optional[dict]:
+def update_account(account_id: int, account_data: AccountBase) -> Optional[dict]:
     """Opdaterer en eksisterende konto baseret på ID."""
-    repo= get_account_repository()
-    return repo.update(account_id, account_data)
+    repo = get_account_repository()
+    account_dict = account_data.model_dump()
+    return repo.update(account_id, account_dict)
+
+def delete_account(account_id: int) -> bool:
+    """Sletter en konto baseret på ID."""
+    repo = get_account_repository()
+    return repo.delete(account_id)

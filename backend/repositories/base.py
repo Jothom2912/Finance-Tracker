@@ -16,6 +16,9 @@ class ITransactionRepository(ABC):
         end_date: Optional[date] = None,
         category_id: Optional[int] = None,
         account_id: Optional[int] = None,
+        type: Optional[str] = None,
+        month: Optional[str] = None,
+        year: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
     ) -> List[Dict]:
@@ -54,13 +57,13 @@ class ITransactionRepository(ABC):
         pass
     
     @abstractmethod
-    def get_summary_by_category(
+    def get_expenses_by_category_for_period(
         self,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None
-    ) -> Dict:
-        """Get summary aggregated by category."""
-        pass
+        month: int,
+        year: int,
+        account_id: int
+    ) -> Dict[int, float]:
+        """Get aggregated expenses by category for a specific month/year and account.""" 
 
 
 class ICategoryRepository(ABC):
@@ -74,6 +77,11 @@ class ICategoryRepository(ABC):
     @abstractmethod
     def get_by_id(self, category_id: int) -> Optional[Dict]:
         """Get category by ID."""
+        pass
+    
+    @abstractmethod
+    def get_by_name(self, name: str) -> Optional[Dict]:
+        """Get category by name."""
         pass
     
     @abstractmethod
@@ -140,8 +148,18 @@ class IUserRepository(ABC):
         pass
     
     @abstractmethod
+    def get_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email."""
+        pass
+    
+    @abstractmethod
     def create(self, user_data: Dict) -> Dict:
         """Create new user."""
+        pass
+    
+    @abstractmethod
+    def authenticate_user(self, username_or_email: str) -> Optional[Dict]:
+        """Get user data including password for authentication."""
         pass
 
 
