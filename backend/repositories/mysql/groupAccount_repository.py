@@ -1,5 +1,4 @@
 from typing import List, Dict, Optional
-from sqlalchemy.orm import Session
 from backend.database.mysql import SessionLocal
 from backend.models.mysql.account_groups import AccountGroups as GroupAccountModel
 from backend.repositories.base import IGroupAccountRepository
@@ -7,7 +6,7 @@ from backend.repositories.base import IGroupAccountRepository
 class MySQGroupAccountRepository(IGroupAccountRepository):
     """MySQL implementation of group account repository."""
     
-    def __init__(self, db: Session = None):
+    def __init__(self, db: SessionLocal = None):
         self.db = db or SessionLocal()
     
     def get_all(self, account_id: Optional[int] = None) -> List[Dict]:
