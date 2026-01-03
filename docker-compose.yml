@@ -1,5 +1,7 @@
 services:
+  # ======================
   # MySQL Database
+  # ======================
   mysql:
     image: mysql:8.0
     container_name: finance-mysql
@@ -19,7 +21,29 @@ services:
     networks:
       - finance-network
 
+  # ======================
+  # Flyway (MySQL migrations)
+  # ======================
+  flyway:
+    image: flyway/flyway:10
+    container_name: finance-flyway
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: >
+      -url=jdbc:mysql://mysql:3306/finans_tracker
+      -user=flyway_migrator
+      -password=strong_flyway_password
+      -schemas=finans_tracker
+      migrate
+    volumes:
+      - ./flyway/db/migration:/flyway/sql
+    networks:
+      - finance-network
+
+  # ======================
   # Elasticsearch
+  # ======================
   elasticsearch:
     image: elasticsearch:8.11.0
     container_name: finance-elasticsearch
@@ -40,7 +64,9 @@ services:
     networks:
       - finance-network
 
+  # ======================
   # Neo4j
+  # ======================
   neo4j:
     image: neo4j:5.15.0
     container_name: finance-neo4j
@@ -62,14 +88,16 @@ services:
     networks:
       - finance-network
 
+  # ======================
   # Backend API
+  # ======================
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: finance-backend
     environment:
-      DATABASE_URL: mysql+pymysql://root:123456@mysql:3306/finans_tracker
+      DATABASE_URL: mysql+pymysql://finance_app:strong_app_password@mysql:3306/finans_tracker
       ELASTICSEARCH_HOST: http://elasticsearch:9200
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
@@ -85,6 +113,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
       elasticsearch:
         condition: service_healthy
       neo4j:
