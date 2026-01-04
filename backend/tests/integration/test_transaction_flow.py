@@ -52,25 +52,27 @@ def mock_repositories(monkeypatch, test_db):
     
     # Mock all repository factories to return the same instances
     # This ensures consistency across the test
-    def get_cat_repo():
+    # Note: Repository factories now require db: Session parameter, but we ignore it and return our test repo
+    def get_cat_repo(db=None):
         return cat_repo
-    def get_trans_repo():
+    def get_trans_repo(db=None):
         return trans_repo
-    def get_acc_repo():
+    def get_acc_repo(db=None):
         return acc_repo
-    def get_budget_repo():
+    def get_budget_repo(db=None):
         return budget_repo
-    def get_user_repo():
+    def get_user_repo(db=None):
         return user_repo
     
     # Mock both the module-level function and any imports
-    monkeypatch.setattr("backend.repository.get_category_repository", get_cat_repo)
+    # ✅ FIX: Use backend.repositories instead of backend.repository
+    monkeypatch.setattr("backend.repositories.get_category_repository", get_cat_repo)
     monkeypatch.setattr("backend.services.transaction_service.get_category_repository", get_cat_repo)
-    monkeypatch.setattr("backend.repository.get_transaction_repository", get_trans_repo)
+    monkeypatch.setattr("backend.repositories.get_transaction_repository", get_trans_repo)
     monkeypatch.setattr("backend.services.transaction_service.get_transaction_repository", get_trans_repo)
-    monkeypatch.setattr("backend.repository.get_account_repository", get_acc_repo)
-    monkeypatch.setattr("backend.repository.get_budget_repository", get_budget_repo)
-    monkeypatch.setattr("backend.repository.get_user_repository", get_user_repo)
+    monkeypatch.setattr("backend.repositories.get_account_repository", get_acc_repo)
+    monkeypatch.setattr("backend.repositories.get_budget_repository", get_budget_repo)
+    monkeypatch.setattr("backend.repositories.get_user_repository", get_user_repo)
 
 @pytest.fixture(scope="function")
 def test_engine():
@@ -173,7 +175,7 @@ class TestTransactionCreation:
         
         # Verify category exists through repository (debug)
         from backend.repositories import get_category_repository
-        category_repo = get_category_repository()
+        category_repo = get_category_repository(test_db)  # ✅ FIX: Pass test_db session
         found_category = category_repo.get_by_id(category.idCategory)
         assert found_category is not None, f"Category {category.idCategory} should exist but was not found by repository"
 
@@ -232,6 +234,6 @@ class TestCsvUpload:
         
         # Verificer gennem repository (ikke direkte SQLAlchemy query)
         from backend.repositories import get_transaction_repository
-        transaction_repo = get_transaction_repository()
+        transaction_repo = get_transaction_repository(test_db)  # ✅ FIX: Pass test_db session
         transactions = transaction_repo.get_all(account_id=account.idAccount)
         assert len(transactions) == 2
