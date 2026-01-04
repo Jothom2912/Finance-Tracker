@@ -78,15 +78,20 @@ If you want test data (users, accounts, transactions, budgets, etc.):
 ```bash
 # Generate dummy data for testing
 docker exec finance-backend python generate_dummy_data.py
+
+# Regernerate / clear dummy data
+python -m backend.generate_dummy_data --clear 
 ```
 
 This creates:
-- **3 test users** (johan, marie, testuser - all with password: `test123`)
+- **3 test users** (johan, marie, testuser + 7 more - all with password: `test123`)
 - Test accounts
 - Test categories (if not already seeded)
 - Test transactions
+- test PlannedTransactions
 - Test budgets
 - Test goals
+- account groups
 
 **Note:** If you already seeded categories in step 4.1, the script will use existing categories instead of creating duplicates.
 
