@@ -34,8 +34,15 @@ def seed_categories():
     """Seeder kategorier i den aktive database."""
     print(f"Seeder kategorier i {ACTIVE_DB.upper()}...")
     
+    # ✅ FIX: Håndter session for MySQL
+    db = None
+    if ACTIVE_DB == "mysql":
+        from backend.database.mysql import SessionLocal
+        db = SessionLocal()
+    
     try:
-        category_repo = get_category_repository()
+        # ✅ FIX: Send session til repository for MySQL
+        category_repo = get_category_repository(db) if ACTIVE_DB == "mysql" else get_category_repository()
         
         # Hent eksisterende kategorier
         existing_categories = category_repo.get_all()
@@ -86,6 +93,10 @@ def seed_categories():
         import traceback
         traceback.print_exc()
         raise
+    finally:
+        # ✅ FIX: Luk session hvis den blev oprettet
+        if db:
+            db.close()
 
 
 if __name__ == "__main__":

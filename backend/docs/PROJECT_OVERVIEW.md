@@ -97,7 +97,7 @@ def create_transaction(db: Session, transaction: TransactionCreate, account_id: 
     # - Validerer at account eksisterer
     # - Validerer at category eksisterer
     # - Opretter transaction via repository
-    repo = get_transaction_repository()  # ← Factory vælger database
+    repo = get_transaction_repository(db)  # ← Pass session for MySQL
     return repo.create(transaction_data)
 ```
 
@@ -165,14 +165,32 @@ def get_transactions(
 Projektet bruger **Repository Pattern** for at abstrahere database-detaljer:
 
 ```python
-# Samme interface, forskellige implementations
+# ✅ FastAPI Routes (med session management)
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from backend.database.mysql import get_db
 from backend.repositories import get_transaction_repository
 
-repo = get_transaction_repository()  # ← Automatisk valg baseret på ACTIVE_DB
+@router.get("/")
+def get_transactions(db: Session = Depends(get_db)):
+    repo = get_transaction_repository(db)  # ← Pass session for MySQL
+    return repo.get_all(account_id=1)
 
-# Samme kode virker for alle databaser!
-transactions = repo.get_all(account_id=1)
+# ✅ Scripts (manual session management)
+from backend.database.mysql import SessionLocal
+from backend.repositories import get_transaction_repository
+from backend.config import ACTIVE_DB
+
+db = SessionLocal() if ACTIVE_DB == "mysql" else None
+try:
+    repo = get_transaction_repository(db) if ACTIVE_DB == "mysql" else get_transaction_repository()
+    transactions = repo.get_all(account_id=1)
+finally:
+    if db:
+        db.close()
 ```
+
+**Note:** MySQL repositories kræver session, Elasticsearch og Neo4j repositories virker uden session.
 
 ### Database Valg
 
@@ -251,6 +269,53 @@ backend/
 
 ## 🔑 Vigtige Koncepter
 
+### 0. **Session Management**
+
+Applikationen bruger FastAPI's dependency injection til database sessions:
+
+**FastAPI Routes:**
+```python
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from backend.database.mysql import get_db
+from backend.repositories import get_transaction_repository
+
+@router.get("/")
+def get_transactions(db: Session = Depends(get_db)):
+    # Session lukkes automatisk efter request
+    repo = get_transaction_repository(db)
+    return repo.get_all()
+```
+
+**Services:**
+```python
+def get_transactions(db: Session, account_id: int):
+    # Modtag session som parameter
+    repo = get_transaction_repository(db)
+    return repo.get_all(account_id=account_id)
+```
+
+**Scripts:**
+```python
+from backend.database.mysql import SessionLocal
+from backend.repositories import get_transaction_repository
+from backend.config import ACTIVE_DB
+
+db = SessionLocal() if ACTIVE_DB == "mysql" else None
+try:
+    repo = get_transaction_repository(db) if ACTIVE_DB == "mysql" else get_transaction_repository()
+    transactions = repo.get_all()
+finally:
+    if db:
+        db.close()  # Vigtigt: Luk session manuelt i scripts
+```
+
+**Vigtigt:**
+- ✅ MySQL repositories kræver session
+- ✅ Elasticsearch og Neo4j repositories virker uden session
+- ✅ FastAPI lukker sessions automatisk efter request
+- ✅ Scripts skal lukke sessions manuelt i `finally` blok
+
 ### 1. **Repository Pattern**
 
 **Problem:** Hvordan skifter man database uden at ændre business logic?
@@ -285,23 +350,31 @@ def get_transaction_repository():
 
 **Fordel:** Business logic (services) behøver ikke at vide hvilken database der bruges!
 
-### 2. **Dependency Injection**
+### 2. **Dependency Injection & Session Management**
 
 FastAPI bruger dependency injection for at håndtere:
-- Database sessions
+- Database sessions (automatisk lukning efter request)
 - Authentication
 - Account ID fra headers
 
 ```python
 @router.get("/transactions/")
 def get_transactions(
-    db: Session = Depends(get_db),                    # ← Dependency
+    db: Session = Depends(get_db),                    # ← Dependency (auto-closed after request)
     account_id: int = Depends(get_account_id_from_headers),  # ← Dependency
     current_user_id: int = Depends(get_current_user_id)       # ← Dependency
 ):
     # FastAPI håndterer automatisk at kalde disse funktioner
-    ...
+    # Session lukkes automatisk efter request
+    repo = get_transaction_repository(db)  # Pass session to repository
+    return repo.get_all(account_id=account_id)
 ```
+
+**Session Management:**
+- **Routes:** Use `db: Session = Depends(get_db)` - session lukkes automatisk
+- **Services:** Receive `db: Session` as parameter
+- **Repositories:** MySQL repositories require session, Elasticsearch/Neo4j don't
+- **Scripts:** Manually create and close session with `SessionLocal()` and `db.close()`
 
 ### 3. **Account Context**
 

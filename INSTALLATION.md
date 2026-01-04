@@ -61,9 +61,14 @@ docker exec finance-mysql mysql -u root -p123456 finans_tracker < dumps/mysql/fi
 - Creating budgets
 - Categorizing transactions
 
+**Works with all 3 databases (MySQL, Elasticsearch, Neo4j):**
+
 ```bash
-# Seed categories from category rules
-docker exec finance-backend python seed_categories.py
+# ✅ Docker
+docker exec finance-backend python -m backend.seed_categories
+
+# ✅ Local development
+python -m backend.seed_categories
 ```
 
 This will create all necessary categories (expense and income) based on the categorization rules. You should see output like:
@@ -71,16 +76,21 @@ This will create all necessary categories (expense and income) based on the cate
 Tilføjet X nye kategorier til databasen.
 ```
 
-### 4.2. Generate Test Data (Optional)
+### 4.2. Generate Test Data (Optional - MySQL Only)
+
+**⚠️ NOTE:** `generate_dummy_data.py` only works with MySQL. For Elasticsearch and Neo4j, seed data via API or use migration scripts.
 
 If you want test data (users, accounts, transactions, budgets, etc.):
 
 ```bash
-# Generate dummy data for testing
-docker exec finance-backend python generate_dummy_data.py
+# ✅ Docker (MySQL only)
+docker exec finance-backend python -m backend.generate_dummy_data
 
-# Regernerate / clear dummy data
-python -m backend.generate_dummy_data --clear 
+# ✅ Local development (MySQL only)
+python -m backend.generate_dummy_data
+
+# Regenerate / clear dummy data
+python -m backend.generate_dummy_data --clear
 ```
 
 This creates:
@@ -88,12 +98,14 @@ This creates:
 - Test accounts
 - Test categories (if not already seeded)
 - Test transactions
-- test PlannedTransactions
+- Test PlannedTransactions
 - Test budgets
 - Test goals
-- account groups
+- Account groups
 
-**Note:** If you already seeded categories in step 4.1, the script will use existing categories instead of creating duplicates.
+**Note:** 
+- If you already seeded categories in step 4.1, the script will use existing categories instead of creating duplicates.
+- For Elasticsearch and Neo4j, you'll need to seed data separately via API endpoints or migration scripts.
 
 ### 5. Load Elasticsearch Data (Optional)
 
@@ -122,8 +134,14 @@ cd backend/scripts
 
 ### Test Backend Health
 
+**Docker:**
 ```bash
 curl http://localhost:8080/health
+```
+
+**Local development:**
+```bash
+curl http://localhost:8000/health
 ```
 
 Expected response:
@@ -140,6 +158,10 @@ Expected response:
 ```bash
 docker exec finance-mysql mysql -u root -p123456 -e "SHOW DATABASES;"
 ```
+
+**Default credentials:**
+- Username: `root`
+- Password: `123456`
 
 ### Test Elasticsearch
 
@@ -160,6 +182,7 @@ Expected response:
 
 Open browser: **http://localhost:7474**
 
+**Default credentials:**
 - Username: `neo4j`
 - Password: `12345678`
 
@@ -192,12 +215,14 @@ docker-compose restart backend
 
 ### 1. Open API Documentation
 
-Open browser: **http://localhost:8080/docs**
+**Docker:** Open browser: **http://localhost:8080/docs**  
+**Local development:** Open browser: **http://localhost:8000/docs**
 
 This shows the interactive Swagger UI with all endpoints.
 
 ### 2. Register a User
 
+**Docker:**
 ```bash
 curl -X POST http://localhost:8080/users/ \
   -H "Content-Type: application/json" \
@@ -208,10 +233,32 @@ curl -X POST http://localhost:8080/users/ \
   }'
 ```
 
+**Local development:**
+```bash
+curl -X POST http://localhost:8000/users/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "email": "test@example.com",
+    "password": "test123456"
+  }'
+```
+
 ### 3. Login
 
+**Docker:**
 ```bash
 curl -X POST http://localhost:8080/users/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username_or_email": "testuser",
+    "password": "test123456"
+  }'
+```
+
+**Local development:**
+```bash
+curl -X POST http://localhost:8000/users/login \
   -H "Content-Type: application/json" \
   -d '{
     "username_or_email": "testuser",
@@ -223,8 +270,24 @@ Save the `access_token` from the response.
 
 ### 4. Create a Transaction
 
+**Docker:**
 ```bash
 curl -X POST http://localhost:8080/transactions/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "X-Account-ID: 1" \
+  -d '{
+    "amount": -100.50,
+    "description": "Test transaction",
+    "date": "2024-12-09",
+    "type": "expense",
+    "Category_idCategory": 1
+  }'
+```
+
+**Local development:**
+```bash
+curl -X POST http://localhost:8000/transactions/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -H "X-Account-ID: 1" \
@@ -299,6 +362,8 @@ docker exec finance-mysql mysqladmin ping -h localhost -u root -p123456
 ```bash
 docker exec finance-neo4j neo4j-admin set-initial-password newpassword
 ```
+
+**Note:** After resetting password, update `NEO4J_PASSWORD` in `.env` file and restart backend.
 
 ### Backend Not Starting
 
@@ -399,10 +464,18 @@ docker stats
 
 ## 📚 Next Steps
 
-1. **Explore API:** Visit http://localhost:8080/docs
+1. **Explore API:** 
+   - Docker: Visit http://localhost:8080/docs
+   - Local: Visit http://localhost:8000/docs
 2. **Load Test Data:** Use dump scripts to load sample data
 3. **Switch Databases:** Try different `ACTIVE_DB` values
-4. **Read Documentation:** Check `docs/` folder for architecture details
+4. **Read Documentation:** Check `backend/docs/` folder for architecture details
+
+## 🔐 Default Credentials
+
+- **MySQL:** `root` / `123456`
+- **Neo4j:** `neo4j` / `12345678`
+- **Test Users:** `johan`, `marie`, `testuser` / `test123`
 
 ---
 

@@ -114,10 +114,11 @@ backend/
 
 5. **Start backend:**
    ```bash
-   python -m uvicorn backend.main:app --reload
+   python -m uvicorn backend.main:app --reload --port 8000
    ```
 
-   API kører på: **http://localhost:8000**
+   API kører på: **http://localhost:8000** (lokal udvikling)  
+   **Note:** I Docker kører API på port 8080
 
 ---
 
@@ -241,22 +242,39 @@ Repository pattern abstrahere fra databaselaget, hvilket gør det:
 - ✅ **Testbart:** Mock repositories i tests
 - ✅ **Fleksibelt:** Skifte database uden at ændre routes
 - ✅ **Vedligehold:** Centraliseret database logik
+- ✅ **Session Management:** Korrekt håndtering af database sessions
 
 ### Brug af Repository
 
-I dine routes:
-
+**FastAPI Routes (med session management):**
 ```python
-from backend.repository import get_transaction_repository
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from backend.database.mysql import get_db
+from backend.repositories import get_transaction_repository
 
 @router.get("/transactions/")
-def list_transactions():
-    repo = get_transaction_repository()  # Får MySQL eller ES based on config
-    transactions = repo.get_all(limit=100)
-    return transactions
+def list_transactions(db: Session = Depends(get_db)):
+    repo = get_transaction_repository(db)  # Pass session for MySQL
+    return repo.get_all(limit=100)
 ```
 
-Repository-funktionen returnerer automatisk den rigtige implementering baseret på `ACTIVE_DB`.
+**Scripts (manual session management):**
+```python
+from backend.database.mysql import SessionLocal
+from backend.repositories import get_transaction_repository
+from backend.config import ACTIVE_DB
+
+db = SessionLocal() if ACTIVE_DB == "mysql" else None
+try:
+    repo = get_transaction_repository(db) if ACTIVE_DB == "mysql" else get_transaction_repository()
+    transactions = repo.get_all(limit=100)
+finally:
+    if db:
+        db.close()
+```
+
+Repository-funktionen returnerer automatisk den rigtige implementering baseret på `ACTIVE_DB`. MySQL repositories kræver session, Elasticsearch og Neo4j repositories virker uden session.
 
 ### Implementere ny database
 
@@ -369,17 +387,32 @@ GET transactions/_search
 
 ### Test med cURL
 
+**Local development (port 8000):**
 ```bash
 # Hent alle transaktioner
 curl http://localhost:8000/transactions/
 
 # Upload CSV
-curl -X POST -F "file=@transactions.csv" http://localhost:8000/transactions/upload
+curl -X POST -F "file=@transactions.csv" http://localhost:8000/transactions/upload-csv/
 
 # Opret kategori
 curl -X POST http://localhost:8000/categories/ \
   -H "Content-Type: application/json" \
-  -d '{"name": "Ny Kategori"}'
+  -d '{"name": "Ny Kategori", "type": "expense"}'
+```
+
+**Docker (port 8080):**
+```bash
+# Hent alle transaktioner
+curl http://localhost:8080/transactions/
+
+# Upload CSV
+curl -X POST -F "file=@transactions.csv" http://localhost:8080/transactions/upload-csv/
+
+# Opret kategori
+curl -X POST http://localhost:8080/categories/ \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Ny Kategori", "type": "expense"}'
 ```
 
 ### Test database switch
@@ -387,14 +420,23 @@ curl -X POST http://localhost:8000/categories/ \
 1. **Start med MySQL:**
    ```bash
    # I .env: ACTIVE_DB=mysql
-   curl http://localhost:8000/transactions/ | jq '.value | length'
+   curl http://localhost:8000/transactions/ | jq 'length'
    # Output: 67
    ```
 
 2. **Skift til Elasticsearch:**
    ```bash
    # I .env: ACTIVE_DB=elasticsearch
-   curl http://localhost:8000/transactions/ | jq '.value | length'
+   # Restart backend: docker-compose restart backend
+   curl http://localhost:8000/transactions/ | jq 'length'
+   # Output: 67 (samme data!)
+   ```
+
+3. **Skift til Neo4j:**
+   ```bash
+   # I .env: ACTIVE_DB=neo4j
+   # Restart backend: docker-compose restart backend
+   curl http://localhost:8000/transactions/ | jq 'length'
    # Output: 67 (samme data!)
    ```
 
@@ -438,15 +480,26 @@ docker rm elasticsearch
 # Primær database URL (MySQL)
 DATABASE_URL=mysql+pymysql://root:123456@localhost:3307/finans_tracker?charset=utf8mb4
 
-# Aktiv database type (mysql | elasticsearch | hybrid)
+# Aktiv database type (mysql | elasticsearch | neo4j)
 ACTIVE_DB=mysql
 
 # Elasticsearch forbindelse
 ELASTICSEARCH_HOST=http://localhost:9200
 
-# Auto-sync til Elasticsearch ved nye transaktioner
-SYNC_TO_ELASTICSEARCH=false
+# Neo4j forbindelse
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=12345678
+
+# JWT Secret
+SECRET_KEY=your-secret-key-here
 ```
+
+## 🔐 Default Credentials
+
+- **MySQL:** `root` / `123456`
+- **Neo4j:** `neo4j` / `12345678`
+- **Test Users:** `johan`, `marie`, `testuser` / `test123`
 
 ---
 

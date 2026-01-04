@@ -149,7 +149,9 @@ See [backend/DATABASE_COMPARISON.md](backend/DATABASE_COMPARISON.md) for detaile
 - `GET /dashboard/overview/` - Financial overview
 - `GET /dashboard/expenses-by-month/` - Monthly expenses
 
-**Full API Documentation:** http://localhost:8080/docs (when running)
+**Full API Documentation:**
+- Docker: http://localhost:8080/docs
+- Local development: http://localhost:8000/docs
 
 ---
 
@@ -206,11 +208,29 @@ docker exec finance-mysql mysqldump -u root -p123456 finans_tracker > dumps/mysq
 The application uses the Repository Pattern to abstract database operations:
 
 ```python
-# Same interface, different implementations
+# ✅ FastAPI Routes (with session management)
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from backend.database.mysql import get_db
 from backend.repositories import get_transaction_repository
 
-repo = get_transaction_repository()  # Automatically selects based on ACTIVE_DB
-transactions = repo.get_all(account_id=1)
+@router.get("/")
+def get_transactions(db: Session = Depends(get_db)):
+    repo = get_transaction_repository(db)  # Pass session for MySQL
+    return repo.get_all(account_id=1)
+
+# ✅ Scripts (manual session management)
+from backend.database.mysql import SessionLocal
+from backend.repositories import get_transaction_repository
+from backend.config import ACTIVE_DB
+
+db = SessionLocal() if ACTIVE_DB == "mysql" else None
+try:
+    repo = get_transaction_repository(db) if ACTIVE_DB == "mysql" else get_transaction_repository()
+    transactions = repo.get_all(account_id=1)
+finally:
+    if db:
+        db.close()
 ```
 
 **Benefits:**
@@ -218,6 +238,7 @@ transactions = repo.get_all(account_id=1)
 - ✅ Testable (can mock repositories)
 - ✅ Clean separation of concerns
 - ✅ Type-safe interfaces
+- ✅ Proper session management (MySQL requires session, ES/Neo4j don't)
 
 ### Clean Architecture Layers
 
@@ -266,6 +287,8 @@ npm install
 npm start
 ```
 
+**Note:** When running locally, API is available at http://localhost:8000/docs (not 8080)
+
 ### Environment Variables
 
 Create `.env` file:
@@ -282,6 +305,9 @@ ELASTICSEARCH_HOST=http://localhost:9200
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=12345678
+
+# JWT Secret
+SECRET_KEY=your-secret-key-here
 ```
 
 ---

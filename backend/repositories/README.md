@@ -44,14 +44,33 @@ ACTIVE_DB=neo4j
 
 ### I Koden
 
+**FastAPI Routes (med session management):**
 ```python
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from backend.database.mysql import get_db
 from backend.repositories import get_transaction_repository
 
-# Henter automatisk den rigtige repository baseret på ACTIVE_DB
-repo = get_transaction_repository()
+@router.get("/")
+def get_transactions(db: Session = Depends(get_db)):
+    # MySQL kræver session, ES/Neo4j ignorerer den
+    repo = get_transaction_repository(db)
+    return repo.get_all(start_date=date(2024, 1, 1))
+```
 
-# Brug repository - samme interface uanset database!
-transactions = repo.get_all(start_date=date(2024, 1, 1))
+**Scripts (manual session management):**
+```python
+from backend.database.mysql import SessionLocal
+from backend.repositories import get_transaction_repository
+from backend.config import ACTIVE_DB
+
+db = SessionLocal() if ACTIVE_DB == "mysql" else None
+try:
+    repo = get_transaction_repository(db) if ACTIVE_DB == "mysql" else get_transaction_repository()
+    transactions = repo.get_all(start_date=date(2024, 1, 1))
+finally:
+    if db:
+        db.close()
 ```
 
 ## 📋 Repository Interfaces
@@ -85,32 +104,70 @@ category_repo = get_category_repository()
 
 ## 💡 Eksempel Brug
 
+**FastAPI Route:**
 ```python
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from backend.database.mysql import get_db
 from backend.repositories import get_transaction_repository
 from datetime import date
 
-# Hent repository (automatisk valg baseret på ACTIVE_DB)
-repo = get_transaction_repository()
+@router.get("/")
+def get_transactions(db: Session = Depends(get_db)):
+    repo = get_transaction_repository(db)  # Pass session for MySQL
+    return repo.get_all(
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 12, 31),
+        account_id=1,
+        limit=50
+    )
 
-# Brug samme interface uanset database
-transactions = repo.get_all(
-    start_date=date(2024, 1, 1),
-    end_date=date(2024, 12, 31),
-    account_id=1,
-    limit=50
-)
-
-# Opret transaktion
-new_transaction = repo.create({
-    "idTransaction": 100,
-    "amount": -500.0,
-    "description": "Netto køb",
-    "date": "2024-12-15",
-    "type": "expense",
-    "Category_idCategory": 1,
-    "Account_idAccount": 1
-})
+@router.post("/")
+def create_transaction(transaction_data: dict, db: Session = Depends(get_db)):
+    repo = get_transaction_repository(db)
+    return repo.create(transaction_data)
 ```
+
+**Script:**
+```python
+from backend.database.mysql import SessionLocal
+from backend.repositories import get_transaction_repository
+from backend.config import ACTIVE_DB
+from datetime import date
+
+db = SessionLocal() if ACTIVE_DB == "mysql" else None
+try:
+    repo = get_transaction_repository(db) if ACTIVE_DB == "mysql" else get_transaction_repository()
+    
+    # Brug samme interface uanset database
+    transactions = repo.get_all(
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 12, 31),
+        account_id=1,
+        limit=50
+    )
+    
+    # Opret transaktion
+    new_transaction = repo.create({
+        "amount": -500.0,
+        "description": "Netto køb",
+        "date": "2024-12-15",
+        "type": "expense",
+        "Category_idCategory": 1,
+        "Account_idAccount": 1
+    })
+finally:
+    if db:
+        db.close()
+```
+
+## 🔧 Session Management
+
+**Vigtigt:** MySQL repositories kræver en database session, mens Elasticsearch og Neo4j repositories virker uden session.
+
+- **FastAPI Routes:** Brug `Depends(get_db)` - session lukkes automatisk efter request
+- **Services:** Modtag `db: Session` som parameter og send videre til repositories
+- **Scripts:** Opret session med `SessionLocal()` og luk med `db.close()` i `finally` blok
 
 ## 🔧 Tilføj ny repository
 
