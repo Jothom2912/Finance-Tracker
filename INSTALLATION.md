@@ -54,6 +54,16 @@ The database tables will be created automatically on first request, or you can r
 docker exec finance-mysql mysql -u root -p123456 finans_tracker < dumps/mysql/finans_tracker.sql
 ```
 
+**⚠️ If loading from an old dump:** If you're restoring from a backup that doesn't have the `created_at` column, run the migration:
+
+```bash
+# ✅ Docker
+docker exec finance-backend python -m backend.migrations.mysql.add_created_at_to_transactions
+
+# ✅ Local development
+python -m backend.migrations.mysql.add_created_at_to_transactions
+```
+
 ### 4.1. Seed Categories (REQUIRED)
 
 **⚠️ IMPORTANT:** You **must** seed categories before using the application. Categories are required for:
