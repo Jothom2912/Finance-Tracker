@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from backend.database import get_db
+from backend.database.mysql import get_db
 from backend.shared.schemas.user import User as UserSchema, UserCreate, UserLogin, TokenResponse
 from backend.services import user_service
 from backend.auth import get_current_user_id
@@ -29,10 +29,10 @@ def options_login():
     return {"message": "OK"}
 
 @router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
-def create_user_route(user: UserCreate):
+def create_user_route(user: UserCreate, db: Session = Depends(get_db)):
     """Opretter en ny bruger."""
     try:
-        db_user = user_service.create_user(user)
+        db_user = user_service.create_user(user, db)
         return db_user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

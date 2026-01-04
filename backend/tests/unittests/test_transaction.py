@@ -112,11 +112,11 @@ def test_base_date_today_valid():
     txn = TransactionBase(
         amount=10.00,
         type=TransactionType.income,
-        transaction_date=today,
+        date=today,
     )
 
     # Assert
-    assert txn.transaction_date == today
+    assert txn.date == today
 
 
 # Date: Past Date (VALID)
@@ -128,11 +128,11 @@ def test_base_date_past_valid():
     txn = TransactionBase(
         amount=10.00,
         type=TransactionType.income,
-        transaction_date=past_date,
+        date=past_date,
     )
 
     # Assert
-    assert txn.transaction_date == past_date
+    assert txn.date == past_date
 
 
 # Date: Future Date (INVALID)
@@ -145,7 +145,7 @@ def test_base_date_future_invalid():
         TransactionBase(
             amount=10.00,
             type=TransactionType.income,
-            transaction_date=future_date,
+            date=future_date,
         )
 
 

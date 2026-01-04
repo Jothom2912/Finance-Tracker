@@ -1,21 +1,22 @@
 from typing import List, Optional, Dict, Any
 from datetime import date
-from backend.repository import get_budget_repository, get_category_repository, get_transaction_repository
+from sqlalchemy.orm import Session
+from backend.repositories import get_budget_repository, get_category_repository, get_transaction_repository
 from backend.shared.schemas.budget import BudgetCreate, BudgetUpdate, BudgetSummary, BudgetSummaryItem
 
 # --- CRUD/Hentningsfunktioner ---
 
-def get_budget_by_id(budget_id: int) -> Optional[Dict]:
+def get_budget_by_id(budget_id: int, db: Session) -> Optional[Dict]:
     """Henter et specifikt budget ud fra ID."""
-    repo = get_budget_repository()
+    repo = get_budget_repository(db)
     return repo.get_by_id(budget_id)
 
-def get_budgets_by_period(account_id: int, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
+def get_budgets_by_period(account_id: int, db: Session, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
     """Henter budgetter for en given periode og Account ID."""
-    repo = get_budget_repository()
+    repo = get_budget_repository(db)
     return repo.get_all(account_id=account_id)
 
-def create_budget(budget: BudgetCreate) -> Dict:
+def create_budget(budget: BudgetCreate, db: Session) -> Dict:
     """Opretter et nyt budget."""
 
     if not budget.Account_idAccount:
@@ -30,15 +31,18 @@ def create_budget(budget: BudgetCreate) -> Dict:
     # Fjern felter der ikke skal i Budget tabellen
     budget_data = budget.model_dump(exclude={'month', 'year', 'category_id'})
     
+    # ✅ FIX: Tilføj Category_idCategory til budget_data så repository kan oprette association
+    budget_data['Category_idCategory'] = category_id
+    
     # Valider at kategorien eksisterer
-    category_repo = get_category_repository()
+    category_repo = get_category_repository(db)
     category = category_repo.get_by_id(category_id)
     if not category:
         raise ValueError(f"Kategori med ID {category_id} findes ikke.")
 
     print(f"DEBUG: category_id={category_id}, budget_data={budget_data}")
 
-    repo = get_budget_repository()
+    repo = get_budget_repository(db)
     created_budget = repo.create(budget_data)
     
     # Note: Budget-category association håndteres i repository hvis nødvendigt
@@ -48,9 +52,9 @@ def create_budget(budget: BudgetCreate) -> Dict:
     return created_budget
 
 
-def update_budget(budget_id: int, budget: BudgetUpdate) -> Optional[Dict]:
+def update_budget(budget_id: int, budget: BudgetUpdate, db: Session) -> Optional[Dict]:
     """Opdaterer et eksisterende budget."""
-    repo = get_budget_repository()
+    repo = get_budget_repository(db)
     existing = repo.get_by_id(budget_id)
     if not existing:
         return None
@@ -73,28 +77,29 @@ def update_budget(budget_id: int, budget: BudgetUpdate) -> Optional[Dict]:
     print(f"DEBUG update_budget: category_id={category_id}")
     if category_id is not None:
         # Valider at kategorien eksisterer
-        category_repo = get_category_repository()
+        category_repo = get_category_repository(db)
         category = category_repo.get_by_id(category_id)
         if not category:
             raise ValueError(f"Kategori med ID {category_id} findes ikke.")
         # Note: Budget-category association håndteres i repository hvis nødvendigt
+        update_data['Category_idCategory'] = category_id
 
     return repo.update(budget_id, update_data)
 
 
-def delete_budget(budget_id: int) -> bool:
+def delete_budget(budget_id: int, db: Session) -> bool:
     """Sletter et budget."""
-    repo = get_budget_repository()
+    repo = get_budget_repository(db)
     return repo.delete(budget_id)
 
 
 # --- Komplicerede logik/summary funktioner ---
 
-def get_budget_summary(account_id: int, month: int, year: int) -> BudgetSummary:
+def get_budget_summary(account_id: int, month: int, year: int, db: Session) -> BudgetSummary:
     """Beregner en detaljeret budgetopsummering for en specifik måned/år og konto."""
 
     # 1. Hent budgetter, der er knyttet til den pågældende konto
-    budget_repo = get_budget_repository()
+    budget_repo = get_budget_repository(db)
     budgets = budget_repo.get_all(account_id=account_id)
 
     # Filtrer manuelt efter month/year hvis budget_date er sat
@@ -121,18 +126,19 @@ def get_budget_summary(account_id: int, month: int, year: int) -> BudgetSummary:
 
     print(f"DEBUG: Efter filtrering: {len(filtered_budgets)} budgetter matcher periode")
     budgets = filtered_budgets
+    
+    # ✅ DEBUG: Log alle budgets med deres amounts
+    print(f"DEBUG get_budget_summary: Fandt {len(budgets)} budgets")
+    for b in budgets:
+        print(f"DEBUG budget: id={b.get('idBudget')}, category_id={b.get('Category_idCategory')}, amount={b.get('amount')}, type={type(b.get('amount'))}")
 
     # 2. Hent de aggregerede udgifter for perioden (kun for denne account)
-    transaction_repo = get_transaction_repository()
-    # Brug get_summary_by_category hvis tilgængelig, ellers beregn manuelt
+    transaction_repo = get_transaction_repository(db)
+    # Beregn start/slut dato for måneden
+    from calendar import monthrange
     start_date = date(year, month, 1)
-    # Beregn sidste dag i måneden
-    if month == 12:
-        end_date = date(year + 1, 1, 1)
-    else:
-        end_date = date(year, month + 1, 1)
-    from datetime import timedelta
-    end_date = end_date - timedelta(days=1)
+    _, last_day = monthrange(year, month)
+    end_date = date(year, month, last_day)
     
     # Hent alle transaktioner for perioden
     transactions = transaction_repo.get_all(
@@ -141,57 +147,83 @@ def get_budget_summary(account_id: int, month: int, year: int) -> BudgetSummary:
         account_id=account_id
     )
     
-    # Aggreger udgifter (negative amounts) per kategori
+    print(f"DEBUG get_budget_summary: Fandt {len(transactions)} transaktioner")
+    
+    # ✅ Aggreger udgifter per kategori - brug type field i stedet for amount < 0
     expenses_by_category: Dict[int, float] = {}
     for t in transactions:
-        amount = t.get("amount", 0)
-        if amount < 0:  # Udgifter er negative
+        amount = float(t.get("amount", 0))
+        tx_type = t.get("type", "")
+        # ✅ Brug type field for at identificere expenses
+        if tx_type == "expense" or (tx_type == "" and amount < 0):
             cat_id = t.get("Category_idCategory")
             if cat_id:
-                expenses_by_category[cat_id] = expenses_by_category.get(cat_id, 0) + abs(float(amount))
+                # ✅ For expenses, brug absolut værdi
+                expenses_by_category[cat_id] = expenses_by_category.get(cat_id, 0) + abs(amount)
+    
+    print(f"DEBUG spent_by_category: {expenses_by_category}")
 
     items: List[BudgetSummaryItem] = []
     total_budget = 0.0
     total_spent = 0.0
     over_budget_count = 0
     budget_category_ids = set()
-    category_repo = get_category_repository()
-
-    # 3. Gå gennem hvert budget og beregn status
+    category_repo = get_category_repository(db)
+    
+    # ✅ FIX: Opret budget lookup dictionary
+    budget_by_category: Dict[int, float] = {}
     for budget in budgets:
-        # Note: Budget-category relationship håndteres i repository
-        # For nu antager vi at budget har category information hvis nødvendigt
-        # Dette skal justeres baseret på hvordan repository returnerer data
-        
-        budget_amount = float(budget.get("amount", 0))
-        
-        # Hvis budget har category_id direkte, brug det
-        # Ellers skal vi hente fra association table (komplekst, simplificeret her)
-        # For nu antager vi at vi kan få category_id fra budget data
-        category_id = budget.get("Category_idCategory")  # Hvis repository inkluderer det
-        
-        if category_id:
-            spent = expenses_by_category.get(category_id, 0.0)
-            remaining = budget_amount - spent
-            percentage_used = (spent / budget_amount * 100.0) if budget_amount > 0 else 0.0
+        cat_id = budget.get("Category_idCategory")
+        # ✅ KRITISK: Hent amount fra budget - tjek om det er None eller 0
+        amount = budget.get("amount")
+        if amount is None:
+            print(f"⚠️ WARNING: Budget {budget.get('idBudget')} har None amount!")
+            amount = 0.0
+        else:
+            amount = float(amount)
+        budget_by_category[cat_id] = amount
+        print(f"DEBUG: Mapping category {cat_id} -> budget {amount}")
 
-            if remaining < 0:
-                over_budget_count += 1
+    # 3. ✅ FIX: Gå gennem hvert budget og beregn status
+    for budget in budgets:
+        category_id = budget.get("Category_idCategory")
+        
+        if not category_id:
+            print(f"⚠️ WARNING: Budget {budget.get('idBudget')} mangler Category_idCategory")
+            continue
+        
+        # ✅ FIX: Brug budget amount direkte fra budget_by_category
+        budget_amount = budget_by_category.get(category_id, 0.0)
+        
+        if budget_amount == 0.0:
+            # ✅ Double-check om amount faktisk er 0 eller om det er en fejl
+            raw_amount = budget.get("amount")
+            print(f"DEBUG: Budget {budget.get('idBudget')} har amount={raw_amount} (type={type(raw_amount)})")
+            if raw_amount is not None:
+                budget_amount = float(raw_amount)
+                budget_by_category[category_id] = budget_amount
+        
+        spent = expenses_by_category.get(category_id, 0.0)
+        remaining = budget_amount - spent
+        percentage_used = (spent / budget_amount * 100.0) if budget_amount > 0 else 0.0
 
-            category = category_repo.get_by_id(category_id)
-            category_name = category.get("name", "Ukendt") if category else "Ukendt"
+        if remaining < 0:
+            over_budget_count += 1
 
-            items.append(BudgetSummaryItem(
-                category_id=category_id,
-                category_name=category_name,
-                budget_amount=round(budget_amount, 2),
-                spent_amount=round(spent, 2),
-                remaining_amount=round(remaining, 2),
-                percentage_used=round(percentage_used, 2)
-            ))
-            total_budget += budget_amount
-            total_spent += spent
-            budget_category_ids.add(category_id)
+        category = category_repo.get_by_id(category_id)
+        category_name = category.get("name", "Ukendt") if category else "Ukendt"
+
+        items.append(BudgetSummaryItem(
+            category_id=category_id,
+            category_name=category_name,
+            budget_amount=round(budget_amount, 2),  # ✅ Skal være fra budget, ikke 0
+            spent_amount=round(spent, 2),
+            remaining_amount=round(remaining, 2),
+            percentage_used=round(percentage_used, 2)
+        ))
+        total_budget += budget_amount
+        total_spent += spent
+        budget_category_ids.add(category_id)
 
     # 4. Inkluder kategorier med udgifter, men uden budget
     category_ids_with_expense = {cid for cid in expenses_by_category.keys() if cid is not None}

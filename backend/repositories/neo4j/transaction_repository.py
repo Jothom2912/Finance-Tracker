@@ -68,16 +68,26 @@ class Neo4jTransactionRepository(ITransactionRepository):
                 t = record["t"]
                 c = record["c"]
                 a = record["a"]
+                # Convert date to date object
+                date_value = _convert_neo4j_date(t.get("date"))
+                if isinstance(date_value, str):
+                    from datetime import datetime
+                    try:
+                        date_value = datetime.fromisoformat(date_value.replace('Z', '+00:00')).date()
+                    except:
+                        date_value = None
+                
                 transactions.append({
                     "idTransaction": t["idTransaction"],
                     "amount": t["amount"],
                     "description": t.get("description"),
-                    "date": _convert_neo4j_date(t.get("date")),
+                    "date": date_value,  # Use 'date' consistently
                     "type": t["type"],
                     "Category_idCategory": c["idCategory"],
                     "category_name": c["name"],
                     "Account_idAccount": a["idAccount"],
-                    "account_name": a["name"]
+                    "account_name": a["name"],
+                    "created_at": _convert_neo4j_date(t.get("created_at"))
                 })
             return transactions
     
@@ -94,21 +104,57 @@ class Neo4jTransactionRepository(ITransactionRepository):
                 t = record["t"]
                 c = record["c"]
                 a = record["a"]
+                # Convert date to date object
+                date_value = _convert_neo4j_date(t.get("date"))
+                if isinstance(date_value, str):
+                    from datetime import datetime
+                    try:
+                        date_value = datetime.fromisoformat(date_value.replace('Z', '+00:00')).date()
+                    except:
+                        date_value = None
+                
                 return {
                     "idTransaction": t["idTransaction"],
                     "amount": t["amount"],
                     "description": t.get("description"),
-                    "date": _convert_neo4j_date(t.get("date")),
+                    "date": date_value,  # Use 'date' consistently
                     "type": t["type"],
                     "Category_idCategory": c["idCategory"],
                     "category_name": c["name"],
                     "Account_idAccount": a["idAccount"],
-                    "account_name": a["name"]
+                    "account_name": a["name"],
+                    "created_at": _convert_neo4j_date(t.get("created_at"))
                 }
             return None
     
     def create(self, transaction_data: Dict) -> Dict:
-        """Create new transaction in Neo4j."""
+        """Create new transaction in Neo4j - håndter date korrekt og generer ID automatisk."""
+        # ✅ Generer unikt ID hvis ikke allerede sat
+        transaction_id = transaction_data.get("idTransaction")
+        if transaction_id is None:
+            # Hent højeste eksisterende ID og inkrementer
+            with self._get_session() as session:
+                result = session.run("MATCH (t:Transaction) RETURN COALESCE(MAX(t.idTransaction), 0) + 1 AS next_id")
+                record = result.single()
+                transaction_id = record["next_id"] if record and record["next_id"] else 1
+        
+        # Håndter date - konverter til ISO string hvis det er date objekt
+        date_value = transaction_data.get("date")
+        if date_value is None:
+            date_value = date.today().isoformat()
+        elif isinstance(date_value, date):
+            date_value = date_value.isoformat()
+        elif hasattr(date_value, 'isoformat'):
+            date_value = date_value.isoformat()
+        
+        # Ensure created_at is set and convert to ISO string if needed
+        created_at = transaction_data.get("created_at")
+        if created_at is None:
+            from datetime import datetime
+            created_at = datetime.now().isoformat()
+        elif hasattr(created_at, "isoformat"):
+            created_at = created_at.isoformat()
+        
         query = """
         MATCH (a:Account {idAccount: $Account_idAccount})
         MATCH (c:Category {idCategory: $Category_idCategory})
@@ -117,7 +163,8 @@ class Neo4jTransactionRepository(ITransactionRepository):
             amount: $amount,
             description: $description,
             date: $date,
-            type: $type
+            type: $type,
+            created_at: $created_at
         })
         CREATE (a)-[:HAS_TRANSACTION]->(t)
         CREATE (t)-[:BELONGS_TO_CATEGORY]->(c)
@@ -125,21 +172,29 @@ class Neo4jTransactionRepository(ITransactionRepository):
         """
         with self._get_session() as session:
             result = session.run(query, 
-                idTransaction=transaction_data.get("idTransaction"),
+                idTransaction=transaction_id,  # ✅ Brug genereret ID
                 amount=transaction_data.get("amount"),
                 description=transaction_data.get("description", ""),
-                date=transaction_data.get("date"),
+                date=date_value,  # ✅ BRUG "date" konsistent
                 type=transaction_data.get("type"),
+                created_at=created_at,
                 Account_idAccount=transaction_data.get("Account_idAccount"),
                 Category_idCategory=transaction_data.get("Category_idCategory")
             )
             record = result.single()
             if record:
-                return self.get_by_id(transaction_data.get("idTransaction"))
+                return self.get_by_id(transaction_id)  # ✅ Brug genereret ID
             return transaction_data
     
     def update(self, transaction_id: int, transaction_data: Dict) -> Dict:
-        """Update transaction in Neo4j."""
+        """Update transaction in Neo4j - håndter date korrekt."""
+        # Håndter date - konverter til ISO string hvis det er date objekt
+        date_value = transaction_data.get("date")
+        if date_value and isinstance(date_value, date):
+            date_value = date_value.isoformat()
+        elif date_value and hasattr(date_value, 'isoformat'):
+            date_value = date_value.isoformat()
+        
         # Neo4j update - slet gamle relationships og opret nye
         delete_query = """
         MATCH (t:Transaction {idTransaction: $id})-[r]-()
@@ -159,11 +214,12 @@ class Neo4jTransactionRepository(ITransactionRepository):
         """
         with self._get_session() as session:
             session.run(delete_query, id=transaction_id)
+            # Note: created_at is not updated on update - it should remain the original creation time
             session.run(create_query,
                 id=transaction_id,
                 amount=transaction_data.get("amount"),
                 description=transaction_data.get("description", ""),
-                date=transaction_data.get("date"),
+                date=date_value,  # ✅ BRUG "date" konsistent
                 type=transaction_data.get("type"),
                 Account_idAccount=transaction_data.get("Account_idAccount"),
                 Category_idCategory=transaction_data.get("Category_idCategory")
@@ -211,12 +267,22 @@ class Neo4jTransactionRepository(ITransactionRepository):
             transactions = []
             for record in result:
                 t = record["t"]
+                # Convert date to date object
+                date_value = _convert_neo4j_date(t.get("date"))
+                if isinstance(date_value, str):
+                    from datetime import datetime
+                    try:
+                        date_value = datetime.fromisoformat(date_value.replace('Z', '+00:00')).date()
+                    except:
+                        date_value = None
+                
                 transactions.append({
                     "idTransaction": t["idTransaction"],
                     "amount": t["amount"],
                     "description": t.get("description"),
-                    "date": _convert_neo4j_date(t.get("date")),
-                    "type": t["type"]
+                    "date": date_value,  # Use 'date' consistently
+                    "type": t["type"],
+                    "created_at": _convert_neo4j_date(t.get("created_at"))
                 })
             return transactions
     

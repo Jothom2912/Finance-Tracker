@@ -44,6 +44,7 @@ def create_transactions_index():
                     }
                 },
                 "date": {"type": "date", "format": "yyyy-MM-dd'T'HH:mm:ss||yyyy-MM-dd||epoch_millis"},
+                "created_at": {"type": "date", "format": "yyyy-MM-dd'T'HH:mm:ss||yyyy-MM-dd||epoch_millis"},
                 "type": {"type": "keyword"},  # 'income' eller 'expense'
                 "Category_idCategory": {"type": "integer"},
                 "category_name": {"type": "keyword"},
@@ -293,11 +294,21 @@ def migrate_transactions(db: SessionLocal) -> int:
                 ).first()
             
             # Opret dokument der matcher MySQL struktur
+            # Håndter created_at - brug created_at hvis tilgængelig, ellers brug date eller current time
+            created_at = None
+            if hasattr(transaction, 'created_at') and transaction.created_at:
+                created_at = transaction.created_at.isoformat()
+            elif transaction.date:
+                created_at = transaction.date.isoformat()
+            else:
+                created_at = datetime.now().isoformat()
+            
             doc = {
                 "idTransaction": transaction.idTransaction,
                 "amount": float(transaction.amount) if transaction.amount else 0.0,
                 "description": transaction.description or "",
                 "date": transaction.date.isoformat() if transaction.date else None,
+                "created_at": created_at,
                 "type": transaction.type or "expense",
                 "Category_idCategory": transaction.Category_idCategory,
                 "category_name": category.name if category else "Ukendt",

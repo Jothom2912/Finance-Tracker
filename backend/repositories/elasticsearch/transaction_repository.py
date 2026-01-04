@@ -15,6 +15,25 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             self.es = es_client
         self.index = "transactions"
     
+    @staticmethod
+    def _normalize_transaction(source: Dict) -> Dict:
+        """Normalize transaction dict: ensure 'date' is a date object."""
+        if "date" in source:
+            date_value = source["date"]
+            # Convert ISO string to date object if needed
+            if isinstance(date_value, str):
+                from datetime import datetime
+                try:
+                    source["date"] = datetime.fromisoformat(date_value.replace('Z', '+00:00')).date()
+                except:
+                    try:
+                        source["date"] = datetime.strptime(date_value, "%Y-%m-%d").date()
+                    except:
+                        source["date"] = None
+            elif hasattr(date_value, 'date'):
+                source["date"] = date_value.date()
+        return source
+    
     def get_all(
         self,
         start_date: Optional[date] = None,
@@ -65,6 +84,8 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
                         continue
                 else:
                     source["idTransaction"] = int(source["idTransaction"])
+                # Normalize date field for schema compatibility
+                source = self._normalize_transaction(source)
                 transactions.append(source)
             return transactions
         except Exception as e:
@@ -88,7 +109,8 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
                     source["idTransaction"] = transaction_id
             else:
                 source["idTransaction"] = int(source["idTransaction"])
-            return source
+            # Normalize date field for schema compatibility
+            return self._normalize_transaction(source)
         except Exception as e:
             print(f"Error getting transaction {transaction_id}: {e}")
             return None
@@ -109,6 +131,26 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             except Exception:
                 transaction_data["idTransaction"] = 1
         
+        # Ensure 'date' is in ISO format for Elasticsearch storage
+        if "date" in transaction_data:
+            date_value = transaction_data["date"]
+            if date_value:
+                if hasattr(date_value, 'isoformat'):
+                    transaction_data["date"] = date_value.isoformat()
+                else:
+                    transaction_data["date"] = str(date_value)
+        else:
+            # If not provided, set to today
+            from datetime import date
+            transaction_data["date"] = date.today().isoformat()
+        
+        # Ensure created_at is set (convert datetime to ISO string if needed)
+        if "created_at" in transaction_data and hasattr(transaction_data["created_at"], "isoformat"):
+            transaction_data["created_at"] = transaction_data["created_at"].isoformat()
+        elif "created_at" not in transaction_data:
+            from datetime import datetime
+            transaction_data["created_at"] = datetime.now().isoformat()
+        
         try:
             response = self.es.index(
                 index=self.index,
@@ -118,24 +160,35 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             )
             # Ensure idTransaction is set in returned data
             transaction_data["idTransaction"] = int(transaction_data.get("idTransaction"))
-            return transaction_data
+            # Normalize for return (ensure 'date' is date object)
+            return self._normalize_transaction(transaction_data)
         except Exception as e:
             print(f"Error creating transaction: {e}")
             raise ValueError(f"Failed to create transaction: {str(e)}")
     
     def update(self, transaction_id: int, transaction_data: Dict) -> Dict:
         """Update transaction in Elasticsearch."""
+        # Ensure 'date' is in ISO format for Elasticsearch storage
+        update_doc = transaction_data.copy()
+        if "date" in update_doc:
+            date_value = update_doc["date"]
+            if date_value:
+                if hasattr(date_value, 'isoformat'):
+                    update_doc["date"] = date_value.isoformat()
+                else:
+                    update_doc["date"] = str(date_value)
+        
         try:
             self.es.update(
                 index=self.index,
                 id=transaction_id,
-                doc=transaction_data,
+                doc=update_doc,
                 refresh=True
             )
-            return self.get_by_id(transaction_id) or transaction_data
+            return self.get_by_id(transaction_id) or self._normalize_transaction(transaction_data)
         except Exception as e:
             print(f"Error updating transaction {transaction_id}: {e}")
-            return transaction_data
+            return self._normalize_transaction(transaction_data)
     
     def delete(self, transaction_id: int) -> bool:
         """Delete transaction from Elasticsearch."""
@@ -200,6 +253,8 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
                         continue
                 else:
                     source["idTransaction"] = int(source["idTransaction"])
+                # Normalize date field for schema compatibility
+                source = self._normalize_transaction(source)
                 transactions.append(source)
             return transactions
         except Exception as e:

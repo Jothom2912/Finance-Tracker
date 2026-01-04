@@ -42,19 +42,35 @@ def mock_repositories(monkeypatch, test_db):
     from backend.repositories.mysql.budget_repository import MySQLBudgetRepository
     from backend.repositories.mysql.user_repository import MySQLUserRepository
     
-    # Create repository instances with test_db
+    # Create repository instances with test_db - use same session for all
+    # This ensures all repositories see the same data
     cat_repo = MySQLCategoryRepository(db=test_db)
     trans_repo = MySQLTransactionRepository(db=test_db)
     acc_repo = MySQLAccountRepository(db=test_db)
     budget_repo = MySQLBudgetRepository(db=test_db)
     user_repo = MySQLUserRepository(db=test_db)
     
-    # Mock all repository factories
-    monkeypatch.setattr("backend.repository.get_category_repository", lambda: cat_repo)
-    monkeypatch.setattr("backend.repository.get_transaction_repository", lambda: trans_repo)
-    monkeypatch.setattr("backend.repository.get_account_repository", lambda: acc_repo)
-    monkeypatch.setattr("backend.repository.get_budget_repository", lambda: budget_repo)
-    monkeypatch.setattr("backend.repository.get_user_repository", lambda: user_repo)
+    # Mock all repository factories to return the same instances
+    # This ensures consistency across the test
+    def get_cat_repo():
+        return cat_repo
+    def get_trans_repo():
+        return trans_repo
+    def get_acc_repo():
+        return acc_repo
+    def get_budget_repo():
+        return budget_repo
+    def get_user_repo():
+        return user_repo
+    
+    # Mock both the module-level function and any imports
+    monkeypatch.setattr("backend.repository.get_category_repository", get_cat_repo)
+    monkeypatch.setattr("backend.services.transaction_service.get_category_repository", get_cat_repo)
+    monkeypatch.setattr("backend.repository.get_transaction_repository", get_trans_repo)
+    monkeypatch.setattr("backend.services.transaction_service.get_transaction_repository", get_trans_repo)
+    monkeypatch.setattr("backend.repository.get_account_repository", get_acc_repo)
+    monkeypatch.setattr("backend.repository.get_budget_repository", get_budget_repo)
+    monkeypatch.setattr("backend.repository.get_user_repository", get_user_repo)
 
 @pytest.fixture(scope="function")
 def test_engine():
@@ -83,12 +99,8 @@ def test_db(test_engine):
 def test_client(test_engine, test_db):
     """FastAPI client med overridden database."""
     def override_get_db():
-        Session = sessionmaker(bind=test_engine)
-        db = Session()
-        try:
-            yield db
-        finally:
-            db.close()
+        # Return same session as test_db to ensure data consistency
+        yield test_db
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as client:
@@ -121,7 +133,9 @@ class Factory:
     def category(db: Session, name: str, type: str = "expense") -> Category:
         cat = Category(name=name, type=type)
         db.add(cat)
+        db.flush()  # Flush to get ID
         db.commit()
+        db.refresh(cat)  # Refresh to ensure all fields are loaded
         return cat
 
     @staticmethod
@@ -152,6 +166,16 @@ class TestTransactionCreation:
         account = Factory.account(test_db, user.idUser)
         category = Factory.category(test_db, "Mad")
         Factory.budget(test_db, account.idAccount, category.idCategory, Decimal("5000"))
+        
+        # Ensure test_db session is synchronized - flush and expire all to force refresh from DB
+        test_db.flush()
+        test_db.expire_all()
+        
+        # Verify category exists through repository (debug)
+        from backend.repositories import get_category_repository
+        category_repo = get_category_repository()
+        found_category = category_repo.get_by_id(category.idCategory)
+        assert found_category is not None, f"Category {category.idCategory} should exist but was not found by repository"
 
         # Act
         response = test_client.post("/transactions/",
@@ -161,7 +185,7 @@ class TestTransactionCreation:
                 "amount": -500.0,
                 "description": "Netto",
                 "type": "expense",
-                "transaction_date": date.today().isoformat()
+                "date": date.today().isoformat()
             },
             headers={"X-Account-ID": str(account.idAccount)}
         )
@@ -183,6 +207,10 @@ class TestCsvUpload:
         Factory.category(test_db, "Anden")  # Fallback kategori
         Factory.category(test_db, "madvarer/dagligvarer")
         Factory.category(test_db, "transport")
+        
+        # Ensure test_db session is synchronized - flush and expire all to force refresh from DB
+        test_db.flush()
+        test_db.expire_all()
 
         csv = b"""Bogf\xc3\xb8ringsdato;Bel\xc3\xb8b;Modtager;Afsender;Navn;Beskrivelse
 2024/01/15;-150.50;Netto;;;Netto k\xc3\xb8b
@@ -203,7 +231,7 @@ class TestCsvUpload:
         assert len(response_data) == 2
         
         # Verificer gennem repository (ikke direkte SQLAlchemy query)
-        from backend.repository import get_transaction_repository
+        from backend.repositories import get_transaction_repository
         transaction_repo = get_transaction_repository()
         transactions = transaction_repo.get_all(account_id=account.idAccount)
         assert len(transactions) == 2

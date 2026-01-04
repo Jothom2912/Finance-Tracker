@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from datetime import datetime, date
+from datetime import datetime, date as date_type
 from typing import Optional
 from decimal import Decimal
 import enum
@@ -33,8 +33,8 @@ class TransactionBase(BaseModel):
         max_length=255,
         description="Optional transaction description"
     )
-    transaction_date: Optional[date] = Field(
-        default=None,
+    date: date_type = Field(
+        default_factory=date_type.today,
         description="Transaction date (defaults to today if not provided)"
     )
     
@@ -55,24 +55,52 @@ class TransactionBase(BaseModel):
             raise ValueError("Transaction amount cannot be zero (0)")
         return round(v, 2)
 
-    @field_validator('transaction_date')
+    @field_validator('date', mode='before')
     @classmethod
-    def validate_transaction_date(cls, v: Optional[date]) -> Optional[date]:
+    def parse_date(cls, v):
+        """Parser date fra string, datetime eller date objekt. Returnerer date_type.today() hvis None."""
+        if v is None:
+            return date_type.today()  # Default hvis None
+        if isinstance(v, date_type):
+            return v
+        if isinstance(v, datetime):
+            return v.date()
+        if isinstance(v, str):
+            try:
+                # Prøv ISO format først
+                return datetime.fromisoformat(v.replace('Z', '+00:00')).date()
+            except:
+                try:
+                    # Prøv dansk format (dd-mm-yyyy)
+                    return datetime.strptime(v, '%d-%m-%Y').date()
+                except:
+                    try:
+                        # Prøv standard format (yyyy-mm-dd)
+                        return datetime.strptime(v, '%Y-%m-%d').date()
+                    except:
+                        raise ValueError(f"Invalid date format: {v}")
+        return v
+    
+    @field_validator('date')
+    @classmethod
+    def validate_date(cls, v: date_type) -> date_type:
         """BVA: Transaction date skal være valid dato
         
         Typisk accept: historiske + dagens dato
         (Ikke fremtid med mindre det er planlagte transaktioner)
         """
-        if v is not None and v > date.today():
+        if v > date_type.today():
             raise ValueError(
-                f"Transaction date cannot be in the future. Got: {v}, Today: {date.today()}"
+                f"Transaction date cannot be in the future. Got: {v}, Today: {date_type.today()}"
             )
         return v
     
     model_config = ConfigDict(
         from_attributes=True,
+        populate_by_name=True,
         json_encoders={
-            Decimal: lambda v: float(v),
+            Decimal: lambda v: float(v) if v else 0.0,
+            date_type: lambda v: v.isoformat() if v else None,
         }
     )
 
@@ -91,14 +119,23 @@ class Transaction(TransactionBase):
     Category_idCategory: int
     Account_idAccount: int
     
+    # Timestamp for når transaktionen blev oprettet (auto-genereret)
+    created_at: Optional[datetime] = Field(
+        None,
+        description="Timestamp for when the transaction was created (auto-generated)"
+    )
+    
     # Relationsdata (valgfri i output, hvis de ikke er indlæst)
     category: Optional[CategoryBase] = None
     account: Optional[AccountBase] = None
 
     model_config = ConfigDict(
         from_attributes=True,
+        populate_by_name=True,
         json_encoders={
-            Decimal: lambda v: float(v),
+            Decimal: lambda v: float(v) if v else 0.0,
+            date_type: lambda v: v.isoformat() if v else None,
+            datetime: lambda v: v.isoformat() if v else None,
         }
     )
 

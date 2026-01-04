@@ -28,7 +28,8 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
                             "idBudget": {"type": "integer"},
                             "amount": {"type": "float"},
                             "budget_date": {"type": "date"},
-                            "Account_idAccount": {"type": "integer"}
+                            "Account_idAccount": {"type": "integer"},
+                            "Category_idCategory": {"type": "integer"}  # ✅ Tilføj dette
                         }
                     }
                 )
@@ -111,11 +112,15 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             except Exception:
                 budget_data["idBudget"] = 1
         
+        # Get Category_idCategory from budget_data (support both field names)
+        category_id = budget_data.get("Category_idCategory") or budget_data.get("category_id")
+        
         doc = {
             "idBudget": budget_data.get("idBudget"),
             "amount": budget_data.get("amount"),
             "budget_date": budget_data.get("budget_date"),
-            "Account_idAccount": budget_data.get("Account_idAccount")
+            "Account_idAccount": budget_data.get("Account_idAccount"),
+            "Category_idCategory": category_id  # ✅ Tilføj dette
         }
         
         try:
@@ -144,6 +149,10 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             updated["budget_date"] = budget_data["budget_date"]
         if "Account_idAccount" in budget_data:
             updated["Account_idAccount"] = budget_data["Account_idAccount"]
+        if "Category_idCategory" in budget_data:  # ✅ Tilføj dette
+            updated["Category_idCategory"] = budget_data["Category_idCategory"]
+        elif "category_id" in budget_data:  # Support both field names
+            updated["Category_idCategory"] = budget_data["category_id"]
         
         try:
             self.es.index(

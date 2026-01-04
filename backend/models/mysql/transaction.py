@@ -16,6 +16,7 @@ class Transaction(Base):
     type = Column(String(45), nullable=False) # 'income' eller 'expense'
     Category_idCategory = Column(Integer, ForeignKey("Category.idCategory"), nullable=False)
     Account_idAccount = Column(Integer, ForeignKey("Account.idAccount", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False, server_default=func.now())
     
     # Relationships
     category = relationship("Category", back_populates="transactions")

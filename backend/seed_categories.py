@@ -1,67 +1,98 @@
 # backend/seed_categories.py
-from sqlalchemy.orm import Session
-
-# Importér moduler med fuld pakke-sti
-from backend.database.mysql import SessionLocal, engine, Base, create_db_tables
-from backend.models.mysql.category import Category
+"""
+Script til at seede kategorier i databasen.
+Virker med alle 3 databaser (MySQL, Neo4j, Elasticsearch) baseret på ACTIVE_DB konfiguration.
+"""
+from backend.repositories import get_category_repository
 from backend.services.categorization import category_rules
-from backend.models.mysql.common import TransactionType
+from backend.config import ACTIVE_DB
 
 
-# Sørg for at databasetabellerne er oprettet
-create_db_tables()
+def determine_category_type(category_name: str) -> str:
+    """Bestemmer om en kategori er 'expense' eller 'income' baseret på navnet."""
+    category_lower = category_name.lower()
+    
+    # Income keywords
+    income_keywords = [
+        "indkomst",
+        "løn",
+        "støtte",
+        "renter",
+        "opsparing (ind)",
+        "mobilepay ind",
+        "betalinger fra andre",
+    ]
+    
+    if any(keyword in category_lower for keyword in income_keywords):
+        return "income"
+    
+    # Default er expense
+    return "expense"
 
 
 def seed_categories():
-    db: Session = SessionLocal()
+    """Seeder kategorier i den aktive database."""
+    print(f"Seeder kategorier i {ACTIVE_DB.upper()}...")
+    
     try:
-        existing_categories = {cat.name.lower() for cat in db.query(Category).all()}
-
+        category_repo = get_category_repository()
+        
+        # Hent eksisterende kategorier
+        existing_categories = category_repo.get_all()
+        existing_names = {cat.get("name", "").lower() for cat in existing_categories}
+        
         categories_to_add = []
+        
+        # Tilføj kategorier fra category_rules
         for category_name in set(category_rules.values()):
-            if category_name.lower() not in existing_categories:
-                # Bestem type baseret på kategorinavn
-                category_type = TransactionType.expense.value
-                if any(
-                    keyword in category_name.lower()
-                    for keyword in [
-                        "indkomst",
-                        "løn",
-                        "støtte",
-                        "renter",
-                        "opsparing (ind)",
-                        "mobilepay ind",
-                        "betalinger fra andre",
-                    ]
-                ):
-                    category_type = TransactionType.income.value
-                elif "mobilepay ud" in category_name.lower():
-                    category_type = TransactionType.expense.value
-
-                categories_to_add.append(Category(name=category_name, type=category_type))
-
+            if category_name.lower() not in existing_names:
+                category_type = determine_category_type(category_name)
+                categories_to_add.append({
+                    "name": category_name,
+                    "type": category_type
+                })
+        
         # Sørg for at "Anden" kategori findes (fallback kategori)
         if (
-            "anden" not in existing_categories
+            "anden" not in existing_names
             and "anden" not in {cat.lower() for cat in set(category_rules.values())}
         ):
-            categories_to_add.append(Category(name="Anden", type=TransactionType.expense.value))
-
+            categories_to_add.append({
+                "name": "Anden",
+                "type": "expense"
+            })
+        
+        # Opret kategorier
         if categories_to_add:
-            db.add_all(categories_to_add)
-            db.commit()
-            print(f"Tilføjet {len(categories_to_add)} nye kategorier til databasen.")
+            created_count = 0
+            for category_data in categories_to_add:
+                try:
+                    category_repo.create(category_data)
+                    created_count += 1
+                    print(f"  [OK] Oprettet: {category_data['name']} ({category_data['type']})")
+                except Exception as e:
+                    print(f"  [WARNING] Fejl ved oprettelse af '{category_data['name']}': {e}")
+            
+            print(f"\n[SUCCESS] Tilfojet {created_count} nye kategorier til {ACTIVE_DB.upper()} databasen.")
         else:
-            print("Alle kategorier fra category_rules eksisterer allerede i databasen.")
-
+            print(f"[INFO] Alle kategorier fra category_rules eksisterer allerede i {ACTIVE_DB.upper()} databasen.")
+        
+        # Vis samlet antal kategorier
+        all_categories = category_repo.get_all()
+        print(f"[INFO] Samlet antal kategorier i databasen: {len(all_categories)}")
+        
     except Exception as e:
-        db.rollback()
-        print(f"Fejl ved tilføjelse af kategorier: {e}")
-    finally:
-        db.close()
+        print(f"[ERROR] Fejl ved seeding af kategorier: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 if __name__ == "__main__":
-    print("Sætter kategorier ind i databasen...")
+    print("=" * 60)
+    print("KATEGORI SEEDING SCRIPT")
+    print("=" * 60)
     seed_categories()
-    print("Kategorisåning afsluttet.")
+    print("=" * 60)
+    print("[SUCCESS] Kategorisaaning afsluttet.")
+    print("=" * 60)

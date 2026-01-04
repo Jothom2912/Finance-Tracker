@@ -280,7 +280,7 @@ def test_transaction_amount_cannot_be_zero():
     with pytest.raises(ValidationError):
         TransactionCreate(
             amount=0,
-            transaction_date=today,
+            date=today,
             type="expense",
             category_id=1,
             account_id=1
@@ -289,7 +289,7 @@ def test_transaction_amount_cannot_be_zero():
     # -0.01 - VALID (negative/expense)
     valid = TransactionCreate(
         amount=-0.01,
-        transaction_date=today,
+        date=today,
         type="expense",
         category_id=1,
         account_id=1
@@ -299,7 +299,7 @@ def test_transaction_amount_cannot_be_zero():
     # 0.01 - VALID (positive/income)
     valid = TransactionCreate(
         amount=0.01,
-        transaction_date=today,
+        date=today,
         type="income",
         category_id=1,
         account_id=1

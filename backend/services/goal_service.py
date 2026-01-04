@@ -1,22 +1,23 @@
 from typing import List, Dict, Optional
-from backend.repository import get_goal_repository, get_account_repository
+from sqlalchemy.orm import Session
+from backend.repositories import get_goal_repository, get_account_repository
 from backend.shared.schemas.goal import GoalCreate, GoalBase
 
-def get_goal_by_id(goal_id: int) -> Optional[Dict]:
-    repo = get_goal_repository()
+def get_goal_by_id(goal_id: int, db: Session) -> Optional[Dict]:
+    repo = get_goal_repository(db)
     return repo.get_by_id(goal_id)
 
-def get_goals_by_account(account_id: int) -> List[Dict]:
-    repo = get_goal_repository()
+def get_goals_by_account(account_id: int, db: Session) -> List[Dict]:
+    repo = get_goal_repository(db)
     return repo.get_all(account_id=account_id)
 
-def create_goal(goal: GoalCreate) -> Dict:
-    account_repo = get_account_repository()
+def create_goal(goal: GoalCreate, db: Session) -> Dict:
+    account_repo = get_account_repository(db)
     account = account_repo.get_by_id(goal.Account_idAccount)
     if not account:
         raise ValueError("Konto med dette ID findes ikke.")
     
-    repo = get_goal_repository()
+    repo = get_goal_repository(db)
     goal_data = {
         "name": goal.name,
         "target_amount": goal.target_amount,
@@ -27,8 +28,8 @@ def create_goal(goal: GoalCreate) -> Dict:
     }
     return repo.create(goal_data)
 
-def update_goal(goal_id: int, goal_data: GoalBase) -> Optional[Dict]:
-    repo = get_goal_repository()
+def update_goal(goal_id: int, goal_data: GoalBase, db: Session) -> Optional[Dict]:
+    repo = get_goal_repository(db)
     existing = repo.get_by_id(goal_id)
     if not existing:
         return None
@@ -42,6 +43,6 @@ def update_goal(goal_id: int, goal_data: GoalBase) -> Optional[Dict]:
     }
     return repo.update(goal_id, update_data)
 
-def delete_goal(goal_id: int) -> bool:
-    repo = get_goal_repository()
+def delete_goal(goal_id: int, db: Session) -> bool:
+    repo = get_goal_repository(db)
     return repo.delete(goal_id)

@@ -30,12 +30,12 @@ def get_users(db: Session, skip: int = 0, limit: int = 100) -> List[UserModel]:
     """Henter en pagineret liste over brugere."""
     return db.query(UserModel).offset(skip).limit(limit).all()
 
-def create_user(user: UserCreate) -> Dict:
+def create_user(user: UserCreate, db: Session) -> Dict:
     """Opretter en ny bruger og en default account."""
-    from backend.repository import get_user_repository, get_account_repository
+    from backend.repositories import get_user_repository, get_account_repository
     
-    repo = get_user_repository()
-    account_repo = get_account_repository()
+    repo = get_user_repository(db)
+    account_repo = get_account_repository(db)
     
     # Check if email exists
     existing = repo.get_by_email_for_auth(user.email)
@@ -114,10 +114,10 @@ def login_user(db: Session, username_or_email: str, password: str) -> dict:
     Raises:
         ValueError: Hvis login mislykkedes
     """
-    from backend.repository import get_user_repository, get_account_repository
+    from backend.repositories import get_user_repository, get_account_repository
     
     # Hent repository baseret på ACTIVE_DB
-    repo = get_user_repository()
+    repo = get_user_repository(db)
     
     # Prøv username først
     user = repo.get_by_username_for_auth(username_or_email)
@@ -141,7 +141,7 @@ def login_user(db: Session, username_or_email: str, password: str) -> dict:
     
     # Hent første account hvis brugeren har accounts
     account_id = None
-    account_repo = get_account_repository()
+    account_repo = get_account_repository(db)
     accounts = account_repo.get_all(user_id=user["idUser"])
     if accounts and len(accounts) > 0:
         account_id = accounts[0]["idAccount"]

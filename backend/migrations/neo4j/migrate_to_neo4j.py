@@ -154,6 +154,16 @@ def migrate_transactions(driver, db: SessionLocal) -> int:
     with driver.session() as session:
         for transaction in transactions:
             # Opret Transaction node med relationships
+            # Håndter created_at - brug created_at hvis tilgængelig, ellers brug date eller current time
+            created_at = None
+            if hasattr(transaction, 'created_at') and transaction.created_at:
+                created_at = transaction.created_at.isoformat()
+            elif transaction.date:
+                created_at = transaction.date.isoformat()
+            else:
+                from datetime import datetime
+                created_at = datetime.now().isoformat()
+            
             query = """
             MATCH (a:Account {idAccount: $accountId})
             MATCH (c:Category {idCategory: $categoryId})
@@ -162,7 +172,8 @@ def migrate_transactions(driver, db: SessionLocal) -> int:
                 amount: $amount,
                 description: $description,
                 date: $date,
-                type: $type
+                type: $type,
+                created_at: $created_at
             })
             CREATE (a)-[:HAS_TRANSACTION]->(t)
             CREATE (t)-[:BELONGS_TO_CATEGORY]->(c)
@@ -173,6 +184,7 @@ def migrate_transactions(driver, db: SessionLocal) -> int:
                 "description": transaction.description or "",
                 "date": transaction.date.isoformat() if transaction.date else None,
                 "type": transaction.type or "expense",
+                "created_at": created_at,
                 "accountId": transaction.Account_idAccount,
                 "categoryId": transaction.Category_idCategory
             })

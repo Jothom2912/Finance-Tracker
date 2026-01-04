@@ -1,6 +1,7 @@
 from typing import Dict, List, Any, Optional
 from datetime import date, timedelta
-from backend.repository import get_transaction_repository, get_category_repository
+from sqlalchemy.orm import Session
+from backend.repositories import get_transaction_repository, get_category_repository
 from backend.shared.schemas.dashboard import FinancialOverview
 
 # --- Finansiel Oversigt Funktioner ---
@@ -8,13 +9,17 @@ from backend.shared.schemas.dashboard import FinancialOverview
 def get_financial_overview(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    account_id: Optional[int] = None
+    account_id: Optional[int] = None,
+    db: Session = None
 ) -> FinancialOverview:
     """Beregner et finansielt overblik for en given periode og account."""
 
     # KRITISK: account_id er påkrævet
     if not account_id:
         raise ValueError("Account ID er påkrævet for at hente finansielt overblik.")
+    
+    if db is None:
+        raise ValueError("db: Session parameter is required")
 
     # Sæt standard datoer
     if not end_date:
@@ -25,8 +30,8 @@ def get_financial_overview(
     if start_date > end_date:
         raise ValueError("Startdato kan ikke være efter slutdato.")
 
-    transaction_repo = get_transaction_repository()
-    category_repo = get_category_repository()
+    transaction_repo = get_transaction_repository(db)
+    category_repo = get_category_repository(db)
     
     # Hent alle transaktioner for perioden
     transactions = transaction_repo.get_all(
@@ -77,7 +82,8 @@ def get_financial_overview(
 def get_expenses_by_month(
     start_date: Optional[date] = None, 
     end_date: Optional[date] = None,
-    account_id: Optional[int] = None
+    account_id: Optional[int] = None,
+    db: Session = None
 ) -> List[Dict[str, Any]]:
     """Henter månedlige udgifter for en given periode, grupperet efter måned og år."""
     
@@ -89,8 +95,11 @@ def get_expenses_by_month(
 
     if start_date > end_date:
         raise ValueError("Startdato kan ikke være efter slutdato.")
+    
+    if db is None:
+        raise ValueError("db: Session parameter is required")
 
-    transaction_repo = get_transaction_repository()
+    transaction_repo = get_transaction_repository(db)
     
     # Hent alle transaktioner for perioden
     transactions = transaction_repo.get_all(
