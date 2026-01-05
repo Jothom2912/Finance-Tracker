@@ -1,4 +1,4 @@
-# 📦 Installation Guide - Finance Tracker
+#  Installation Guide - Finance Tracker
 
 ## Prerequisites
 
@@ -9,7 +9,7 @@
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Clone Repository
 
@@ -54,19 +54,19 @@ The database tables will be created automatically on first request, or you can r
 docker exec finance-mysql mysql -u root -p123456 finans_tracker < dumps/mysql/finans_tracker.sql
 ```
 
-**⚠️ If loading from an old dump:** If you're restoring from a backup that doesn't have the `created_at` column, run the migration:
+** If loading from an old dump:** If you're restoring from a backup that doesn't have the `created_at` column, run the migration:
 
 ```bash
-# ✅ Docker
+#  Docker
 docker exec finance-backend python -m backend.migrations.mysql.add_created_at_to_transactions
 
-# ✅ Local development
+#  Local development
 python -m backend.migrations.mysql.add_created_at_to_transactions
 ```
 
 ### 4.1. Seed Categories (REQUIRED)
 
-**⚠️ IMPORTANT:** You **must** seed categories before using the application. Categories are required for:
+** IMPORTANT:** You **must** seed categories before using the application. Categories are required for:
 - Creating transactions
 - Creating budgets
 - Categorizing transactions
@@ -74,10 +74,10 @@ python -m backend.migrations.mysql.add_created_at_to_transactions
 **Works with all 3 databases (MySQL, Elasticsearch, Neo4j):**
 
 ```bash
-# ✅ Docker
+#  Docker
 docker exec finance-backend python -m backend.seed_categories
 
-# ✅ Local development
+#  Local development
 python -m backend.seed_categories
 ```
 
@@ -88,15 +88,15 @@ Tilføjet X nye kategorier til databasen.
 
 ### 4.2. Generate Test Data (Optional - MySQL Only)
 
-**⚠️ NOTE:** `generate_dummy_data.py` only works with MySQL. For Elasticsearch and Neo4j, seed data via API or use migration scripts.
+** NOTE:** `generate_dummy_data.py` only works with MySQL. For Elasticsearch and Neo4j, seed data via API or use migration scripts.
 
 If you want test data (users, accounts, transactions, budgets, etc.):
 
 ```bash
-# ✅ Docker (MySQL only)
+#  Docker (MySQL only)
 docker exec finance-backend python -m backend.generate_dummy_data
 
-# ✅ Local development (MySQL only)
+#  Local development (MySQL only)
 python -m backend.generate_dummy_data
 
 # Regenerate / clear dummy data
@@ -214,7 +214,7 @@ Open browser: **http://localhost:7474**
 
 ---
 
-## 🔄 Switch Between Databases
+##  Switch Between Databases
 
 Edit `.env` file (or set environment variable):
 
@@ -237,7 +237,7 @@ docker-compose restart backend
 
 ---
 
-## 🧪 Test API
+##  Test API
 
 ### 1. Open API Documentation
 
@@ -328,7 +328,7 @@ curl -X POST http://localhost:8000/transactions/ \
 
 ---
 
-## 📊 Database Dumps
+##  Database Dumps
 
 Test data is available in `dumps/` directory:
 
@@ -357,7 +357,7 @@ docker exec finance-mysql mysqldump -u root -p123456 finans_tracker > dumps/mysq
 
 ---
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### MySQL Connection Fails
 
@@ -418,7 +418,7 @@ If ports 3307, 8080, 9200, 7474, or 7687 are already in use:
 
 ---
 
-## 🛑 Stop All Services
+##  Stop All Services
 
 ```bash
 docker-compose down
@@ -428,9 +428,9 @@ This stops all containers but **keeps the data**.
 
 ---
 
-## 🗑️ Clean Everything (Including Data)
+##  Clean Everything (Including Data)
 
-**⚠️ WARNING: This deletes all data!**
+** WARNING: This deletes all data!**
 
 ```bash
 docker-compose down -v
@@ -443,7 +443,7 @@ This removes:
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 finance-tracker/
@@ -466,7 +466,7 @@ finance-tracker/
 
 ---
 
-## 🔗 Useful Commands
+##  Useful Commands
 
 ```bash
 # View logs
@@ -488,7 +488,7 @@ docker stats
 
 ---
 
-## 📚 Next Steps
+##  Next Steps
 
 1. **Explore API:** 
    - Docker: Visit http://localhost:8080/docs
@@ -497,7 +497,7 @@ docker stats
 3. **Switch Databases:** Try different `ACTIVE_DB` values
 4. **Read Documentation:** Check `backend/docs/` folder for architecture details
 
-## 🔐 Default Credentials
+##  Default Credentials
 
 - **MySQL:** `root` / `123456`
 - **Neo4j:** `neo4j` / `12345678`
@@ -505,7 +505,7 @@ docker stats
 
 ---
 
-## 🆘 Need Help?
+##  Need Help?
 
 - Check logs: `docker-compose logs`
 - Review documentation in `backend/docs/`
@@ -514,5 +514,4 @@ docker stats
 
 ---
 
-**Happy coding! 🚀**
 
