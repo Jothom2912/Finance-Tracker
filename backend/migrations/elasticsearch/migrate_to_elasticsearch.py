@@ -3,6 +3,14 @@
 Migration script til at migrere data fra MySQL til Elasticsearch.
 Følger samme struktur som MySQL databasen.
 """
+import sys
+import io
+
+# Fix encoding for Windows console
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 from elasticsearch import Elasticsearch
 from backend.database.mysql import SessionLocal
 from backend.models.mysql.transaction import Transaction

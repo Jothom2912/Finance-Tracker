@@ -3,6 +3,14 @@
 Migration script til at migrere data fra MySQL til Neo4j.
 Følger samme struktur som MySQL databasen, men som graph nodes og relationships.
 """
+import sys
+import io
+
+# Fix encoding for Windows console
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 from neo4j import GraphDatabase
 from backend.database.mysql import SessionLocal
 from backend.models.mysql.transaction import Transaction
@@ -13,7 +21,7 @@ from backend.models.mysql.budget import Budget
 from backend.models.mysql.goal import Goal
 from backend.models.mysql.planned_transactions import PlannedTransactions
 from backend.models.mysql.account_groups import AccountGroups
-from backend.config import ELASTICSEARCH_HOST
+from backend.config import ELASTICSEARCH_HOST, NEO4J_URI, NEO4J_USER
 import os
 from datetime import datetime
 from decimal import Decimal
@@ -64,12 +72,15 @@ def migrate_users(driver, db: SessionLocal) -> int:
     with driver.session() as session:
         for user in users:
             query = """
-            CREATE (u:User {
-                idUser: $idUser,
-                username: $username,
-                email: $email,
-                created_at: $created_at
-            })
+            MERGE (u:User {idUser: $idUser})
+            ON CREATE SET 
+                u.username = $username,
+                u.email = $email,
+                u.created_at = $created_at
+            ON MATCH SET
+                u.username = $username,
+                u.email = $email,
+                u.created_at = $created_at
             """
             session.run(query, {
                 "idUser": user.idUser,
@@ -94,11 +105,13 @@ def migrate_categories(driver, db: SessionLocal) -> int:
     with driver.session() as session:
         for category in categories:
             query = """
-            CREATE (c:Category {
-                idCategory: $idCategory,
-                name: $name,
-                type: $type
-            })
+            MERGE (c:Category {idCategory: $idCategory})
+            ON CREATE SET 
+                c.name = $name,
+                c.type = $type
+            ON MATCH SET
+                c.name = $name,
+                c.type = $type
             """
             session.run(query, {
                 "idCategory": category.idCategory,
@@ -124,12 +137,14 @@ def migrate_accounts(driver, db: SessionLocal) -> int:
             # Opret Account node
             query = """
             MATCH (u:User {idUser: $userId})
-            CREATE (a:Account {
-                idAccount: $idAccount,
-                name: $name,
-                saldo: $saldo
-            })
-            CREATE (u)-[:OWNS]->(a)
+            MERGE (a:Account {idAccount: $idAccount})
+            ON CREATE SET 
+                a.name = $name,
+                a.saldo = $saldo
+            ON MATCH SET
+                a.name = $name,
+                a.saldo = $saldo
+            MERGE (u)-[:OWNS]->(a)
             """
             session.run(query, {
                 "idAccount": account.idAccount,
@@ -167,16 +182,21 @@ def migrate_transactions(driver, db: SessionLocal) -> int:
             query = """
             MATCH (a:Account {idAccount: $accountId})
             MATCH (c:Category {idCategory: $categoryId})
-            CREATE (t:Transaction {
-                idTransaction: $idTransaction,
-                amount: $amount,
-                description: $description,
-                date: $date,
-                type: $type,
-                created_at: $created_at
-            })
-            CREATE (a)-[:HAS_TRANSACTION]->(t)
-            CREATE (t)-[:BELONGS_TO_CATEGORY]->(c)
+            MERGE (t:Transaction {idTransaction: $idTransaction})
+            ON CREATE SET 
+                t.amount = $amount,
+                t.description = $description,
+                t.date = $date,
+                t.type = $type,
+                t.created_at = $created_at
+            ON MATCH SET
+                t.amount = $amount,
+                t.description = $description,
+                t.date = $date,
+                t.type = $type,
+                t.created_at = $created_at
+            MERGE (a)-[:HAS_TRANSACTION]->(t)
+            MERGE (t)-[:BELONGS_TO_CATEGORY]->(c)
             """
             session.run(query, {
                 "idTransaction": transaction.idTransaction,
@@ -207,12 +227,14 @@ def migrate_budgets(driver, db: SessionLocal) -> int:
             # Opret Budget node
             query = """
             MATCH (a:Account {idAccount: $accountId})
-            CREATE (b:Budget {
-                idBudget: $idBudget,
-                amount: $amount,
-                budget_date: $budget_date
-            })
-            CREATE (a)-[:HAS_BUDGET]->(b)
+            MERGE (b:Budget {idBudget: $idBudget})
+            ON CREATE SET 
+                b.amount = $amount,
+                b.budget_date = $budget_date
+            ON MATCH SET
+                b.amount = $amount,
+                b.budget_date = $budget_date
+            MERGE (a)-[:HAS_BUDGET]->(b)
             """
             session.run(query, {
                 "idBudget": budget.idBudget,
@@ -228,7 +250,7 @@ def migrate_budgets(driver, db: SessionLocal) -> int:
                     link_query = """
                     MATCH (b:Budget {idBudget: $budgetId})
                     MATCH (c:Category {idCategory: $categoryId})
-                    CREATE (b)-[:FOR_CATEGORY]->(c)
+                    MERGE (b)-[:FOR_CATEGORY]->(c)
                     """
                     session.run(link_query, {
                         "budgetId": budget.idBudget,
@@ -252,15 +274,20 @@ def migrate_goals(driver, db: SessionLocal) -> int:
         for goal in goals:
             query = """
             MATCH (a:Account {idAccount: $accountId})
-            CREATE (g:Goal {
-                idGoal: $idGoal,
-                name: $name,
-                target_amount: $target_amount,
-                current_amount: $current_amount,
-                target_date: $target_date,
-                status: $status
-            })
-            CREATE (a)-[:HAS_GOAL]->(g)
+            MERGE (g:Goal {idGoal: $idGoal})
+            ON CREATE SET 
+                g.name = $name,
+                g.target_amount = $target_amount,
+                g.current_amount = $current_amount,
+                g.target_date = $target_date,
+                g.status = $status
+            ON MATCH SET
+                g.name = $name,
+                g.target_amount = $target_amount,
+                g.current_amount = $current_amount,
+                g.target_date = $target_date,
+                g.status = $status
+            MERGE (a)-[:HAS_GOAL]->(g)
             """
             session.run(query, {
                 "idGoal": goal.idGoal,
@@ -289,10 +316,11 @@ def migrate_account_groups(driver, db: SessionLocal) -> int:
         for group in groups:
             # Opret AccountGroup node
             query = """
-            CREATE (ag:AccountGroup {
-                idAccountGroups: $idAccountGroups,
-                name: $name
-            })
+            MERGE (ag:AccountGroup {idAccountGroups: $idAccountGroups})
+            ON CREATE SET 
+                ag.name = $name
+            ON MATCH SET
+                ag.name = $name
             """
             session.run(query, {
                 "idAccountGroups": group.idAccountGroups,
@@ -305,7 +333,7 @@ def migrate_account_groups(driver, db: SessionLocal) -> int:
                     link_query = """
                     MATCH (ag:AccountGroup {idAccountGroups: $groupId})
                     MATCH (u:User {idUser: $userId})
-                    CREATE (u)-[:MEMBER_OF]->(ag)
+                    MERGE (u)-[:MEMBER_OF]->(ag)
                     """
                     session.run(link_query, {
                         "groupId": group.idAccountGroups,
@@ -329,11 +357,13 @@ def migrate_planned_transactions(driver, db: SessionLocal) -> int:
         for pt in planned:
             # Opret PlannedTransaction node
             query = """
-            CREATE (pt:PlannedTransaction {
-                idPlannedTransactions: $idPlannedTransactions,
-                name: $name,
-                amount: $amount
-            })
+            MERGE (pt:PlannedTransaction {idPlannedTransactions: $idPlannedTransactions})
+            ON CREATE SET 
+                pt.name = $name,
+                pt.amount = $amount
+            ON MATCH SET
+                pt.name = $name,
+                pt.amount = $amount
             """
             session.run(query, {
                 "idPlannedTransactions": pt.idPlannedTransactions,
@@ -346,7 +376,7 @@ def migrate_planned_transactions(driver, db: SessionLocal) -> int:
                 link_query = """
                 MATCH (pt:PlannedTransaction {idPlannedTransactions: $ptId})
                 MATCH (t:Transaction {idTransaction: $transactionId})
-                CREATE (pt)-[:PLANNED_FOR]->(t)
+                MERGE (pt)-[:PLANNED_FOR]->(t)
                 """
                 session.run(link_query, {
                     "ptId": pt.idPlannedTransactions,
@@ -380,6 +410,8 @@ def migrate_all():
     db = SessionLocal()
     try:
         # Slet eksisterende data (valgfrit - kommenter ud hvis du vil beholde data)
+        # MERGE statements håndterer eksisterende data, så sletning er ikke nødvendig
+        # men kan være nyttig for at starte forfra
         print("\n🗑️  Sletter eksisterende Neo4j data...")
         clear_neo4j_database(driver)
         

@@ -3,6 +3,14 @@
 Script til at generere dummy data til test af migration og applikationen.
 Følger korrekt struktur: User → Account → Category → Transaction → Budget → Goal
 """
+import sys
+import io
+
+# Fix encoding for Windows console
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import random
@@ -84,17 +92,39 @@ def generate_dummy_data(clear_existing: bool = False):
             )
 
         for user_info in user_data:
-            existing = db.query(User).filter(User.username == user_info["username"]).first()
+            # Tjek om user allerede findes (på username ELLER email)
+            existing = db.query(User).filter(
+                (User.username == user_info["username"]) | 
+                (User.email == user_info["email"])
+            ).first()
+            
             if not existing:
+                # Ingen eksisterende user - opret ny
                 user = User(
                     username=user_info["username"],
                     email=user_info["email"],
                     password=hash_password(user_info["password"]),
                     created_at=datetime.now() - timedelta(days=random.randint(30, 365)),
                 )
-                db.add(user)
-                users.append(user)
+                try:
+                    db.add(user)
+                    db.flush()  # Flush for at få ID uden commit
+                    users.append(user)
+                except Exception as e:
+                    # Hvis der er en fejl (fx duplicate key), prøv at hente eksisterende user
+                    db.rollback()
+                    existing = db.query(User).filter(
+                        (User.username == user_info["username"]) | 
+                        (User.email == user_info["email"])
+                    ).first()
+                    if existing:
+                        print(f"  ⚠ User '{user_info['username']}' findes allerede (ID: {existing.idUser}) - bruger eksisterende")
+                        users.append(existing)
+                    else:
+                        raise  # Re-raise hvis det ikke er en duplicate key fejl
             else:
+                # User findes allerede - brug eksisterende
+                print(f"  ⚠ User '{user_info['username']}' findes allerede (ID: {existing.idUser}) - bruger eksisterende")
                 users.append(existing)
 
         db.commit()

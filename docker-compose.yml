@@ -46,7 +46,6 @@ services:
     container_name: finance-neo4j
     environment:
       NEO4J_AUTH: neo4j/12345678
-      NEO4J_PLUGINS: '["apoc"]'
     ports:
       - "7474:7474"  # HTTP
       - "7687:7687"  # Bolt
