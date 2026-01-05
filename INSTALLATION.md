@@ -140,6 +140,7 @@ cd backend/scripts
 
 ---
 
+## 🖥️ Local Development (Windows TL;DR)
 
 Use these commands to run the backend locally without Docker:
 
@@ -150,11 +151,18 @@ py -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r backend/requirements.txt
 
-uvicorn backend.main:app --reload --port 8000
+# Start the API (recommended on Windows)
+python -m uvicorn backend.main:app --reload --port 8000
 ```
 
 - API docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
+
+If you prefer the CLI entry point and it’s on PATH:
+
+```powershell
+uvicorn backend.main:app --reload --port 8000
+```
 
 ## ✅ Verify Installation
 
