@@ -140,6 +140,22 @@ cd backend/scripts
 
 ---
 
+
+Use these commands to run the backend locally without Docker:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+python -m pip install -r backend/requirements.txt
+
+uvicorn backend.main:app --reload --port 8000
+```
+
+- API docs: http://localhost:8000/docs
+- Health: http://localhost:8000/health
+
 ## ✅ Verify Installation
 
 ### Test Backend Health
