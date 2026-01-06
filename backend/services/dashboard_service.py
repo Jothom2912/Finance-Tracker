@@ -53,11 +53,24 @@ def get_financial_overview(
     
     for t in transactions:
         amount = float(t.get("amount", 0))
-        current_account_balance += amount
+        tx_type = t.get("type", "").lower() if t.get("type") else ""
         
-        if amount > 0:
-            total_income += amount
+        # Brug type-feltet hvis det findes, ellers brug amount sign (bagudkompatibilitet)
+        is_income = tx_type == "income" or (tx_type == "" and amount > 0)
+        is_expense = tx_type == "expense" or (tx_type == "" and amount < 0)
+        
+        # Opdater balance baseret på type eller amount sign
+        if is_income:
+            current_account_balance += abs(amount)
+        elif is_expense:
+            current_account_balance -= abs(amount)
         else:
+            # Fallback: brug amount sign direkte
+            current_account_balance += amount
+        
+        if is_income:
+            total_income += abs(amount)
+        elif is_expense:
             total_expenses += abs(amount)
             
             # Gruppér expenses by category
@@ -68,6 +81,17 @@ def get_financial_overview(
     
     net_change_in_period = total_income - total_expenses
 
+    # Beregn gennemsnitlige månedlige udgifter
+    # Beregn antal måneder i perioden
+    months_in_period = max(1, (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) + 1)
+    
+    # Hvis perioden er mindre end en måned, brug antal dage divideret med 30
+    if months_in_period == 1:
+        days_in_period = (end_date - start_date).days + 1
+        months_in_period = max(1, days_in_period / 30.0)
+    
+    average_monthly_expenses = total_expenses / months_in_period if months_in_period > 0 else 0.0
+
     # 4. Returner skemaet
     return FinancialOverview(
         start_date=start_date,
@@ -76,7 +100,8 @@ def get_financial_overview(
         total_expenses=round(total_expenses, 2),
         net_change_in_period=round(net_change_in_period, 2),
         expenses_by_category={k: round(v, 2) for k, v in category_expenses.items()},
-        current_account_balance=round(current_account_balance, 2)
+        current_account_balance=round(current_account_balance, 2),
+        average_monthly_expenses=round(average_monthly_expenses, 2)
     )
 
 def get_expenses_by_month(
@@ -109,8 +134,14 @@ def get_expenses_by_month(
         limit=10000
     )
     
-    # Filtrer kun expenses (negative amounts eller type == 'expense')
-    expenses = [t for t in transactions if float(t.get("amount", 0)) < 0 or t.get("type", "").lower() == "expense"]
+    # Filtrer kun expenses - brug type-feltet hvis det findes, ellers brug amount sign
+    expenses = []
+    for t in transactions:
+        amount = float(t.get("amount", 0))
+        tx_type = t.get("type", "").lower() if t.get("type") else ""
+        is_expense = tx_type == "expense" or (tx_type == "" and amount < 0)
+        if is_expense:
+            expenses.append(t)
     
     # Gruppér efter måned
     monthly_expenses: Dict[str, float] = {}

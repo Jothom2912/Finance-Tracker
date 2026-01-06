@@ -45,7 +45,10 @@ category_rules = {
     "pizzaria": "restauranter/takeaway",
     "sushi": "restauranter/takeaway",
     "restaurant": "restauranter/takeaway",
-    "cafe": "restauranter/takeaway", 
+    "cafe": "restauranter/takeaway",
+    "sunset blvd": "restauranter/takeaway",
+    "7-eleven": "restauranter/takeaway",
+    "dsb 7-eleven": "restauranter/takeaway", 
 
     # Transport
     "dsb.dk/": "transport",
@@ -54,12 +57,14 @@ category_rules = {
     "flixbus.com": "transport",
     "metro service a/s": "transport",
     "rejsekort": "transport",
-    "bycyklen": "transport", 
+    "bycyklen": "transport",
+    "rejsebillet.dk": "transport", 
 
     # Regninger/Faste udgifter
     "cph village": "husleje/bolig",
     "telenor a/s": "mobil/internet",
     "bs betaling telenor a/s": "mobil/internet",
+    "telenor": "mobil/internet",
     "energi": "el/vand/varme",
     "forsikring": "forsikringer",
     "abonnement": "abonnementer",
@@ -73,6 +78,8 @@ category_rules = {
     "fk-feriepenge": "offentlig støtte",
     "betaling fra kk": "betalinger fra andre",
     "tage kristensen": "betalinger fra andre",
+    "lønoverførsel": "løn",
+    "løn": "løn",
 
     # Opsparing/Investering
     "fra opsparing": "opsparing (ind)",
@@ -100,7 +107,7 @@ category_rules = {
 
     # Hjem/DIY
     "silvan": "møbler/interiør/diy",
-    "bauhaus": "møbler/interiør/diy",
+    "bauhaus": "møbler/interiør/dia",
     "ikea": "møbler/interiør/diy",
     "jem og fix": "møbler/interiør/diy",
     "elgiganten": "elektronik/hjem", 
@@ -192,6 +199,9 @@ def assign_category_automatically(transaction_description: str, amount: float, c
             ("tage kristensen", "betalinger fra andre"),
             ("fra opsparing", "opsparing (ind)"),
             ("renter", "renter"),
+            ("rente", "renter"),
+            ("lønoverførsel", "løn"),
+            ("løn", "løn"),
             ("overførsel mobilepay", "mobilepay ind"),
             ("vipps mobilepay", "mobilepay ind"),
         ]:

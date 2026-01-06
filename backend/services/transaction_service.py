@@ -233,9 +233,16 @@ def import_transactions_from_csv(file_contents: bytes, account_id: int, db: Sess
                 # Parse amount
                 amount = float(row['amount'])
                 
-                # Build description
-                full_description = f"{row.get('Modtager', '')} {row.get('Afsender', '')} {row.get('Navn', '')} {row.get('Beskrivelse', '')}".strip()
-                full_description = " ".join(full_description.split())
+                # Build description - fjern 'nan' værdier
+                parts = [
+                    str(row.get('Modtager', '')),
+                    str(row.get('Afsender', '')),
+                    str(row.get('Navn', '')),
+                    str(row.get('Beskrivelse', ''))
+                ]
+                # Fjern 'nan', 'NaN', tomme strings og whitespace
+                cleaned_parts = [p for p in parts if p and p.lower() != 'nan' and p.strip()]
+                full_description = " ".join(cleaned_parts).strip()
                 if not full_description:
                     full_description = "Ukendt beskrivelse"
 

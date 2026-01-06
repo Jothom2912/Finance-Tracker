@@ -21,11 +21,13 @@ def get_es_client() -> Elasticsearch:
     global _es_client
     if _es_client is None:
         from backend.config import ELASTICSEARCH_HOST
+        # Tvinger API version 8 headers for at undgå version 9 fejl med ES 8.11.0 server
         _es_client = Elasticsearch(
             [ELASTICSEARCH_HOST],
             request_timeout=30,
             max_retries=3,
-            retry_on_timeout=True
+            retry_on_timeout=True,
+            headers={"Accept": "application/vnd.elasticsearch+json; compatible-with=8", "Content-Type": "application/vnd.elasticsearch+json; compatible-with=8"}
         )
     return _es_client
 

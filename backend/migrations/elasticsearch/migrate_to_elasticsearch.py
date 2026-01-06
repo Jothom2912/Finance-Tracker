@@ -26,8 +26,15 @@ from datetime import datetime
 from typing import Dict, List
 import json
 
-# Elasticsearch client
-es = Elasticsearch([ELASTICSEARCH_HOST])
+# Elasticsearch client - eksplicit brug API version 8 for kompatibilitet med ES 8.11.0
+# Tvinger API version 8 headers for at undgå version 9 fejl
+es = Elasticsearch(
+    [ELASTICSEARCH_HOST],
+    request_timeout=30,
+    max_retries=3,
+    retry_on_timeout=True,
+    headers={"Accept": "application/vnd.elasticsearch+json; compatible-with=8", "Content-Type": "application/vnd.elasticsearch+json; compatible-with=8"}
+)
 
 def create_transactions_index():
     """Opretter transactions index med korrekt mapping baseret på MySQL struktur"""
