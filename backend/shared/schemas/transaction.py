@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime, date as date_type
 from typing import Optional
-from decimal import Decimal
 import enum
 from backend.validation_boundaries import TRANSACTION_BVA
 
@@ -98,10 +97,6 @@ class TransactionBase(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
-        json_encoders={
-            Decimal: lambda v: float(v) if v else 0.0,
-            date_type: lambda v: v.isoformat() if v else None,
-        }
     )
 
 # --- 2. Schema for Oprettelse (Bruges i POST) ---
@@ -132,11 +127,6 @@ class Transaction(TransactionBase):
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
-        json_encoders={
-            Decimal: lambda v: float(v) if v else 0.0,
-            date_type: lambda v: v.isoformat() if v else None,
-            datetime: lambda v: v.isoformat() if v else None,
-        }
     )
 
 # NB: Hvis du bruger din Transaction model til at læse data, 

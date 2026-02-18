@@ -1,0 +1,1 @@
+# Transaction outbound adapters (repositories)

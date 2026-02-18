@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
-from decimal import Decimal
 from backend.validation_boundaries import ACCOUNT_BVA
 
 # Forward references for relationships (minimal info)
@@ -62,7 +61,7 @@ class Account(AccountBase):
     idAccount: int
     User_idUser: Optional[int] = None  # Gør optional (Neo4j returnerer måske None)
     
-    # Relationships - alle optional for repository compatibility
+    # Relationships are optional to keep schema stable across adapters.
     user: Optional[UserBase] = None  # Gør optional (repositories returnerer ikke nested objects)
     transactions: Optional[List[TransactionBase]] = []
     budgets: Optional[List[BudgetBase]] = []
@@ -70,7 +69,4 @@ class Account(AccountBase):
 
     model_config = ConfigDict(
         from_attributes=True,
-        json_encoders={
-            Decimal: lambda v: float(v),
-        }
     )

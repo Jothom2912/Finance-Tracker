@@ -26,10 +26,8 @@ class MySQLBudgetRepository(IBudgetRepository):
             if account_id:
                 query = query.filter(BudgetModel.Account_idAccount == account_id)
             budgets = query.all()
-            self.db.commit()  # ✅ Commit efter read
             return [self._serialize_budget(b) for b in budgets]
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af budgetter: {e}")
     
     def get_by_id(self, budget_id: int) -> Optional[Dict]:
@@ -40,10 +38,8 @@ class MySQLBudgetRepository(IBudgetRepository):
             ).filter(
                 BudgetModel.idBudget == budget_id
             ).first()
-            self.db.commit()  # ✅ Commit efter read
             return self._serialize_budget(budget) if budget else None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af budget: {e}")
     
     def create(self, budget_data: Dict) -> Dict:
@@ -95,7 +91,6 @@ class MySQLBudgetRepository(IBudgetRepository):
                 BudgetModel.idBudget == budget_id
             ).first()
             if not budget:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 raise ValueError(f"Budget {budget_id} not found")
             
             if "amount" in budget_data:
@@ -141,7 +136,6 @@ class MySQLBudgetRepository(IBudgetRepository):
                 BudgetModel.idBudget == budget_id
             ).first()
             if not budget:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 return False
             
             self.db.delete(budget)
@@ -163,7 +157,7 @@ class MySQLBudgetRepository(IBudgetRepository):
         else:
             # Hvis categories ikke er loaded, prøv at hente direkte fra association
             # Dette kan ske hvis relationship ikke er eager loaded
-            print(f"⚠️ WARNING: Budget {budget.idBudget} har ikke categories relationship loaded")
+            pass
         
         return {
             "idBudget": budget.idBudget,

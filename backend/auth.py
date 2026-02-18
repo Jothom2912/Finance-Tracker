@@ -9,34 +9,18 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, status, Header
+from sqlalchemy.orm import Session
 import bcrypt
 
-# ============================================================================
-# KONFIGURATION
-# ============================================================================
+from backend.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from backend.database.mysql import get_db
 
-import os
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Find .env filen - tjek både root mappen og backend mappen
-env_path = Path(__file__).parent.parent / ".env"
-if not env_path.exists():
-    # Hvis ikke i root, prøv i backend mappen
-    env_path = Path(__file__).parent / ".env"
-
-load_dotenv(dotenv_path=env_path)
-
-# Læs SECRET_KEY fra environment variabel
-SECRET_KEY = os.getenv("SECRET_KEY")
+# Validate SECRET_KEY at import time
 if not SECRET_KEY:
     raise ValueError(
         "SECRET_KEY must be set in environment variables. "
         "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
     )
-
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -170,6 +154,61 @@ def get_current_user_id(
         )
     
     return token_data.user_id
+
+
+# ============================================================================
+# ACCOUNT RESOLUTION DEPENDENCY
+# ============================================================================
+
+def get_account_id_from_headers(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
+    db: Session = Depends(get_db),
+) -> Optional[int]:
+    """
+    FastAPI Dependency: Resolves account_id from request headers.
+    
+    Priority:
+    1. X-Account-ID header (explicit account selection)
+    2. First account for the authenticated user (fallback via JWT)
+    
+    Returns:
+        account_id if found, None otherwise
+    """
+    token_data: Optional[TokenData] = None
+    if authorization:
+        token = (
+            authorization.replace("Bearer ", "")
+            if authorization.startswith("Bearer ")
+            else authorization
+        )
+        token_data = decode_token(token)
+
+    if x_account_id:
+        try:
+            requested_account_id = int(x_account_id)
+        except ValueError:
+            requested_account_id = None
+
+        # Explicit account selection requires a valid authenticated user.
+        if requested_account_id is not None and token_data:
+            from backend.repositories import get_account_repository
+
+            account_repo = get_account_repository(db)
+            account = account_repo.get_by_id(requested_account_id)
+            if account and account.get("User_idUser") == token_data.user_id:
+                return requested_account_id
+        return None
+
+    if token_data:
+        from backend.repositories import get_account_repository
+
+        account_repo = get_account_repository(db)
+        accounts = account_repo.get_all(user_id=token_data.user_id)
+        if accounts:
+            return accounts[0]["idAccount"]
+
+    return None
 
 
 # ============================================================================

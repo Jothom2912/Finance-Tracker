@@ -29,10 +29,8 @@ class MySQLCategoryRepository(ICategoryRepository):
             # Hvis filters er nødvendigt i fremtiden, skal Category model opdateres først
             
             categories = query.all()
-            self.db.commit()  # ✅ Commit efter read
             return [self._serialize_category(c) for c in categories]
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af kategorier: {e}")
     
     def get_by_id(self, category_id: int) -> Optional[Dict]:
@@ -40,10 +38,8 @@ class MySQLCategoryRepository(ICategoryRepository):
             category = self.db.query(CategoryModel).filter(
                 CategoryModel.idCategory == category_id
             ).first()
-            self.db.commit()  # ✅ Commit efter read
             return self._serialize_category(category) if category else None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af kategori: {e}")
     
     def create(self, category_data: Dict) -> Dict:
@@ -66,7 +62,6 @@ class MySQLCategoryRepository(ICategoryRepository):
                 CategoryModel.idCategory == category_id
             ).first()
             if not category:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 raise ValueError(f"Category {category_id} not found")
             
             if "name" in category_data:
@@ -89,7 +84,6 @@ class MySQLCategoryRepository(ICategoryRepository):
                 CategoryModel.idCategory == category_id
             ).first()
             if not category:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 return False
             
             self.db.delete(category)

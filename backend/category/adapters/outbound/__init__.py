@@ -1,0 +1,1 @@
+# Category outbound adapters (repositories)

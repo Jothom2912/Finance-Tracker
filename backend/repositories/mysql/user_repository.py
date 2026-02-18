@@ -20,28 +20,22 @@ class MySQLUserRepository(IUserRepository):
     def get_all(self) -> List[Dict]:
         try:
             users = self.db.query(UserModel).all()
-            self.db.commit()  # ✅ Commit efter read
             return [self._serialize_user(u) for u in users]
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af brugere: {e}")
     
     def get_by_id(self, user_id: int) -> Optional[Dict]:
         try:
             user = self.db.query(UserModel).filter(UserModel.idUser == user_id).first()
-            self.db.commit()  # ✅ Commit efter read
             return self._serialize_user(user) if user else None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af bruger: {e}")
     
     def get_by_username(self, username: str) -> Optional[Dict]:
         try:
             user = self.db.query(UserModel).filter(UserModel.username == username).first()
-            self.db.commit()  # ✅ Commit efter read
             return self._serialize_user(user) if user else None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af bruger: {e}")
     
     def create(self, user_data: Dict) -> Dict:
@@ -63,7 +57,6 @@ class MySQLUserRepository(IUserRepository):
         """Get user by username INCLUDING password - kun til authentication."""
         try:
             user = self.db.query(UserModel).filter(UserModel.username == username).first()
-            self.db.commit()  # ✅ Commit efter read
             if user:
                 return {
                     "idUser": user.idUser,
@@ -74,14 +67,12 @@ class MySQLUserRepository(IUserRepository):
                 }
             return None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af bruger til auth: {e}")
     
     def get_by_email_for_auth(self, email: str) -> Optional[Dict]:
         """Get user by email INCLUDING password - kun til authentication."""
         try:
             user = self.db.query(UserModel).filter(UserModel.email == email).first()
-            self.db.commit()  # ✅ Commit efter read
             if user:
                 return {
                     "idUser": user.idUser,
@@ -92,7 +83,6 @@ class MySQLUserRepository(IUserRepository):
                 }
             return None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af bruger til auth: {e}")
     
     @staticmethod

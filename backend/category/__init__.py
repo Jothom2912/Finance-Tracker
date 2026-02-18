@@ -1,0 +1,1 @@
+# Category bounded context

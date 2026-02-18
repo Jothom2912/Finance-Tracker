@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import date, datetime
 from typing import Optional
-from decimal import Decimal
 from backend.validation_boundaries import GOAL_BVA
 
 # Forward references for relationships (minimal info)
@@ -100,12 +99,9 @@ class Goal(GoalBase):
     idGoal: int
     Account_idAccount: Optional[int] = None  # Gør optional
 
-    # Relationship - optional for repository compatibility
+    # Relationship is optional to keep schema stable across adapters.
     account: Optional[AccountBase] = None  # Gør optional
 
     model_config = ConfigDict(
         from_attributes=True,
-        json_encoders={
-            Decimal: lambda v: float(v),
-        }
     )

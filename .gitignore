@@ -15,9 +15,11 @@ __pycache__/
 *.so
 .Python
 
-# Database dumps (optional - remove if you want to commit dumps)
+# Database dumps and backup files
 dumps/
 *.dump
+*.sql
+!**/migrations/**/*.sql
 
 # IDE
 .vscode/

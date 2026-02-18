@@ -23,19 +23,15 @@ class MySQLGoalRepository(IGoalRepository):
             if account_id:
                 query = query.filter(GoalModel.Account_idAccount == account_id)
             goals = query.all()
-            self.db.commit()  # ✅ Commit efter read
             return [self._serialize_goal(g) for g in goals]
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af mål: {e}")
     
     def get_by_id(self, goal_id: int) -> Optional[Dict]:
         try:
             goal = self.db.query(GoalModel).filter(GoalModel.idGoal == goal_id).first()
-            self.db.commit()  # ✅ Commit efter read
             return self._serialize_goal(goal) if goal else None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af mål: {e}")
     
     def create(self, goal_data: Dict) -> Dict:
@@ -53,7 +49,6 @@ class MySQLGoalRepository(IGoalRepository):
         try:
             goal = self.db.query(GoalModel).filter(GoalModel.idGoal == goal_id).first()
             if not goal:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 raise ValueError(f"Goal {goal_id} not found")
             for key, value in goal_data.items():
                 setattr(goal, key, value)
@@ -70,7 +65,6 @@ class MySQLGoalRepository(IGoalRepository):
         try:
             goal = self.db.query(GoalModel).filter(GoalModel.idGoal == goal_id).first()
             if not goal:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 return False
             self.db.delete(goal)
             self.db.commit()  # ✅ Commit efter write

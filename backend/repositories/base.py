@@ -212,3 +212,51 @@ class IGoalRepository(ABC):
         """Delete goal."""
         pass
 
+
+class IPlannedTransactionRepository(ABC):
+    """Abstract interface for planned transaction repository."""
+
+    @abstractmethod
+    def get_all(self, skip: int = 0, limit: int = 100) -> List[Dict]:
+        """Get planned transactions with pagination."""
+        pass
+
+    @abstractmethod
+    def get_by_id(self, pt_id: int) -> Optional[Dict]:
+        """Get planned transaction by ID."""
+        pass
+
+    @abstractmethod
+    def create(self, pt_data: Dict) -> Dict:
+        """Create new planned transaction."""
+        pass
+
+    @abstractmethod
+    def update(self, pt_id: int, pt_data: Dict) -> Optional[Dict]:
+        """Update planned transaction."""
+        pass
+
+
+class IAccountGroupRepository(ABC):
+    """Abstract interface for account group repository."""
+
+    @abstractmethod
+    def get_all(self, skip: int = 0, limit: int = 100) -> List[Dict]:
+        """Get account groups with pagination."""
+        pass
+
+    @abstractmethod
+    def get_by_id(self, group_id: int) -> Optional[Dict]:
+        """Get account group by ID."""
+        pass
+
+    @abstractmethod
+    def create(self, group_data: Dict) -> Dict:
+        """Create new account group."""
+        pass
+
+    @abstractmethod
+    def update(self, group_id: int, group_data: Dict) -> Optional[Dict]:
+        """Update account group."""
+        pass
+

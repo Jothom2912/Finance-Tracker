@@ -11,7 +11,9 @@ from backend.repositories.base import (
     IAccountRepository,
     IUserRepository,
     IBudgetRepository,
-    IGoalRepository
+    IGoalRepository,
+    IPlannedTransactionRepository,
+    IAccountGroupRepository,
 )
 
 # Factory functions - lazy imports for at undgå at importere alle database drivers
@@ -154,3 +156,27 @@ def get_goal_repository(db: Optional[Session] = None) -> IGoalRepository:
         if db is None:
             raise ValueError("db: Session parameter is required for MySQL repositories")
         return MySQLGoalRepository(db)
+
+def get_planned_transaction_repository(db: Optional[Session] = None) -> IPlannedTransactionRepository:
+    """Factory function to get the active planned transaction repository.
+    
+    Args:
+        db: Database session (required for MySQL)
+    """
+    # Currently only MySQL is supported for planned transactions
+    from backend.repositories.mysql.planned_transaction_repository import MySQLPlannedTransactionRepository
+    if db is None:
+        raise ValueError("db: Session parameter is required for MySQL repositories")
+    return MySQLPlannedTransactionRepository(db)
+
+def get_account_group_repository(db: Optional[Session] = None) -> IAccountGroupRepository:
+    """Factory function to get the active account group repository.
+    
+    Args:
+        db: Database session (required for MySQL)
+    """
+    # Currently only MySQL is supported for account groups
+    from backend.repositories.mysql.account_group_repository import MySQLAccountGroupRepository
+    if db is None:
+        raise ValueError("db: Session parameter is required for MySQL repositories")
+    return MySQLAccountGroupRepository(db)

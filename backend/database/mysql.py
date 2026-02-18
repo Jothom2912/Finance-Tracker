@@ -5,14 +5,11 @@ MySQL Database Connection
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 import os
-from dotenv import load_dotenv
 import logging
 
-logger = logging.getLogger(__name__)
+from backend.config import DATABASE_URL
 
-# --- Database Opsætning ---
-load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL")
+logger = logging.getLogger(__name__)
 
 # Base kan oprettes uden DATABASE_URL (bruges i tests)
 Base = declarative_base()

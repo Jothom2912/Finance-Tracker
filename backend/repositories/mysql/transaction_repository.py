@@ -1,10 +1,13 @@
 # backend/repositories/mysql/transaction_repository.py
+import logging
 from typing import List, Dict, Optional
 from datetime import date
 from sqlalchemy.orm import Session
 from backend.models.mysql.transaction import Transaction as TransactionModel
 from backend.models.mysql.category import Category as CategoryModel
 from backend.repositories.base import ITransactionRepository
+
+logger = logging.getLogger(__name__)
 
 class MySQLTransactionRepository(ITransactionRepository):
     """MySQL implementation of transaction repository."""
@@ -41,10 +44,8 @@ class MySQLTransactionRepository(ITransactionRepository):
                 query = query.filter(TransactionModel.Account_idAccount == account_id)
             
             transactions = query.order_by(TransactionModel.date.desc()).offset(offset).limit(limit).all()
-            self.db.commit()  # ✅ Commit efter read
             return [self._serialize_transaction(t) for t in transactions]
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af transaktioner: {e}")
     
     def get_by_id(self, transaction_id: int) -> Optional[Dict]:
@@ -52,10 +53,8 @@ class MySQLTransactionRepository(ITransactionRepository):
             transaction = self.db.query(TransactionModel).filter(
                 TransactionModel.idTransaction == transaction_id
             ).first()
-            self.db.commit()  # ✅ Commit efter read
             return self._serialize_transaction(transaction) if transaction else None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af transaktion: {e}")
     
     def create(self, transaction_data: Dict) -> Dict:
@@ -99,7 +98,6 @@ class MySQLTransactionRepository(ITransactionRepository):
                 TransactionModel.idTransaction == transaction_id
             ).first()
             if not transaction:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 raise ValueError(f"Transaction {transaction_id} not found")
             
             for key, value in transaction_data.items():
@@ -120,7 +118,6 @@ class MySQLTransactionRepository(ITransactionRepository):
                 TransactionModel.idTransaction == transaction_id
             ).first()
             if not transaction:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 return False
             
             self.db.delete(transaction)
@@ -152,10 +149,8 @@ class MySQLTransactionRepository(ITransactionRepository):
                 query = query.filter(TransactionModel.Category_idCategory == category_id)
             
             transactions = query.order_by(TransactionModel.date.desc()).all()
-            self.db.commit()  # ✅ Commit efter read
             return [self._serialize_transaction(t) for t in transactions]
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved søgning af transaktioner: {e}")
     
     def get_summary_by_category(
@@ -186,10 +181,8 @@ class MySQLTransactionRepository(ITransactionRepository):
                 summary[cat_name]["count"] += 1
                 summary[cat_name]["total"] += float(t.amount) if t.amount else 0.0
             
-            self.db.commit()  # ✅ Commit efter read
             return summary
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af kategori summary: {e}")
     
     @staticmethod
@@ -216,7 +209,7 @@ class MySQLTransactionRepository(ITransactionRepository):
                 else:
                     date_value = transaction.date
             except Exception as e:
-                print(f"WARNING: Error converting date for transaction {transaction.idTransaction}: {e}")
+                logger.warning("Error converting date for transaction %s: %s", transaction.idTransaction, e)
                 date_value = None
         
         return {

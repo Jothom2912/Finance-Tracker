@@ -1,6 +1,6 @@
 # backend/models/__init__.py
 """
-Models package - Re-exports MySQL models for backward compatibility
+Models package - re-exports MySQL models for package-level imports.
 """
 from .mysql import (
     Base,

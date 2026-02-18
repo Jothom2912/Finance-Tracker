@@ -13,8 +13,8 @@ import io
 os.environ["ACTIVE_DB"] = "mysql"
 
 from backend.main import app
-from backend.database.mysql import Base
-from backend.database import get_db
+from backend.database.mysql import Base, get_db
+from backend.auth import create_access_token
 from backend.models.mysql import (
     User, Account, Category, Budget, Transaction,
     TransactionType, budget_category_association
@@ -35,24 +35,29 @@ def set_mysql_for_tests(monkeypatch):
 
 @pytest.fixture(scope="function")
 def mock_repositories(monkeypatch, test_db):
-    """Mock repository factories to use MySQL with test_db session."""
+    """Mock repository factories to use MySQL with test_db session.
+    
+    Domain services use repository factories that are patched to the
+    test session in this fixture.
+    """
     from backend.repositories.mysql.category_repository import MySQLCategoryRepository
     from backend.repositories.mysql.transaction_repository import MySQLTransactionRepository
     from backend.repositories.mysql.account_repository import MySQLAccountRepository
     from backend.repositories.mysql.budget_repository import MySQLBudgetRepository
     from backend.repositories.mysql.user_repository import MySQLUserRepository
+    from backend.repositories.mysql.planned_transaction_repository import MySQLPlannedTransactionRepository
+    from backend.repositories.mysql.account_group_repository import MySQLAccountGroupRepository
     
-    # Create repository instances with test_db - use same session for all
-    # This ensures all repositories see the same data
+    # Create repository instances with test_db
     cat_repo = MySQLCategoryRepository(db=test_db)
     trans_repo = MySQLTransactionRepository(db=test_db)
     acc_repo = MySQLAccountRepository(db=test_db)
     budget_repo = MySQLBudgetRepository(db=test_db)
     user_repo = MySQLUserRepository(db=test_db)
+    pt_repo = MySQLPlannedTransactionRepository(db=test_db)
+    ag_repo = MySQLAccountGroupRepository(db=test_db)
     
-    # Mock all repository factories to return the same instances
-    # This ensures consistency across the test
-    # Note: Repository factories now require db: Session parameter, but we ignore it and return our test repo
+    # Repository factory mocks
     def get_cat_repo(db=None):
         return cat_repo
     def get_trans_repo(db=None):
@@ -63,17 +68,19 @@ def mock_repositories(monkeypatch, test_db):
         return budget_repo
     def get_user_repo(db=None):
         return user_repo
+    def get_pt_repo(db=None):
+        return pt_repo
+    def get_ag_repo(db=None):
+        return ag_repo
     
-    # Mock both the module-level function and any imports
-    # ✅ FIX: Use backend.repositories instead of backend.repository
+    # Patch repository factories
     monkeypatch.setattr("backend.repositories.get_category_repository", get_cat_repo)
-    monkeypatch.setattr("backend.services.transaction_service.get_category_repository", get_cat_repo)
     monkeypatch.setattr("backend.repositories.get_transaction_repository", get_trans_repo)
-    monkeypatch.setattr("backend.services.transaction_service.get_transaction_repository", get_trans_repo)
     monkeypatch.setattr("backend.repositories.get_account_repository", get_acc_repo)
     monkeypatch.setattr("backend.repositories.get_budget_repository", get_budget_repo)
     monkeypatch.setattr("backend.repositories.get_user_repository", get_user_repo)
-
+    monkeypatch.setattr("backend.repositories.get_planned_transaction_repository", get_pt_repo)
+    monkeypatch.setattr("backend.repositories.get_account_group_repository", get_ag_repo)
 @pytest.fixture(scope="function")
 def test_engine():
     """Opretter isoleret in-memory database per test."""
@@ -180,6 +187,7 @@ class TestTransactionCreation:
         assert found_category is not None, f"Category {category.idCategory} should exist but was not found by repository"
 
         # Act
+        token = create_access_token(user.idUser, user.username, user.email)
         response = test_client.post("/transactions/",
             json={
                 "category_id": category.idCategory,
@@ -189,7 +197,10 @@ class TestTransactionCreation:
                 "type": "expense",
                 "date": date.today().isoformat()
             },
-            headers={"X-Account-ID": str(account.idAccount)}
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Account-ID": str(account.idAccount),
+            },
         )
 
         # Assert
@@ -219,10 +230,14 @@ class TestCsvUpload:
 2024/01/16;-75.00;DSB.dk/;;;DSB billet"""
 
         # Act
+        token = create_access_token(user.idUser, user.username, user.email)
         response = test_client.post(
             "/transactions/upload-csv/",
             files={"file": ("test.csv", io.BytesIO(csv), "text/csv")},
-            headers={"X-Account-ID": str(account.idAccount)}
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Account-ID": str(account.idAccount),
+            },
         )
 
         # Assert

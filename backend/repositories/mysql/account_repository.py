@@ -23,10 +23,8 @@ class MySQLAccountRepository(IAccountRepository):
             if user_id:
                 query = query.filter(AccountModel.User_idUser == user_id)
             accounts = query.all()
-            self.db.commit()  # ✅ Commit efter read
             return [self._serialize_account(a) for a in accounts]
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af konti: {e}")
     
     def get_by_id(self, account_id: int) -> Optional[Dict]:
@@ -34,10 +32,8 @@ class MySQLAccountRepository(IAccountRepository):
             account = self.db.query(AccountModel).filter(
                 AccountModel.idAccount == account_id
             ).first()
-            self.db.commit()  # ✅ Commit efter read
             return self._serialize_account(account) if account else None
         except Exception as e:
-            self.db.rollback()  # ✅ Rollback på fejl
             raise ValueError(f"Fejl ved hentning af konto: {e}")
     
     def create(self, account_data: Dict) -> Dict:
@@ -61,7 +57,6 @@ class MySQLAccountRepository(IAccountRepository):
                 AccountModel.idAccount == account_id
             ).first()
             if not account:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 raise ValueError(f"Account {account_id} not found")
             
             if "name" in account_data:
@@ -84,7 +79,6 @@ class MySQLAccountRepository(IAccountRepository):
                 AccountModel.idAccount == account_id
             ).first()
             if not account:
-                self.db.rollback()  # ✅ Rollback når objekt ikke findes
                 return False
             
             self.db.delete(account)

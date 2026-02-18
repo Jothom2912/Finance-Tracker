@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import date, datetime
-from decimal import Decimal
 from backend.validation_boundaries import PLANNED_TRANSACTION_BVA
 
 # Forward references for relationships (minimal info)
@@ -89,7 +88,4 @@ class PlannedTransactions(PlannedTransactionsBase):
 
     model_config = ConfigDict(
         from_attributes=True,
-        json_encoders={
-            Decimal: lambda v: float(v),
-        }
     )

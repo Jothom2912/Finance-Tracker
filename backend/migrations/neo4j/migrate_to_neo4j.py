@@ -262,7 +262,7 @@ def migrate_budgets(driver, db: SessionLocal) -> int:
 
 def migrate_goals(driver, db: SessionLocal) -> int:
     """Migrerer alle mål fra MySQL til Neo4j med relationships"""
-    print(f"\n🎯 Migrerer mål...")
+    print(f"\n Migrerer mål...")
     goals = db.query(Goal).all()
     print(f"  Fundet {len(goals)} mål i MySQL")
     
@@ -345,7 +345,7 @@ def migrate_account_groups(driver, db: SessionLocal) -> int:
 
 def migrate_planned_transactions(driver, db: SessionLocal) -> int:
     """Migrerer planlagte transaktioner fra MySQL til Neo4j"""
-    print(f"\n📅 Migrerer planlagte transaktioner...")
+    print(f"\n Migrerer planlagte transaktioner...")
     planned = db.query(PlannedTransactions).all()
     print(f"  Fundet {len(planned)} planlagte transaktioner i MySQL")
     
@@ -389,7 +389,7 @@ def migrate_planned_transactions(driver, db: SessionLocal) -> int:
 def migrate_all():
     """Migrerer alle data fra MySQL til Neo4j"""
     print("=" * 60)
-    print("🚀 STARTER MIGRATION TIL NEO4J")
+    print(" STARTER MIGRATION TIL NEO4J")
     print("=" * 60)
     
     # Test Neo4j forbindelse
@@ -412,16 +412,16 @@ def migrate_all():
         # Slet eksisterende data (valgfrit - kommenter ud hvis du vil beholde data)
         # MERGE statements håndterer eksisterende data, så sletning er ikke nødvendig
         # men kan være nyttig for at starte forfra
-        print("\n🗑️  Sletter eksisterende Neo4j data...")
+        print("\n  Sletter eksisterende Neo4j data...")
         clear_neo4j_database(driver)
         
         # Opret constraints
-        print("\n📋 Opretter constraints...")
+        print("\n Opretter constraints...")
         create_constraints(driver)
         
         # Migrer data (i korrekt rækkefølge pga. relationships)
         print("\n" + "=" * 60)
-        print("📦 STARTER DATA MIGRATION")
+        print(" STARTER DATA MIGRATION")
         print("=" * 60)
         
         # 1. Users først (ingen dependencies)
@@ -449,11 +449,11 @@ def migrate_all():
         migrate_planned_transactions(driver, db)
         
         print("\n" + "=" * 60)
-        print("✅ MIGRATION FULDFØRT!")
+        print(" MIGRATION FULDFØRT!")
         print("=" * 60)
         
         # Vis statistik
-        print("\n📊 STATISTIK:")
+        print("\n STATISTIK:")
         with driver.session() as session:
             stats = {
                 "User": session.run("MATCH (u:User) RETURN count(u) as count").single()["count"],
