@@ -478,6 +478,8 @@ cp example.env .env
 | [backend/docs/STRUCTURE.md](backend/docs/STRUCTURE.md) | Hexagonal structure map and bounded context layout |
 | [backend/DATABASE_COMPARISON.md](backend/DATABASE_COMPARISON.md) | MySQL vs Elasticsearch vs Neo4j comparison |
 | [backend/repositories/README.md](backend/repositories/README.md) | Repository pattern and multi-database factory |
+| [docs/MANDATORY_ASSIGNMENT_1_REPORT.md](docs/MANDATORY_ASSIGNMENT_1_REPORT.md) | Assignment 1 report: requirements, architecture, deployment, testing |
+| [docs/PRESENTATION_OUTLINE.md](docs/PRESENTATION_OUTLINE.md) | Slide-by-slide presentation outline |
 
 ---
 
@@ -493,7 +495,8 @@ cp example.env .env
 - [x] Structured logging with correlation ID
 - [x] Unit tests for services and schema BVA (194 tests)
 - [x] Integration tests for all flows + GraphQL (45 tests)
-- [ ] Frontend integration with `/api/v1/` prefix and GraphQL
+- [x] Frontend integration with `/api/v1/` prefix
+- [ ] Frontend GraphQL client integration
 - [ ] Database migrations with Alembic
 - [ ] Rate limiting and security hardening
 - [ ] Export functionality (PDF, Excel)
