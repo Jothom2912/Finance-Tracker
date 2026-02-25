@@ -26,9 +26,8 @@ elasticsearch<9.0.0
 # Neo4j (til graph database)
 neo4j
 
-# GraphQL (til GraphQL API)
+# GraphQL (read gateway via Strawberry + FastAPI integration)
 strawberry-graphql[fastapi]
-strawberry-graphql-django
 
 # ANBEFALEDE TILLÆG
 python-dotenv 

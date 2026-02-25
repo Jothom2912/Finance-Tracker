@@ -14,7 +14,7 @@ class TestAccountCreation:
     ):
         # Act
         response = test_client.post(
-            "/accounts/",
+            "/api/v1/accounts/",
             json={"name": "Opsparingskonto", "saldo": 25000.0},
             headers=auth_headers,
         )
@@ -30,7 +30,7 @@ class TestAccountCreation:
     ):
         # Act - no Authorization header
         response = test_client.post(
-            "/accounts/",
+            "/api/v1/accounts/",
             json={"name": "Unauthorized", "saldo": 1000.0},
         )
 
@@ -42,12 +42,12 @@ class TestAccountCreation:
     ):
         # Act
         r1 = test_client.post(
-            "/accounts/",
+            "/api/v1/accounts/",
             json={"name": "Konto 1", "saldo": 5000.0},
             headers=auth_headers,
         )
         r2 = test_client.post(
-            "/accounts/",
+            "/api/v1/accounts/",
             json={"name": "Konto 2", "saldo": 10000.0},
             headers=auth_headers,
         )
@@ -66,7 +66,7 @@ class TestAccountRetrieval:
         self, test_client, test_db, mock_repositories, auth_headers, seed_account
     ):
         # Act
-        response = test_client.get("/accounts/", headers=auth_headers)
+        response = test_client.get("/api/v1/accounts/", headers=auth_headers)
 
         # Assert
         assert response.status_code == 200
@@ -81,7 +81,7 @@ class TestAccountRetrieval:
         self, test_client, test_db, mock_repositories
     ):
         # Act
-        response = test_client.get("/accounts/")
+        response = test_client.get("/api/v1/accounts/")
 
         # Assert
         assert response.status_code == 401
@@ -91,7 +91,7 @@ class TestAccountRetrieval:
     ):
         # Act
         response = test_client.get(
-            f"/accounts/{seed_account.idAccount}",
+            f"/api/v1/accounts/{seed_account.idAccount}",
             headers=auth_headers,
         )
 
@@ -104,7 +104,7 @@ class TestAccountRetrieval:
         self, test_client, test_db, mock_repositories, auth_headers
     ):
         # Act
-        response = test_client.get("/accounts/99999", headers=auth_headers)
+        response = test_client.get("/api/v1/accounts/99999", headers=auth_headers)
 
         # Assert
         assert response.status_code == 404
@@ -118,7 +118,7 @@ class TestAccountUpdate:
     ):
         # Act
         response = test_client.put(
-            f"/accounts/{seed_account.idAccount}",
+            f"/api/v1/accounts/{seed_account.idAccount}",
             json={"name": "Updated Konto", "saldo": 15000.0},
             headers=auth_headers,
         )
@@ -134,7 +134,7 @@ class TestAccountUpdate:
     ):
         # Act
         response = test_client.put(
-            f"/accounts/{seed_account.idAccount}",
+            f"/api/v1/accounts/{seed_account.idAccount}",
             json={"name": "Hack", "saldo": 999999.0},
         )
 

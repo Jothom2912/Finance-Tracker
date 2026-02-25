@@ -1,18 +1,75 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import json
 import logging
 import time
+import uuid
 
-from backend.config import CORS_ORIGINS
+from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
-# Konfigurer logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+from backend.config import CORS_ORIGINS, ENVIRONMENT, LOG_LEVEL
+
+# ---------------------------------------------------------------------------
+# Logging configuration
+# ---------------------------------------------------------------------------
+
+_log_level = getattr(logging, LOG_LEVEL, logging.INFO)
+
+if ENVIRONMENT == "development":
+    logging.basicConfig(
+        level=_log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+else:
+    _json_handler = logging.StreamHandler()
+    _json_handler.setFormatter(logging.Formatter("%(message)s"))
+    logging.basicConfig(level=_log_level, handlers=[_json_handler])
+
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Request logging middleware with correlation ID
+# ---------------------------------------------------------------------------
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Adds a correlation ID to every request and logs method/path/status/duration."""
+
+    async def dispatch(self, request: Request, call_next):
+        correlation_id = request.headers.get(
+            "x-correlation-id", str(uuid.uuid4())
+        )
+        start = time.perf_counter()
+
+        response: Response = await call_next(request)
+
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        response.headers["X-Correlation-ID"] = correlation_id
+
+        log_data = {
+            "correlation_id": correlation_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status": response.status_code,
+            "duration_ms": duration_ms,
+        }
+
+        if ENVIRONMENT == "development":
+            logger.info(
+                "%s %s -> %s (%.1fms) [%s]",
+                request.method,
+                request.url.path,
+                response.status_code,
+                duration_ms,
+                correlation_id[:8],
+            )
+        else:
+            logger.info(json.dumps(log_data))
+
+        return response
 
 # Hexagonal architecture routers
 from backend.transaction.adapters.inbound.rest_api import (
@@ -29,6 +86,7 @@ from backend.analytics.adapters.inbound.rest_api import (
     dashboard_router,
     budget_summary_router,
 )
+from backend.analytics.adapters.inbound.graphql_api import create_graphql_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,7 +97,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Personlig Finans Tracker API", lifespan=lifespan)
 
-# CORS middleware (must be first middleware)
+# Middleware stack (order matters: last added runs first)
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -58,21 +117,27 @@ def health_check():
     """Health check endpoint."""
     return {"status": "ok", "message": "Backend kører!", "timestamp": time.time()}
 
-# Include hexagonal architecture routers
-app.include_router(transaction_router)
-app.include_router(planned_transaction_router)
-app.include_router(category_router)
+# ---------------------------------------------------------------------------
+# API v1 router -- all domain routes under /api/v1/
+# ---------------------------------------------------------------------------
 
-# Budget summary MUST be included BEFORE hexagonal CRUD
-# to avoid /budgets/summary being matched by /budgets/{budget_id}
-app.include_router(budget_summary_router)
-app.include_router(budget_router)  # Hexagonal CRUD
+v1 = APIRouter(prefix="/api/v1")
 
-# Include hexagonal account, goal, and user routers
-app.include_router(account_router)
-app.include_router(account_group_router)
-app.include_router(goal_router)
-app.include_router(user_router)
+v1.include_router(transaction_router)
+v1.include_router(planned_transaction_router)
+v1.include_router(category_router)
 
-# Include hexagonal analytics routers
-app.include_router(dashboard_router)
+# Budget summary MUST be included BEFORE CRUD to avoid
+# /budgets/summary being matched by /budgets/{budget_id}
+v1.include_router(budget_summary_router)
+v1.include_router(budget_router)
+
+v1.include_router(account_router)
+v1.include_router(account_group_router)
+v1.include_router(goal_router)
+v1.include_router(user_router)
+
+v1.include_router(dashboard_router)
+v1.include_router(create_graphql_router(), prefix="/graphql")
+
+app.include_router(v1)

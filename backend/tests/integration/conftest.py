@@ -308,7 +308,7 @@ def seed_categories(test_db):
 def auth_headers(test_client, seed_user, mock_repositories):
     """Login the seed user and return Authorization headers with JWT token."""
     response = test_client.post(
-        "/users/login",
+        "/api/v1/users/login",
         json={
             "username_or_email": seed_user.username,
             "password": "testpassword123",

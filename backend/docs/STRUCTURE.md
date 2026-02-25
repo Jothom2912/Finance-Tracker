@@ -1,23 +1,24 @@
-# Backend Structure (Hexagonal)
+# Backend Structure (Hexagonal + CQRS)
 
 ## Overview
 
-The backend runtime now follows a hexagonal architecture across all active endpoints.
+The backend uses hexagonal architecture across all domains with a CQRS split:
+- **REST** for commands (write operations)
+- **GraphQL** for queries (read operations via a cross-domain read gateway)
 
-Legacy runtime code in `backend/routes/` and legacy business services in
-`backend/services/` were removed as part of the migration.
+All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remain at root.
 
 ## Runtime Entry Points
 
-- `backend/main.py` registers FastAPI routers.
-- `backend/dependencies.py` wires application services with outbound adapters.
+- `backend/main.py` -- registers routers, middleware (CORS, request logging, correlation ID), and the GraphQL endpoint.
+- `backend/dependencies.py` -- wires application services with outbound adapters via FastAPI DI.
 
 ## Active Bounded Contexts
 
 - `backend/transaction/`
 - `backend/category/`
 - `backend/budget/`
-- `backend/analytics/`
+- `backend/analytics/` -- includes the GraphQL read gateway adapter
 - `backend/account/`
 - `backend/goal/`
 - `backend/user/`
@@ -27,63 +28,53 @@ Each context follows the same layout:
 ```text
 <context>/
 ├── adapters/
-│   ├── inbound/
-│   └── outbound/
+│   ├── inbound/       # REST API (+ GraphQL for analytics)
+│   └── outbound/      # Repository implementations
 ├── application/
-│   ├── ports/
-│   └── service.py
+│   ├── ports/         # Inbound + outbound interfaces
+│   ├── service.py     # Application service
+│   └── dto.py         # Data transfer objects
 ├── domain/
+│   ├── entities.py
+│   └── exceptions.py
 └── __init__.py
 ```
 
+### Analytics domain -- read gateway
+
+The `analytics` context contains an extra inbound adapter: `graphql_api.py`. This adapter is a cross-domain read gateway that injects services from other bounded contexts (transactions, categories) to serve read-only GraphQL queries. This is a deliberate architectural choice to provide a single query interface without breaking domain encapsulation -- each domain's service layer is the only entry point.
+
 ## Router Map
 
-- `/transactions/*`
-- `/planned-transactions/*`
-- `/categories/*`
-- `/budgets/*` (CRUD)
-- `/budgets/summary`
-- `/dashboard/overview/`
-- `/dashboard/expenses-by-month/`
-- `/accounts/*`
-- `/account-groups/*`
-- `/goals/*`
-- `/users/*`
+| Path | Domain | Protocol |
+|---|---|---|
+| `/api/v1/transactions/*` | Transaction | REST |
+| `/api/v1/planned-transactions/*` | Transaction | REST |
+| `/api/v1/categories/*` | Category | REST |
+| `/api/v1/budgets/*` (CRUD) | Budget | REST |
+| `/api/v1/budgets/summary` | Analytics | REST |
+| `/api/v1/dashboard/*` | Analytics | REST |
+| `/api/v1/accounts/*` | Account | REST |
+| `/api/v1/account-groups/*` | Account | REST |
+| `/api/v1/goals/*` | Goal | REST |
+| `/api/v1/users/*` | User | REST |
+| `/api/v1/graphql` | Analytics (read gateway) | GraphQL |
+
+## Middleware Stack
+
+1. **CORS** -- configured via `CORS_ORIGINS` env var.
+2. **Request Logging** -- logs method, path, status, duration_ms, and correlation_id.
+3. **Correlation ID** -- generates UUID per request (or forwards `X-Correlation-ID` header). Returned in `X-Correlation-ID` response header.
 
 ## Database Role Configuration
 
-Database settings live in `backend/config.py`.
+Settings in `backend/config.py`:
 
-Key variables:
+- `ACTIVE_DB` -- global fallback
+- `TRANSACTIONS_DB` -- transaction domain
+- `ANALYTICS_DB` -- analytics domain (supports MySQL, Elasticsearch, Neo4j)
+- `USER_DB` -- user domain
 
-- `ACTIVE_DB` (global fallback)
-- `TRANSACTIONS_DB`
-- `ANALYTICS_DB`
-- `USER_DB`
+## Removed Legacy Files
 
-Current behavior:
-
-- Transactional write paths use MySQL-backed adapters.
-- Analytics reads are selected by `ANALYTICS_DB` (MySQL, Elasticsearch, Neo4j).
-
-## Removed Legacy Runtime Files
-
-- `backend/routes/accounts.py`
-- `backend/routes/account_groups.py`
-- `backend/routes/categories.py`
-- `backend/routes/goals.py`
-- `backend/routes/planned_transactions.py`
-- `backend/routes/transactions.py`
-- `backend/routes/users.py`
-- `backend/routes/dashboard.py`
-- `backend/routes/budgets.py`
-
-## Removed Legacy Service Files
-
-- `backend/services/account_service.py`
-- `backend/services/budget_service.py`
-- `backend/services/category_service.py`
-- `backend/services/dashboard_service.py`
-- `backend/services/goal_service.py`
-- `backend/services/transaction_service.py`
-- `backend/services/user_service.py`
+All legacy `backend/routes/` and `backend/services/` files were removed during the hexagonal migration. The legacy `backend/graphql/` directory (direct SessionLocal access) was also removed and replaced by the hexagonal GraphQL read gateway in `backend/analytics/adapters/inbound/graphql_api.py`.

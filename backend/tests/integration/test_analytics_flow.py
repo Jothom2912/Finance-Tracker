@@ -9,7 +9,7 @@ class TestDashboardAnalytics:
     def test_dashboard_overview_returns_200(
         self, test_client, test_db, mock_repositories, seed_account, seed_categories, account_headers
     ):
-        response = test_client.get("/dashboard/overview/", headers=account_headers)
+        response = test_client.get("/api/v1/dashboard/overview/", headers=account_headers)
 
         assert response.status_code == 200
         body = response.json()
@@ -30,7 +30,7 @@ class TestDashboardAnalytics:
             type="expense",
         )
 
-        response = test_client.get("/dashboard/expenses-by-month/", headers=account_headers)
+        response = test_client.get("/api/v1/dashboard/expenses-by-month/", headers=account_headers)
 
         assert response.status_code == 200
         assert isinstance(response.json(), list)

@@ -14,7 +14,7 @@ class TestGoalCreation:
     ):
         # Act - omit target_date (optional) to avoid SQLite string-to-date issue
         response = test_client.post(
-            "/goals/",
+            "/api/v1/goals/",
             json={
                 "name": "Sommerferie",
                 "target_amount": 15000.0,
@@ -33,7 +33,7 @@ class TestGoalCreation:
     ):
         # Act - no account header, no auth
         response = test_client.post(
-            "/goals/",
+            "/api/v1/goals/",
             json={
                 "name": "No Account Goal",
                 "target_amount": 5000.0,
@@ -48,7 +48,7 @@ class TestGoalCreation:
     ):
         # Act - omit target_date (optional) to avoid SQLite string-to-date issue
         response = test_client.post(
-            "/goals/",
+            "/api/v1/goals/",
             json={
                 "name": "Ny bil",
                 "target_amount": 200000.0,
@@ -77,7 +77,7 @@ class TestGoalRetrieval:
 
         # Act
         response = test_client.get(
-            "/goals/",
+            "/api/v1/goals/",
             headers=account_headers,
         )
 
@@ -99,7 +99,7 @@ class TestGoalRetrieval:
         test_db.expire_all()
 
         # Act
-        response = test_client.get(f"/goals/{goal.idGoal}")
+        response = test_client.get(f"/api/v1/goals/{goal.idGoal}")
 
         # Assert
         assert response.status_code == 200
@@ -109,7 +109,7 @@ class TestGoalRetrieval:
         self, test_client, test_db, mock_repositories
     ):
         # Act
-        response = test_client.get("/goals/99999")
+        response = test_client.get("/api/v1/goals/99999")
 
         # Assert
         assert response.status_code == 404
@@ -135,7 +135,7 @@ class TestGoalLifecycle:
 
         # Act - update current_amount (no target_date to avoid SQLite string-to-date)
         response = test_client.put(
-            f"/goals/{goal.idGoal}",
+            f"/api/v1/goals/{goal.idGoal}",
             json={
                 "name": "Progress Test",
                 "target_amount": 10000.0,
@@ -158,7 +158,7 @@ class TestGoalLifecycle:
         test_db.expire_all()
 
         # Act
-        response = test_client.delete(f"/goals/{goal.idGoal}")
+        response = test_client.delete(f"/api/v1/goals/{goal.idGoal}")
 
         # Assert
         assert response.status_code == 204
@@ -167,7 +167,7 @@ class TestGoalLifecycle:
         self, test_client, test_db, mock_repositories
     ):
         # Act
-        response = test_client.delete("/goals/99999")
+        response = test_client.delete("/api/v1/goals/99999")
 
         # Assert
         assert response.status_code == 404

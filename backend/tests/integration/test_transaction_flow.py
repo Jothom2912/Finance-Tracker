@@ -188,7 +188,7 @@ class TestTransactionCreation:
 
         # Act
         token = create_access_token(user.idUser, user.username, user.email)
-        response = test_client.post("/transactions/",
+        response = test_client.post("/api/v1/transactions/",
             json={
                 "category_id": category.idCategory,
                 "account_id": account.idAccount,
@@ -232,7 +232,7 @@ class TestCsvUpload:
         # Act
         token = create_access_token(user.idUser, user.username, user.email)
         response = test_client.post(
-            "/transactions/upload-csv/",
+            "/api/v1/transactions/upload-csv/",
             files={"file": ("test.csv", io.BytesIO(csv), "text/csv")},
             headers={
                 "Authorization": f"Bearer {token}",

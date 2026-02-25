@@ -56,6 +56,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 
 
 # =============================================================================
+# Application / Observability
+# =============================================================================
+
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+
+# =============================================================================
 # CORS Configuration
 # =============================================================================
 

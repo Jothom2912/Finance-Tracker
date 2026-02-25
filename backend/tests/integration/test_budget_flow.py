@@ -24,7 +24,7 @@ class TestBudgetCreation:
 
         # Act
         response = test_client.post(
-            "/budgets/",
+            "/api/v1/budgets/",
             json={
                 "amount": 5000.0,
                 "category_id": category.idCategory,
@@ -47,7 +47,7 @@ class TestBudgetCreation:
 
         # Act
         response = test_client.post(
-            "/budgets/",
+            "/api/v1/budgets/",
             json={
                 "amount": 3000.0,
                 "category_id": category.idCategory,
@@ -71,7 +71,7 @@ class TestBudgetCreation:
 
         # Act
         response = test_client.post(
-            "/budgets/",
+            "/api/v1/budgets/",
             json={
                 "amount": 5000.0,
                 "category_id": 9999,
@@ -109,7 +109,7 @@ class TestBudgetRetrieval:
 
         # Act
         response = test_client.get(
-            "/budgets/",
+            "/api/v1/budgets/",
             headers=account_headers,
         )
 
@@ -133,7 +133,7 @@ class TestBudgetRetrieval:
         test_db.expire_all()
 
         # Act
-        response = test_client.get(f"/budgets/{budget.idBudget}")
+        response = test_client.get(f"/api/v1/budgets/{budget.idBudget}")
 
         # Assert
         assert response.status_code == 200
@@ -143,7 +143,7 @@ class TestBudgetRetrieval:
         self, test_client, test_db, mock_repositories
     ):
         # Act
-        response = test_client.get("/budgets/99999")
+        response = test_client.get("/api/v1/budgets/99999")
 
         # Assert
         assert response.status_code == 404
@@ -167,7 +167,7 @@ class TestBudgetLifecycle:
 
         # Act
         response = test_client.put(
-            f"/budgets/{budget.idBudget}",
+            f"/api/v1/budgets/{budget.idBudget}",
             json={"amount": 7000.0},
         )
 
@@ -189,7 +189,7 @@ class TestBudgetLifecycle:
         test_db.expire_all()
 
         # Act
-        response = test_client.delete(f"/budgets/{budget.idBudget}")
+        response = test_client.delete(f"/api/v1/budgets/{budget.idBudget}")
 
         # Assert
         assert response.status_code == 204
@@ -198,7 +198,7 @@ class TestBudgetLifecycle:
         self, test_client, test_db, mock_repositories
     ):
         # Act
-        response = test_client.delete("/budgets/99999")
+        response = test_client.delete("/api/v1/budgets/99999")
 
         # Assert
         assert response.status_code == 404
@@ -245,7 +245,7 @@ class TestBudgetSummary:
 
         # Act
         response = test_client.get(
-            "/budgets/summary",
+            "/api/v1/budgets/summary",
             params={"month": str(today.month), "year": str(today.year)},
             headers=account_headers,
         )
