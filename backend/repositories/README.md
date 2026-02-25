@@ -1,188 +1,104 @@
-# Repository Pattern - Multi-Database Support
+# Repository Layer -- Multi-Database Infrastructure
 
-Denne mappe indeholder repository implementations for alle 3 databaser: MySQL, Elasticsearch og Neo4j.
+This folder contains the shared repository infrastructure that provides multi-database support across MySQL, Elasticsearch, and Neo4j.
 
-## 📁 Mappe Struktur
+## Role in Hexagonal Architecture
+
+In the current hexagonal architecture, each bounded context (e.g. `transaction/`, `budget/`) has its own outbound adapters that implement repository interfaces defined in `application/ports/outbound.py`. This shared `repositories/` layer provides the underlying database-specific implementations that those outbound adapters delegate to.
+
+```
+Bounded Context (e.g. transaction/)
+├── application/ports/outbound.py    # Port interface (TransactionRepository ABC)
+├── adapters/outbound/
+│   └── mysql_repository.py          # Outbound adapter (implements port, uses shared repo)
+│
+Shared Infrastructure (repositories/)
+├── base.py                          # Abstract interfaces (legacy, still used by factory)
+├── __init__.py                      # Factory functions for database selection
+├── mysql/                           # MySQL implementations
+├── elasticsearch/                   # Elasticsearch implementations
+└── neo4j/                           # Neo4j implementations
+```
+
+## Directory Structure
 
 ```
 repositories/
-├── __init__.py              # Factory functions til at vælge repository
-├── base.py                  # Abstract interfaces (kontrakter)
-├── mysql/                   # MySQL implementations
+├── __init__.py                    # Factory functions (select repository by ACTIVE_DB)
+├── base.py                        # Abstract interfaces (ABC)
+├── mysql/
 │   ├── transaction_repository.py
 │   ├── category_repository.py
 │   ├── account_repository.py
+│   ├── account_group_repository.py
 │   ├── user_repository.py
 │   ├── budget_repository.py
-│   └── goal_repository.py
-├── elasticsearch/           # Elasticsearch implementations
+│   ├── goal_repository.py
+│   └── planned_transaction_repository.py
+├── elasticsearch/
 │   ├── transaction_repository.py
-│   └── category_repository.py
-└── neo4j/                   # Neo4j implementations
+│   ├── category_repository.py
+│   ├── account_repository.py
+│   ├── budget_repository.py
+│   ├── goal_repository.py
+│   └── user_repository.py
+└── neo4j/
     ├── transaction_repository.py
     ├── category_repository.py
     ├── account_repository.py
+    ├── budget_repository.py
+    ├── goal_repository.py
     └── user_repository.py
 ```
 
-## 🔄 Sådan skifter du database
+## Database Selection
 
-### Via Environment Variable
+The factory in `__init__.py` selects the right implementation based on environment variables:
 
-I `.env` filen:
+| Variable | Scope | Default |
+|----------|-------|---------|
+| `ACTIVE_DB` | Global fallback | `mysql` |
+| `TRANSACTIONS_DB` | Transaction domain | `mysql` |
+| `ANALYTICS_DB` | Analytics domain | `ACTIVE_DB` |
+| `USER_DB` | User domain | `mysql` |
 
 ```bash
-# Brug MySQL (standard)
-ACTIVE_DB=mysql
+# Switch to Elasticsearch for analytics
+ANALYTICS_DB=elasticsearch
 
-# Brug Elasticsearch
-ACTIVE_DB=elasticsearch
-
-# Brug Neo4j
+# Switch everything to Neo4j
 ACTIVE_DB=neo4j
 ```
 
-### I Koden
+## Repository Support Matrix
 
-**FastAPI Routes (med session management):**
+| Repository | MySQL | Elasticsearch | Neo4j |
+|------------|-------|---------------|-------|
+| Transaction | Yes | Yes | Yes |
+| Category | Yes | Yes | Yes |
+| Account | Yes | Yes | Yes |
+| User | Yes | Yes | Yes |
+| Budget | Yes | Yes | Yes |
+| Goal | Yes | Yes | Yes |
+
+MySQL has the most complete implementations. Elasticsearch and Neo4j implementations cover the same interfaces but may have limitations for certain query patterns.
+
+## Usage in Hexagonal Domains
+
+The bounded context outbound adapters in `<context>/adapters/outbound/` use these repositories. The DI wiring in `dependencies.py` selects the right implementation:
+
 ```python
-from fastapi import Depends
-from sqlalchemy.orm import Session
-from backend.database.mysql import get_db
 from backend.repositories import get_transaction_repository
 
-@router.get("/")
-def get_transactions(db: Session = Depends(get_db)):
-    # MySQL kræver session, ES/Neo4j ignorerer den
-    repo = get_transaction_repository(db)
-    return repo.get_all(start_date=date(2024, 1, 1))
-```
-
-**Scripts (manual session management):**
-```python
-from backend.database.mysql import SessionLocal
-from backend.repositories import get_transaction_repository
-from backend.config import ACTIVE_DB
-
-db = SessionLocal() if ACTIVE_DB == "mysql" else None
-try:
-    repo = get_transaction_repository(db) if ACTIVE_DB == "mysql" else get_transaction_repository()
-    transactions = repo.get_all(start_date=date(2024, 1, 1))
-finally:
-    if db:
-        db.close()
-```
-
-## 📋 Repository Interfaces
-
-Alle repositories implementerer de samme interfaces fra `base.py`:
-
-- **ITransactionRepository** - CRUD for transaktioner
-- **ICategoryRepository** - CRUD for kategorier
-- **IAccountRepository** - CRUD for konti
-- **IUserRepository** - CRUD for brugere
-- **IBudgetRepository** - CRUD for budgetter
-- **IGoalRepository** - CRUD for mål
-
-## 🎯 Factory Functions
-
-```python
-from backend.repositories import (
-    get_transaction_repository,
-    get_category_repository,
-    get_account_repository,
-    get_user_repository,
-    get_budget_repository,
-    get_goal_repository
-)
-
-# Alle returnerer den rigtige implementation baseret på ACTIVE_DB
-transaction_repo = get_transaction_repository()
-category_repo = get_category_repository()
-# osv...
-```
-
-## 💡 Eksempel Brug
-
-**FastAPI Route:**
-```python
-from fastapi import Depends
-from sqlalchemy.orm import Session
-from backend.database.mysql import get_db
-from backend.repositories import get_transaction_repository
-from datetime import date
-
-@router.get("/")
-def get_transactions(db: Session = Depends(get_db)):
-    repo = get_transaction_repository(db)  # Pass session for MySQL
-    return repo.get_all(
-        start_date=date(2024, 1, 1),
-        end_date=date(2024, 12, 31),
-        account_id=1,
-        limit=50
+def get_transaction_service(db: Session = Depends(get_db)) -> TransactionService:
+    return TransactionService(
+        transaction_repo=get_transaction_repository(db),
+        category_repo=get_category_repository(db),
     )
-
-@router.post("/")
-def create_transaction(transaction_data: dict, db: Session = Depends(get_db)):
-    repo = get_transaction_repository(db)
-    return repo.create(transaction_data)
 ```
 
-**Script:**
-```python
-from backend.database.mysql import SessionLocal
-from backend.repositories import get_transaction_repository
-from backend.config import ACTIVE_DB
-from datetime import date
+Services never access repositories directly from routes. The flow is:
 
-db = SessionLocal() if ACTIVE_DB == "mysql" else None
-try:
-    repo = get_transaction_repository(db) if ACTIVE_DB == "mysql" else get_transaction_repository()
-    
-    # Brug samme interface uanset database
-    transactions = repo.get_all(
-        start_date=date(2024, 1, 1),
-        end_date=date(2024, 12, 31),
-        account_id=1,
-        limit=50
-    )
-    
-    # Opret transaktion
-    new_transaction = repo.create({
-        "amount": -500.0,
-        "description": "Netto køb",
-        "date": "2024-12-15",
-        "type": "expense",
-        "Category_idCategory": 1,
-        "Account_idAccount": 1
-    })
-finally:
-    if db:
-        db.close()
 ```
-
-## 🔧 Session Management
-
-**Vigtigt:** MySQL repositories kræver en database session, mens Elasticsearch og Neo4j repositories virker uden session.
-
-- **FastAPI Routes:** Brug `Depends(get_db)` - session lukkes automatisk efter request
-- **Services:** Modtag `db: Session` som parameter og send videre til repositories
-- **Scripts:** Opret session med `SessionLocal()` og luk med `db.close()` i `finally` blok
-
-## 🔧 Tilføj ny repository
-
-1. Opret interface i `base.py` (hvis ikke eksisterer)
-2. Implementer i alle 3 mapper:
-   - `mysql/your_repository.py`
-   - `elasticsearch/your_repository.py`
-   - `neo4j/your_repository.py`
-3. Tilføj factory function i `__init__.py`
-
-## ✅ Fordele ved denne struktur
-
-- ✅ **Separation of Concerns** - Hver database har sin egen mappe
-- ✅ **Easy Switching** - Skift database med én environment variable
-- ✅ **Type Safety** - Interfaces garanterer samme API
-- ✅ **Testability** - Nemt at mocke repositories
-- ✅ **Maintainability** - Klar struktur, nem at finde kode
-
+Inbound Adapter → Service → Outbound Port → Repository Adapter → Database
+```

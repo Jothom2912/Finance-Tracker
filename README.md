@@ -1,46 +1,20 @@
-# Personal Finance Tracker - Multi-Database Implementation
+# Finance Tracker -- Multi-Database Personal Finance Application
 
-A modern personal finance tracking application demonstrating **Clean Architecture** and **Repository Pattern** by implementing the same business logic across three different databases: **MySQL**, **Elasticsearch**, and **Neo4j**.
+A personal finance tracking application built with **hexagonal architecture (ports & adapters)**, **CQRS**, and **multi-database support** across MySQL, Elasticsearch, and Neo4j. The backend uses FastAPI with domain-driven bounded contexts, and the frontend is a React SPA.
 
 ## Table of Contents
 
-- [Project Overview](#project-overview)
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
-- [Switch Between Databases](#switch-between-databases)
-- [Database Comparison](#database-comparison)
-- [API Endpoints](#api-endpoints)
+- [API Reference](#api-reference)
+- [GraphQL Read Gateway](#graphql-read-gateway)
+- [Configuration](#configuration)
 - [Testing](#testing)
-- [Database Dumps](#database-dumps)
+- [Database Support](#database-support)
 - [Security](#security)
 - [Development](#development)
-- [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
-- [License](#license)
-
----
-
-## Project Overview
-
-This project showcases:
-- **Clean Architecture** with clear separation of concerns
-- **Repository Pattern** for database abstraction
-- **Multi-database support** - Switch between MySQL, Elasticsearch, and Neo4j seamlessly
-- **RESTful API** built with FastAPI
-- **JWT Authentication** with secure password hashing
-- **Modern Frontend** built with React
-
-### Key Features
-
-- **Transaction Management** - Track income and expenses with CSV import
-- **Budget Planning** - Set budgets per category with summary and aggregation
-- **Financial Goals** - Set savings goals and track progress
-- **Dashboard Analytics** - Financial overview, monthly breakdowns, category insights
-- **Account Groups** - Group accounts for household or shared budgets
-- **Planned Transactions** - Schedule future recurring transactions
-- **Multi-Database** - Switch between MySQL, Elasticsearch, and Neo4j
-- **Auto-Categorization** - Automatic transaction categorization from CSV
 
 ---
 
@@ -48,29 +22,136 @@ This project showcases:
 
 ### Prerequisites
 
-- Docker Desktop installed and running
-- Git installed
-- 8GB RAM available (minimum 4GB for Elasticsearch)
+- Python 3.11+
+- `uv` (Python package manager)
+- Node.js 18+ (for frontend)
+- Docker Desktop (optional, for database services)
 
-### Installation
-
-See [INSTALLATION.md](INSTALLATION.md) for detailed setup instructions.
+### Backend
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/finance-tracker.git
-cd finance-tracker
-
-# Start all services
-docker-compose up -d
-
-# Wait for services to be healthy (30-60 seconds)
-docker-compose ps
-
-# Access the application
-# - API: http://localhost:8080/docs
-# - Neo4j Browser: http://localhost:7474
+cd backend
+uv sync
+uv run uvicorn backend.main:app --reload --port 8000
 ```
+
+- API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/health
+- GraphQL playground: http://localhost:8000/api/v1/graphql
+
+### Frontend
+
+```bash
+cd frontend/finans-tracker-frontend
+npm install
+npm start
+```
+
+- App: http://localhost:3000
+
+### Docker (all services)
+
+```bash
+docker-compose up -d
+```
+
+See [INSTALLATION.md](INSTALLATION.md) for detailed setup including database seeding.
+
+---
+
+## Architecture
+
+### Hexagonal Architecture with CQRS
+
+The backend is organized into bounded contexts, each following hexagonal architecture:
+
+- **REST** handles commands (create, update, delete) via inbound adapters
+- **GraphQL** handles cross-domain read queries via a read gateway adapter
+- Application services enforce business rules and are injected with outbound port implementations
+- Outbound adapters implement repository interfaces for MySQL, Elasticsearch, and Neo4j
+
+```mermaid
+graph TB
+    subgraph "Clients"
+        FE[React Frontend]
+        GQL[GraphQL Client]
+    end
+
+    subgraph "Inbound Adapters"
+        REST[REST Controllers<br/>/api/v1/*]
+        GRAPHQL[GraphQL Read Gateway<br/>/api/v1/graphql]
+    end
+
+    subgraph "Middleware"
+        CORS[CORS]
+        LOG[Request Logging<br/>+ Correlation ID]
+    end
+
+    subgraph "Application Layer"
+        SVC[Domain Services<br/>TransactionService, BudgetService, etc.]
+        PORTS_IN[Inbound Ports<br/>Service interfaces]
+        PORTS_OUT[Outbound Ports<br/>Repository interfaces]
+    end
+
+    subgraph "Outbound Adapters"
+        MYSQL_REPO[MySQL Repositories]
+        ES_REPO[Elasticsearch Repositories]
+        NEO4J_REPO[Neo4j Repositories]
+    end
+
+    subgraph "Databases"
+        MYSQL[(MySQL)]
+        ES[(Elasticsearch)]
+        NEO4J[(Neo4j)]
+    end
+
+    FE --> REST
+    GQL --> GRAPHQL
+    REST --> LOG --> CORS --> PORTS_IN
+    GRAPHQL --> LOG
+    PORTS_IN --> SVC
+    SVC --> PORTS_OUT
+    PORTS_OUT --> MYSQL_REPO --> MYSQL
+    PORTS_OUT --> ES_REPO --> ES
+    PORTS_OUT --> NEO4J_REPO --> NEO4J
+```
+
+### CQRS Split
+
+| Operation | Protocol | Example |
+|-----------|----------|---------|
+| Commands (write) | REST | `POST /api/v1/transactions/` |
+| Queries (read) | GraphQL | `query { financialOverview { ... } }` |
+| Domain-specific reads | REST | `GET /api/v1/transactions/` |
+
+The GraphQL endpoint is a cross-domain read gateway that aggregates data from multiple bounded contexts (analytics, transactions, categories) through a single query interface, without breaking domain encapsulation.
+
+### Dependency Injection Flow
+
+```mermaid
+sequenceDiagram
+    participant Route as Inbound Adapter
+    participant DI as dependencies.py
+    participant Service as Application Service
+    participant Port as Outbound Port
+    participant Repo as Repository Adapter
+
+    Route->>DI: Depends(get_transaction_service)
+    DI->>Repo: Instantiate repository adapter
+    DI->>Service: Inject repository via constructor
+    Route->>Service: service.create_transaction(data)
+    Service->>Port: self._transaction_repo.create(...)
+    Port->>Repo: MySQL/ES/Neo4j implementation
+    Repo-->>Service: Domain entity
+    Service-->>Route: Result
+```
+
+### Observability
+
+Every HTTP request gets a correlation ID (auto-generated UUID or forwarded from `X-Correlation-ID` header). The ID is included in log output and returned in the `X-Correlation-ID` response header for end-to-end tracing.
+
+- Development: human-readable log format
+- Production: structured JSON logs with `correlation_id`, `method`, `path`, `status`, `duration_ms`
 
 ---
 
@@ -79,748 +160,342 @@ docker-compose ps
 ```
 finance-tracker/
 ├── backend/
-│   ├── main.py              # FastAPI app entry point
-│   ├── config.py            # Centralized environment config
-│   ├── auth.py              # JWT auth + password hashing (bcrypt)
-│   ├── dependencies.py      # FastAPI DI wiring (service factories)
+│   ├── main.py                 # FastAPI app, middleware, router registration
+│   ├── config.py               # Environment variable configuration
+│   ├── auth.py                 # JWT authentication + bcrypt hashing
+│   ├── dependencies.py         # FastAPI DI wiring (service factories)
 │   │
-│   ├── database/            # Database connections
-│   │   ├── mysql.py         # SQLAlchemy engine + session
-│   │   ├── elasticsearch.py # ES client
-│   │   └── neo4j.py         # Neo4j driver
+│   ├── transaction/            # Bounded context: transactions
+│   │   ├── adapters/
+│   │   │   ├── inbound/        # REST API (rest_api.py)
+│   │   │   └── outbound/       # MySQL repository, category adapter
+│   │   ├── application/
+│   │   │   ├── ports/          # Inbound + outbound interfaces
+│   │   │   ├── service.py      # Application service
+│   │   │   └── dto.py          # Data transfer objects
+│   │   └── domain/
+│   │       ├── entities.py     # Domain entities
+│   │       └── exceptions.py   # Domain exceptions
 │   │
-│   ├── models/mysql/        # SQLAlchemy ORM models
-│   │   ├── user.py          # User model
-│   │   ├── account.py       # Account model
-│   │   ├── transaction.py   # Transaction model
-│   │   ├── category.py      # Category model
-│   │   ├── budget.py        # Budget model
-│   │   ├── goal.py          # Goal model
-│   │   ├── planned_transactions.py
-│   │   ├── account_groups.py
-│   │   └── common.py        # Base, enums, association tables
+│   ├── budget/                 # Bounded context: budgets (same layout)
+│   ├── category/               # Bounded context: categories
+│   ├── account/                # Bounded context: accounts + groups
+│   ├── goal/                   # Bounded context: goals
+│   ├── user/                   # Bounded context: users + auth
+│   ├── analytics/              # Bounded context: dashboard + GraphQL gateway
+│   │   └── adapters/inbound/
+│   │       └── graphql_api.py  # Cross-domain GraphQL read gateway
 │   │
-│   ├── repositories/        # Repository Pattern
-│   │   ├── base.py          # Abstract interfaces (ABC)
-│   │   ├── __init__.py      # Repository factory functions
-│   │   ├── mysql/           # MySQL implementations (8 repos)
-│   │   ├── elasticsearch/   # Elasticsearch implementations
-│   │   └── neo4j/           # Neo4j implementations
+│   ├── database/               # Database connection managers
+│   │   ├── mysql.py            # SQLAlchemy engine + session
+│   │   ├── elasticsearch.py    # ES client
+│   │   └── neo4j.py            # Neo4j driver
 │   │
-│   ├── services/            # Business logic (class-based + DI)
-│   │   ├── transaction_service.py  # Transactions + planned transactions
-│   │   ├── account_service.py      # Accounts + account groups
-│   │   ├── budget_service.py       # Budgets + summary calculations
-│   │   ├── category_service.py     # Category CRUD + duplicate check
-│   │   ├── goal_service.py         # Savings goals
-│   │   ├── dashboard_service.py    # Financial analytics
-│   │   └── user_service.py         # Registration, login, JWT
+│   ├── models/mysql/           # SQLAlchemy ORM models
+│   ├── repositories/           # Legacy repository layer (multi-DB factory)
+│   │   ├── base.py             # Abstract interfaces (ABC)
+│   │   ├── mysql/              # MySQL implementations
+│   │   ├── elasticsearch/      # Elasticsearch implementations
+│   │   └── neo4j/              # Neo4j implementations
 │   │
-│   ├── routes/              # FastAPI endpoint routers
-│   ├── shared/schemas/      # Pydantic validation schemas
-│   ├── shared/exceptions/   # Custom business exceptions
+│   ├── shared/
+│   │   ├── schemas/            # Pydantic validation schemas
+│   │   └── exceptions/         # Business exception classes
 │   │
-│   └── tests/               # Test suite (321 tests)
+│   └── tests/
 │       ├── unittests/
-│       │   ├── services/    # Service unit tests (7 files, 150 tests)
-│       │   ├── test_*.py    # Schema BVA tests (12 files, 143 tests)
-│       │   └── ...
+│       │   ├── services/       # Service layer unit tests
+│       │   └── test_*.py       # Schema BVA validation tests
 │       └── integration/
-│           ├── conftest.py  # Shared fixtures, Factory, auth helpers
+│           ├── conftest.py     # Shared fixtures, auth helpers
+│           ├── test_graphql_flow.py
 │           ├── test_transaction_flow.py
 │           ├── test_budget_flow.py
 │           ├── test_account_flow.py
-│           └── test_goal_flow.py
+│           ├── test_goal_flow.py
+│           └── test_analytics_flow.py
 │
-├── frontend/                # React frontend
-├── dumps/                   # Database dumps (MySQL, ES, Neo4j)
-├── docker-compose.yml       # Docker services
-├── Dockerfile               # Backend container
-├── INSTALLATION.md          # Setup guide
-└── README.md                # This file
+├── frontend/
+│   └── finans-tracker-frontend/  # React SPA
+│       ├── src/
+│       │   ├── components/     # UI components
+│       │   ├── pages/          # Page components
+│       │   ├── context/        # Auth context
+│       │   ├── hooks/          # Custom hooks
+│       │   └── utils/          # API client
+│       └── cypress/            # E2E tests
+│
+├── docker-compose.yml
+├── Dockerfile
+├── example.env
+├── INSTALLATION.md
+└── README.md
 ```
 
 ---
 
-## Switch Between Databases
+## API Reference
 
-The application supports three databases. Switch by changing `ACTIVE_DB` in `.env` or environment variables:
+All domain routes are versioned under `/api/v1/`. Root-level endpoints (`/`, `/health`) are not versioned.
 
-```bash
-# Use MySQL (default - ACID transactions, relations)
-ACTIVE_DB=mysql
+### Router Map
 
-# Use Elasticsearch (full-text search, analytics)
-ACTIVE_DB=elasticsearch
-
-# Use Neo4j (graph queries, relationships)
-ACTIVE_DB=neo4j
-```
-
-**No code changes required!** The Repository Pattern handles the switch automatically.
-
----
-
-## Database Comparison
-
-| Feature | MySQL | Elasticsearch | Neo4j |
-|---------|-------|---------------|-------|
-| **Primary Use** | CRUD operations | Search & Analytics | Graph queries |
-| **Strengths** | ACID, Relations | Full-text search | Relationship traversal |
-| **Best For** | Primary data store | Search, aggregations | Network analysis |
-| **Query Language** | SQL | Query DSL | Cypher |
-
-See [backend/DATABASE_COMPARISON.md](backend/DATABASE_COMPARISON.md) for detailed comparison.
-
----
-
-## API Endpoints
+| Path | Domain | Protocol | Auth |
+|------|--------|----------|------|
+| `/api/v1/transactions/*` | Transaction | REST | Yes |
+| `/api/v1/transactions/upload-csv/` | Transaction | REST | Yes |
+| `/api/v1/planned-transactions/*` | Transaction | REST | Yes |
+| `/api/v1/categories/*` | Category | REST | Partial |
+| `/api/v1/budgets/*` | Budget | REST | Yes |
+| `/api/v1/budgets/summary` | Analytics | REST | Yes |
+| `/api/v1/dashboard/overview/` | Analytics | REST | Yes |
+| `/api/v1/dashboard/expenses-by-month/` | Analytics | REST | Yes |
+| `/api/v1/accounts/*` | Account | REST | Yes |
+| `/api/v1/account-groups/*` | Account | REST | No |
+| `/api/v1/goals/*` | Goal | REST | Yes |
+| `/api/v1/users/*` | User | REST | Partial |
+| `/api/v1/graphql` | Analytics (read gateway) | GraphQL | Yes |
 
 ### Authentication
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `POST` | `/users/` | Register new user | No |
-| `POST` | `/users/login` | Login and get JWT token | No |
-| `GET` | `/users/{user_id}` | Get user details | Yes |
+All protected endpoints require:
+- `Authorization: Bearer <jwt-token>` header
+- `X-Account-ID: <id>` header (optional, defaults to user's first account)
 
-### Transactions
+### Key Endpoints
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/transactions/` | List transactions (with filters) | Yes |
-| `POST` | `/transactions/` | Create transaction | Yes |
-| `GET` | `/transactions/{id}` | Get transaction by ID | Yes |
-| `PUT` | `/transactions/{id}` | Update transaction | Yes |
-| `DELETE` | `/transactions/{id}` | Delete transaction | Yes |
-| `POST` | `/transactions/upload-csv/` | Bulk import from CSV | Yes |
+```bash
+# Register
+curl -X POST http://localhost:8000/api/v1/users/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "email": "test@example.com", "password": "test123456"}'
 
-**Query Parameters:**
-- `start_date` - Filter by start date
-- `end_date` - Filter by end date
-- `type` - Filter by type (income/expense)
-- `category_id` - Filter by category
+# Login
+curl -X POST http://localhost:8000/api/v1/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"username_or_email": "testuser", "password": "test123456"}'
 
-### Accounts
+# Create transaction (with JWT token)
+curl -X POST http://localhost:8000/api/v1/transactions/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-Account-ID: 1" \
+  -d '{"amount": -100.50, "description": "Groceries", "date": "2025-12-09", "type": "expense", "Category_idCategory": 1}'
+```
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/accounts/` | List user's accounts | Yes |
-| `POST` | `/accounts/` | Create account | Yes |
-| `GET` | `/accounts/{id}` | Get account by ID | Yes |
-| `PUT` | `/accounts/{id}` | Update account | Yes |
-| `DELETE` | `/accounts/{id}` | Delete account | Yes |
+---
 
-### Categories
+## GraphQL Read Gateway
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/categories/` | List all categories | No |
-| `POST` | `/categories/` | Create category | Yes |
-| `GET` | `/categories/{id}` | Get category by ID | No |
+The GraphQL endpoint at `/api/v1/graphql` provides read-only queries across multiple bounded contexts. No mutations are exposed -- all write operations use REST.
 
-### Budgets
+### Available Queries
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/budgets/` | List budgets (with filters) | Yes |
-| `POST` | `/budgets/` | Create budget | Yes |
-| `GET` | `/budgets/{id}` | Get budget by ID | Yes |
-| `PUT` | `/budgets/{id}` | Update budget | Yes |
-| `DELETE` | `/budgets/{id}` | Delete budget | Yes |
-| `GET` | `/budgets/{id}/summary` | Get budget summary | Yes |
+| Query | Description | Returns |
+|-------|-------------|---------|
+| `financialOverview(accountId)` | Income, expenses, balance, transaction count | `FinancialOverviewType` |
+| `expensesByMonth(accountId)` | Monthly expense breakdown | `[MonthlyExpenseType]` |
+| `budgetSummary(accountId, month, year)` | Budget vs actual spending per category | `[BudgetSummaryEntryType]` |
+| `categories` | All categories | `[CategoryType]` |
+| `transactions(accountId)` | Transactions for an account | `[TransactionType]` |
 
-**Query Parameters:**
-- `month` - Filter by month (MM format)
-- `year` - Filter by year (YYYY format)
+### Example Query
 
-### Goals
+```graphql
+query {
+  financialOverview(accountId: 1) {
+    totalIncome
+    totalExpenses
+    balance
+    transactionCount
+  }
+  categories {
+    id
+    name
+    type
+  }
+}
+```
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/goals/` | List goals | Yes |
-| `POST` | `/goals/` | Create goal | Yes |
-| `GET` | `/goals/{id}` | Get goal by ID | Yes |
-| `PUT` | `/goals/{id}` | Update goal | Yes |
-| `DELETE` | `/goals/{id}` | Delete goal | Yes |
+---
 
-### Dashboard
+## Configuration
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/dashboard/overview/` | Financial overview statistics | Yes |
-| `GET` | `/dashboard/expenses-by-month/` | Monthly expenses breakdown | Yes |
+All configuration is loaded from environment variables via `backend/config.py`. See `example.env` for the full list with descriptions.
 
-### Account Groups
+### Core Variables
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/account-groups/` | List account groups | No |
-| `POST` | `/account-groups/` | Create account group | No |
-| `GET` | `/account-groups/{id}` | Get account group by ID | No |
-| `PUT` | `/account-groups/{id}` | Update account group | No |
-
-### Planned Transactions
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/planned-transactions/` | List planned transactions | Yes |
-| `POST` | `/planned-transactions/` | Create planned transaction | Yes |
-| `GET` | `/planned-transactions/{id}` | Get planned transaction | Yes |
-| `PUT` | `/planned-transactions/{id}` | Update planned transaction | Yes |
-
-**Full API Documentation:**
-- **Docker:** http://localhost:8080/docs
-- **Local development:** http://localhost:8000/docs
-
-**Authentication:**
-- Include JWT token in `Authorization` header: `Bearer <token>`
-- Include account context in `X-Account-ID` header (optional, defaults to user's first account)
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SECRET_KEY` | Yes | -- | JWT signing key |
+| `DATABASE_URL` | Yes | -- | MySQL connection string |
+| `ACTIVE_DB` | No | `mysql` | Global fallback database |
+| `TRANSACTIONS_DB` | No | `mysql` | Database for transaction workloads |
+| `ANALYTICS_DB` | No | `ACTIVE_DB` | Database for analytics workloads |
+| `USER_DB` | No | `mysql` | Database for user workloads |
+| `CORS_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | Allowed origins |
+| `ENVIRONMENT` | No | `development` | `development`, `staging`, `production` |
+| `LOG_LEVEL` | No | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `ELASTICSEARCH_HOST` | No | `http://localhost:9200` | Elasticsearch URL |
+| `NEO4J_URI` | No | `bolt://localhost:7687` | Neo4j bolt URI |
+| `NEO4J_USER` | No | `neo4j` | Neo4j username |
+| `NEO4J_PASSWORD` | No | -- | Neo4j password |
 
 ---
 
 ## Testing
 
-The project has **321 tests** organized following the Testing Pyramid:
+The project has **239 tests** organized following the testing pyramid:
 
 ```
      +----------+
-     |   E2E    |   (future - Playwright)
+     |   E2E    |   Cypress (frontend)
      +----------+
-     | Integr.  |   30 tests - Full HTTP flow
+     | Integr.  |   45 tests - Full HTTP flow + GraphQL
      +----------+
-     |   Unit   |   291 tests - Business logic + schema validation
+     |   Unit   |   194 tests - Business logic + schema BVA
      +----------+
-```
-
-### Test Structure
-
-```
-backend/tests/
-├── unittests/
-│   ├── services/                    # Service layer unit tests (150 tests)
-│   │   ├── test_transaction_service.py   # 53 tests
-│   │   ├── test_account_service.py       # 23 tests
-│   │   ├── test_budget_service.py        # 17 tests
-│   │   ├── test_category_service.py      # 14 tests
-│   │   ├── test_goal_service.py          # 13 tests
-│   │   ├── test_dashboard_service.py     # 14 tests
-│   │   └── test_user_service.py          # 16 tests
-│   │
-│   ├── test_transaction.py          # Schema BVA validation tests
-│   ├── test_budget.py
-│   ├── test_category.py
-│   ├── test_goal.py
-│   ├── test_user.py
-│   └── ...                          # 141 schema/BVA tests total
-│
-└── integration/                     # Full HTTP stack tests (30 tests)
-    ├── conftest.py                  # Shared fixtures, Factory, auth helpers
-    ├── test_transaction_flow.py     # Transaction creation + CSV import
-    ├── test_budget_flow.py          # Budget CRUD + summary with aggregation
-    ├── test_account_flow.py         # Account CRUD + auth checks
-    └── test_goal_flow.py            # Goal CRUD + progress tracking
 ```
 
 ### Running Tests
 
 ```bash
-# Run all tests (321 tests)
-pytest backend/tests/ -v
+cd backend
 
-# Run only unit tests
-pytest backend/tests/unittests/ -v
+# All tests
+uv run pytest tests/ -v
 
-# Run only service unit tests
-pytest backend/tests/unittests/services/ -v
+# Unit tests only
+uv run pytest tests/unittests/ -v
 
-# Run only integration tests
-pytest backend/tests/integration/ -v
+# Integration tests only
+uv run pytest tests/integration/ -v
 
-# Run with coverage
-pytest backend/tests/ --cov=backend --cov-report=html
+# With coverage
+uv run pytest tests/ --cov=backend --cov-report=html
 ```
 
-### Test Patterns
+### Test Categories
 
-**Unit tests** use mocked repositories (no database):
-
-```python
-class TestTransactionService:
-    def setup_method(self):
-        self.mock_transaction_repo = Mock(spec=ITransactionRepository)
-        self.mock_category_repo = Mock(spec=ICategoryRepository)
-        self.service = TransactionService(
-            transaction_repo=self.mock_transaction_repo,
-            category_repo=self.mock_category_repo,
-        )
-
-    def test_create_transaction_validates_category(self):
-        self.mock_category_repo.get_by_id.return_value = None
-        with pytest.raises(ValueError):
-            self.service.create_transaction(transaction_data)
-```
-
-**Integration tests** use in-memory SQLite with real repositories:
-
-```python
-def test_create_account_returns_201(self, test_client, auth_headers, mock_repositories):
-    response = test_client.post(
-        "/accounts/",
-        json={"name": "Opsparingskonto", "saldo": 25000.0},
-        headers=auth_headers,
-    )
-    assert response.status_code == 201
-    assert response.json()["name"] == "Opsparingskonto"
-```
+| Category | Location | Count | What It Tests |
+|----------|----------|-------|---------------|
+| Service unit tests | `tests/unittests/services/` | ~30 | Service layer with mocked repos |
+| Schema BVA tests | `tests/unittests/test_*.py` | ~164 | Pydantic schema boundary values |
+| Integration tests | `tests/integration/` | 45 | Full HTTP stack with in-memory SQLite |
+| GraphQL tests | `tests/integration/test_graphql_flow.py` | 13 | GraphQL queries, schema validation, correlation ID |
 
 ---
 
-## Database Dumps
+## Database Support
 
-Test data is available in `dumps/` directory:
+The application supports three databases. Each bounded context can independently select its database via environment variables (`TRANSACTIONS_DB`, `ANALYTICS_DB`, `USER_DB`).
 
-- `dumps/mysql/` - MySQL SQL dump
-- `dumps/elasticsearch/` - JSON exports for each index
-- `dumps/neo4j/` - Neo4j database dump
+### Database Selection
 
-### Create Dumps
-
-**Elasticsearch:**
 ```bash
-docker exec finance-backend python scripts/dump_elasticsearch.py
+# Use MySQL for everything (default)
+ACTIVE_DB=mysql
+
+# Use Elasticsearch for analytics, MySQL for the rest
+ANALYTICS_DB=elasticsearch
+
+# Use Neo4j for analytics
+ANALYTICS_DB=neo4j
 ```
 
-**Neo4j:**
-```bash
-cd backend/scripts
-chmod +x dump_neo4j.sh
-./dump_neo4j.sh
-```
+### Comparison
 
-**MySQL:**
-```bash
-docker exec finance-mysql mysqldump -u root -p123456 finans_tracker > dumps/mysql/finans_tracker.sql
-```
+| Feature | MySQL | Elasticsearch | Neo4j |
+|---------|-------|---------------|-------|
+| Primary use | CRUD operations | Search & analytics | Graph queries |
+| Strengths | ACID, relations | Full-text search, aggregations | Relationship traversal |
+| Query language | SQL | Query DSL | Cypher |
+| Best for | Primary data store | Search, dashboards | Network analysis |
 
----
-
-## Architecture
-
-### System Overview
-
-The application follows **Clean Architecture** principles with class-based services, constructor-injected dependencies, and the Repository Pattern. This enables seamless switching between MySQL, Elasticsearch, and Neo4j databases without changing business logic.
-
-### Architecture Diagram
-
-```mermaid
-graph TB
-    subgraph "Frontend Layer"
-        FE[React Frontend]
-    end
-    
-    subgraph "Backend Layer - FastAPI"
-        subgraph "Presentation Layer"
-            ROUTES[API Routes]
-            AUTH[JWT Authentication]
-        end
-        
-        subgraph "Dependency Injection"
-            DI[dependencies.py]
-            FACTORY[Repository Factory]
-        end
-        
-        subgraph "Application Layer"
-            TS[TransactionService]
-            AS[AccountService]
-            BS[BudgetService]
-            CS[CategoryService]
-            GS[GoalService]
-            DS[DashboardService]
-            US[UserService]
-        end
-        
-        subgraph "Domain Layer"
-            INTERFACES["Repository Interfaces (ABC)"]
-        end
-        
-        subgraph "Infrastructure Layer"
-            MYSQL_REPO[MySQL Repositories]
-            ES_REPO[ES Repositories]
-            NEO4J_REPO[Neo4j Repositories]
-        end
-    end
-    
-    subgraph "Database Layer"
-        MYSQL[(MySQL)]
-        ES[(Elasticsearch)]
-        NEO4J[(Neo4j)]
-    end
-    
-    FE --> ROUTES
-    ROUTES --> AUTH
-    ROUTES --> DI
-    DI --> FACTORY
-    FACTORY --> MYSQL_REPO
-    FACTORY --> ES_REPO
-    FACTORY --> NEO4J_REPO
-    DI --> TS
-    DI --> AS
-    DI --> BS
-    DI --> CS
-    DI --> GS
-    DI --> DS
-    DI --> US
-    TS --> INTERFACES
-    AS --> INTERFACES
-    BS --> INTERFACES
-    CS --> INTERFACES
-    GS --> INTERFACES
-    DS --> INTERFACES
-    US --> INTERFACES
-    MYSQL_REPO --> MYSQL
-    ES_REPO --> ES
-    NEO4J_REPO --> NEO4J
-```
-
-### Clean Architecture Layers
-
-```
-+---------------------------------------------------+
-|  Presentation Layer (routes/)                     |  HTTP endpoints, request/response
-+---------------------------------------------------+
-|  Dependency Injection (dependencies.py)           |  Service factory + repo wiring
-+---------------------------------------------------+
-|  Application Layer (services/)                    |  Business logic (class-based)
-+---------------------------------------------------+
-|  Domain Layer (repositories/base.py)              |  Abstract interfaces (ABC)
-+---------------------------------------------------+
-|  Infrastructure Layer (repositories/mysql|es|neo) |  Database implementations
-+---------------------------------------------------+
-```
-
-**Key design decisions:**
-
-1. **Services are classes** that receive repository interfaces via constructor injection
-2. **`dependencies.py`** wires services with concrete repos using FastAPI `Depends()`
-3. **Routes never access repositories directly** - they only interact with services
-4. **No `db: Session` parameter in services** - the session is encapsulated in repos
-
-### Dependency Injection Flow
-
-```mermaid
-sequenceDiagram
-    participant Route as API Route
-    participant DI as dependencies.py
-    participant Factory as Repo Factory
-    participant Service as TransactionService
-    participant Repo as ITransactionRepository
-
-    Route->>DI: Depends(get_transaction_service)
-    DI->>Factory: get_transaction_repository(db)
-    Factory-->>DI: MySQLTransactionRepository(db)
-    DI->>Service: TransactionService(transaction_repo, category_repo)
-    Route->>Service: service.create_transaction(data)
-    Service->>Repo: self._transaction_repo.create(...)
-    Repo-->>Service: Created transaction dict
-    Service-->>Route: Result
-```
-
-### Service DI Pattern
-
-All seven services follow the same pattern:
-
-```python
-from backend.repositories.base import ITransactionRepository, ICategoryRepository
-
-class TransactionService:
-    """Business logic for transactions. Receives repositories via constructor."""
-    
-    def __init__(
-        self,
-        transaction_repo: ITransactionRepository,
-        category_repo: ICategoryRepository,
-        planned_transaction_repo: IPlannedTransactionRepository = None,
-    ):
-        self._transaction_repo = transaction_repo
-        self._category_repo = category_repo
-        self._planned_transaction_repo = planned_transaction_repo
-
-    def create_transaction(self, transaction: TransactionCreate):
-        # Validate category exists
-        category = self._category_repo.get_by_id(transaction.category_id)
-        if not category:
-            raise ValueError("Category not found")
-        # Delegate to repository
-        return self._transaction_repo.create(transaction_data)
-```
-
-The DI wiring in `dependencies.py`:
-
-```python
-from fastapi import Depends
-from backend.repositories import get_transaction_repository, get_category_repository
-
-def get_transaction_service(db: Session = Depends(get_db)) -> TransactionService:
-    return TransactionService(
-        transaction_repo=get_transaction_repository(db),
-        category_repo=get_category_repository(db),
-        planned_transaction_repo=get_planned_transaction_repository(db),
-    )
-```
-
-Routes use it via `Depends()`:
-
-```python
-@router.post("/", status_code=201)
-def create_transaction(
-    transaction: TransactionCreate,
-    service: TransactionService = Depends(get_transaction_service),
-    account_id: int = Depends(get_account_id_from_headers),
-):
-    return service.create_transaction(transaction)
-```
-
-### Process Flow: Database Selection
-
-```mermaid
-flowchart TD
-    A[Request Arrives] --> B{ACTIVE_DB in .env?}
-    B -->|mysql| C[MySQL Repository]
-    B -->|elasticsearch| D[Elasticsearch Repository]
-    B -->|neo4j| E[Neo4j Repository]
-    
-    C --> F[SQLAlchemy Session]
-    D --> G[Elasticsearch Client]
-    E --> H[Neo4j Driver]
-    
-    F --> I[Execute SQL Query]
-    G --> J[Execute ES Query]
-    H --> K[Execute Cypher Query]
-    
-    I --> L[Return Results]
-    J --> L
-    K --> L
-```
-
-### Authentication Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant Backend
-    participant UserService
-    participant UserRepo as User Repository
-    participant Auth as auth.py
-
-    User->>Frontend: Enter credentials
-    Frontend->>Backend: POST /users/login
-    Backend->>UserService: login_user(username, password)
-    UserService->>UserRepo: get_by_username(username)
-    UserRepo-->>UserService: User data (with hashed password)
-    UserService->>Auth: verify_password(plain, hashed)
-    Auth->>Auth: bcrypt.checkpw()
-    alt Password valid
-        UserService->>Auth: create_access_token(user_id, username, email)
-        Auth-->>UserService: JWT token
-        UserService-->>Backend: TokenResponse
-        Backend-->>Frontend: 200 OK + token
-    else Password invalid
-        UserService-->>Backend: ValueError
-        Backend-->>Frontend: 401 Unauthorized
-    end
-```
-
-### Multi-Database Support
-
-The Repository Factory (`repositories/__init__.py`) selects implementations based on `ACTIVE_DB`:
-
-```python
-def get_transaction_repository(db: Session = None):
-    if ACTIVE_DB == "mysql":
-        return MySQLTransactionRepository(db)
-    elif ACTIVE_DB == "elasticsearch":
-        return ElasticsearchTransactionRepository()
-    elif ACTIVE_DB == "neo4j":
-        return Neo4jTransactionRepository()
-```
-
-Switch databases by changing one environment variable - no code changes needed:
-
-| Variable | Database | Best For |
-|----------|----------|----------|
-| `ACTIVE_DB=mysql` | MySQL | ACID transactions, relational queries |
-| `ACTIVE_DB=elasticsearch` | Elasticsearch | Full-text search, analytics |
-| `ACTIVE_DB=neo4j` | Neo4j | Graph queries, relationship analysis |
+See [backend/DATABASE_COMPARISON.md](backend/DATABASE_COMPARISON.md) for a detailed comparison.
 
 ---
 
 ## Security
 
-### Authentication & Authorization
-
-- **JWT Authentication** - Secure token-based authentication
-  - Tokens expire after 24 hours
-  - Include in `Authorization: Bearer <token>` header
-- **Password Hashing** - bcrypt with 12 rounds
-  - Passwords are never stored in plain text
-  - Constant-time comparison prevents timing attacks
-- **Protected Routes** - Authentication required for sensitive endpoints
-  - Most endpoints require valid JWT token
-  - Public endpoints: registration, login, health check
-- **Account Isolation** - Users can only access their own data
-  - Account context via `X-Account-ID` header
-  - Server-side validation ensures data isolation
-
-### Input Validation
-
-- **Pydantic Schemas** - All inputs validated at API boundary
-  - Type checking
-  - Format validation
-  - Business rule validation
-- **SQL Injection Prevention** - Parameterized queries (SQLAlchemy)
-- **XSS Prevention** - Output encoding in frontend
-
-### Best Practices
-
-- Never commit `.env` file with secrets
-- Use strong `SECRET_KEY` in production
-- Rotate JWT secrets periodically
-- Use HTTPS in production
-
----
-
-## Documentation
-
-- [Installation Guide](INSTALLATION.md) - Setup instructions
-- [Project Overview](backend/docs/PROJECT_OVERVIEW.md) - Architecture and flow
-- [Project Status](backend/docs/PROJECT_STATUS.md) - What's implemented
-- [Backend Readiness](backend/docs/BACKEND_READINESS.md) - Current status
-- [Repository Pattern](backend/repositories/README.md) - Repository guide
-- [Database Comparison](backend/DATABASE_COMPARISON.md) - Database details
+- **JWT Authentication** -- tokens expire after 24 hours, bcrypt password hashing (12 rounds)
+- **Account isolation** -- users can only access their own data via `X-Account-ID` header with server-side validation
+- **Input validation** -- Pydantic schemas validate all API inputs at the boundary
+- **SQL injection prevention** -- parameterized queries via SQLAlchemy
+- **Correlation ID** -- every request gets a traceable UUID for audit and debugging
+- **CORS** -- configurable allowed origins
 
 ---
 
 ## Development
 
-### Local Development (Without Docker)
+### Local Development (without Docker)
 
 ```bash
 # Backend
 cd backend
-pip install -r requirements.txt
-python -m uvicorn backend.main:app --reload --port 8000
+uv sync
+uv run uvicorn backend.main:app --reload --port 8000
 
 # Frontend
 cd frontend/finans-tracker-frontend
 npm install
 npm start
-
-# Run tests
-set ACTIVE_DB=mysql
-set SECRET_KEY=your-test-secret
-pytest backend/tests/ -v
 ```
 
-**Note:** When running locally, API is available at http://localhost:8000/docs (not 8080)
-
-### Environment Variables
-
-Create `.env` file in the project root:
+### With Docker
 
 ```bash
-# =============================================================================
-# Database Configuration
-# =============================================================================
-
-# Active database: mysql, elasticsearch, or neo4j
-ACTIVE_DB=mysql
-
-# MySQL Configuration
-DATABASE_URL=mysql+pymysql://root:123456@localhost:3307/finans_tracker
-
-# Elasticsearch Configuration
-ELASTICSEARCH_HOST=http://localhost:9200
-
-# Neo4j Configuration
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=12345678
-
-# =============================================================================
-# Security
-# =============================================================================
-
-# JWT Secret Key (generate with: openssl rand -hex 32)
-SECRET_KEY=your-secret-key-here-change-in-production
-
-# =============================================================================
-# Application Settings
-# =============================================================================
-
-# CORS Origins (comma-separated)
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+docker-compose up -d
+# API: http://localhost:8080/docs
+# Neo4j Browser: http://localhost:7474
 ```
 
-**Required Variables:**
-- `ACTIVE_DB` - Database to use (mysql/elasticsearch/neo4j)
-- `SECRET_KEY` - JWT signing key (required for authentication)
+### Environment Setup
 
-**Database-Specific Variables:**
-- MySQL: `DATABASE_URL` (required when `ACTIVE_DB=mysql`)
-- Elasticsearch: `ELASTICSEARCH_HOST` (required when `ACTIVE_DB=elasticsearch`)
-- Neo4j: `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (required when `ACTIVE_DB=neo4j`)
+```bash
+# Copy example environment file
+cp example.env .env
+# Edit .env with your database credentials and SECRET_KEY
+```
 
----
+### Default Credentials (development)
 
-## Troubleshooting
-
-See [INSTALLATION.md](INSTALLATION.md#-troubleshooting) for common issues and solutions.
-
----
-
-## License
-
-MIT License - See LICENSE file for details
+| Service | Username | Password |
+|---------|----------|----------|
+| MySQL | `root` | `123456` |
+| Neo4j | `neo4j` | `12345678` |
+| Test users | `johan`, `marie`, `testuser` | `test123` |
 
 ---
 
-## Acknowledgments
+## Documentation
 
-- **FastAPI** - Modern Python web framework
-- **SQLAlchemy** - Python SQL toolkit
-- **Elasticsearch** - Search and analytics engine
-- **Neo4j** - Graph database
-- **React** - Frontend framework
+| Document | Description |
+|----------|-------------|
+| [INSTALLATION.md](INSTALLATION.md) | Full setup guide with Docker and local development |
+| [backend/README.md](backend/README.md) | Backend architecture, router map, logging details |
+| [backend/docs/STRUCTURE.md](backend/docs/STRUCTURE.md) | Hexagonal structure map and bounded context layout |
+| [backend/DATABASE_COMPARISON.md](backend/DATABASE_COMPARISON.md) | MySQL vs Elasticsearch vs Neo4j comparison |
+| [backend/repositories/README.md](backend/repositories/README.md) | Repository pattern and multi-database factory |
 
 ---
 
 ## Roadmap
 
-- [x] Clean Architecture with Repository Pattern
-- [x] Class-based services with Dependency Injection
-- [x] Unit tests for all services (150 tests)
-- [x] Integration tests for all major flows (30 tests)
-- [x] Schema validation tests with BVA (141 tests)
+- [x] Multi-database support (MySQL, Elasticsearch, Neo4j)
+- [x] Repository pattern with factory selection
+- [x] Class-based services with dependency injection
 - [x] JWT authentication with bcrypt
-- [x] Planned transactions merged into TransactionService
-- [x] Account groups merged into AccountService
-- [ ] Hexagonal Architecture (ports and adapters)
+- [x] Hexagonal architecture (ports & adapters) across all domains
+- [x] GraphQL read gateway (CQRS pattern)
+- [x] API versioning (`/api/v1/`)
+- [x] Structured logging with correlation ID
+- [x] Unit tests for services and schema BVA (194 tests)
+- [x] Integration tests for all flows + GraphQL (45 tests)
+- [ ] Frontend integration with `/api/v1/` prefix and GraphQL
 - [ ] Database migrations with Alembic
 - [ ] Rate limiting and security hardening
 - [ ] Export functionality (PDF, Excel)
-- [ ] Notifications and alerts
 - [ ] E2E tests with Playwright
 - [ ] Microservice extraction
-
----
-
-## Contact
-
-For questions or issues, please open an issue on GitHub.
-
----
-
-**Built with Clean Architecture, Repository Pattern, and Dependency Injection**
-

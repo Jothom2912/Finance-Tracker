@@ -1,72 +1,54 @@
-# Migration Guide: repository/ → repositories/
+# Migration History: Repository Layer
 
-## 🔄 Hvad er ændret?
+## Previous Migrations
 
-Den gamle `repository/` mappe er erstattet med en ny `repositories/` struktur:
+### 1. `repository/` to `repositories/` (completed)
 
-**Før:**
+The original single-file `repository/` folder was split into database-specific subfolders:
+
 ```
+# Before
 repository/
 ├── base_repository.py
 ├── mysql_repository.py
-├── elasticsearch_repository.py
-└── __init__.py
-```
+└── elasticsearch_repository.py
 
-**Nu:**
-```
+# After
 repositories/
 ├── base.py
-├── mysql/
-│   ├── transaction_repository.py
-│   ├── category_repository.py
-│   └── ...
-├── elasticsearch/
-│   ├── transaction_repository.py
-│   └── category_repository.py
-├── neo4j/
-│   ├── transaction_repository.py
-│   └── ...
-└── __init__.py (factory functions)
+├── mysql/          # One file per entity
+├── elasticsearch/  # One file per entity
+├── neo4j/          # One file per entity
+└── __init__.py     # Factory functions
 ```
 
-## 📝 Import Ændringer
+Import changes: `backend.repository` became `backend.repositories`, and `base_repository` became `base`.
 
-### Før:
-```python
-from backend.repository import get_transaction_repository
-from backend.repository.base_repository import ITransactionRepository
+### 2. Legacy services/routes to hexagonal architecture (completed)
+
+The backend migrated from a flat `routes/ → services/ → repositories/` structure to hexagonal architecture with bounded contexts:
+
+```
+# Before (legacy)
+routes/transactions.py → services/transaction_service.py → repositories/
+
+# After (hexagonal)
+transaction/
+├── adapters/inbound/rest_api.py      # Inbound adapter
+├── adapters/outbound/mysql_repository.py  # Outbound adapter
+├── application/
+│   ├── ports/inbound.py              # Service interface
+│   ├── ports/outbound.py             # Repository interface
+│   └── service.py                    # Application service
+└── domain/entities.py                # Domain entities
 ```
 
-### Nu:
-```python
-from backend.repositories import get_transaction_repository
-from backend.repositories.base import ITransactionRepository
-```
+The shared `repositories/` folder is still used as infrastructure for the multi-database factory that the hexagonal outbound adapters delegate to.
 
-## ✅ Hvad virker stadig?
+### 3. Legacy GraphQL to hexagonal read gateway (completed)
 
-Den gamle `repository/` mappe kan stadig bruges, men anbefales ikke. Alle nye features skal bruge `repositories/`.
+The standalone `backend/graphql/` directory (which accessed `SessionLocal` directly, bypassing service layers) was removed and replaced by `backend/analytics/adapters/inbound/graphql_api.py` -- a proper hexagonal inbound adapter that injects services via FastAPI DI and serves as a cross-domain read gateway.
 
-## 🚀 Opgradering
+## Current Architecture
 
-1. **Opdater imports:**
-   - `backend.repository` → `backend.repositories`
-   - `base_repository` → `base`
-
-2. **Brug factory functions:**
-   ```python
-   from backend.repositories import get_transaction_repository
-   repo = get_transaction_repository()
-   ```
-
-3. **Skift database:**
-   ```bash
-   # I .env
-   ACTIVE_DB=mysql        # eller elasticsearch eller neo4j
-   ```
-
-## 📚 Se også
-
-- `repositories/README.md` - Komplet guide til repository strukturen
-
+All new development follows the hexagonal bounded context pattern. The shared `repositories/` layer remains as infrastructure for multi-database support, with factory functions in `__init__.py` selecting the right implementation based on `ACTIVE_DB`, `TRANSACTIONS_DB`, `ANALYTICS_DB`, and `USER_DB` environment variables.
