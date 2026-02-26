@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend.analytics.application.service import AnalyticsService
 from backend.auth import get_account_id_from_headers
-from backend.dependencies import get_analytics_service
+from backend.dependencies import get_analytics_service, get_monthly_budget_service
+from backend.monthly_budget.application.service import MonthlyBudgetService
 from backend.shared.schemas.budget import BudgetSummary
 from backend.shared.schemas.dashboard import FinancialOverview
 
@@ -56,9 +57,10 @@ def get_expenses_by_month_route(
 async def get_budget_summary_route(
     month: str = Query(..., description="Month (1-12)."),
     year: str = Query(..., description="Year (YYYY format)."),
-    service: AnalyticsService = Depends(get_analytics_service),
+    mb_service: MonthlyBudgetService = Depends(get_monthly_budget_service),
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ):
+    """Backward-compatible proxy that delegates to the new MonthlyBudget service."""
     if not account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -88,6 +90,26 @@ async def get_budget_summary_route(
             detail=f"Year skal være mellem 2000 og 9999. Fik: {year_int}",
         )
 
-    return service.get_budget_summary(
+    summary = mb_service.get_summary(
         account_id=account_id, month=month_int, year=year_int
+    )
+
+    return BudgetSummary(
+        month=f"{summary.month:02d}",
+        year=str(summary.year),
+        items=[
+            {
+                "category_id": item.category_id,
+                "category_name": item.category_name,
+                "budget_amount": item.budget_amount,
+                "spent_amount": item.spent_amount,
+                "remaining_amount": item.remaining_amount,
+                "percentage_used": item.percentage_used,
+            }
+            for item in summary.items
+        ],
+        total_budget=summary.total_budget,
+        total_spent=summary.total_spent,
+        total_remaining=summary.total_remaining,
+        over_budget_count=summary.over_budget_count,
     )

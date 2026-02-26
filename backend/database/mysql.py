@@ -135,7 +135,8 @@ def create_db_tables():
                 budget,
                 goal,
                 account_groups,
-                planned_transactions
+                planned_transactions,
+                monthly_budget,
             )
             logger.info("✅ Alle models importeret succesfuldt")
         except ImportError as e:
@@ -185,7 +186,7 @@ def drop_all_tables():
     try:
         from backend.models.mysql import (
             transaction, account, category, user, budget, goal,
-            account_groups, planned_transactions
+            account_groups, planned_transactions, monthly_budget,
         )
         Base.metadata.drop_all(bind=engine)
         logger.info("✅ All tables dropped from database")

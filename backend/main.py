@@ -82,6 +82,9 @@ from backend.account.adapters.inbound.account_api import router as account_route
 from backend.account.adapters.inbound.account_group_api import router as account_group_router
 from backend.goal.adapters.inbound.goal_api import router as goal_router
 from backend.user.adapters.inbound.user_api import router as user_router
+from backend.monthly_budget.adapters.inbound.rest_api import (
+    router as monthly_budget_router,
+)
 from backend.analytics.adapters.inbound.rest_api import (
     dashboard_router,
     budget_summary_router,
@@ -131,6 +134,8 @@ v1.include_router(category_router)
 # /budgets/summary being matched by /budgets/{budget_id}
 v1.include_router(budget_summary_router)
 v1.include_router(budget_router)
+
+v1.include_router(monthly_budget_router)
 
 v1.include_router(account_router)
 v1.include_router(account_group_router)

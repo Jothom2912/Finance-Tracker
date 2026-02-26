@@ -74,6 +74,20 @@ from backend.budget.adapters.outbound.category_adapter import (
     MySQLCategoryAdapter as BudgetCategoryAdapter,
 )
 
+# Hexagonal MonthlyBudget domain
+from backend.monthly_budget.application.service import (
+    MonthlyBudgetService,
+)
+from backend.monthly_budget.adapters.outbound.mysql_repository import (
+    MySQLMonthlyBudgetRepository,
+)
+from backend.monthly_budget.adapters.outbound.transaction_adapter import (
+    MySQLTransactionAdapter as MonthlyBudgetTransactionAdapter,
+)
+from backend.monthly_budget.adapters.outbound.category_adapter import (
+    MySQLCategoryAdapter as MonthlyBudgetCategoryAdapter,
+)
+
 # Hexagonal Analytics domain
 from backend.analytics.application.service import AnalyticsService
 from backend.analytics.adapters.outbound.mysql_repository import (
@@ -105,6 +119,17 @@ def get_budget_service(
     return HexBudgetService(
         budget_repo=HexMySQLBudgetRepository(db),
         category_port=BudgetCategoryAdapter(db),
+    )
+
+
+def get_monthly_budget_service(
+    db: Session = Depends(get_db),
+) -> MonthlyBudgetService:
+    """Create MonthlyBudgetService with proper repositories."""
+    return MonthlyBudgetService(
+        budget_repo=MySQLMonthlyBudgetRepository(db),
+        transaction_port=MonthlyBudgetTransactionAdapter(db),
+        category_port=MonthlyBudgetCategoryAdapter(db),
     )
 
 
