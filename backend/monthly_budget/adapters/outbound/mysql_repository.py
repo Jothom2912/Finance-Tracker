@@ -23,11 +23,16 @@ class MySQLMonthlyBudgetRepository(IMonthlyBudgetRepository):
             raise ValueError("db: Session parameter is required")
         self._db = db
 
-    def get_by_id(self, budget_id: int) -> Optional[MonthlyBudget]:
+    def get_by_id_for_account(
+        self, budget_id: int, account_id: int
+    ) -> Optional[MonthlyBudget]:
         model = (
             self._db.query(MonthlyBudgetModel)
             .options(joinedload(MonthlyBudgetModel.lines))
-            .filter(MonthlyBudgetModel.id == budget_id)
+            .filter(
+                MonthlyBudgetModel.id == budget_id,
+                MonthlyBudgetModel.account_id == account_id,
+            )
             .first()
         )
         return self._to_entity(model) if model else None
@@ -92,10 +97,13 @@ class MySQLMonthlyBudgetRepository(IMonthlyBudgetRepository):
         self._db.refresh(model)
         return self._to_entity(model)
 
-    def delete(self, budget_id: int) -> bool:
+    def delete(self, budget_id: int, account_id: int) -> bool:
         model = (
             self._db.query(MonthlyBudgetModel)
-            .filter(MonthlyBudgetModel.id == budget_id)
+            .filter(
+                MonthlyBudgetModel.id == budget_id,
+                MonthlyBudgetModel.account_id == account_id,
+            )
             .first()
         )
         if not model:

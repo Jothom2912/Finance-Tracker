@@ -11,7 +11,9 @@ class IMonthlyBudgetRepository(ABC):
     """Port for monthly budget persistence."""
 
     @abstractmethod
-    def get_by_id(self, budget_id: int) -> Optional[MonthlyBudget]:
+    def get_by_id_for_account(
+        self, budget_id: int, account_id: int
+    ) -> Optional[MonthlyBudget]:
         pass
 
     @abstractmethod
@@ -29,7 +31,7 @@ class IMonthlyBudgetRepository(ABC):
         pass
 
     @abstractmethod
-    def delete(self, budget_id: int) -> bool:
+    def delete(self, budget_id: int, account_id: int) -> bool:
         pass
 
 

@@ -30,12 +30,12 @@ class IMonthlyBudgetService(ABC):
 
     @abstractmethod
     def update(
-        self, budget_id: int, dto: MonthlyBudgetUpdate
+        self, budget_id: int, account_id: int, dto: MonthlyBudgetUpdate
     ) -> MonthlyBudgetResponse:
         pass
 
     @abstractmethod
-    def delete(self, budget_id: int) -> bool:
+    def delete(self, budget_id: int, account_id: int) -> bool:
         pass
 
     @abstractmethod

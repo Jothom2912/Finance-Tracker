@@ -100,10 +100,12 @@ async def update_monthly_budget(
     budget_id: int,
     body: MonthlyBudgetUpdate,
     service: MonthlyBudgetService = Depends(get_monthly_budget_service),
+    account_id: Optional[int] = Depends(get_account_id_from_headers),
 ):
     """Replace all lines in an existing monthly budget."""
+    aid = _require_account(account_id)
     try:
-        return service.update(budget_id, body)
+        return service.update(budget_id, aid, body)
     except MonthlyBudgetNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc))
     except CategoryNotFoundForBudgetLine as exc:
@@ -114,9 +116,11 @@ async def update_monthly_budget(
 async def delete_monthly_budget(
     budget_id: int,
     service: MonthlyBudgetService = Depends(get_monthly_budget_service),
+    account_id: Optional[int] = Depends(get_account_id_from_headers),
 ):
     """Delete a monthly budget and all its lines."""
-    if not service.delete(budget_id):
+    aid = _require_account(account_id)
+    if not service.delete(budget_id, aid):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Budget not found")
 
 

@@ -103,6 +103,7 @@ class MonthlyBudgetService(IMonthlyBudgetService):
         for cat_id, spent in expenses.items():
             if cat_id in budgeted_category_ids:
                 continue
+            over_budget_count += 1
             items.append(
                 MonthlyBudgetSummaryItem(
                     category_id=cat_id,
@@ -158,9 +159,9 @@ class MonthlyBudgetService(IMonthlyBudgetService):
         return self._to_response(created)
 
     def update(
-        self, budget_id: int, dto: MonthlyBudgetUpdate
+        self, budget_id: int, account_id: int, dto: MonthlyBudgetUpdate
     ) -> MonthlyBudgetResponse:
-        existing = self._budget_repo.get_by_id(budget_id)
+        existing = self._budget_repo.get_by_id_for_account(budget_id, account_id)
         if not existing:
             raise MonthlyBudgetNotFound(budget_id)
 
@@ -174,8 +175,8 @@ class MonthlyBudgetService(IMonthlyBudgetService):
         updated = self._budget_repo.update(existing)
         return self._to_response(updated)
 
-    def delete(self, budget_id: int) -> bool:
-        return self._budget_repo.delete(budget_id)
+    def delete(self, budget_id: int, account_id: int) -> bool:
+        return self._budget_repo.delete(budget_id, account_id)
 
     def copy_to_month(
         self, account_id: int, dto: CopyBudgetRequest
