@@ -4,6 +4,8 @@ import pytest
 from decimal import Decimal
 from datetime import date
 
+from backend.models.mysql.monthly_budget import BudgetLine as MonthlyBudgetLineModel
+from backend.models.mysql.monthly_budget import MonthlyBudget as MonthlyBudgetModel
 from .conftest import Factory
 
 
@@ -216,14 +218,21 @@ class TestBudgetSummary:
         seed_categories,
         account_headers,
     ):
-        # Arrange - create budget and transactions in the same category
+        # Arrange - create monthly budget + transactions in the same category
         category = seed_categories[0]  # Mad
-        Factory.budget(
-            test_db,
-            seed_account.idAccount,
-            category.idCategory,
-            Decimal("5000"),
+        today = date.today()
+        monthly_budget = MonthlyBudgetModel(
+            month=today.month,
+            year=today.year,
+            account_id=seed_account.idAccount,
         )
+        monthly_budget.lines.append(
+            MonthlyBudgetLineModel(
+                category_id=category.idCategory,
+                amount=Decimal("5000"),
+            )
+        )
+        test_db.add(monthly_budget)
         Factory.transaction(
             test_db,
             seed_account.idAccount,
@@ -240,8 +249,6 @@ class TestBudgetSummary:
         )
         test_db.flush()
         test_db.expire_all()
-
-        today = date.today()
 
         # Act
         response = test_client.get(
