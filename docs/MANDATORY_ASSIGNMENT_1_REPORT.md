@@ -63,7 +63,7 @@ The project demonstrates multi-database support by implementing the same busines
 | NFR-03 | Data consistency for financial transactions | ACID compliance (MySQL) | Met |
 | NFR-04 | Authentication security | JWT with bcrypt (12 rounds), 24h token expiry | Met |
 | NFR-05 | Input validation at API boundary | All endpoints validated via Pydantic | Met |
-| NFR-06 | Test coverage | > 80% for business logic | Met (239 tests) |
+| NFR-06 | Test coverage | > 80% for business logic | Met (243 tests) |
 | NFR-07 | API backward compatibility | Versioned endpoints (/api/v1/) | Met |
 | NFR-08 | Request traceability | Correlation ID on every request | Met |
 | NFR-09 | Environment-independent configuration | All config via environment variables | Met (12-factor) |
@@ -126,13 +126,14 @@ graph TB
             Middleware["Middleware Stack<br/>CORS + Logging + Correlation ID"]
 
             subgraph v1api ["/api/v1/ - Versioned Routes"]
-                REST_IN["REST Inbound Adapters<br/>(7 domain controllers)"]
+                REST_IN["REST Inbound Adapters<br/>(8 domain controllers)"]
                 GQL_IN["GraphQL Read Gateway<br/>/api/v1/graphql"]
             end
 
             subgraph domains [Bounded Contexts]
                 TXN["Transaction<br/>Domain"]
-                BUD["Budget<br/>Domain"]
+                BUD["Budget<br/>Domain (legacy)"]
+                MBUD["Monthly Budget<br/>Domain"]
                 CAT["Category<br/>Domain"]
                 ACC["Account<br/>Domain"]
                 GOL["Goal<br/>Domain"]
@@ -158,7 +159,7 @@ graph TB
 
     subgraph cicd [CI/CD - GitHub Actions]
         GHA["GitHub Actions<br/>Push/PR triggers"]
-        Tests["pytest 239 tests<br/>+ coverage"]
+        Tests["pytest 243 tests<br/>+ coverage"]
         Codecov["Codecov<br/>Coverage reports"]
     end
 
@@ -224,10 +225,16 @@ graph LR
         T_OUT[MySQL Repository]
     end
 
-    subgraph budget [Budget Context]
+    subgraph budget [Budget Context - legacy]
         B_IN[REST Adapter]
         B_SVC[BudgetService]
         B_OUT[MySQL Repository]
+    end
+
+    subgraph monthlybudget [Monthly Budget Context]
+        MB_IN[REST Adapter]
+        MB_SVC[MonthlyBudgetService]
+        MB_OUT[MySQL Repository]
     end
 
     subgraph category [Category Context]
@@ -246,6 +253,8 @@ graph LR
     A_GQL -->|"reads via DI"| T_SVC
     A_GQL -->|"reads via DI"| C_SVC
     A_GQL -->|"reads via DI"| A_SVC
+    MB_SVC -->|"validates categories"| C_SVC
+    MB_SVC -->|"reads transactions"| T_SVC
     B_SVC -->|"validates categories"| C_SVC
     T_SVC -->|"validates categories"| C_SVC
 ```
@@ -399,13 +408,13 @@ flowchart LR
         Setup["Setup Python<br/>3.11 + 3.12"]
         InstallUV["Install uv"]
         Deps["Install<br/>dependencies"]
-        Test["Run pytest<br/>239 tests"]
+        Test["Run pytest<br/>243 tests"]
         Coverage["Generate<br/>coverage report"]
         Upload["Upload to<br/>Codecov"]
     end
 
     subgraph gates [Quality Gates]
-        AllPass["All 239 tests<br/>must pass"]
+        AllPass["All 243 tests<br/>must pass"]
         CovReport["Coverage XML<br/>generated"]
     end
 
@@ -422,7 +431,7 @@ flowchart LR
 - **Matrix testing:** Tests run against Python 3.11 and 3.12
 - **Environment:** `ACTIVE_DB=mysql`, `SECRET_KEY=test-secret-key-for-ci`
 - **Coverage:** Reports uploaded to Codecov
-- **Pre-push hook:** Local git hooks run all 239 tests before push
+- **Pre-push hook:** Local git hooks run all 243 tests before push
 
 ### 9.2 Planned CD Pipeline (Future)
 
@@ -471,7 +480,7 @@ The project follows the testing pyramid with the majority of tests at the unit l
          +----------+
          | Integr.  |   ~19% - 45 tests (full HTTP + GraphQL)
          +----------+
-         |   Unit   |   ~81% - 194 tests (services + schema BVA)
+         |   Unit   |   ~81% - 198 tests (services + schema BVA)
          +----------+
 ```
 
@@ -479,7 +488,7 @@ The project follows the testing pyramid with the majority of tests at the unit l
 
 | Level | Count | Location | What Is Tested | Tools |
 |-------|-------|----------|----------------|-------|
-| Unit (services) | ~30 | `tests/unittests/services/` | Service business logic with mocked repositories | pytest, unittest.mock |
+| Unit (services) | ~34 | `tests/unittests/services/` | Service business logic with mocked repositories | pytest, unittest.mock |
 | Unit (schemas) | ~164 | `tests/unittests/test_*.py` | Pydantic schema boundary value analysis (BVA) | pytest |
 | Integration | 32 | `tests/integration/test_*_flow.py` | Full HTTP request-response with in-memory SQLite | pytest, TestClient |
 | Integration (GraphQL) | 13 | `tests/integration/test_graphql_flow.py` | GraphQL queries, schema validation, correlation ID | pytest, TestClient |
@@ -511,7 +520,7 @@ class TestTransactionService:
 
 ### 10.4 CI Integration
 
-All 239 tests run in the GitHub Actions CI pipeline on every push and pull request. The pipeline tests against both Python 3.11 and 3.12 to ensure compatibility. Coverage reports are generated and uploaded to Codecov.
+All 243 tests run in the GitHub Actions CI pipeline on every push and pull request. The pipeline tests against both Python 3.11 and 3.12 to ensure compatibility. Coverage reports are generated and uploaded to Codecov.
 
 Tests must pass before code can be pushed (enforced by pre-push git hook) and before pull requests can be merged.
 

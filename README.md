@@ -88,7 +88,7 @@ graph TB
     end
 
     subgraph "Application Layer"
-        SVC[Domain Services<br/>TransactionService, BudgetService, etc.]
+        SVC[Domain Services<br/>TransactionService, BudgetService,<br/>MonthlyBudgetService, etc.]
         PORTS_IN[Inbound Ports<br/>Service interfaces]
         PORTS_OUT[Outbound Ports<br/>Repository interfaces]
     end
@@ -177,7 +177,8 @@ finance-tracker/
 │   │       ├── entities.py     # Domain entities
 │   │       └── exceptions.py   # Domain exceptions
 │   │
-│   ├── budget/                 # Bounded context: budgets (same layout)
+│   ├── budget/                 # Bounded context: legacy budgets (same layout)
+│   ├── monthly_budget/         # Bounded context: monthly budgets (aggregate model)
 │   ├── category/               # Bounded context: categories
 │   ├── account/                # Bounded context: accounts + groups
 │   ├── goal/                   # Bounded context: goals
@@ -246,8 +247,10 @@ All domain routes are versioned under `/api/v1/`. Root-level endpoints (`/`, `/h
 | `/api/v1/transactions/upload-csv/` | Transaction | REST | Yes |
 | `/api/v1/planned-transactions/*` | Transaction | REST | Yes |
 | `/api/v1/categories/*` | Category | REST | Partial |
-| `/api/v1/budgets/*` | Budget | REST | Yes |
+| `/api/v1/budgets/*` | Budget (legacy) | REST | Yes |
 | `/api/v1/budgets/summary` | Analytics | REST | Yes |
+| `/api/v1/monthly-budgets/*` | Monthly Budget | REST | Yes |
+| `/api/v1/monthly-budgets/summary` | Monthly Budget | REST | Yes |
 | `/api/v1/dashboard/overview/` | Analytics | REST | Yes |
 | `/api/v1/dashboard/expenses-by-month/` | Analytics | REST | Yes |
 | `/api/v1/accounts/*` | Account | REST | Yes |
@@ -345,7 +348,7 @@ All configuration is loaded from environment variables via `backend/config.py`. 
 
 ## Testing
 
-The project has **239 tests** organized following the testing pyramid:
+The project has **243 tests** organized following the testing pyramid:
 
 ```
      +----------+
@@ -353,7 +356,7 @@ The project has **239 tests** organized following the testing pyramid:
      +----------+
      | Integr.  |   45 tests - Full HTTP flow + GraphQL
      +----------+
-     |   Unit   |   194 tests - Business logic + schema BVA
+     |   Unit   |   198 tests - Business logic + schema BVA
      +----------+
 ```
 
@@ -379,7 +382,7 @@ uv run pytest tests/ --cov=backend --cov-report=html
 
 | Category | Location | Count | What It Tests |
 |----------|----------|-------|---------------|
-| Service unit tests | `tests/unittests/services/` | ~30 | Service layer with mocked repos |
+| Service unit tests | `tests/unittests/services/` | ~34 | Service layer with mocked repos |
 | Schema BVA tests | `tests/unittests/test_*.py` | ~164 | Pydantic schema boundary values |
 | Integration tests | `tests/integration/` | 45 | Full HTTP stack with in-memory SQLite |
 | GraphQL tests | `tests/integration/test_graphql_flow.py` | 13 | GraphQL queries, schema validation, correlation ID |
@@ -493,7 +496,8 @@ cp example.env .env
 - [x] GraphQL read gateway (CQRS pattern)
 - [x] API versioning (`/api/v1/`)
 - [x] Structured logging with correlation ID
-- [x] Unit tests for services and schema BVA (194 tests)
+- [x] Monthly budget system with aggregate model and copy functionality
+- [x] Unit tests for services and schema BVA (198 tests)
 - [x] Integration tests for all flows + GraphQL (45 tests)
 - [x] Frontend integration with `/api/v1/` prefix
 - [ ] Frontend GraphQL client integration

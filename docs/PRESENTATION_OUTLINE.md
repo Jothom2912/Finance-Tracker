@@ -28,7 +28,7 @@ Use this outline to create your PowerPoint. Each section below maps to 1-2 slide
 **Key points to highlight on this slide:**
 
 - React frontend communicates via REST + GraphQL
-- Backend organized as bounded contexts (7 domains)
+- Backend organized as bounded contexts (8 domains)
 - Docker Compose orchestrates all services
 - Three databases with role-based selection
 
@@ -50,7 +50,7 @@ transaction/
 └── domain/entities.py   (domain model)
 ```
 
-- 7 bounded contexts follow this pattern
+- 8 bounded contexts follow this pattern
 - Business logic isolated from infrastructure
 - Prepared for microservice extraction
 
@@ -85,7 +85,7 @@ transaction/
 
 - GitHub Actions runs on every push/PR
 - Matrix testing: Python 3.11 + 3.12
-- 239 tests must pass (pre-push hook + CI)
+- 243 tests must pass (pre-push hook + CI)
 - Coverage reports to Codecov
 - CD planned: Docker build, staging, manual approval, production
 
@@ -99,11 +99,11 @@ transaction/
          +----------+
          | Integr.  |   ~19% - 45 tests
          +----------+
-         |   Unit   |   ~81% - 194 tests
+         |   Unit   |   ~81% - 198 tests
          +----------+
 ```
 
-- 239 total tests, all passing
+- 243 total tests, all passing
 - Unit: mocked repos, BVA schema validation
 - Integration: full HTTP stack with in-memory SQLite
 - GraphQL: schema validation tests (advantage over REST)
@@ -147,7 +147,7 @@ transaction/
 
 1. Hexagonal architecture enables database independence and microservice readiness
 2. CQRS with REST + GraphQL separates write and read concerns
-3. 239 tests with CI integration ensure quality
+3. 243 tests with CI integration ensure quality
 4. Structured logging with correlation IDs enables production debugging
 5. Azure chosen for European compliance and student credits
 

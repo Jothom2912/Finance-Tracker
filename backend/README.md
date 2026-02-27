@@ -42,7 +42,8 @@ See `backend/docs/STRUCTURE.md` for the full structure map.
 ### Active domains
 
 - `transaction` -- CRUD + CSV import
-- `budget` -- CRUD + summary analytics
+- `budget` -- legacy per-category budget CRUD + summary analytics
+- `monthly_budget` -- aggregate-based monthly budgets with budget lines, summary, and copy
 - `analytics` -- dashboard overview, expenses-by-month, budget summary, GraphQL read gateway
 - `category` -- CRUD
 - `account` -- CRUD + account groups
@@ -56,8 +57,10 @@ See `backend/docs/STRUCTURE.md` for the full structure map.
 | `/api/v1/transactions/*` | Transaction | REST |
 | `/api/v1/planned-transactions/*` | Transaction | REST |
 | `/api/v1/categories/*` | Category | REST |
-| `/api/v1/budgets/*` | Budget | REST |
+| `/api/v1/budgets/*` | Budget (legacy) | REST |
 | `/api/v1/budgets/summary` | Analytics | REST |
+| `/api/v1/monthly-budgets/*` | Monthly Budget | REST |
+| `/api/v1/monthly-budgets/summary` | Monthly Budget | REST |
 | `/api/v1/dashboard/overview/` | Analytics | REST |
 | `/api/v1/dashboard/expenses-by-month/` | Analytics | REST |
 | `/api/v1/accounts/*` | Account | REST |
@@ -71,6 +74,8 @@ See `backend/docs/STRUCTURE.md` for the full structure map.
 The GraphQL endpoint at `/api/v1/graphql` is a cross-domain read gateway that aggregates data from multiple bounded contexts through a single query interface. This is a deliberate CQRS pattern: REST handles writes, GraphQL handles reads.
 
 Available queries: `financialOverview`, `expensesByMonth`, `budgetSummary`, `categories`, `transactions`.
+
+Note: The GraphQL `budgetSummary` query reads from the legacy `Budget` model via `AnalyticsService`. The new `MonthlyBudget` summary is available via `GET /api/v1/monthly-budgets/summary`.
 
 No mutations are exposed -- all write operations use REST endpoints.
 

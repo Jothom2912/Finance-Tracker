@@ -17,7 +17,8 @@ All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remai
 
 - `backend/transaction/`
 - `backend/category/`
-- `backend/budget/`
+- `backend/budget/` -- legacy per-category budgets
+- `backend/monthly_budget/` -- aggregate-based monthly budgets with budget lines
 - `backend/analytics/` -- includes the GraphQL read gateway adapter
 - `backend/account/`
 - `backend/goal/`
@@ -40,6 +41,12 @@ Each context follows the same layout:
 └── __init__.py
 ```
 
+### Monthly Budget domain
+
+The `monthly_budget` context replaces the legacy `budget` context with an aggregate-based model. Instead of one budget row per category, a `MonthlyBudget` aggregate groups multiple `BudgetLine` entries under a single month/year/account combination. It supports budget copying between months and provides its own summary endpoint that compares budget lines against actual transaction spending.
+
+The legacy `budget` context remains for backward compatibility and is still used by the GraphQL `budgetSummary` query via `AnalyticsService`.
+
 ### Analytics domain -- read gateway
 
 The `analytics` context contains an extra inbound adapter: `graphql_api.py`. This adapter is a cross-domain read gateway that injects services from other bounded contexts (transactions, categories) to serve read-only GraphQL queries. This is a deliberate architectural choice to provide a single query interface without breaking domain encapsulation -- each domain's service layer is the only entry point.
@@ -51,8 +58,10 @@ The `analytics` context contains an extra inbound adapter: `graphql_api.py`. Thi
 | `/api/v1/transactions/*` | Transaction | REST |
 | `/api/v1/planned-transactions/*` | Transaction | REST |
 | `/api/v1/categories/*` | Category | REST |
-| `/api/v1/budgets/*` (CRUD) | Budget | REST |
+| `/api/v1/budgets/*` (CRUD) | Budget (legacy) | REST |
 | `/api/v1/budgets/summary` | Analytics | REST |
+| `/api/v1/monthly-budgets/*` (CRUD + copy) | Monthly Budget | REST |
+| `/api/v1/monthly-budgets/summary` | Monthly Budget | REST |
 | `/api/v1/dashboard/*` | Analytics | REST |
 | `/api/v1/accounts/*` | Account | REST |
 | `/api/v1/account-groups/*` | Account | REST |
