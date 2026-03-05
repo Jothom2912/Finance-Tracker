@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.shared.schemas.account import (
+from backend.account.application.dto import (
     Account as AccountSchema,
     AccountCreate,
     AccountBase,

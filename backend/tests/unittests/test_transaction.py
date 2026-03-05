@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 from datetime import date, timedelta
-from backend.shared.schemas.transaction import (
+from backend.transaction.application.dto import (
     TransactionBase,
     TransactionType,
     TransactionCreate,

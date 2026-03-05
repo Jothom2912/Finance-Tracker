@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from backend.shared.schemas.account import AccountCreate, AccountBase
+from backend.account.application.dto import AccountCreate, AccountBase
 
 
 #Account Name Length Boundary Value Analysis

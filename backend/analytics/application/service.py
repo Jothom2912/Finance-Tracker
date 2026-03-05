@@ -4,13 +4,11 @@ Application service for Analytics bounded context.
 from __future__ import annotations
 
 import logging
-from calendar import monthrange
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
 from backend.analytics.application.ports.outbound import IAnalyticsReadRepository
-from backend.shared.schemas.budget import BudgetSummary, BudgetSummaryItem
-from backend.shared.schemas.dashboard import FinancialOverview
+from backend.analytics.application.dto import FinancialOverview
 
 logger = logging.getLogger(__name__)
 
@@ -140,102 +138,6 @@ class AnalyticsService:
             {"month": month_key, "total_expenses": round(total, 2)}
             for month_key, total in sorted(monthly_expenses.items())
         ]
-
-    def get_budget_summary(self, account_id: int, month: int, year: int) -> BudgetSummary:
-        budgets = self._read_repo.get_budgets(account_id=account_id)
-
-        filtered_budgets: list[dict] = []
-        for budget in budgets:
-            budget_date = self._normalize_date(budget.get("budget_date"))
-            if budget_date and budget_date.month == month and budget_date.year == year:
-                filtered_budgets.append(budget)
-
-        start_date = date(year, month, 1)
-        _, last_day = monthrange(year, month)
-        end_date = date(year, month, last_day)
-
-        transactions = self._read_repo.get_transactions(
-            account_id=account_id,
-            start_date=start_date,
-            end_date=end_date,
-            limit=10000,
-        )
-
-        expenses_by_category: dict[int, float] = {}
-        for transaction in transactions:
-            amount = float(transaction.get("amount", 0))
-            tx_type = self._normalize_tx_type(transaction.get("type"))
-            if tx_type == "expense" or (tx_type == "" and amount < 0):
-                category_id = transaction.get("Category_idCategory")
-                if category_id:
-                    expenses_by_category[category_id] = (
-                        expenses_by_category.get(category_id, 0.0) + abs(amount)
-                    )
-
-        categories = self._read_repo.get_categories()
-        category_id_to_name = {
-            cat.get("idCategory"): cat.get("name", "Ukendt")
-            for cat in categories
-            if cat.get("idCategory")
-        }
-
-        items: list[BudgetSummaryItem] = []
-        total_budget = 0.0
-        total_spent = 0.0
-        over_budget_count = 0
-        budget_category_ids: set[int] = set()
-
-        for budget in filtered_budgets:
-            category_id = budget.get("Category_idCategory")
-            if not category_id:
-                continue
-
-            budget_amount = float(budget.get("amount") or 0.0)
-            spent = expenses_by_category.get(category_id, 0.0)
-            remaining = budget_amount - spent
-            percentage_used = (spent / budget_amount * 100.0) if budget_amount > 0 else 0.0
-
-            if remaining < 0:
-                over_budget_count += 1
-
-            items.append(
-                BudgetSummaryItem(
-                    category_id=category_id,
-                    category_name=category_id_to_name.get(category_id, "Ukendt"),
-                    budget_amount=round(budget_amount, 2),
-                    spent_amount=round(spent, 2),
-                    remaining_amount=round(remaining, 2),
-                    percentage_used=round(percentage_used, 2),
-                )
-            )
-            total_budget += budget_amount
-            total_spent += spent
-            budget_category_ids.add(category_id)
-
-        missing_budget_category_ids = set(expenses_by_category) - budget_category_ids
-        for category_id in missing_budget_category_ids:
-            spent = expenses_by_category.get(category_id, 0.0)
-            items.append(
-                BudgetSummaryItem(
-                    category_id=category_id,
-                    category_name=category_id_to_name.get(category_id, "Ukendt"),
-                    budget_amount=0.0,
-                    spent_amount=round(spent, 2),
-                    remaining_amount=round(-spent, 2),
-                    percentage_used=100.0,
-                )
-            )
-            total_spent += spent
-
-        return BudgetSummary(
-            month=f"{month:02d}",
-            year=str(year),
-            items=items,
-            total_budget=round(total_budget, 2),
-            total_spent=round(total_spent, 2),
-            total_remaining=round(total_budget - total_spent, 2),
-            over_budget_count=over_budget_count,
-        )
 
     @staticmethod
     def _normalize_date(raw_value: Any) -> Optional[date]:

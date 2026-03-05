@@ -3,8 +3,7 @@ import pytest
 from datetime import date, timedelta
 from typing import Optional
 
-from backend.shared.schemas.planned_transactions import PlannedTransactionsBase, PlannedTransactionsCreate
-from backend.shared.schemas.transaction import TransactionBase
+from backend.transaction.application.dto import PlannedTransactionsBase, PlannedTransactionsCreate, TransactionBase
 
 
 

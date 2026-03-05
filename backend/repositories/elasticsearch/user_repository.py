@@ -1,8 +1,12 @@
 # backend/repositories/elasticsearch/user_repository.py
+import logging
 from typing import List, Dict, Optional
 from elasticsearch import Elasticsearch
 from backend.database.elasticsearch import get_es_client
 from backend.repositories.base import IUserRepository
+
+logger = logging.getLogger(__name__)
+
 
 class ElasticsearchUserRepository(IUserRepository):
     """Elasticsearch implementation of user repository."""
@@ -37,7 +41,7 @@ class ElasticsearchUserRepository(IUserRepository):
                 )
             except Exception as e:
                 # Index might already exist
-                print(f"Note: Index {self.index} setup: {e}")
+                logger.warning("Note: Index %s setup: %s", self.index, e)
     
     def get_all(self) -> List[Dict]:
         """Get all users from Elasticsearch."""

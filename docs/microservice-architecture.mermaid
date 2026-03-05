@@ -1,0 +1,122 @@
+graph TD
+    subgraph Clients
+        FE["React Frontend\n(Vite)"]
+    end
+
+    subgraph External
+        TINK["Tink API\nPSD2 Bank Data"]
+        LLM["LLM Provider\nClaude / Ollama"]
+        OAUTH["OAuth Provider\nGoogle / MitID"]
+    end
+
+    subgraph apiGateway ["API Gateway"]
+        GW["API Gateway\nRouting, Rate Limiting\nJWT Validation, CORS"]
+    end
+
+    subgraph writeServices ["Write Services (REST)"]
+        subgraph userService ["User Service"]
+            US["UserService\nAuth, JWT, OAuth\nRegistrering"]
+            US_DB[("Postgres\nUsers, Sessions\nOAuth tokens")]
+        end
+
+        subgraph transactionService ["Transaction Service"]
+            TS["TransactionService\nImmutable + Tombstone\nCSV Import"]
+            TS_DB[("MySQL\nTransactions\nPlanned transactions")]
+        end
+
+        subgraph bankService ["Bank Integration Service"]
+            BIS["BankIntegrationService\nTink Polling 4x/dag\nIdempotent Import"]
+            BIS_DB[("MySQL\nConnections\nSync state, Raw data")]
+        end
+
+        subgraph budgetService ["Budget Service"]
+            BS["BudgetService\nMonthlyBudget aggregate\nBudgetLines, Copy, CRUD"]
+            BS_DB[("MySQL\nBudgets\nBudget lines")]
+        end
+
+        subgraph categoryService ["Category Service"]
+            CS["CategoryService\nCRUD\nUser-defined kategorier"]
+            CS_DB[("MySQL\nCategories")]
+        end
+
+        subgraph goalService ["Goal Service"]
+            GS["GoalService\nCRUD, Auto-evaluering\nMånedsafslutning"]
+            GS_DB[("MySQL\nGoals\nProgress history")]
+        end
+
+        subgraph categorizationService ["Categorization Service"]
+            CAT["CategorizationService\nRegel → ML → LLM\nConfidence scoring"]
+            CAT_DB[("MySQL\nRules, ML model ref\nCategorization log")]
+        end
+    end
+
+    subgraph readSide ["Read Side (CQRS)"]
+        subgraph analyticsService ["Analytics / Read Service"]
+            AS["AnalyticsService\nGraphQL Gateway\ncurrentMonthOverview\nbudgetVsActual\ntopSpending\ngoalProgress"]
+            AS_DB[("Elasticsearch\nDenormaliserede views\nOptimeret til queries")]
+        end
+    end
+
+    subgraph eventBackbone ["Event Backbone"]
+        RMQ["RabbitMQ\nEvent Bus"]
+    end
+
+    subgraph monitoring ["Monitoring"]
+        PROM["Prometheus"]
+        GRAF["Grafana"]
+    end
+
+    %% Client -> Gateway
+    FE -->|"REST + GraphQL"| GW
+
+    %% Gateway -> Services
+    GW -->|"/users/*"| US
+    GW -->|"/transactions/*"| TS
+    GW -->|"/bank/*"| BIS
+    GW -->|"/budgets/*"| BS
+    GW -->|"/categories/*"| CS
+    GW -->|"/goals/*"| GS
+    GW -->|"/graphql"| AS
+
+    %% External -> Services
+    TINK -->|"poll"| BIS
+    LLM --> CAT
+    OAUTH --> US
+
+    %% Services -> Own databases
+    US --> US_DB
+    TS --> TS_DB
+    BIS --> BIS_DB
+    BS --> BS_DB
+    CS --> CS_DB
+    GS --> GS_DB
+    CAT --> CAT_DB
+    AS --> AS_DB
+
+    %% Event publishing (write -> RabbitMQ)
+    BIS -->|"transaction.imported"| RMQ
+    TS -->|"transaction.created\ntransaction.deleted"| RMQ
+    BS -->|"budget.updated\nbudget.threshold.80pct"| RMQ
+    CS -->|"category.created\ncategory.updated"| RMQ
+    GS -->|"goal.updated\ngoal.evaluated"| RMQ
+    CAT -->|"transaction.categorized"| RMQ
+    US -->|"user.created"| RMQ
+
+    %% Event consuming (RabbitMQ -> services)
+    RMQ -->|"transaction.imported"| TS
+    RMQ -->|"transaction.created"| CAT
+    RMQ -->|"transaction.created"| BS
+    RMQ -->|"transaction.categorized"| TS
+
+    %% All events -> Analytics read store
+    RMQ ==>|"ALL events\n-> denormaliserede\nread views"| AS
+
+    %% Monitoring
+    US -.->|"metrics"| PROM
+    TS -.->|"metrics"| PROM
+    BIS -.->|"metrics"| PROM
+    BS -.->|"metrics"| PROM
+    AS -.->|"metrics"| PROM
+    CAT -.->|"metrics"| PROM
+    RMQ -.->|"queue metrics"| PROM
+    PROM --> GRAF

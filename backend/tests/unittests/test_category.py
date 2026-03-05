@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from backend.shared.schemas.category import CategoryCreate
+from backend.category.application.dto import CategoryCreate
 
 
 # Category Name Boundary Value Tests

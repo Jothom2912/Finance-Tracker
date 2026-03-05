@@ -12,8 +12,8 @@ from backend.analytics.application.service import AnalyticsService
 from backend.auth import get_account_id_from_headers
 from backend.dependencies import get_analytics_service, get_monthly_budget_service
 from backend.monthly_budget.application.service import MonthlyBudgetService
-from backend.shared.schemas.budget import BudgetSummary
-from backend.shared.schemas.dashboard import FinancialOverview
+from backend.budget.application.dto import BudgetSummary
+from backend.analytics.application.dto import FinancialOverview
 
 dashboard_router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 budget_summary_router = APIRouter(prefix="/budgets", tags=["Budgets"])

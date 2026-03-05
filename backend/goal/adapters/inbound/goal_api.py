@@ -5,7 +5,7 @@ from typing import Optional, Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 
-from backend.shared.schemas.goal import (
+from backend.goal.application.dto import (
     Goal as GoalSchema,
     GoalCreate,
     GoalBase,

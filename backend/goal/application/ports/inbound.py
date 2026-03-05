@@ -5,7 +5,7 @@ These define what the Goal application can do.
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from backend.shared.schemas.goal import (
+from backend.goal.application.dto import (
     GoalCreate,
     GoalBase,
     Goal as GoalSchema,

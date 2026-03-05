@@ -1,8 +1,11 @@
 # backend/repositories/elasticsearch/category_repository.py
+import logging
 from typing import List, Dict, Optional
 from elasticsearch import Elasticsearch
 from backend.database.elasticsearch import get_es_client
 from backend.repositories.base import ICategoryRepository
+
+logger = logging.getLogger(__name__)
 
 class ElasticsearchCategoryRepository(ICategoryRepository):
     """Elasticsearch implementation of category repository."""
@@ -39,7 +42,7 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
             except Exception as create_error:
                 # If it's a version error, we can't fix it here - need to downgrade client or upgrade server
                 if "version" not in str(create_error).lower() and "compatible-with" not in str(create_error).lower():
-                    print(f"Note: Index {self.index} setup: {create_error}")
+                    logger.warning("Index %s setup: %s", self.index, create_error)
     
     def get_all(self) -> List[Dict]:
         """Get all categories from Elasticsearch."""
@@ -67,7 +70,7 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
                 categories.append(source)
             return categories
         except Exception as e:
-            print(f"Error getting all categories: {e}")
+            logger.error("Error getting all categories: %s", e)
             return []
     
     def get_by_id(self, category_id: int) -> Optional[Dict]:
@@ -89,7 +92,7 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
                 source["idCategory"] = int(source["idCategory"])
             return source
         except Exception as e:
-            print(f"Error getting category {category_id}: {e}")
+            logger.error("Error getting category %d: %s", category_id, e)
             return None
     
     def create(self, category_data: Dict) -> Dict:
@@ -119,7 +122,7 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
             category_data["idCategory"] = int(category_data.get("idCategory"))
             return category_data
         except Exception as e:
-            print(f"Error creating category: {e}")
+            logger.error("Error creating category: %s", e)
             raise ValueError(f"Failed to create category: {str(e)}")
     
     def update(self, category_id: int, category_data: Dict) -> Dict:
@@ -133,7 +136,7 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
             )
             return self.get_by_id(category_id) or category_data
         except Exception as e:
-            print(f"Error updating category {category_id}: {e}")
+            logger.error("Error updating category %d: %s", category_id, e)
             return category_data
     
     def delete(self, category_id: int) -> bool:
@@ -142,5 +145,5 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
             self.es.delete(index=self.index, id=category_id, refresh=True)
             return True
         except Exception as e:
-            print(f"Error deleting category {category_id}: {e}")
+            logger.error("Error deleting category %d: %s", category_id, e)
             return False

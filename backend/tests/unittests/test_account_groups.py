@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from backend.shared.schemas.account_groups import (
+from backend.account.application.dto import (
     AccountGroupsBase,
     AccountGroupsCreate,
 )

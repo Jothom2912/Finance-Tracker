@@ -27,8 +27,9 @@ from backend.transaction.domain.exceptions import (
     CategoryNotFound,
     PlannedTransactionRepositoryNotConfigured,
 )
-from backend.shared.schemas.transaction import TransactionCreate, TransactionType
-from backend.shared.schemas.planned_transactions import (
+from backend.transaction.application.dto import (
+    TransactionCreate,
+    TransactionType,
     PlannedTransactionsCreate,
     PlannedTransactionsBase,
 )

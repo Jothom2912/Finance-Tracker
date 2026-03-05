@@ -1,9 +1,13 @@
 # backend/repositories/elasticsearch/transaction_repository.py
+import logging
 from typing import List, Dict, Optional
 from datetime import date
 from elasticsearch import Elasticsearch
 from backend.database.elasticsearch import get_es_client
 from backend.repositories.base import ITransactionRepository
+
+logger = logging.getLogger(__name__)
+
 
 class ElasticsearchTransactionRepository(ITransactionRepository):
     """Elasticsearch implementation of transaction repository."""
@@ -89,7 +93,7 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
                 transactions.append(source)
             return transactions
         except Exception as e:
-            print(f"Error searching Elasticsearch: {e}")
+            logger.error("Error searching Elasticsearch: %s", e)
             return []
     
     def get_by_id(self, transaction_id: int) -> Optional[Dict]:
@@ -112,7 +116,7 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             # Normalize date field for schema compatibility
             return self._normalize_transaction(source)
         except Exception as e:
-            print(f"Error getting transaction {transaction_id}: {e}")
+            logger.error("Error getting transaction %s: %s", transaction_id, e)
             return None
     
     def create(self, transaction_data: Dict) -> Dict:
@@ -163,7 +167,7 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             # Normalize for return (ensure 'date' is date object)
             return self._normalize_transaction(transaction_data)
         except Exception as e:
-            print(f"Error creating transaction: {e}")
+            logger.error("Error creating transaction: %s", e)
             raise ValueError(f"Failed to create transaction: {str(e)}")
     
     def update(self, transaction_id: int, transaction_data: Dict) -> Dict:
@@ -187,7 +191,7 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             )
             return self.get_by_id(transaction_id) or self._normalize_transaction(transaction_data)
         except Exception as e:
-            print(f"Error updating transaction {transaction_id}: {e}")
+            logger.error("Error updating transaction %s: %s", transaction_id, e)
             return self._normalize_transaction(transaction_data)
     
     def delete(self, transaction_id: int) -> bool:
@@ -196,7 +200,7 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             self.es.delete(index=self.index, id=transaction_id, refresh=True)
             return True
         except Exception as e:
-            print(f"Error deleting transaction {transaction_id}: {e}")
+            logger.error("Error deleting transaction %s: %s", transaction_id, e)
             return False
     
     def search(
@@ -258,7 +262,7 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
                 transactions.append(source)
             return transactions
         except Exception as e:
-            print(f"Error searching Elasticsearch: {e}")
+            logger.error("Error searching Elasticsearch: %s", e)
             return []
     
     def get_summary_by_category(
@@ -306,5 +310,5 @@ class ElasticsearchTransactionRepository(ITransactionRepository):
             
             return summary
         except Exception as e:
-            print(f"Error getting category summary: {e}")
+            logger.error("Error getting category summary: %s", e)
             return {}

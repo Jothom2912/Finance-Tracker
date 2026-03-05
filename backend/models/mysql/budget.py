@@ -8,11 +8,8 @@ from .common import (
     Date, 
     ForeignKey, 
     relationship,
-    # IMPORTER NU ASSOCIATIONSTABELLEN DIREKTE FRA COMMON.PY:
-    budget_category_association
+    budget_category_association,
 )
-# FJERN DEN GAMLE LINJE:
-# from .__init__ import budget_category_association
 
 class Budget(Base):
     """Budget model - Bruges til at sætte budgetter per kategori"""

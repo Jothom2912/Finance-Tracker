@@ -16,12 +16,10 @@ from backend.account.domain.exceptions import (
     UserNotFoundForAccount,
     InvalidUserInGroup,
 )
-from backend.shared.schemas.account import (
+from backend.account.application.dto import (
     AccountCreate,
     AccountBase,
     Account as AccountSchema,
-)
-from backend.shared.schemas.account_groups import (
     AccountGroupsCreate,
     AccountGroups as AccountGroupSchema,
 )

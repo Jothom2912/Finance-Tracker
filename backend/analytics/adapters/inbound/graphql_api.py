@@ -3,7 +3,7 @@ GraphQL Read Gateway adapter.
 
 This adapter functions as a cross-domain read gateway, aggregating
 read-only data from multiple bounded contexts (analytics, transactions,
-categories) through a single GraphQL query interface.
+categories, goals) through a single GraphQL query interface.
 
 Architectural decision: This is a deliberate CQRS pattern where REST
 handles commands (write) and GraphQL handles queries (read) across
@@ -14,6 +14,7 @@ preserving each domain's encapsulation.
 from __future__ import annotations
 
 import logging
+from calendar import monthrange
 from datetime import date
 from typing import Any, Optional
 
@@ -29,8 +30,12 @@ from backend.database.mysql import get_db
 from backend.dependencies import (
     get_analytics_service,
     get_category_service,
+    get_goal_service,
+    get_monthly_budget_service,
     get_transaction_service,
 )
+from backend.goal.application.service import GoalService
+from backend.monthly_budget.application.service import MonthlyBudgetService
 from backend.transaction.application.service import TransactionService
 
 from sqlalchemy.orm import Session
@@ -105,6 +110,48 @@ class TransactionType:
     account_id: int
 
 
+@strawberry.type(description="Month-over-month trend indicators")
+class TrendType:
+    income_change_percent: Optional[float]
+    expense_change_percent: Optional[float]
+    net_change_diff: float
+    previous_month_income: float
+    previous_month_expenses: float
+
+
+@strawberry.type(
+    description="Current month overview with optional trend vs previous month"
+)
+class CurrentMonthOverviewType:
+    start_date: date
+    end_date: date
+    total_income: float
+    total_expenses: float
+    net_change_in_period: float
+    expenses_by_category: list[CategoryExpenseEntry]
+    current_account_balance: Optional[float] = None
+    average_monthly_expenses: Optional[float] = None
+    trend: Optional[TrendType] = None
+
+
+@strawberry.type(description="Goal progress read projection")
+class GoalProgressType:
+    id: int
+    name: Optional[str]
+    target_amount: float
+    current_amount: float
+    target_date: Optional[date]
+    status: Optional[str]
+    percent_complete: float
+
+
+@strawberry.type(description="Top spending category for a given period")
+class TopSpendingCategoryType:
+    category_name: str
+    amount: float
+    percentage_of_total: float
+
+
 # ---------------------------------------------------------------------------
 # Context getter -- wires FastAPI DI into Strawberry resolvers
 # ---------------------------------------------------------------------------
@@ -118,6 +165,8 @@ async def get_graphql_context(
     return {
         "analytics_service": get_analytics_service(db),
         "category_service": get_category_service(db),
+        "goal_service": get_goal_service(db),
+        "monthly_budget_service": get_monthly_budget_service(db),
         "transaction_service": get_transaction_service(db),
         "account_id": account_id,
     }
@@ -201,14 +250,14 @@ class Query:
     ) -> BudgetSummaryType:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        service: AnalyticsService = ctx["analytics_service"]
+        mb_service: MonthlyBudgetService = ctx["monthly_budget_service"]
 
-        result = service.get_budget_summary(
+        result = mb_service.get_summary(
             account_id=account_id, month=month, year=year
         )
         return BudgetSummaryType(
-            month=result.month,
-            year=result.year,
+            month=str(result.month).zfill(2),
+            year=str(result.year),
             items=[
                 BudgetSummaryItemType(
                     category_id=item.category_id,
@@ -225,6 +274,129 @@ class Query:
             total_remaining=result.total_remaining,
             over_budget_count=result.over_budget_count,
         )
+
+    @strawberry.field(
+        description="Financial overview for the current calendar month with trend vs previous month"
+    )
+    def current_month_overview(self, info: Info) -> CurrentMonthOverviewType:
+        ctx = info.context
+        account_id = _require_account_id(ctx)
+        service: AnalyticsService = ctx["analytics_service"]
+
+        today = date.today()
+        start = date(today.year, today.month, 1)
+        _, last_day = monthrange(today.year, today.month)
+        end = date(today.year, today.month, last_day)
+
+        result = service.get_financial_overview(
+            account_id=account_id,
+            start_date=start,
+            end_date=end,
+        )
+
+        prev_year = today.year if today.month > 1 else today.year - 1
+        prev_month = today.month - 1 if today.month > 1 else 12
+        prev_start = date(prev_year, prev_month, 1)
+        _, prev_last_day = monthrange(prev_year, prev_month)
+        prev_end = date(prev_year, prev_month, prev_last_day)
+
+        prev_result = service.get_financial_overview(
+            account_id=account_id,
+            start_date=prev_start,
+            end_date=prev_end,
+        )
+
+        def _pct_change(current: float, previous: float) -> float | None:
+            if previous == 0:
+                return None
+            return round(((current - previous) / abs(previous)) * 100, 1)
+
+        trend = TrendType(
+            income_change_percent=_pct_change(
+                result.total_income, prev_result.total_income
+            ),
+            expense_change_percent=_pct_change(
+                result.total_expenses, prev_result.total_expenses
+            ),
+            net_change_diff=round(
+                result.net_change_in_period - prev_result.net_change_in_period, 2
+            ),
+            previous_month_income=prev_result.total_income,
+            previous_month_expenses=prev_result.total_expenses,
+        )
+
+        return CurrentMonthOverviewType(
+            start_date=result.start_date,
+            end_date=result.end_date,
+            total_income=result.total_income,
+            total_expenses=result.total_expenses,
+            net_change_in_period=result.net_change_in_period,
+            expenses_by_category=[
+                CategoryExpenseEntry(category_name=name, amount=amount)
+                for name, amount in result.expenses_by_category.items()
+            ],
+            current_account_balance=result.current_account_balance,
+            average_monthly_expenses=result.average_monthly_expenses,
+            trend=trend,
+        )
+
+    @strawberry.field(description="Progress for all goals on the active account")
+    def goal_progress(self, info: Info) -> list[GoalProgressType]:
+        ctx = info.context
+        account_id = _require_account_id(ctx)
+        goal_service: GoalService = ctx["goal_service"]
+
+        goals = goal_service.list_goals(account_id=account_id)
+        return [
+            GoalProgressType(
+                id=g.idGoal,
+                name=g.name,
+                target_amount=g.target_amount,
+                current_amount=g.current_amount,
+                target_date=g.target_date,
+                status=g.status,
+                percent_complete=(
+                    round((g.current_amount / g.target_amount) * 100, 1)
+                    if g.target_amount > 0
+                    else 100.0
+                ),
+            )
+            for g in goals
+        ]
+
+    @strawberry.field(description="Top spending categories for a month")
+    def top_spending_categories(
+        self,
+        info: Info,
+        month: int,
+        year: int,
+        limit: int = 5,
+    ) -> list[TopSpendingCategoryType]:
+        ctx = info.context
+        account_id = _require_account_id(ctx)
+        service: AnalyticsService = ctx["analytics_service"]
+
+        start = date(year, month, 1)
+        _, last_day = monthrange(year, month)
+        end = date(year, month, last_day)
+
+        result = service.get_financial_overview(
+            account_id=account_id, start_date=start, end_date=end
+        )
+
+        total = result.total_expenses or 1.0
+        sorted_cats = sorted(
+            result.expenses_by_category.items(), key=lambda x: x[1], reverse=True
+        )[:limit]
+
+        return [
+            TopSpendingCategoryType(
+                category_name=name,
+                amount=amount,
+                percentage_of_total=round((amount / total) * 100, 1),
+            )
+            for name, amount in sorted_cats
+        ]
 
     # -- Cross-context read resolvers (thin gateway layer) --
 

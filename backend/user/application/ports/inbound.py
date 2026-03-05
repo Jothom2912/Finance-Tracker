@@ -5,7 +5,7 @@ These define what the User application can do.
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from backend.shared.schemas.user import (
+from backend.user.application.dto import (
     UserCreate,
     User as UserSchema,
 )

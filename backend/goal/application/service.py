@@ -12,7 +12,7 @@ from backend.goal.application.ports.outbound import (
 )
 from backend.goal.domain.entities import Goal
 from backend.goal.domain.exceptions import AccountNotFoundForGoal
-from backend.shared.schemas.goal import (
+from backend.goal.application.dto import (
     GoalCreate,
     GoalBase,
     Goal as GoalSchema,

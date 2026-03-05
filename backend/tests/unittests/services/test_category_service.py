@@ -15,7 +15,7 @@ from backend.category.domain.exceptions import (
     DuplicateCategoryName,
     DuplicateCategoryNameOnUpdate,
 )
-from backend.shared.schemas.category import CategoryCreate
+from backend.category.application.dto import CategoryCreate
 
 
 # ============================================================================

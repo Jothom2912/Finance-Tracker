@@ -19,7 +19,7 @@ from backend.user.domain.exceptions import (
     InvalidCredentials,
 )
 from backend.auth import hash_password, verify_password, create_access_token
-from backend.shared.schemas.user import (
+from backend.user.application.dto import (
     UserCreate,
     User as UserSchema,
 )

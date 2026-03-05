@@ -18,7 +18,7 @@ from pydantic import ValidationError
 #done
 def test_category_name_boundary_values():
     """BVA: Name længde grænseværdier: 0, 1, 30, 31"""
-    from backend.shared.schemas.category import CategoryCreate
+    from backend.category.application.dto import CategoryCreate
     
     # 0 chars - INVALID
     with pytest.raises(ValidationError):
@@ -39,7 +39,7 @@ def test_category_name_boundary_values():
 
 def test_category_type_boundary_values():
     """BVA: Type må være 'income' eller 'expense'"""
-    from backend.shared.schemas.category import CategoryCreate
+    from backend.category.application.dto import CategoryCreate
     
     # Valid types
     valid1 = CategoryCreate(name="Test", type="income")
@@ -61,7 +61,7 @@ def test_category_type_boundary_values():
 
 def test_category_description_boundary_values():
     """BVA: Description max 200 chars"""
-    from backend.shared.schemas.category import CategoryCreate
+    from backend.category.application.dto import CategoryCreate
     
     # 200 chars - VALID (grænse)
     valid = CategoryCreate(name="Test", type="income", description="A" * 200)
@@ -82,7 +82,7 @@ def test_category_description_boundary_values():
 
 def test_budget_amount_boundary_values():
     """BVA: Amount grænseværdier: -0.01 (invalid), 0 (valid), 0.01 (valid)"""
-    from backend.shared.schemas.budget import BudgetCreate
+    from backend.budget.application.dto import BudgetCreate
     
     # -0.01 - INVALID
     with pytest.raises(ValidationError):
@@ -114,7 +114,7 @@ def test_budget_amount_boundary_values():
 
 def test_budget_period_boundary_values():
     """BVA: Budget amount skal være >= 0 (test different amount values)"""
-    from backend.shared.schemas.budget import BudgetCreate
+    from backend.budget.application.dto import BudgetCreate
     
     today = date.today()
     
@@ -136,7 +136,7 @@ def test_budget_period_boundary_values():
 
 def test_budget_date_boundary_values():
     """BVA: Budget date validation"""
-    from backend.shared.schemas.budget import BudgetCreate
+    from backend.budget.application.dto import BudgetCreate
     
     today = date.today()
     yesterday = today - timedelta(days=1)
@@ -174,7 +174,7 @@ def test_budget_date_boundary_values():
 
 def test_goal_target_amount_boundary_values():
     """BVA: Target amount grænseværdier: -0.01 (invalid), 0 (valid), 0.01 (valid)"""
-    from backend.shared.schemas.goal import GoalCreate
+    from backend.goal.application.dto import GoalCreate
     
     # -0.01 - INVALID
     with pytest.raises(ValidationError):
@@ -203,7 +203,7 @@ def test_goal_target_amount_boundary_values():
 
 def test_goal_current_vs_target_boundary():
     """BVA: current_amount må IKKE være > target_amount"""
-    from backend.shared.schemas.goal import GoalCreate
+    from backend.goal.application.dto import GoalCreate
     
     # current > target - INVALID
     with pytest.raises(ValidationError):
@@ -232,7 +232,7 @@ def test_goal_current_vs_target_boundary():
 
 def test_goal_deadline_boundary_values():
     """BVA: Deadline skal være i fremtiden"""
-    from backend.shared.schemas.goal import GoalCreate
+    from backend.goal.application.dto import GoalCreate
     
     today = date.today()
     tomorrow = today + timedelta(days=1)
@@ -272,7 +272,7 @@ def test_goal_deadline_boundary_values():
 
 def test_transaction_amount_cannot_be_zero():
     """BVA: Amount må IKKE være 0"""
-    from backend.shared.schemas.transaction import TransactionCreate
+    from backend.transaction.application.dto import TransactionCreate
     
     today = date.today()
     
@@ -313,7 +313,7 @@ def test_transaction_amount_cannot_be_zero():
 
 def test_user_username_boundary_values():
     """BVA: Username grænseværdier: 2 (invalid), 3 (valid), 20 (valid), 21 (invalid)"""
-    from backend.shared.schemas.user import UserCreate
+    from backend.user.application.dto import UserCreate
     
     # 2 chars - INVALID
     with pytest.raises(ValidationError):
@@ -350,7 +350,7 @@ def test_user_username_boundary_values():
 
 def test_user_password_boundary_values():
     """BVA: Password grænseværdier: 7 (invalid), 8 (valid), 9 (valid)"""
-    from backend.shared.schemas.user import UserCreate
+    from backend.user.application.dto import UserCreate
     
     # 7 chars - INVALID
     with pytest.raises(ValidationError):

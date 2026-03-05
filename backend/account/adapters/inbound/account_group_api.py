@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.shared.schemas.account_groups import (
+from backend.account.application.dto import (
     AccountGroups as AccountGroupSchema,
     AccountGroupsCreate,
 )

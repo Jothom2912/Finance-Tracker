@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from backend.shared.schemas.user import UserBase, UserCreate
+from backend.user.application.dto import UserBase, UserCreate
 
 
 # -------------------------

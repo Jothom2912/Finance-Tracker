@@ -1,8 +1,12 @@
 # backend/repositories/elasticsearch/account_repository.py
+import logging
 from typing import List, Dict, Optional
 from elasticsearch import Elasticsearch
 from backend.database.elasticsearch import get_es_client
 from backend.repositories.base import IAccountRepository
+
+logger = logging.getLogger(__name__)
+
 
 class ElasticsearchAccountRepository(IAccountRepository):
     """Elasticsearch implementation of account repository."""
@@ -33,7 +37,7 @@ class ElasticsearchAccountRepository(IAccountRepository):
                     }
                 )
             except Exception as e:
-                print(f"Note: Index {self.index} setup: {e}")
+                logger.warning("Note: Index %s setup: %s", self.index, e)
     
     def get_all(self, user_id: Optional[int] = None) -> List[Dict]:
         """Get all accounts from Elasticsearch, optionally filtered by user_id."""

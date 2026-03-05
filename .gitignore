@@ -21,6 +21,12 @@ dumps/
 *.sql
 !**/migrations/**/*.sql
 
+# Logs
+*.log
+
+# Test caches
+.pytest_cache/
+
 # IDE
 .vscode/
 .idea/

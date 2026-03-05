@@ -3,7 +3,7 @@ from pydantic import ValidationError
 from datetime import date
 from typing import Optional
 from pydantic import BaseModel, ValidationError, Field, field_validator 
-from backend.shared.schemas.budget import BudgetCreate, BudgetBase
+from backend.budget.application.dto import BudgetCreate, BudgetBase
 
 #BudgetBase tests
 

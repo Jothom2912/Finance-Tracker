@@ -5,7 +5,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.shared.schemas.user import (
+from backend.user.application.dto import (
     User as UserSchema,
     UserCreate,
     UserLogin,
