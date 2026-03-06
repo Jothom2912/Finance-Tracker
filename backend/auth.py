@@ -9,11 +9,11 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, status, Header
-from sqlalchemy.orm import Session
 import bcrypt
 
 from backend.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
-from backend.database.mysql import get_db
+from backend.shared.adapters.auth_dependencies import get_account_resolver
+from backend.shared.ports.auth_ports import IAccountResolver
 
 # Validate SECRET_KEY at import time
 if not SECRET_KEY:
@@ -163,7 +163,7 @@ def get_current_user_id(
 def get_account_id_from_headers(
     authorization: Optional[str] = Header(None, alias="Authorization"),
     x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    db: Session = Depends(get_db),
+    resolver: IAccountResolver = Depends(get_account_resolver),
 ) -> Optional[int]:
     """
     FastAPI Dependency: Resolves account_id from request headers.
@@ -190,23 +190,15 @@ def get_account_id_from_headers(
         except ValueError:
             requested_account_id = None
 
-        # Explicit account selection requires a valid authenticated user.
         if requested_account_id is not None and token_data:
-            from backend.repositories import get_account_repository
-
-            account_repo = get_account_repository(db)
-            account = account_repo.get_by_id(requested_account_id)
-            if account and account.get("User_idUser") == token_data.user_id:
+            if resolver.verify_account_ownership(
+                token_data.user_id, requested_account_id
+            ):
                 return requested_account_id
         return None
 
     if token_data:
-        from backend.repositories import get_account_repository
-
-        account_repo = get_account_repository(db)
-        accounts = account_repo.get_all(user_id=token_data.user_id)
-        if accounts:
-            return accounts[0]["idAccount"]
+        return resolver.get_account_id_for_user(token_data.user_id)
 
     return None
 

@@ -85,7 +85,7 @@ class MySQLTransactionRepository(ITransactionRepository):
             created_at=transaction.created_at or datetime.now(),
         )
         self._db.add(model)
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(model)
         return self._to_entity(model)
 
@@ -110,7 +110,7 @@ class MySQLTransactionRepository(ITransactionRepository):
                 date_value = datetime.combine(date_value, datetime.min.time())
             model.date = date_value
 
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(model)
         return self._to_entity(model)
 
@@ -124,7 +124,7 @@ class MySQLTransactionRepository(ITransactionRepository):
             return False
 
         self._db.delete(model)
-        self._db.commit()
+        self._db.flush()
         return True
 
     def search(
@@ -243,7 +243,7 @@ class MySQLPlannedTransactionRepository(IPlannedTransactionRepository):
             Transaction_idTransaction=planned.transaction_id,
         )
         self._db.add(model)
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(model)
         return self._to_entity(model)
 
@@ -263,7 +263,7 @@ class MySQLPlannedTransactionRepository(IPlannedTransactionRepository):
         if planned.transaction_id is not None:
             model.Transaction_idTransaction = planned.transaction_id
 
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(model)
         return self._to_entity(model)
 

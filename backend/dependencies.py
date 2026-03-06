@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import ANALYTICS_DB, DatabaseType
 from backend.database.mysql import get_db
+from backend.shared.adapters.mysql_unit_of_work import MySQLUnitOfWork
 
 # Hexagonal User domain
 from backend.user.application.service import UserService as HexUserService
@@ -108,6 +109,7 @@ def get_transaction_service(
     return TransactionService(
         transaction_repo=MySQLTransactionRepository(db),
         category_port=TransactionCategoryAdapter(db),
+        uow=MySQLUnitOfWork(db),
         planned_transaction_repo=MySQLPlannedTransactionRepository(db),
     )
 

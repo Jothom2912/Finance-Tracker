@@ -49,9 +49,9 @@ def create_transaction_route(
             detail="Account ID mangler. Vælg en konto først.",
         )
 
-    if transaction.Account_idAccount is None:
+    if transaction.account_id is None:
         transaction = transaction.model_copy(
-            update={"Account_idAccount": account_id}
+            update={"account_id": account_id}
         )
 
     try:
@@ -178,9 +178,9 @@ def update_transaction_route(
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ):
     """Opdaterer en eksisterende transaktion."""
-    if transaction.Account_idAccount is None and account_id:
+    if transaction.account_id is None and account_id:
         transaction = transaction.model_copy(
-            update={"Account_idAccount": account_id}
+            update={"account_id": account_id}
         )
 
     try:

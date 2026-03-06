@@ -196,7 +196,7 @@ def test_create_category_id_valid():
     )
 
     # Assert
-    assert txn.Category_idCategory == category_id
+    assert txn.category_id == category_id
 
 
 # Inheritance Check — Zero Amount (INVALID)

@@ -432,13 +432,13 @@ class Query:
         )
         return [
             TransactionType(
-                id=t.idTransaction,
+                id=t.id,
                 amount=t.amount,
                 description=t.description,
                 date=t.date,
                 type=t.type,
-                category_id=t.Category_idCategory,
-                account_id=t.Account_idAccount,
+                category_id=t.category_id,
+                account_id=t.account_id,
             )
             for t in results
         ]

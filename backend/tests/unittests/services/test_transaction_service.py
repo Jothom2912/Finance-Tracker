@@ -22,6 +22,7 @@ from backend.transaction.domain.entities import (
     PlannedTransaction,
     Transaction,
 )
+from backend.shared.ports.unit_of_work import IUnitOfWork
 from backend.transaction.domain.exceptions import (
     AccountRequired,
     CategoryNotFound,
@@ -56,21 +57,31 @@ def mock_planned_repo():
 
 
 @pytest.fixture
-def service(mock_transaction_repo, mock_category_repo, mock_planned_repo):
+def mock_uow():
+    uow = Mock(spec=IUnitOfWork)
+    uow.__enter__ = Mock(return_value=uow)
+    uow.__exit__ = Mock(return_value=False)
+    return uow
+
+
+@pytest.fixture
+def service(mock_transaction_repo, mock_category_repo, mock_uow, mock_planned_repo):
     """TransactionService with all repos injected."""
     return TransactionService(
         transaction_repo=mock_transaction_repo,
         category_port=mock_category_repo,
+        uow=mock_uow,
         planned_transaction_repo=mock_planned_repo,
     )
 
 
 @pytest.fixture
-def service_without_planned(mock_transaction_repo, mock_category_repo):
+def service_without_planned(mock_transaction_repo, mock_category_repo, mock_uow):
     """TransactionService without planned transaction repo."""
     return TransactionService(
         transaction_repo=mock_transaction_repo,
         category_port=mock_category_repo,
+        uow=mock_uow,
     )
 
 
@@ -80,8 +91,8 @@ def _make_transaction_create(**overrides):
         "amount": -500.0,
         "type": TransactionType.expense,
         "description": "Netto",
-        "Category_idCategory": 1,
-        "Account_idAccount": 1,
+        "category_id": 1,
+        "account_id": 1,
         "date": date.today(),
     }
     defaults.update(overrides)
@@ -158,7 +169,7 @@ class TestListTransactions:
 
         # Assert
         assert len(result) == 1
-        assert result[0].idTransaction == 1
+        assert result[0].id == 1
         assert result[0].amount == -500.0
 
     def test_returns_empty_list_when_no_data(self, service, mock_transaction_repo):
@@ -255,7 +266,7 @@ class TestListTransactions:
 
         # Assert
         assert len(result) == 1
-        assert result[0].idTransaction == 1
+        assert result[0].id == 1
 
     def test_filters_by_month_and_year_combined(self, service, mock_transaction_repo):
         # Arrange
@@ -270,7 +281,7 @@ class TestListTransactions:
 
         # Assert
         assert len(result) == 1
-        assert result[0].idTransaction == 1
+        assert result[0].id == 1
 
 
 # ============================================================================
@@ -290,7 +301,7 @@ class TestGetTransaction:
         result = service.get_transaction(transaction_id=1)
 
         # Assert
-        assert result.idTransaction == 1
+        assert result.id == 1
         assert result.amount == -500.0
         assert result.description == "Netto"
 
@@ -337,13 +348,13 @@ class TestCreateTransaction:
         result = service.create_transaction(transaction)
 
         # Assert
-        assert result.idTransaction == 1
+        assert result.id == 1
         mock_transaction_repo.create.assert_called_once()
 
     def test_raises_when_category_not_found(self, service, mock_category_repo):
         # Arrange
         mock_category_repo.get_by_id.return_value = None
-        transaction = _make_transaction_create(Category_idCategory=999)
+        transaction = _make_transaction_create(category_id=999)
 
         # Act & Assert
         with pytest.raises(CategoryNotFound):
@@ -352,7 +363,7 @@ class TestCreateTransaction:
     def test_raises_when_account_id_missing(self, service, mock_category_repo):
         # Arrange
         mock_category_repo.get_by_id.return_value = _make_category_info(1, "Mad")
-        transaction = _make_transaction_create(Account_idAccount=None)
+        transaction = _make_transaction_create(account_id=None)
 
         # Act & Assert
         with pytest.raises(AccountRequired):
@@ -470,7 +481,7 @@ class TestUpdateTransaction:
         existing = _make_transaction_entity(tx_id=1, category_id=1)
         mock_transaction_repo.get_by_id.return_value = existing
         mock_category_repo.get_by_id.return_value = None  # New category doesn't exist
-        update_data = _make_transaction_create(Category_idCategory=999)
+        update_data = _make_transaction_create(category_id=999)
 
         # Act & Assert
         with pytest.raises(CategoryNotFound):
@@ -483,7 +494,7 @@ class TestUpdateTransaction:
         existing = _make_transaction_entity(tx_id=1, category_id=1)
         mock_transaction_repo.get_by_id.return_value = existing
         mock_transaction_repo.update.return_value = _make_transaction_entity(tx_id=1)
-        update_data = _make_transaction_create(Category_idCategory=1)
+        update_data = _make_transaction_create(category_id=1)
 
         # Act
         service.update_transaction(transaction_id=1, dto=update_data)
@@ -587,7 +598,7 @@ class TestPlannedTransactions:
         result = service.get_planned_transaction(pt_id=1)
 
         # Assert
-        assert result.idPlannedTransactions == 1
+        assert result.id == 1
         assert result.name == "Husleje"
 
     def test_get_planned_transaction_returns_none(

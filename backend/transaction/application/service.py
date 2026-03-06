@@ -9,8 +9,8 @@ from typing import Optional
 
 import pandas as pd
 
-from backend.models.mysql.common import TransactionType
 from backend.services.categorization import assign_category_automatically
+from backend.transaction.domain.entities import TransactionType
 
 from backend.transaction.application.dto import (
     PlannedTransactionCreateDTO,
@@ -20,6 +20,7 @@ from backend.transaction.application.dto import (
     TransactionResponseDTO,
 )
 from backend.transaction.application.ports.inbound import ITransactionService
+from backend.shared.ports.unit_of_work import IUnitOfWork
 from backend.transaction.application.ports.outbound import (
     ICategoryPort,
     IPlannedTransactionRepository,
@@ -46,10 +47,12 @@ class TransactionService(ITransactionService):
         self,
         transaction_repo: ITransactionRepository,
         category_port: ICategoryPort,
+        uow: IUnitOfWork,
         planned_transaction_repo: Optional[IPlannedTransactionRepository] = None,
     ):
         self._transaction_repo = transaction_repo
         self._category_port = category_port
+        self._uow = uow
         self._planned_transaction_repo = planned_transaction_repo
 
     # ------------------------------------------------------------------
@@ -108,13 +111,12 @@ class TransactionService(ITransactionService):
     ) -> TransactionResponseDTO:
         logger.debug("create_transaction: input = %s", dto.model_dump())
 
-        # Validate category exists
-        category = self._category_port.get_by_id(dto.Category_idCategory)
+        category = self._category_port.get_by_id(dto.category_id)
         if not category:
-            raise CategoryNotFound(dto.Category_idCategory)
+            raise CategoryNotFound(dto.category_id)
         logger.debug("create_transaction: Kategori fundet: %s", category.name)
 
-        if not dto.Account_idAccount:
+        if not dto.account_id:
             raise AccountRequired()
 
         tx_type = dto.type
@@ -127,12 +129,14 @@ class TransactionService(ITransactionService):
             description=dto.description,
             date=dto.date or date.today(),
             type=tx_type,
-            category_id=dto.Category_idCategory,
-            account_id=dto.Account_idAccount,
+            category_id=dto.category_id,
+            account_id=dto.account_id,
             created_at=datetime.now(),
         )
 
-        created = self._transaction_repo.create(entity)
+        with self._uow:
+            created = self._transaction_repo.create(entity)
+            self._uow.commit()
         logger.debug("create_transaction: Oprettet med ID: %s", created.id)
         return self._to_dto(created)
 
@@ -143,11 +147,10 @@ class TransactionService(ITransactionService):
         if not existing:
             return None
 
-        # Validate category if changed
-        if existing.category_id != dto.Category_idCategory:
-            category = self._category_port.get_by_id(dto.Category_idCategory)
+        if existing.category_id != dto.category_id:
+            category = self._category_port.get_by_id(dto.category_id)
             if not category:
-                raise CategoryNotFound(dto.Category_idCategory)
+                raise CategoryNotFound(dto.category_id)
 
         tx_type = dto.type
         if hasattr(tx_type, "value"):
@@ -159,18 +162,23 @@ class TransactionService(ITransactionService):
             description=dto.description,
             date=dto.date or existing.date,
             type=tx_type,
-            category_id=dto.Category_idCategory,
-            account_id=dto.Account_idAccount or existing.account_id,
+            category_id=dto.category_id,
+            account_id=dto.account_id or existing.account_id,
             created_at=existing.created_at,
         )
 
-        result = self._transaction_repo.update(updated)
+        with self._uow:
+            result = self._transaction_repo.update(updated)
+            self._uow.commit()
         if not result:
             return None
         return self._to_dto(result)
 
     def delete_transaction(self, transaction_id: int) -> bool:
-        return self._transaction_repo.delete(transaction_id)
+        with self._uow:
+            result = self._transaction_repo.delete(transaction_id)
+            self._uow.commit()
+        return result
 
     # ------------------------------------------------------------------
     # Planned Transactions
@@ -206,7 +214,9 @@ class TransactionService(ITransactionService):
             amount=dto.amount,
         )
 
-        created = self._planned_transaction_repo.create(entity)
+        with self._uow:
+            created = self._planned_transaction_repo.create(entity)
+            self._uow.commit()
         return self._to_planned_dto(created)
 
     def update_planned_transaction(
@@ -228,7 +238,9 @@ class TransactionService(ITransactionService):
             transaction_id=existing.transaction_id,
         )
 
-        result = self._planned_transaction_repo.update(updated)
+        with self._uow:
+            result = self._planned_transaction_repo.update(updated)
+            self._uow.commit()
         if not result:
             return None
         return self._to_planned_dto(result)
@@ -288,59 +300,60 @@ class TransactionService(ITransactionService):
         created_transactions: list[TransactionResponseDTO] = []
 
         try:
-            for idx, row in df.iterrows():
-                try:
-                    amount = float(row["amount"])
+            with self._uow:
+                for idx, row in df.iterrows():
+                    try:
+                        amount = float(row["amount"])
 
-                    # Build description
-                    parts = [
-                        str(row.get("Modtager", "")),
-                        str(row.get("Afsender", "")),
-                        str(row.get("Navn", "")),
-                        str(row.get("Beskrivelse", "")),
-                    ]
-                    cleaned_parts = [
-                        p for p in parts if p and p.lower() != "nan" and p.strip()
-                    ]
-                    full_description = " ".join(cleaned_parts).strip()
-                    if not full_description:
-                        full_description = "Ukendt beskrivelse"
+                        parts = [
+                            str(row.get("Modtager", "")),
+                            str(row.get("Afsender", "")),
+                            str(row.get("Navn", "")),
+                            str(row.get("Beskrivelse", "")),
+                        ]
+                        cleaned_parts = [
+                            p for p in parts if p and p.lower() != "nan" and p.strip()
+                        ]
+                        full_description = " ".join(cleaned_parts).strip()
+                        if not full_description:
+                            full_description = "Ukendt beskrivelse"
 
-                    # Auto-assign category
-                    transaction_category_id = assign_category_automatically(
-                        transaction_description=full_description,
-                        amount=amount,
-                        category_name_to_id=category_name_to_id,
-                    )
+                        transaction_category_id = assign_category_automatically(
+                            transaction_description=full_description,
+                            amount=amount,
+                            category_name_to_id=category_name_to_id,
+                        )
 
-                    tx_type = (
-                        TransactionType.income.value
-                        if amount >= 0
-                        else TransactionType.expense.value
-                    )
+                        tx_type = (
+                            TransactionType.income.value
+                            if amount >= 0
+                            else TransactionType.expense.value
+                        )
 
-                    entity = Transaction(
-                        id=None,
-                        amount=abs(amount),
-                        description=full_description,
-                        date=row["date"],
-                        type=tx_type,
-                        category_id=transaction_category_id,
-                        account_id=account_id,
-                        created_at=datetime.now(),
-                    )
+                        entity = Transaction(
+                            id=None,
+                            amount=abs(amount),
+                            description=full_description,
+                            date=row["date"],
+                            type=tx_type,
+                            category_id=transaction_category_id,
+                            account_id=account_id,
+                            created_at=datetime.now(),
+                        )
 
-                    created = self._transaction_repo.create(entity)
-                    created_transactions.append(self._to_dto(created))
+                        created = self._transaction_repo.create(entity)
+                        created_transactions.append(self._to_dto(created))
 
-                except Exception as row_error:
-                    logger.warning(
-                        "Fejl ved import af række %s: %s", idx, row_error
-                    )
-                    continue
+                    except Exception as row_error:
+                        logger.warning(
+                            "Fejl ved import af række %s: %s", idx, row_error
+                        )
+                        continue
 
-            if not created_transactions:
-                raise ValueError("Ingen transaktioner kunne importeres fra CSV")
+                if not created_transactions:
+                    raise ValueError("Ingen transaktioner kunne importeres fra CSV")
+
+                self._uow.commit()
 
             logger.info(
                 "Succesfuldt importeret %s transaktioner til account_id=%s",
@@ -366,23 +379,23 @@ class TransactionService(ITransactionService):
     @staticmethod
     def _to_dto(entity: Transaction) -> TransactionResponseDTO:
         return TransactionResponseDTO(
-            idTransaction=entity.id,
+            id=entity.id,
             amount=entity.amount,
             description=entity.description,
             date=entity.date,
             type=entity.type,
-            Category_idCategory=entity.category_id,
-            Account_idAccount=entity.account_id,
+            category_id=entity.category_id,
+            account_id=entity.account_id,
             created_at=entity.created_at,
         )
 
     @staticmethod
     def _to_planned_dto(entity: PlannedTransaction) -> PlannedTransactionResponseDTO:
         return PlannedTransactionResponseDTO(
-            idPlannedTransactions=entity.id,
+            id=entity.id,
             name=entity.name,
             amount=entity.amount,
-            Transaction_idTransaction=entity.transaction_id,
+            transaction_id=entity.transaction_id,
         )
 
     # ------------------------------------------------------------------

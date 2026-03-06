@@ -2,9 +2,15 @@
 Domain entities for Transaction bounded context.
 Pure domain objects with no infrastructure dependencies.
 """
+import enum
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Optional
+
+
+class TransactionType(str, enum.Enum):
+    income = "income"
+    expense = "expense"
 
 
 @dataclass
@@ -15,7 +21,7 @@ class Transaction:
     amount: float
     description: Optional[str]
     date: date
-    type: str  # "income" or "expense"
+    type: str
     category_id: int
     account_id: int
     created_at: Optional[datetime] = None

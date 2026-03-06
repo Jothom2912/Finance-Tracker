@@ -1,20 +1,14 @@
 """DTOs for Transaction bounded context."""
 from __future__ import annotations
 
-import enum
 from datetime import date, datetime
 from datetime import date as date_type
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from backend.transaction.domain.entities import TransactionType
 from backend.validation_boundaries import PLANNED_TRANSACTION_BVA, TRANSACTION_BVA
-
-
-# --- ENUM for Type ---
-class TransactionType(str, enum.Enum):
-    income = "income"
-    expense = "expense"
 
 
 # --- Forward references for nested relations ---
@@ -98,16 +92,16 @@ class TransactionBase(BaseModel):
 
 class TransactionCreate(TransactionBase):
     """Fields required to create a new transaction."""
-    Category_idCategory: int = Field(..., alias="category_id")
-    Account_idAccount: Optional[int] = Field(None, alias="account_id")
+    category_id: int = Field(..., validation_alias="category_id", serialization_alias="Category_idCategory")
+    account_id: Optional[int] = Field(None, validation_alias="account_id", serialization_alias="Account_idAccount")
 
 
 class Transaction(TransactionBase):
     """Full schema including ID and relationships."""
-    idTransaction: int
+    id: int = Field(serialization_alias="idTransaction")
 
-    Category_idCategory: int
-    Account_idAccount: int
+    category_id: int = Field(serialization_alias="Category_idCategory")
+    account_id: int = Field(serialization_alias="Account_idAccount")
 
     created_at: Optional[datetime] = Field(
         None,
@@ -189,8 +183,8 @@ class PlannedTransactionsCreate(PlannedTransactionsBase):
 
 
 class PlannedTransactions(PlannedTransactionsBase):
-    idPlannedTransactions: int
-    Transaction_idTransaction: Optional[int] = None
+    id: int = Field(serialization_alias="idPlannedTransactions")
+    transaction_id: Optional[int] = Field(None, serialization_alias="Transaction_idTransaction")
 
     transaction: Optional[PlannedTransactionRefBase] = None
 
