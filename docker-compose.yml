@@ -1,28 +1,54 @@
 services:
-  # MySQL Database
-  mysql:
+  # --- Databases ---
+  mysql-transactions:
     image: mysql:8.0
-    container_name: finance-mysql
     environment:
       MYSQL_ROOT_PASSWORD: 123456
-      MYSQL_DATABASE: finans_tracker
+      MYSQL_DATABASE: transactions
     ports:
-      - "3307:3306"
+      - "3310:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./dumps/mysql:/dumps
+      - mysql_transactions_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - finance-network
 
-  # Elasticsearch
+  postgres-users:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: finance
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: users
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_users_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-budgets:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: finance
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: budgets
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_budgets_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   elasticsearch:
     image: elasticsearch:8.11.0
-    container_name: finance-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -31,76 +57,95 @@ services:
       - "9200:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
-      - ./dumps/elasticsearch:/dumps
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - finance-network
 
-  # Neo4j
-  neo4j:
-    image: neo4j:5.14.0
-    container_name: finance-neo4j
-    entrypoint: ["bash", "-c", "rm -f /var/lib/neo4j/run/neo4j.pid; /startup/docker-entrypoint.sh neo4j console"]
-    environment:
-      NEO4J_AUTH: neo4j/12345678
+  rabbitmq:
+    image: rabbitmq:3-management
     ports:
-      - "7474:7474"  # HTTP
-      - "7687:7687"  # Bolt
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: finance
+      RABBITMQ_DEFAULT_PASS: 123456
     volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-      - ./dumps/neo4j:/dumps
+      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p 12345678 'RETURN 1' || exit 1"]
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
-    networks:
-      - finance-network
 
-  # Backend API
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: finance-backend
-    environment:
-      DATABASE_URL: mysql+pymysql://root:123456@mysql:3306/finans_tracker
-      ELASTICSEARCH_HOST: http://elasticsearch:9200
-      NEO4J_URI: bolt://neo4j:7687
-      NEO4J_USER: neo4j
-      NEO4J_PASSWORD: 12345678
-      ACTIVE_DB: mysql
-      PYTHONUNBUFFERED: 1
-      PYTHONPATH: /app
-    ports:
-      - "8080:8080"
-    volumes:
-      - .:/app
-      - ./dumps:/app/dumps
-    depends_on:
-      mysql:
-        condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
-    networks:
-      - finance-network
+  # --- Services (placeholder, uncomment as services are ready) ---
+  # user-service:
+  #   build: ./services/user-service
+  #   ports:
+  #     - "8001:8000"
+  #   depends_on:
+  #     postgres-users:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql://finance:123456@postgres-users:5432/users
+  #     RABBITMQ_URL: amqp://finance:123456@rabbitmq:5672/
+  #     JWT_SECRET: your-secret-key
+
+  # transaction-service:
+  #   build: ./services/transaction-service
+  #   ports:
+  #     - "8002:8000"
+  #   depends_on:
+  #     mysql-transactions:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: mysql+pymysql://root:123456@mysql-transactions:3306/transactions
+  #     RABBITMQ_URL: amqp://finance:123456@rabbitmq:5672/
+
+  # budget-service:
+  #   build: ./services/budget-service
+  #   ports:
+  #     - "8003:8000"
+  #   depends_on:
+  #     postgres-budgets:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+
+  # analytics-service:
+  #   build: ./services/analytics-service
+  #   ports:
+  #     - "8004:8000"
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+
+  # ai-service:
+  #   build: ./services/ai-service
+  #   ports:
+  #     - "8005:8000"
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+
+  # notification-service:
+  #   build: ./services/notification-service
+  #   ports:
+  #     - "8006:8000"
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
 
 volumes:
-  mysql_data:
+  mysql_transactions_data:
+  pg_users_data:
+  pg_budgets_data:
   es_data:
-  neo4j_data:
-  neo4j_logs:
-
-networks:
-  finance-network:
-    driver: bridge
-
+  rabbitmq_data:
