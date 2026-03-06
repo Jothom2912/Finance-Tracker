@@ -200,10 +200,13 @@ finance-tracker/
 │   │   └── neo4j/              # Neo4j implementations
 │   │
 │   ├── shared/
+│   │   ├── ports/              # Cross-cutting port interfaces (IAccountResolver, IUnitOfWork)
+│   │   ├── adapters/           # Cross-cutting adapter implementations
 │   │   ├── schemas/            # Pydantic validation schemas
 │   │   └── exceptions/         # Business exception classes
 │   │
 │   └── tests/
+│       ├── architecture/       # Architecture fitness tests (import boundaries)
 │       ├── unittests/
 │       │   ├── services/       # Service layer unit tests
 │       │   └── test_*.py       # Schema BVA validation tests
@@ -283,7 +286,7 @@ curl -X POST http://localhost:8000/api/v1/transactions/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Account-ID: 1" \
-  -d '{"amount": -100.50, "description": "Groceries", "date": "2025-12-09", "type": "expense", "Category_idCategory": 1}'
+  -d '{"amount": -100.50, "description": "Groceries", "date": "2025-12-09", "type": "expense", "category_id": 1}'
 ```
 
 ---
@@ -348,7 +351,7 @@ All configuration is loaded from environment variables via `backend/config.py`. 
 
 ## Testing
 
-The project has **243 tests** organized following the testing pyramid:
+The project has **255 tests** organized following the testing pyramid:
 
 ```
      +----------+
@@ -356,7 +359,9 @@ The project has **243 tests** organized following the testing pyramid:
      +----------+
      | Integr.  |   45 tests - Full HTTP flow + GraphQL
      +----------+
-     |   Unit   |   198 tests - Business logic + schema BVA
+     |   Unit   |   207 tests - Business logic + schema BVA
+     +----------+
+     |   Arch   |   3 tests - Import boundary enforcement
      +----------+
 ```
 
@@ -382,6 +387,7 @@ uv run pytest tests/ --cov=backend --cov-report=html
 
 | Category | Location | Count | What It Tests |
 |----------|----------|-------|---------------|
+| Architecture fitness | `tests/architecture/` | 3 | Import boundary enforcement (hex constraints) |
 | Service unit tests | `tests/unittests/services/` | ~34 | Service layer with mocked repos |
 | Schema BVA tests | `tests/unittests/test_*.py` | ~164 | Pydantic schema boundary values |
 | Integration tests | `tests/integration/` | 45 | Full HTTP stack with in-memory SQLite |
@@ -497,7 +503,9 @@ cp example.env .env
 - [x] API versioning (`/api/v1/`)
 - [x] Structured logging with correlation ID
 - [x] Monthly budget system with aggregate model and copy functionality
-- [x] Unit tests for services and schema BVA (198 tests)
+- [x] Unit of Work pattern for transactional boundaries
+- [x] Architecture fitness tests (import boundary enforcement)
+- [x] Unit tests for services and schema BVA (207 tests)
 - [x] Integration tests for all flows + GraphQL (45 tests)
 - [x] Frontend integration with `/api/v1/` prefix
 - [ ] Frontend GraphQL client integration

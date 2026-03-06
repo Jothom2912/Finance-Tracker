@@ -36,6 +36,11 @@ The runtime follows a hexagonal (ports and adapters) structure with CQRS:
 2. **GraphQL** handles read queries via a cross-domain read gateway.
 3. Application services enforce business rules.
 4. Outbound ports call database adapters (MySQL, Elasticsearch, Neo4j).
+5. **Auth boundary** uses `IAccountResolver` port -- `auth.py` has no direct repository or database imports.
+6. **Unit of Work** pattern manages transaction boundaries in the Transaction domain -- repositories use `flush()`, services control `commit()`/`rollback()` via `IUnitOfWork`.
+7. **Shared infrastructure** in `backend/shared/` provides cross-cutting ports (`IAccountResolver`, `IUnitOfWork`) and their adapters.
+
+Architecture boundaries are enforced by fitness tests in `tests/architecture/test_import_boundaries.py`.
 
 See `backend/docs/STRUCTURE.md` for the full structure map.
 

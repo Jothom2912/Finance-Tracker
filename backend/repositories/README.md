@@ -85,15 +85,33 @@ MySQL has the most complete implementations. Elasticsearch and Neo4j implementat
 
 ## Usage in Hexagonal Domains
 
-The bounded context outbound adapters in `<context>/adapters/outbound/` use these repositories. The DI wiring in `dependencies.py` selects the right implementation:
+Bounded context outbound adapters in `<context>/adapters/outbound/` implement the port interfaces. Some domains (Transaction, Analytics) have fully migrated to domain-specific adapters and no longer use the shared repository factory. Other domains still delegate to the shared layer.
+
+**Transaction domain (fully migrated):**
 
 ```python
-from backend.repositories import get_transaction_repository
+from backend.transaction.adapters.outbound.mysql_repository import MySQLTransactionRepository
+from backend.shared.adapters.mysql_unit_of_work import MySQLUnitOfWork
 
 def get_transaction_service(db: Session = Depends(get_db)) -> TransactionService:
     return TransactionService(
-        transaction_repo=get_transaction_repository(db),
-        category_repo=get_category_repository(db),
+        transaction_repo=MySQLTransactionRepository(db),
+        category_port=MySQLCategoryAdapter(db),
+        uow=MySQLUnitOfWork(db),
+    )
+```
+
+Transaction repositories use `flush()` instead of `commit()`/`rollback()`. The `TransactionService` wraps write operations in a Unit of Work (`IUnitOfWork`) that controls the transaction boundary.
+
+**Other domains (still using shared factory):**
+
+```python
+from backend.repositories import get_budget_repository
+
+def get_budget_service(db: Session = Depends(get_db)) -> BudgetService:
+    return BudgetService(
+        budget_repo=get_budget_repository(db),
+        category_port=MySQLCategoryAdapter(db),
     )
 ```
 

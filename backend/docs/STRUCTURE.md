@@ -12,6 +12,9 @@ All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remai
 
 - `backend/main.py` -- registers routers, middleware (CORS, request logging, correlation ID), and the GraphQL endpoint.
 - `backend/dependencies.py` -- wires application services with outbound adapters via FastAPI DI.
+- `backend/shared/ports/` -- cross-cutting port interfaces (`IAccountResolver`, `IUnitOfWork`).
+- `backend/shared/adapters/` -- cross-cutting adapter implementations (`MySQLAccountResolver`, `MySQLUnitOfWork`, auth DI wiring).
+- `backend/tests/architecture/test_import_boundaries.py` -- architecture fitness tests that enforce import boundaries at CI time.
 
 ## Active Bounded Contexts
 
@@ -47,9 +50,21 @@ The `monthly_budget` context replaces the legacy `budget` context with an aggreg
 
 The legacy `budget` context remains for backward compatibility and is still used by the GraphQL `budgetSummary` query via `AnalyticsService`.
 
+### Transaction domain -- Unit of Work
+
+The `transaction` context uses the Unit of Work pattern (`IUnitOfWork`) for transactional boundaries. Its repositories use `flush()` instead of `commit()`/`rollback()`, and the `TransactionService` wraps write operations in a UoW context that controls the transaction boundary. The `TransactionType` enum lives in `transaction/domain/entities.py` (domain layer, no infra dependency).
+
+### Analytics domain -- transitional read model
+
+The `analytics` context has its own direct database queries in its outbound adapters (MySQL, Elasticsearch, Neo4j). These adapters do not import from the shared `backend.repositories` layer -- they query the database directly using SQLAlchemy models, ES client, or Neo4j driver.
+
 ### Analytics domain -- read gateway
 
 The `analytics` context contains an extra inbound adapter: `graphql_api.py`. This adapter is a cross-domain read gateway that injects services from other bounded contexts (transactions, categories) to serve read-only GraphQL queries. This is a deliberate architectural choice to provide a single query interface without breaking domain encapsulation -- each domain's service layer is the only entry point.
+
+### Auth boundary
+
+The `auth.py` module uses an `IAccountResolver` port (defined in `shared/ports/auth_ports.py`) instead of importing directly from the repository or database layers. The adapter `MySQLAccountResolver` is wired in `shared/adapters/auth_dependencies.py` and injected via FastAPI `Depends()`.
 
 ## Router Map
 

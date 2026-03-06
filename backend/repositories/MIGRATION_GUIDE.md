@@ -49,6 +49,16 @@ The shared `repositories/` folder is still used as infrastructure for the multi-
 
 The standalone `backend/graphql/` directory (which accessed `SessionLocal` directly, bypassing service layers) was removed and replaced by `backend/analytics/adapters/inbound/graphql_api.py` -- a proper hexagonal inbound adapter that injects services via FastAPI DI and serves as a cross-domain read gateway.
 
+### 4. Transaction and Analytics domains fully migrated (completed)
+
+The Transaction and Analytics bounded contexts no longer import from the shared `repositories/` layer. Their outbound adapters contain self-contained database queries:
+
+- **Transaction domain** uses `transaction/adapters/outbound/mysql_repository.py` with `flush()` instead of `commit()`/`rollback()`. The `TransactionService` wraps writes in an `IUnitOfWork` that controls the transaction boundary.
+- **Analytics domain** uses direct SQLAlchemy/Elasticsearch/Neo4j queries in its own adapters, without delegating to the shared repository factory.
+- **Auth module** uses `IAccountResolver` port instead of importing from `backend.repositories`.
+
+Architecture fitness tests in `tests/architecture/test_import_boundaries.py` enforce these boundaries at CI time.
+
 ## Current Architecture
 
-All new development follows the hexagonal bounded context pattern. The shared `repositories/` layer remains as infrastructure for multi-database support, with factory functions in `__init__.py` selecting the right implementation based on `ACTIVE_DB`, `TRANSACTIONS_DB`, `ANALYTICS_DB`, and `USER_DB` environment variables.
+All new development follows the hexagonal bounded context pattern. The Transaction and Analytics domains have fully migrated to domain-specific adapters. Other domains still delegate to the shared `repositories/` layer, which provides multi-database support via factory functions in `__init__.py` based on `ACTIVE_DB`, `TRANSACTIONS_DB`, `ANALYTICS_DB`, and `USER_DB` environment variables.

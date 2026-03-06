@@ -52,11 +52,29 @@ def create_transaction(
 
 ### 2. DI wiring selects repository
 
+Some domains (Transaction, Analytics) have fully migrated to domain-specific adapters and no longer use the shared factory. Other domains still use the factory pattern shown below.
+
+**Transaction domain (migrated -- uses UoW):**
+
 ```python
+from backend.transaction.adapters.outbound.mysql_repository import MySQLTransactionRepository
+from backend.shared.adapters.mysql_unit_of_work import MySQLUnitOfWork
+
 def get_transaction_service(db: Session = Depends(get_db)) -> TransactionService:
     return TransactionService(
-        transaction_repo=get_transaction_repository(db),
-        category_repo=get_category_repository(db),
+        transaction_repo=MySQLTransactionRepository(db),
+        category_port=MySQLCategoryAdapter(db),
+        uow=MySQLUnitOfWork(db),
+    )
+```
+
+**Other domains (shared factory):**
+
+```python
+def get_budget_service(db: Session = Depends(get_db)) -> BudgetService:
+    return BudgetService(
+        budget_repo=get_budget_repository(db),
+        category_port=MySQLCategoryAdapter(db),
     )
 ```
 

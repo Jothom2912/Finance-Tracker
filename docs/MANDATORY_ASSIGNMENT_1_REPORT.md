@@ -63,7 +63,7 @@ The project demonstrates multi-database support by implementing the same busines
 | NFR-03 | Data consistency for financial transactions | ACID compliance (MySQL) | Met |
 | NFR-04 | Authentication security | JWT with bcrypt (12 rounds), 24h token expiry | Met |
 | NFR-05 | Input validation at API boundary | All endpoints validated via Pydantic | Met |
-| NFR-06 | Test coverage | > 80% for business logic | Met (243 tests) |
+| NFR-06 | Test coverage | > 80% for business logic | Met (255 tests) |
 | NFR-07 | API backward compatibility | Versioned endpoints (/api/v1/) | Met |
 | NFR-08 | Request traceability | Correlation ID on every request | Met |
 | NFR-09 | Environment-independent configuration | All config via environment variables | Met (12-factor) |
@@ -159,7 +159,7 @@ graph TB
 
     subgraph cicd [CI/CD - GitHub Actions]
         GHA["GitHub Actions<br/>Push/PR triggers"]
-        Tests["pytest 243 tests<br/>+ coverage"]
+        Tests["pytest 255 tests<br/>+ coverage"]
         Codecov["Codecov<br/>Coverage reports"]
     end
 
@@ -326,6 +326,8 @@ This separation allows independent optimization of read and write paths.
 
 Abstract repository interfaces (`base.py`) define the data access contract. Concrete implementations exist for MySQL, Elasticsearch, and Neo4j. A factory function selects the implementation based on environment configuration.
 
+Some domains (Transaction, Analytics) have fully migrated to domain-specific adapters that implement their own port interfaces and contain self-contained database queries. The Transaction domain additionally uses the Unit of Work pattern (`IUnitOfWork`) for transactional boundaries -- repositories use `flush()` while the application service controls `commit()`/`rollback()`. Architecture fitness tests enforce these import boundaries at CI time.
+
 ### 7.4 Dependency Injection
 
 FastAPI's `Depends()` mechanism is used for constructor injection of all services and repositories. No service creates its own dependencies -- everything is wired in `dependencies.py`.
@@ -408,13 +410,13 @@ flowchart LR
         Setup["Setup Python<br/>3.11 + 3.12"]
         InstallUV["Install uv"]
         Deps["Install<br/>dependencies"]
-        Test["Run pytest<br/>243 tests"]
+        Test["Run pytest<br/>255 tests"]
         Coverage["Generate<br/>coverage report"]
         Upload["Upload to<br/>Codecov"]
     end
 
     subgraph gates [Quality Gates]
-        AllPass["All 243 tests<br/>must pass"]
+        AllPass["All 255 tests<br/>must pass"]
         CovReport["Coverage XML<br/>generated"]
     end
 
@@ -431,7 +433,7 @@ flowchart LR
 - **Matrix testing:** Tests run against Python 3.11 and 3.12
 - **Environment:** `ACTIVE_DB=mysql`, `SECRET_KEY=test-secret-key-for-ci`
 - **Coverage:** Reports uploaded to Codecov
-- **Pre-push hook:** Local git hooks run all 243 tests before push
+- **Pre-push hook:** Local git hooks run all 255 tests before push
 
 ### 9.2 Planned CD Pipeline (Future)
 
@@ -488,7 +490,8 @@ The project follows the testing pyramid with the majority of tests at the unit l
 
 | Level | Count | Location | What Is Tested | Tools |
 |-------|-------|----------|----------------|-------|
-| Unit (services) | ~34 | `tests/unittests/services/` | Service business logic with mocked repositories | pytest, unittest.mock |
+| Architecture | 3 | `tests/architecture/` | Import boundary enforcement (hex constraints) | pytest, ast |
+| Unit (services) | ~34 | `tests/unittests/services/` | Service business logic with mocked repos + UoW | pytest, unittest.mock |
 | Unit (schemas) | ~164 | `tests/unittests/test_*.py` | Pydantic schema boundary value analysis (BVA) | pytest |
 | Integration | 32 | `tests/integration/test_*_flow.py` | Full HTTP request-response with in-memory SQLite | pytest, TestClient |
 | Integration (GraphQL) | 13 | `tests/integration/test_graphql_flow.py` | GraphQL queries, schema validation, correlation ID | pytest, TestClient |
@@ -501,16 +504,18 @@ The project follows the testing pyramid with the majority of tests at the unit l
 ```python
 class TestTransactionService:
     def setup_method(self):
-        self.mock_transaction_repo = Mock(spec=TransactionRepository)
-        self.mock_category_repo = Mock(spec=CategoryRepository)
+        self.mock_transaction_repo = Mock(spec=ITransactionRepository)
+        self.mock_category_port = Mock(spec=ICategoryPort)
+        self.mock_uow = Mock(spec=IUnitOfWork)
         self.service = TransactionService(
             transaction_repo=self.mock_transaction_repo,
-            category_repo=self.mock_category_repo,
+            category_port=self.mock_category_port,
+            uow=self.mock_uow,
         )
 
     def test_create_transaction_validates_category(self):
-        self.mock_category_repo.get_by_id.return_value = None
-        with pytest.raises(ValueError):
+        self.mock_category_port.get_by_id.return_value = None
+        with pytest.raises(CategoryNotFound):
             self.service.create_transaction(transaction_data)
 ```
 
@@ -520,7 +525,7 @@ class TestTransactionService:
 
 ### 10.4 CI Integration
 
-All 243 tests run in the GitHub Actions CI pipeline on every push and pull request. The pipeline tests against both Python 3.11 and 3.12 to ensure compatibility. Coverage reports are generated and uploaded to Codecov.
+All 255 tests run in the GitHub Actions CI pipeline on every push and pull request. The pipeline tests against both Python 3.11 and 3.12 to ensure compatibility. Coverage reports are generated and uploaded to Codecov.
 
 Tests must pass before code can be pushed (enforced by pre-push git hook) and before pull requests can be merged.
 
