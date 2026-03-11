@@ -29,6 +29,6 @@ account_group_user_association = Table(
     'AccountGroups_has_User',
     Base.metadata,
     Column('AccountGroups_idAccountGroups', Integer, ForeignKey('AccountGroups.idAccountGroups', ondelete='CASCADE'), primary_key=True),
-    Column('User_idUser', Integer, ForeignKey('User.idUser', ondelete='CASCADE'), primary_key=True),
+    Column('User_idUser', Integer, primary_key=True),
     extend_existing=True 
 )

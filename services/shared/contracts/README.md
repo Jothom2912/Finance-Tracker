@@ -1,0 +1,110 @@
+# finans-tracker-contracts
+
+Shared event contracts for async inter-service communication via RabbitMQ.
+
+Services depend on this package for event schemas instead of depending on each other (dependency inversion). The package is **transport-agnostic** and contains only Pydantic data models — no RabbitMQ or messaging dependencies.
+
+## Quick Start
+
+### Install
+
+```bash
+pip install -e services/shared/contracts/
+```
+
+### Usage
+
+```python
+from contracts import UserCreatedEvent, TransactionCreatedEvent
+
+# User events
+event = UserCreatedEvent(user_id=42, email="alice@example.com", username="alice")
+json_bytes = event.to_json()
+restored = UserCreatedEvent.from_json(json_bytes)
+
+# Transaction events (amount as string for decimal precision)
+tx_event = TransactionCreatedEvent(
+    transaction_id=1,
+    user_id=42,
+    amount="125.50",
+    transaction_type="expense",
+    account_id=1,
+)
+```
+
+## Available Events
+
+### User Events (`contracts.events.user`)
+
+| Event | Routing Key | Fields |
+|-------|-------------|--------|
+| `UserCreatedEvent` | `user.created` | `user_id`, `email`, `username` |
+
+### Account Events (`contracts.events.account`)
+
+| Event | Routing Key | Fields |
+|-------|-------------|--------|
+| `AccountCreatedEvent` | `account.created` | `account_id`, `user_id`, `account_name` |
+| `AccountCreationFailedEvent` | `account.creation_failed` | `user_id`, `reason` |
+
+### Transaction Events (`contracts.events.transaction`)
+
+| Event | Routing Key | Fields |
+|-------|-------------|--------|
+| `TransactionCreatedEvent` | `transaction.created` | `transaction_id`, `user_id`, `amount` (str), `transaction_type`, `account_id` |
+| `TransactionDeletedEvent` | `transaction.deleted` | `transaction_id`, `user_id` |
+
+## Adding New Events
+
+1. Create a new file under `contracts/events/` (e.g. `budget.py`).
+2. Define one or more event classes inheriting from `BaseEvent`.
+3. Re-export the new classes in `contracts/events/__init__.py` and `contracts/__init__.py`.
+
+```python
+from __future__ import annotations
+
+from contracts.base import BaseEvent
+
+
+class BudgetThresholdEvent(BaseEvent):
+    event_type: str = "budget.threshold.80pct"
+    event_version: int = 1
+
+    budget_id: int
+    user_id: int
+    spent_percentage: float
+```
+
+## Architecture
+
+```text
+contracts/
+├── base.py            # BaseEvent (immutable Pydantic model)
+└── events/
+    ├── user.py        # UserCreatedEvent
+    ├── account.py     # AccountCreatedEvent, AccountCreationFailedEvent
+    └── transaction.py # TransactionCreatedEvent, TransactionDeletedEvent
+```
+
+Events are **frozen** (immutable value objects) and carry:
+
+| Field | Type | Default |
+|-------|------|---------|
+| `event_type` | `str` | Set per subclass |
+| `event_version` | `int` | `1` |
+| `correlation_id` | `str` | Random UUID |
+| `timestamp` | `datetime` | Current UTC time |
+
+## Design Decisions
+
+- **Amount as string in transaction events**: Pydantic serializes `Decimal` to `float` in JSON, which loses precision. By sending amount as a string (e.g. `"125.50"`), consumers can parse it with `Decimal("125.50")` for exact arithmetic.
+- **Frozen models**: Events are immutable value objects. Once created, they cannot be modified.
+- **No messaging dependencies**: This package contains only Pydantic models. RabbitMQ, Kafka, or any other transport is the responsibility of the publishing/consuming service.
+
+## Testing
+
+```bash
+cd services/shared/contracts
+pip install -e ".[dev]"
+pytest
+```

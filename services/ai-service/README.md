@@ -1,16 +1,17 @@
-# AI Service
+# AI / Categorization Service (Planned)
 
-AI-powered categorization and financial insights.
+**Status: Not yet implemented.** Transaction categorization is not yet automated.
 
-## Quick Start
+This service will provide AI-powered transaction categorization using a tiered approach: rule-based, ML model, and LLM fallback (Claude/Ollama) with confidence scoring.
 
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8005
-```
-
-## Health Check
+## Planned Port
 
 ```
-GET /health
+8005
 ```
+
+## Planned Event Flow
+
+- Listens for `transaction.created` events
+- Categorizes the transaction
+- Publishes `transaction.categorized` event

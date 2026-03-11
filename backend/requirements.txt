@@ -29,6 +29,9 @@ neo4j
 # GraphQL (read gateway via Strawberry + FastAPI integration)
 strawberry-graphql[fastapi]
 
+# Messaging (RabbitMQ consumer worker)
+aio-pika
+
 # ANBEFALEDE TILLÆG
 python-dotenv 
 pydantic[email]  # Krævet for EmailStr validering i user.py

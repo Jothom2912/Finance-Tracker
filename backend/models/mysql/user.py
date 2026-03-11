@@ -6,18 +6,27 @@ from .common import (
 )
 
 class User(Base):
-    """Bruger model - Håndterer autentifikation og brugeroplysninger"""
+    """Bruger model — local cache of user data from user-service."""
     __tablename__ = "User"
     
     idUser = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(45), nullable=False, unique=True, index=True)
-    password = Column(String(255), nullable=False)  # Hashed password
+    password = Column(String(255), nullable=False)
     email = Column(String(45), nullable=False, unique=True, index=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     
-    # Relationships
-    accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
-    account_groups = relationship("AccountGroups", secondary=account_group_user_association, back_populates="users")
+    # No FK on junction.User_idUser — explicit joins needed
+    account_groups = relationship(
+        "AccountGroups",
+        secondary=account_group_user_association,
+        primaryjoin=lambda: User.idUser == account_group_user_association.c.User_idUser,
+        secondaryjoin=lambda: account_group_user_association.c.AccountGroups_idAccountGroups == Base.metadata.tables["AccountGroups"].c.idAccountGroups,
+        foreign_keys=[
+            account_group_user_association.c.User_idUser,
+            account_group_user_association.c.AccountGroups_idAccountGroups,
+        ],
+        back_populates="users",
+    )
     
     def __repr__(self):
         return f"<User(idUser={self.idUser}, username='{self.username}')>"

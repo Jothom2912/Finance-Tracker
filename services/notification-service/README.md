@@ -1,16 +1,17 @@
-# Notification Service
+# Notification Service (Planned)
 
-Email and push notifications for budget alerts and goals.
+**Status: Not yet implemented.**
 
-## Quick Start
+This service will handle email and push notifications for budget alerts (80% threshold), goal evaluations, and other financial events.
 
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8006
-```
-
-## Health Check
+## Planned Port
 
 ```
-GET /health
+8006
 ```
+
+## Planned Event Flow
+
+- Listens for `budget.threshold.80pct` events
+- Listens for `goal.evaluated` events
+- Sends notifications via email/push

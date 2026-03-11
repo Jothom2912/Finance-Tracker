@@ -1,16 +1,17 @@
-# Budget Service
+# Budget Service (Planned)
 
-Manages budgets, monthly budgets, and budget lines.
+**Status: Not yet implemented.** Budget management is currently handled by the monolith on port 8000.
 
-## Quick Start
+This service will manage budgets, monthly budgets, and budget lines when extracted.
 
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8003
-```
-
-## Health Check
+## Planned Port
 
 ```
-GET /health
+8003
 ```
+
+## Current Location
+
+Budget logic currently lives in:
+- `backend/budget/` — legacy per-category budgets
+- `backend/monthly_budget/` — aggregate-based monthly budgets with budget lines

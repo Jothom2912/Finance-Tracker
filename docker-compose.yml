@@ -1,119 +1,160 @@
 services:
-  # --- Databases ---
-  mysql-transactions:
+  # === Infrastructure ===
+
+  mysql:
     image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: 123456
-      MYSQL_DATABASE: transactions
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: finans_tracker
     ports:
-      - "3310:3306"
+      - "3306:3306"
     volumes:
-      - mysql_transactions_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  postgres-users:
+  postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: finance
-      POSTGRES_PASSWORD: 123456
+      POSTGRES_USER: user_service
+      POSTGRES_PASSWORD: user_service_pass
       POSTGRES_DB: users
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_users_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U finance"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres-budgets:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: finance
-      POSTGRES_PASSWORD: 123456
-      POSTGRES_DB: budgets
     ports:
       - "5433:5432"
     volumes:
-      - pg_budgets_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U finance"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  elasticsearch:
-    image: elasticsearch:8.11.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U user_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: finance
-      RABBITMQ_DEFAULT_PASS: 123456
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # --- Services (placeholder, uncomment as services are ready) ---
-  # user-service:
-  #   build: ./services/user-service
-  #   ports:
-  #     - "8001:8000"
-  #   depends_on:
-  #     postgres-users:
-  #       condition: service_healthy
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   environment:
-  #     DATABASE_URL: postgresql://finance:123456@postgres-users:5432/users
-  #     RABBITMQ_URL: amqp://finance:123456@rabbitmq:5672/
-  #     JWT_SECRET: your-secret-key
+  # === Application services ===
 
-  # transaction-service:
-  #   build: ./services/transaction-service
-  #   ports:
-  #     - "8002:8000"
-  #   depends_on:
-  #     mysql-transactions:
-  #       condition: service_healthy
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   environment:
-  #     DATABASE_URL: mysql+pymysql://root:123456@mysql-transactions:3306/transactions
-  #     RABBITMQ_URL: amqp://finance:123456@rabbitmq:5672/
+  monolith:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
+      SECRET_KEY: dev-secret-key-change-in-production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+      ENVIRONMENT: development
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://user_service:user_service_pass@postgres:5432/users
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_EXPIRE_MINUTES: "60"
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  user-sync-consumer:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "backend.consumers.worker", "--consumer", "user-sync"]
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
+      SECRET_KEY: dev-secret-key-change-in-production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  account-creation-consumer:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "backend.consumers.worker", "--consumer", "account-creation"]
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
+      SECRET_KEY: dev-secret-key-change-in-production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  postgres-transactions:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: transaction_service
+      POSTGRES_PASSWORD: transaction_service_pass
+      POSTGRES_DB: transactions
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_transactions_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transaction_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  transaction-service:
+    build:
+      context: .
+      dockerfile: services/transaction-service/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+      ENVIRONMENT: development
+    depends_on:
+      postgres-transactions:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # === Placeholder services (uncomment as services are ready) ===
 
   # budget-service:
   #   build: ./services/budget-service
   #   ports:
   #     - "8003:8000"
   #   depends_on:
-  #     postgres-budgets:
-  #       condition: service_healthy
   #     rabbitmq:
   #       condition: service_healthy
 
@@ -122,8 +163,6 @@ services:
   #   ports:
   #     - "8004:8000"
   #   depends_on:
-  #     elasticsearch:
-  #       condition: service_healthy
   #     rabbitmq:
   #       condition: service_healthy
 
@@ -144,8 +183,7 @@ services:
   #       condition: service_healthy
 
 volumes:
-  mysql_transactions_data:
-  pg_users_data:
-  pg_budgets_data:
-  es_data:
+  mysql_data:
+  postgres_data:
+  postgres_transactions_data:
   rabbitmq_data:

@@ -1,17 +1,17 @@
-# Finance Tracker -- Multi-Database Personal Finance Application
+# Finance Tracker — Microservices Personal Finance Application
 
-A personal finance tracking application built with **hexagonal architecture (ports & adapters)**, **CQRS**, and **multi-database support** across MySQL, Elasticsearch, and Neo4j. The backend uses FastAPI with domain-driven bounded contexts, and the frontend is a React SPA.
+A personal finance tracking application being incrementally migrated from a **monolith** to **microservices**. The backend uses FastAPI with hexagonal architecture (ports & adapters), CQRS, event-driven communication via RabbitMQ, and polyglot persistence (MySQL + PostgreSQL).
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
+- [Service Map](#service-map)
 - [Project Structure](#project-structure)
 - [API Reference](#api-reference)
-- [GraphQL Read Gateway](#graphql-read-gateway)
+- [Event-Driven Architecture](#event-driven-architecture)
 - [Configuration](#configuration)
 - [Testing](#testing)
-- [Database Support](#database-support)
 - [Security](#security)
 - [Development](#development)
 - [Documentation](#documentation)
@@ -25,34 +25,46 @@ A personal finance tracking application built with **hexagonal architecture (por
 - Python 3.11+
 - `uv` (Python package manager)
 - Node.js 18+ (for frontend)
-- Docker Desktop (optional, for database services)
+- Docker Desktop
 
-### Backend
+### Start everything
 
 ```bash
-cd backend
-uv sync
-uv run uvicorn backend.main:app --reload --port 8000
+docker compose up -d
 ```
 
-- API docs: http://localhost:8000/docs
-- Health check: http://localhost:8000/health
-- GraphQL playground: http://localhost:8000/api/v1/graphql
+This starts all services:
+
+| Service | Port | Description |
+|---------|------|-------------|
+| MySQL | 3306 | Monolith database |
+| PostgreSQL (users) | 5433 | User-service database |
+| PostgreSQL (transactions) | 5434 | Transaction-service database |
+| RabbitMQ | 5672 / 15672 | Event bus + management UI |
+| Monolith | 8000 | Accounts, budgets, categories, goals, analytics |
+| User Service | 8001 | Registration, login, JWT issuing |
+| Transaction Service | 8002 | Transaction CRUD, CSV import, planned transactions |
+| UserSync Consumer | — | Syncs users from events to MySQL |
+| AccountCreation Consumer | — | Creates default accounts from events |
+
+**Wait 30-60 seconds** for health checks to pass.
 
 ### Frontend
 
 ```bash
 cd frontend/finans-tracker-frontend
-npm install
-npm start
+yarn install
+yarn dev
 ```
 
-- App: http://localhost:3000
+App: http://localhost:3001
 
-### Docker (all services)
+### Verify services
 
 ```bash
-docker-compose up -d
+curl http://localhost:8000/health   # Monolith
+curl http://localhost:8001/health   # User Service
+curl http://localhost:8002/health   # Transaction Service
 ```
 
 See [INSTALLATION.md](INSTALLATION.md) for detailed setup including database seeding.
@@ -61,59 +73,57 @@ See [INSTALLATION.md](INSTALLATION.md) for detailed setup including database see
 
 ## Architecture
 
-### Hexagonal Architecture with CQRS
+### System Overview
 
-The backend is organized into bounded contexts, each following hexagonal architecture:
-
-- **REST** handles commands (create, update, delete) via inbound adapters
-- **GraphQL** handles cross-domain read queries via a read gateway adapter
-- Application services enforce business rules and are injected with outbound port implementations
-- Outbound adapters implement repository interfaces for MySQL, Elasticsearch, and Neo4j
+The application is being incrementally extracted from a monolith to microservices. Currently extracted: **user-service** and **transaction-service**. The monolith handles everything else and receives event-driven updates.
 
 ```mermaid
-graph TB
-    subgraph "Clients"
-        FE[React Frontend]
-        GQL[GraphQL Client]
-    end
+graph LR
+    FE[React Frontend] -->|register/login| US[User Service<br/>:8001]
+    FE -->|transactions| TS[Transaction Service<br/>:8002]
+    FE -->|accounts, budgets,<br/>categories, goals| MON[Monolith<br/>:8000]
 
-    subgraph "Inbound Adapters"
-        REST[REST Controllers<br/>/api/v1/*]
-        GRAPHQL[GraphQL Read Gateway<br/>/api/v1/graphql]
-    end
+    US -->|user.created event| RMQ[RabbitMQ]
+    TS -->|transaction.created<br/>transaction.deleted| RMQ
 
-    subgraph "Middleware"
-        CORS[CORS]
-        LOG[Request Logging<br/>+ Correlation ID]
-    end
+    RMQ -->|user.created| USC[UserSync<br/>Consumer]
+    RMQ -->|user.created| ACC[AccountCreation<br/>Consumer]
 
-    subgraph "Application Layer"
-        SVC[Domain Services<br/>TransactionService, BudgetService,<br/>MonthlyBudgetService, etc.]
-        PORTS_IN[Inbound Ports<br/>Service interfaces]
-        PORTS_OUT[Outbound Ports<br/>Repository interfaces]
-    end
+    USC -->|INSERT User| MYSQL[(MySQL)]
+    ACC -->|INSERT Account| MYSQL
 
-    subgraph "Outbound Adapters"
-        MYSQL_REPO[MySQL Repositories]
-        ES_REPO[Elasticsearch Repositories]
-        NEO4J_REPO[Neo4j Repositories]
-    end
+    US --> PG_U[(PostgreSQL<br/>Users)]
+    TS --> PG_T[(PostgreSQL<br/>Transactions)]
+    MON --> MYSQL
+```
 
-    subgraph "Databases"
-        MYSQL[(MySQL)]
-        ES[(Elasticsearch)]
-        NEO4J[(Neo4j)]
-    end
+### Key Architecture Decisions
 
-    FE --> REST
-    GQL --> GRAPHQL
-    REST --> LOG --> CORS --> PORTS_IN
-    GRAPHQL --> LOG
-    PORTS_IN --> SVC
-    SVC --> PORTS_OUT
-    PORTS_OUT --> MYSQL_REPO --> MYSQL
-    PORTS_OUT --> ES_REPO --> ES
-    PORTS_OUT --> NEO4J_REPO --> NEO4J
+| Decision | Rationale |
+|----------|-----------|
+| **Polyglot persistence** | PostgreSQL for microservices (NUMERIC for money, async), MySQL for monolith |
+| **No cross-service FKs** | Services own their data. `user_id` in monolith tables is a plain integer, no FK constraint |
+| **Event-driven sync** | `user.created` events trigger MySQL user sync and default account creation |
+| **Shared JWT secret** | All services validate tokens with the same secret. User-service is the sole token issuer |
+| **Event publish after commit** | Avoids publishing events for rolled-back transactions. Trade-off: possible missing events on publish failure |
+| **Denormalized data** | Transaction-service stores `account_name` and `category_name` alongside IDs |
+| **Amount as string in events** | Preserves decimal precision across JSON serialization |
+
+### Hexagonal Architecture (per service)
+
+Each bounded context follows the same structure:
+
+```text
+adapters/
+├── inbound/       # REST API controllers
+└── outbound/      # Repository implementations, event publishers
+application/
+├── ports/         # Inbound + outbound interfaces (ABC)
+├── service.py     # Application service (business rules)
+└── dto.py         # Pydantic DTOs with BVA validation
+domain/
+├── entities.py    # Frozen dataclasses (immutable domain objects)
+└── exceptions.py  # Domain exceptions
 ```
 
 ### CQRS Split
@@ -123,8 +133,6 @@ graph TB
 | Commands (write) | REST | `POST /api/v1/transactions/` |
 | Queries (read) | GraphQL | `query { financialOverview { ... } }` |
 | Domain-specific reads | REST | `GET /api/v1/transactions/` |
-
-The GraphQL endpoint is a cross-domain read gateway that aggregates data from multiple bounded contexts (analytics, transactions, categories) through a single query interface, without breaking domain encapsulation.
 
 ### Dependency Injection Flow
 
@@ -136,22 +144,39 @@ sequenceDiagram
     participant Port as Outbound Port
     participant Repo as Repository Adapter
 
-    Route->>DI: Depends(get_transaction_service)
+    Route->>DI: Depends(get_service)
     DI->>Repo: Instantiate repository adapter
     DI->>Service: Inject repository via constructor
-    Route->>Service: service.create_transaction(data)
-    Service->>Port: self._transaction_repo.create(...)
-    Port->>Repo: MySQL/ES/Neo4j implementation
+    Route->>Service: service.create(data)
+    Service->>Port: self._repo.create(...)
+    Port->>Repo: PostgreSQL/MySQL implementation
     Repo-->>Service: Domain entity
     Service-->>Route: Result
 ```
 
-### Observability
+---
 
-Every HTTP request gets a correlation ID (auto-generated UUID or forwarded from `X-Correlation-ID` header). The ID is included in log output and returned in the `X-Correlation-ID` response header for end-to-end tracing.
+## Service Map
 
-- Development: human-readable log format
-- Production: structured JSON logs with `correlation_id`, `method`, `path`, `status`, `duration_ms`
+### Currently Deployed
+
+| Service | Port | Database | Role |
+|---------|------|----------|------|
+| **Monolith** | 8000 | MySQL (3306) | Accounts, categories, budgets, goals, analytics, GraphQL gateway |
+| **User Service** | 8001 | PostgreSQL (5433) | User registration, login, JWT issuing (source of truth) |
+| **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions |
+| **UserSync Consumer** | — | MySQL | Sync user data from events to MySQL User table |
+| **AccountCreation Consumer** | — | MySQL | Create default account from user.created events |
+
+### Future Services (not yet extracted)
+
+| Service | Planned Port | Description |
+|---------|-------------|-------------|
+| Budget Service | 8003 | Budget management |
+| Analytics Service | 8004 | GraphQL gateway + Elasticsearch |
+| AI Service | 8005 | Transaction categorization (rule/ML/LLM) |
+| Notification Service | 8006 | Email/push notifications |
+| API Gateway | — | Routing, rate limiting, JWT validation |
 
 ---
 
@@ -159,79 +184,60 @@ Every HTTP request gets a correlation ID (auto-generated UUID or forwarded from 
 
 ```
 finance-tracker/
-├── backend/
-│   ├── main.py                 # FastAPI app, middleware, router registration
-│   ├── config.py               # Environment variable configuration
-│   ├── auth.py                 # JWT authentication + bcrypt hashing
-│   ├── dependencies.py         # FastAPI DI wiring (service factories)
+├── backend/                         # Monolith (FastAPI)
+│   ├── main.py                      # App, middleware, router registration
+│   ├── config.py                    # Environment configuration
+│   ├── auth.py                      # JWT auth (creates + validates tokens)
+│   ├── dependencies.py              # FastAPI DI wiring
+│   ├── consumers/                   # RabbitMQ event consumers
+│   │   ├── base.py                  # BaseConsumer (retry, DLQ, idempotency)
+│   │   ├── user_sync.py             # UserSyncConsumer
+│   │   ├── account_creation.py      # AccountCreationConsumer
+│   │   └── worker.py                # Consumer runner (--consumer flag)
+│   ├── transaction/                 # Bounded context (hexagonal)
+│   ├── category/                    # Bounded context
+│   ├── budget/                      # Legacy budget context
+│   ├── monthly_budget/              # Aggregate-based monthly budgets
+│   ├── analytics/                   # Dashboard + GraphQL read gateway
+│   ├── account/                     # Account + groups
+│   ├── goal/                        # Goals
+│   ├── user/                        # Local user management
+│   ├── shared/                      # Cross-cutting ports/adapters
+│   ├── models/mysql/                # SQLAlchemy ORM models
+│   ├── database/                    # Connection managers
+│   └── tests/                       # Unit + integration tests
+│
+├── services/
+│   ├── user-service/                # User microservice
+│   │   ├── app/                     # FastAPI app (hexagonal)
+│   │   ├── migrations/              # Alembic migrations
+│   │   ├── tests/                   # Unit + integration tests
+│   │   └── Dockerfile
 │   │
-│   ├── transaction/            # Bounded context: transactions
-│   │   ├── adapters/
-│   │   │   ├── inbound/        # REST API (rest_api.py)
-│   │   │   └── outbound/       # MySQL repository, category adapter
-│   │   ├── application/
-│   │   │   ├── ports/          # Inbound + outbound interfaces
-│   │   │   ├── service.py      # Application service
-│   │   │   └── dto.py          # Data transfer objects
-│   │   └── domain/
-│   │       ├── entities.py     # Domain entities
-│   │       └── exceptions.py   # Domain exceptions
+│   ├── transaction-service/         # Transaction microservice
+│   │   ├── app/                     # FastAPI app (hexagonal + UoW)
+│   │   ├── migrations/              # Alembic migrations
+│   │   ├── tests/                   # Unit + integration tests
+│   │   └── Dockerfile
 │   │
-│   ├── budget/                 # Bounded context: legacy budgets (same layout)
-│   ├── monthly_budget/         # Bounded context: monthly budgets (aggregate model)
-│   ├── category/               # Bounded context: categories
-│   ├── account/                # Bounded context: accounts + groups
-│   ├── goal/                   # Bounded context: goals
-│   ├── user/                   # Bounded context: users + auth
-│   ├── analytics/              # Bounded context: dashboard + GraphQL gateway
-│   │   └── adapters/inbound/
-│   │       └── graphql_api.py  # Cross-domain GraphQL read gateway
-│   │
-│   ├── database/               # Database connection managers
-│   │   ├── mysql.py            # SQLAlchemy engine + session
-│   │   ├── elasticsearch.py    # ES client
-│   │   └── neo4j.py            # Neo4j driver
-│   │
-│   ├── models/mysql/           # SQLAlchemy ORM models
-│   ├── repositories/           # Legacy repository layer (multi-DB factory)
-│   │   ├── base.py             # Abstract interfaces (ABC)
-│   │   ├── mysql/              # MySQL implementations
-│   │   ├── elasticsearch/      # Elasticsearch implementations
-│   │   └── neo4j/              # Neo4j implementations
-│   │
-│   ├── shared/
-│   │   ├── ports/              # Cross-cutting port interfaces (IAccountResolver, IUnitOfWork)
-│   │   ├── adapters/           # Cross-cutting adapter implementations
-│   │   ├── schemas/            # Pydantic validation schemas
-│   │   └── exceptions/         # Business exception classes
-│   │
-│   └── tests/
-│       ├── architecture/       # Architecture fitness tests (import boundaries)
-│       ├── unittests/
-│       │   ├── services/       # Service layer unit tests
-│       │   └── test_*.py       # Schema BVA validation tests
-│       └── integration/
-│           ├── conftest.py     # Shared fixtures, auth helpers
-│           ├── test_graphql_flow.py
-│           ├── test_transaction_flow.py
-│           ├── test_budget_flow.py
-│           ├── test_account_flow.py
-│           ├── test_goal_flow.py
-│           └── test_analytics_flow.py
+│   └── shared/
+│       └── contracts/               # Shared event schemas (Pydantic)
+│           └── contracts/events/    # UserCreated, TransactionCreated, etc.
 │
 ├── frontend/
-│   └── finans-tracker-frontend/  # React SPA
+│   └── finans-tracker-frontend/     # React SPA (Vite)
 │       ├── src/
-│       │   ├── components/     # UI components
-│       │   ├── pages/          # Page components
-│       │   ├── context/        # Auth context
-│       │   ├── hooks/          # Custom hooks
-│       │   └── utils/          # API client
-│       └── cypress/            # E2E tests
+│       │   ├── components/          # UI components
+│       │   ├── pages/               # Page components
+│       │   ├── context/             # Auth context
+│       │   ├── hooks/               # Custom hooks
+│       │   └── utils/               # API client
+│       └── package.json
 │
-├── docker-compose.yml
-├── Dockerfile
-├── example.env
+├── tests/
+│   └── e2e/                         # End-to-end tests (cross-service)
+│
+├── docker-compose.yml               # Full stack orchestration
 ├── INSTALLATION.md
 └── README.md
 ```
@@ -240,241 +246,211 @@ finance-tracker/
 
 ## API Reference
 
-All domain routes are versioned under `/api/v1/`. Root-level endpoints (`/`, `/health`) are not versioned.
+### User Service (port 8001)
 
-### Router Map
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `POST` | `/api/v1/users/register` | Register user | No |
+| `POST` | `/api/v1/users/login` | Login (returns JWT) | No |
+| `GET` | `/api/v1/users/me` | Current user profile | Yes |
 
-| Path | Domain | Protocol | Auth |
-|------|--------|----------|------|
-| `/api/v1/transactions/*` | Transaction | REST | Yes |
-| `/api/v1/transactions/upload-csv/` | Transaction | REST | Yes |
-| `/api/v1/planned-transactions/*` | Transaction | REST | Yes |
-| `/api/v1/categories/*` | Category | REST | Partial |
-| `/api/v1/budgets/*` | Budget (legacy) | REST | Yes |
-| `/api/v1/budgets/summary` | Analytics | REST | Yes |
-| `/api/v1/monthly-budgets/*` | Monthly Budget | REST | Yes |
-| `/api/v1/monthly-budgets/summary` | Monthly Budget | REST | Yes |
-| `/api/v1/dashboard/overview/` | Analytics | REST | Yes |
-| `/api/v1/dashboard/expenses-by-month/` | Analytics | REST | Yes |
-| `/api/v1/accounts/*` | Account | REST | Yes |
-| `/api/v1/account-groups/*` | Account | REST | No |
-| `/api/v1/goals/*` | Goal | REST | Yes |
-| `/api/v1/users/*` | User | REST | Partial |
-| `/api/v1/graphql` | Analytics (read gateway) | GraphQL | Yes |
+### Transaction Service (port 8002)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `POST` | `/api/v1/transactions/` | Create transaction | Yes |
+| `GET` | `/api/v1/transactions/` | List (with filters) | Yes |
+| `GET` | `/api/v1/transactions/{id}` | Get by ID | Yes |
+| `DELETE` | `/api/v1/transactions/{id}` | Delete | Yes |
+| `POST` | `/api/v1/transactions/import-csv` | Import CSV | Yes |
+| `POST` | `/api/v1/planned-transactions/` | Create planned | Yes |
+| `GET` | `/api/v1/planned-transactions/` | List planned | Yes |
+| `PATCH` | `/api/v1/planned-transactions/{id}` | Update planned | Yes |
+| `DELETE` | `/api/v1/planned-transactions/{id}` | Deactivate | Yes |
+
+### Monolith (port 8000)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `*` | `/api/v1/transactions/*` | Transaction CRUD + CSV | Yes |
+| `*` | `/api/v1/categories/*` | Category CRUD | Partial |
+| `*` | `/api/v1/budgets/*` | Legacy budget CRUD | Yes |
+| `*` | `/api/v1/monthly-budgets/*` | Monthly budget CRUD + copy | Yes |
+| `*` | `/api/v1/dashboard/*` | Analytics | Yes |
+| `*` | `/api/v1/accounts/*` | Account CRUD | Yes |
+| `*` | `/api/v1/goals/*` | Goal CRUD | Yes |
+| `*` | `/api/v1/users/*` | User management | Partial |
+| `POST` | `/api/v1/graphql` | GraphQL read gateway | Yes |
 
 ### Authentication
 
-All protected endpoints require:
-- `Authorization: Bearer <jwt-token>` header
-- `X-Account-ID: <id>` header (optional, defaults to user's first account)
-
-### Key Endpoints
-
-```bash
-# Register
-curl -X POST http://localhost:8000/api/v1/users/ \
-  -H "Content-Type: application/json" \
-  -d '{"username": "testuser", "email": "test@example.com", "password": "test123456"}'
-
-# Login
-curl -X POST http://localhost:8000/api/v1/users/login \
-  -H "Content-Type: application/json" \
-  -d '{"username_or_email": "testuser", "password": "test123456"}'
-
-# Create transaction (with JWT token)
-curl -X POST http://localhost:8000/api/v1/transactions/ \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "X-Account-ID: 1" \
-  -d '{"amount": -100.50, "description": "Groceries", "date": "2025-12-09", "type": "expense", "category_id": 1}'
-```
+All protected endpoints require `Authorization: Bearer <jwt-token>`. Tokens are issued by user-service and accepted by all services (shared JWT secret).
 
 ---
 
-## GraphQL Read Gateway
+## Event-Driven Architecture
 
-The GraphQL endpoint at `/api/v1/graphql` provides read-only queries across multiple bounded contexts. No mutations are exposed -- all write operations use REST.
+### Event Flow
 
-### Available Queries
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant US as User Service
+    participant RMQ as RabbitMQ
+    participant USC as UserSync Consumer
+    participant ACC as AccountCreation Consumer
+    participant MYSQL as MySQL
 
-| Query | Description | Returns |
-|-------|-------------|---------|
-| `financialOverview(accountId)` | Income, expenses, balance, transaction count | `FinancialOverviewType` |
-| `expensesByMonth(accountId)` | Monthly expense breakdown | `[MonthlyExpenseType]` |
-| `budgetSummary(accountId, month, year)` | Budget vs actual spending per category | `[BudgetSummaryEntryType]` |
-| `categories` | All categories | `[CategoryType]` |
-| `transactions(accountId)` | Transactions for an account | `[TransactionType]` |
+    FE->>US: POST /register
+    US->>US: Create user in PostgreSQL
+    US->>RMQ: Publish user.created
+    US-->>FE: 201 + JWT token
 
-### Example Query
-
-```graphql
-query {
-  financialOverview(accountId: 1) {
-    totalIncome
-    totalExpenses
-    balance
-    transactionCount
-  }
-  categories {
-    id
-    name
-    type
-  }
-}
+    par Independent consumers
+        RMQ->>USC: user.created (queue: monolith.user_sync)
+        USC->>MYSQL: INSERT INTO User
+    and
+        RMQ->>ACC: user.created (queue: monolith.account_creation)
+        ACC->>MYSQL: INSERT INTO Account
+    end
 ```
+
+### Event Catalog
+
+| Event | Producer | Consumers | Routing Key |
+|-------|----------|-----------|-------------|
+| `UserCreatedEvent` | user-service | UserSyncConsumer, AccountCreationConsumer | `user.created` |
+| `TransactionCreatedEvent` | transaction-service | (future consumers) | `transaction.created` |
+| `TransactionDeletedEvent` | transaction-service | (future consumers) | `transaction.deleted` |
+| `AccountCreatedEvent` | AccountCreationConsumer | (future consumers) | `account.created` |
+
+### Consumer Reliability
+
+All consumers inherit from `BaseConsumer` with:
+- **Retry**: 3 attempts with exponential backoff
+- **Dead-letter queue**: Failed messages routed to `*.dlq`
+- **Idempotency**: Correlation-ID based deduplication
+- **Independent operation**: Each consumer has its own queue and fails independently
 
 ---
 
 ## Configuration
 
-All configuration is loaded from environment variables via `backend/config.py`. See `example.env` for the full list with descriptions.
+### Docker-Compose Environment
 
-### Core Variables
+| Variable | Service | Default | Description |
+|----------|---------|---------|-------------|
+| `DATABASE_URL` | all | — | Database connection string |
+| `SECRET_KEY` / `JWT_SECRET` | all | — | JWT signing key (must match) |
+| `RABBITMQ_URL` | all | `amqp://guest:guest@rabbitmq:5672/` | RabbitMQ connection |
+| `CORS_ORIGINS` | all | `http://localhost:3000,http://localhost:3001` | Allowed origins |
+| `ENVIRONMENT` | all | `development` | Runtime environment |
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SECRET_KEY` | Yes | -- | JWT signing key |
-| `DATABASE_URL` | Yes | -- | MySQL connection string |
-| `ACTIVE_DB` | No | `mysql` | Global fallback database |
-| `TRANSACTIONS_DB` | No | `mysql` | Database for transaction workloads |
-| `ANALYTICS_DB` | No | `ACTIVE_DB` | Database for analytics workloads |
-| `USER_DB` | No | `mysql` | Database for user workloads |
-| `CORS_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | Allowed origins |
-| `ENVIRONMENT` | No | `development` | `development`, `staging`, `production` |
-| `LOG_LEVEL` | No | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `ELASTICSEARCH_HOST` | No | `http://localhost:9200` | Elasticsearch URL |
-| `NEO4J_URI` | No | `bolt://localhost:7687` | Neo4j bolt URI |
-| `NEO4J_USER` | No | `neo4j` | Neo4j username |
-| `NEO4J_PASSWORD` | No | -- | Neo4j password |
+The monolith uses `SECRET_KEY`, microservices use `JWT_SECRET`. Both are set to the same value in docker-compose.
+
+See `example.env` for the full list with descriptions.
 
 ---
 
 ## Testing
 
-The project has **255 tests** organized following the testing pyramid:
+The project has **300+ tests** organized following the testing pyramid:
 
 ```
      +----------+
-     |   E2E    |   Cypress (frontend)
+     |   E2E    |   Cross-service flow tests (pytest + httpx)
      +----------+
-     | Integr.  |   45 tests - Full HTTP flow + GraphQL
+     | Integr.  |   Full HTTP flow with in-memory DB
      +----------+
-     |   Unit   |   207 tests - Business logic + schema BVA
+     |   Unit   |   Business logic + schema BVA validation
      +----------+
-     |   Arch   |   3 tests - Import boundary enforcement
+     |   Arch   |   Import boundary enforcement
      +----------+
 ```
+
+### Test Counts by Service
+
+| Service | Unit | Integration | E2E | Total |
+|---------|------|-------------|-----|-------|
+| Monolith | ~231 | 45 | — | ~276 |
+| User Service | 22 | 11 | — | 33 |
+| Transaction Service | 40 | 17 | — | 57 |
+| Cross-service E2E | — | — | ~15 | ~15 |
 
 ### Running Tests
 
 ```bash
-cd backend
+# Monolith tests
+cd backend && uv run pytest tests/ -v
 
-# All tests
-uv run pytest tests/ -v
+# User service tests
+cd services/user-service && uv run pytest tests/ -v
 
-# Unit tests only
-uv run pytest tests/unittests/ -v
+# Transaction service tests
+cd services/transaction-service && uv run pytest tests/ -v
 
-# Integration tests only
-uv run pytest tests/integration/ -v
-
-# With coverage
-uv run pytest tests/ --cov=backend --cov-report=html
+# E2E tests (requires docker compose up)
+uv run pytest tests/e2e/ -v -m e2e
 ```
-
-### Test Categories
-
-| Category | Location | Count | What It Tests |
-|----------|----------|-------|---------------|
-| Architecture fitness | `tests/architecture/` | 3 | Import boundary enforcement (hex constraints) |
-| Service unit tests | `tests/unittests/services/` | ~34 | Service layer with mocked repos |
-| Schema BVA tests | `tests/unittests/test_*.py` | ~164 | Pydantic schema boundary values |
-| Integration tests | `tests/integration/` | 45 | Full HTTP stack with in-memory SQLite |
-| GraphQL tests | `tests/integration/test_graphql_flow.py` | 13 | GraphQL queries, schema validation, correlation ID |
-
----
-
-## Database Support
-
-The application supports three databases. Each bounded context can independently select its database via environment variables (`TRANSACTIONS_DB`, `ANALYTICS_DB`, `USER_DB`).
-
-### Database Selection
-
-```bash
-# Use MySQL for everything (default)
-ACTIVE_DB=mysql
-
-# Use Elasticsearch for analytics, MySQL for the rest
-ANALYTICS_DB=elasticsearch
-
-# Use Neo4j for analytics
-ANALYTICS_DB=neo4j
-```
-
-### Comparison
-
-| Feature | MySQL | Elasticsearch | Neo4j |
-|---------|-------|---------------|-------|
-| Primary use | CRUD operations | Search & analytics | Graph queries |
-| Strengths | ACID, relations | Full-text search, aggregations | Relationship traversal |
-| Query language | SQL | Query DSL | Cypher |
-| Best for | Primary data store | Search, dashboards | Network analysis |
-
-See [backend/DATABASE_COMPARISON.md](backend/DATABASE_COMPARISON.md) for a detailed comparison.
 
 ---
 
 ## Security
 
-- **JWT Authentication** -- tokens expire after 24 hours, bcrypt password hashing (12 rounds)
-- **Account isolation** -- users can only access their own data via `X-Account-ID` header with server-side validation
-- **Input validation** -- Pydantic schemas validate all API inputs at the boundary
-- **SQL injection prevention** -- parameterized queries via SQLAlchemy
-- **Correlation ID** -- every request gets a traceable UUID for audit and debugging
-- **CORS** -- configurable allowed origins
+- **JWT Authentication** — user-service issues tokens, all services validate with shared secret
+- **Cross-service token compatibility** — tokens contain both `sub` (standard) and legacy `user_id`/`username`/`email` fields
+- **Data isolation** — every query filters by `user_id` (multi-tenant). Wrong user gets 404, not 403 (no existence leaking)
+- **bcrypt password hashing** — 12 rounds in user-service
+- **Input validation** — Pydantic schemas with BVA (Boundary Value Analysis) at all service boundaries
+- **No cross-service FKs** — services cannot accidentally access each other's data
+- **Correlation ID** — every request gets a traceable UUID for audit and debugging
+- **CORS** — configurable allowed origins per service
 
 ---
 
 ## Development
 
+### Full Stack (Docker)
+
+```bash
+docker compose up -d
+# All services: http://localhost:8000 (monolith), :8001 (user), :8002 (transaction)
+# RabbitMQ UI: http://localhost:15672 (guest/guest)
+# Frontend: http://localhost:3001
+```
+
 ### Local Development (without Docker)
 
 ```bash
-# Backend
-cd backend
-uv sync
+# Backend (monolith)
+cd backend && uv sync
 uv run uvicorn backend.main:app --reload --port 8000
+
+# User service
+cd services/user-service
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8001
+
+# Transaction service
+cd services/transaction-service
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8002
+
+# Consumers (in separate terminals)
+uv run python -m backend.consumers.worker --consumer user-sync
+uv run python -m backend.consumers.worker --consumer account-creation
 
 # Frontend
 cd frontend/finans-tracker-frontend
-npm install
-npm start
-```
-
-### With Docker
-
-```bash
-docker-compose up -d
-# API: http://localhost:8080/docs
-# Neo4j Browser: http://localhost:7474
-```
-
-### Environment Setup
-
-```bash
-# Copy example environment file
-cp example.env .env
-# Edit .env with your database credentials and SECRET_KEY
+yarn install && yarn dev
 ```
 
 ### Default Credentials (development)
 
 | Service | Username | Password |
 |---------|----------|----------|
-| MySQL | `root` | `123456` |
-| Neo4j | `neo4j` | `12345678` |
-| Test users | `johan`, `marie`, `testuser` | `test123` |
+| MySQL | `root` | `root` |
+| RabbitMQ | `guest` | `guest` |
 
 ---
 
@@ -482,35 +458,38 @@ cp example.env .env
 
 | Document | Description |
 |----------|-------------|
-| [INSTALLATION.md](INSTALLATION.md) | Full setup guide with Docker and local development |
-| [backend/README.md](backend/README.md) | Backend architecture, router map, logging details |
-| [backend/docs/STRUCTURE.md](backend/docs/STRUCTURE.md) | Hexagonal structure map and bounded context layout |
+| [INSTALLATION.md](INSTALLATION.md) | Full setup guide with Docker and seeding |
+| [backend/README.md](backend/README.md) | Monolith architecture, router map, consumers |
+| [backend/docs/STRUCTURE.md](backend/docs/STRUCTURE.md) | Hexagonal structure map and bounded contexts |
+| [services/user-service/README.md](services/user-service/README.md) | User service API, events, JWT format |
+| [services/transaction-service/README.md](services/transaction-service/README.md) | Transaction service API, UoW pattern, CSV import |
+| [services/shared/contracts/README.md](services/shared/contracts/README.md) | Shared event contracts (Pydantic models) |
+| [docs/microservice-architecture.mermaid](docs/microservice-architecture.mermaid) | Full architecture diagram (current + future) |
 | [backend/DATABASE_COMPARISON.md](backend/DATABASE_COMPARISON.md) | MySQL vs Elasticsearch vs Neo4j comparison |
-| [backend/repositories/README.md](backend/repositories/README.md) | Repository pattern and multi-database factory |
-| [docs/MANDATORY_ASSIGNMENT_1_REPORT.md](docs/MANDATORY_ASSIGNMENT_1_REPORT.md) | Assignment 1 report: requirements, architecture, deployment, testing |
-| [docs/PRESENTATION_OUTLINE.md](docs/PRESENTATION_OUTLINE.md) | Slide-by-slide presentation outline |
+| [docs/MANDATORY_ASSIGNMENT_1_REPORT.md](docs/MANDATORY_ASSIGNMENT_1_REPORT.md) | Assignment 1 report |
 
 ---
 
 ## Roadmap
 
-- [x] Multi-database support (MySQL, Elasticsearch, Neo4j)
-- [x] Repository pattern with factory selection
-- [x] Class-based services with dependency injection
-- [x] JWT authentication with bcrypt
 - [x] Hexagonal architecture (ports & adapters) across all domains
 - [x] GraphQL read gateway (CQRS pattern)
+- [x] Multi-database support (MySQL, Elasticsearch, Neo4j)
+- [x] JWT authentication with bcrypt
 - [x] API versioning (`/api/v1/`)
 - [x] Structured logging with correlation ID
-- [x] Monthly budget system with aggregate model and copy functionality
+- [x] Monthly budget system with aggregate model
 - [x] Unit of Work pattern for transactional boundaries
 - [x] Architecture fitness tests (import boundary enforcement)
-- [x] Unit tests for services and schema BVA (207 tests)
-- [x] Integration tests for all flows + GraphQL (45 tests)
-- [x] Frontend integration with `/api/v1/` prefix
-- [ ] Frontend GraphQL client integration
-- [ ] Database migrations with Alembic
-- [ ] Rate limiting and security hardening
-- [ ] Export functionality (PDF, Excel)
-- [ ] E2E tests with Playwright
-- [ ] Microservice extraction
+- [x] 300+ tests (unit, integration, e2e)
+- [x] User-service extraction (PostgreSQL, RabbitMQ events)
+- [x] Transaction-service extraction (PostgreSQL, UoW, CSV import)
+- [x] Event-driven sync (UserSync + AccountCreation consumers)
+- [x] Cross-service JWT compatibility
+- [x] No cross-service foreign key constraints
+- [ ] API Gateway (routing, rate limiting)
+- [ ] Budget service extraction
+- [ ] Analytics service + Elasticsearch
+- [ ] AI categorization service
+- [ ] Frontend routing to microservices (currently partial)
+- [ ] Transactional outbox pattern

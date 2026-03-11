@@ -1,31 +1,34 @@
-# Backend Structure (Hexagonal + CQRS)
+# Backend Structure (Monolith — Hexagonal + CQRS)
 
 ## Overview
 
-The backend uses hexagonal architecture across all domains with a CQRS split:
+The monolith backend uses hexagonal architecture across all domains with a CQRS split:
+
 - **REST** for commands (write operations)
 - **GraphQL** for queries (read operations via a cross-domain read gateway)
 
 All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remain at root.
 
+**Note:** The user and transaction domains have been extracted into standalone microservices (`user-service` on port 8001, `transaction-service` on port 8002). The monolith retains local copies of user data via event-driven sync, but `user-service` is the source of truth for authentication. See the root `README.md` for the full microservices architecture.
+
 ## Runtime Entry Points
 
-- `backend/main.py` -- registers routers, middleware (CORS, request logging, correlation ID), and the GraphQL endpoint.
-- `backend/dependencies.py` -- wires application services with outbound adapters via FastAPI DI.
-- `backend/shared/ports/` -- cross-cutting port interfaces (`IAccountResolver`, `IUnitOfWork`).
-- `backend/shared/adapters/` -- cross-cutting adapter implementations (`MySQLAccountResolver`, `MySQLUnitOfWork`, auth DI wiring).
-- `backend/tests/architecture/test_import_boundaries.py` -- architecture fitness tests that enforce import boundaries at CI time.
+- `backend/main.py` — registers routers, middleware (CORS, request logging, correlation ID), and the GraphQL endpoint.
+- `backend/dependencies.py` — wires application services with outbound adapters via FastAPI DI.
+- `backend/shared/ports/` — cross-cutting port interfaces (`IAccountResolver`, `IUnitOfWork`).
+- `backend/shared/adapters/` — cross-cutting adapter implementations (`MySQLAccountResolver`, `MySQLUnitOfWork`, auth DI wiring).
+- `backend/tests/architecture/test_import_boundaries.py` — architecture fitness tests that enforce import boundaries at CI time.
 
-## Active Bounded Contexts
+## Active Bounded Contexts (still in monolith)
 
-- `backend/transaction/`
-- `backend/category/`
-- `backend/budget/` -- legacy per-category budgets
-- `backend/monthly_budget/` -- aggregate-based monthly budgets with budget lines
-- `backend/analytics/` -- includes the GraphQL read gateway adapter
-- `backend/account/`
-- `backend/goal/`
-- `backend/user/`
+- `backend/transaction/` — CRUD, CSV import, planned transactions
+- `backend/category/` — CRUD
+- `backend/budget/` — legacy per-category budgets
+- `backend/monthly_budget/` — aggregate-based monthly budgets with budget lines
+- `backend/analytics/` — dashboard overview, GraphQL read gateway
+- `backend/account/` — CRUD + account groups
+- `backend/goal/` — CRUD
+- `backend/user/` — registration/login (delegates to monolith MySQL, but user-service is source of truth)
 
 Each context follows the same layout:
 
@@ -44,32 +47,46 @@ Each context follows the same layout:
 └── __init__.py
 ```
 
-### Monthly Budget domain
+## Event Consumers
 
-The `monthly_budget` context replaces the legacy `budget` context with an aggregate-based model. Instead of one budget row per category, a `MonthlyBudget` aggregate groups multiple `BudgetLine` entries under a single month/year/account combination. It supports budget copying between months and provides its own summary endpoint that compares budget lines against actual transaction spending.
+The monolith includes two independent RabbitMQ consumers that react to `user.created` events from user-service:
 
-The legacy `budget` context remains for backward compatibility and is still used by the GraphQL `budgetSummary` query via `AnalyticsService`.
+| Consumer | Queue | Responsibility |
+|----------|-------|---------------|
+| `UserSyncConsumer` | `monolith.user_sync` | Sync user data to MySQL User table |
+| `AccountCreationConsumer` | `monolith.account_creation` | Create default account in MySQL |
 
-### Transaction domain -- Unit of Work
+Both consumers:
+- Listen on the same routing key (`user.created`) but use separate queues
+- Inherit from `BaseConsumer` with retry (3 attempts), DLQ, and idempotency
+- Run independently — failure in one does not affect the other
+- Can be scaled independently via `--consumer` argument to `worker.py`
 
-The `transaction` context uses the Unit of Work pattern (`IUnitOfWork`) for transactional boundaries. Its repositories use `flush()` instead of `commit()`/`rollback()`, and the `TransactionService` wraps write operations in a UoW context that controls the transaction boundary. The `TransactionType` enum lives in `transaction/domain/entities.py` (domain layer, no infra dependency).
+```bash
+# Run specific consumer
+python -m backend.consumers.worker --consumer user-sync
+python -m backend.consumers.worker --consumer account-creation
 
-### Analytics domain -- transitional read model
+# Run all consumers
+python -m backend.consumers.worker
+```
 
-The `analytics` context has its own direct database queries in its outbound adapters (MySQL, Elasticsearch, Neo4j). These adapters do not import from the shared `backend.repositories` layer -- they query the database directly using SQLAlchemy models, ES client, or Neo4j driver.
+## Cross-Service Architecture Decisions
 
-### Analytics domain -- read gateway
+### No FK constraints to User table
 
-The `analytics` context contains an extra inbound adapter: `graphql_api.py`. This adapter is a cross-domain read gateway that injects services from other bounded contexts (transactions, categories) to serve read-only GraphQL queries. This is a deliberate architectural choice to provide a single query interface without breaking domain encapsulation -- each domain's service layer is the only entry point.
+The MySQL `Account.User_idUser` and `AccountGroups_has_User.User_idUser` columns have **no foreign key constraints** referencing the `User` table. This is intentional — in a microservices architecture, the MySQL User table is a local cache synced via events, not the source of truth. Cross-service referential integrity is maintained through eventual consistency, not database constraints.
 
-### Auth boundary
+The ORM relationships on `User.account_groups` and `AccountGroups.users` use explicit `primaryjoin`/`secondaryjoin`/`foreign_keys` parameters to work without FK metadata.
 
-The `auth.py` module uses an `IAccountResolver` port (defined in `shared/ports/auth_ports.py`) instead of importing directly from the repository or database layers. The adapter `MySQLAccountResolver` is wired in `shared/adapters/auth_dependencies.py` and injected via FastAPI `Depends()`.
+### JWT Cross-Service Compatibility
+
+The monolith creates tokens with both `sub` (standard JWT claim) and legacy `user_id`/`username`/`email` fields. Token validation accepts either format, so tokens from both the monolith and user-service work across all services.
 
 ## Router Map
 
 | Path | Domain | Protocol |
-|---|---|---|
+|------|--------|----------|
 | `/api/v1/transactions/*` | Transaction | REST |
 | `/api/v1/planned-transactions/*` | Transaction | REST |
 | `/api/v1/categories/*` | Category | REST |
@@ -86,19 +103,15 @@ The `auth.py` module uses an `IAccountResolver` port (defined in `shared/ports/a
 
 ## Middleware Stack
 
-1. **CORS** -- configured via `CORS_ORIGINS` env var.
-2. **Request Logging** -- logs method, path, status, duration_ms, and correlation_id.
-3. **Correlation ID** -- generates UUID per request (or forwards `X-Correlation-ID` header). Returned in `X-Correlation-ID` response header.
+1. **CORS** — configured via `CORS_ORIGINS` env var.
+2. **Request Logging** — logs method, path, status, duration_ms, and correlation_id.
+3. **Correlation ID** — generates UUID per request (or forwards `X-Correlation-ID` header). Returned in `X-Correlation-ID` response header.
 
 ## Database Role Configuration
 
 Settings in `backend/config.py`:
 
-- `ACTIVE_DB` -- global fallback
-- `TRANSACTIONS_DB` -- transaction domain
-- `ANALYTICS_DB` -- analytics domain (supports MySQL, Elasticsearch, Neo4j)
-- `USER_DB` -- user domain
-
-## Removed Legacy Files
-
-All legacy `backend/routes/` and `backend/services/` files were removed during the hexagonal migration. The legacy `backend/graphql/` directory (direct SessionLocal access) was also removed and replaced by the hexagonal GraphQL read gateway in `backend/analytics/adapters/inbound/graphql_api.py`.
+- `ACTIVE_DB` — global fallback
+- `TRANSACTIONS_DB` — transaction domain
+- `ANALYTICS_DB` — analytics domain (supports MySQL, Elasticsearch, Neo4j)
+- `USER_DB` — user domain

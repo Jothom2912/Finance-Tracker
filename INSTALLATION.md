@@ -1,11 +1,11 @@
-# Installation Guide -- Finance Tracker
+# Installation Guide — Finance Tracker
 
 ## Prerequisites
 
 - **Docker Desktop** installed and running
 - **Git** installed
-- **8GB RAM** available (minimum 4GB for Elasticsearch)
-- **10GB free disk space**
+- **Node.js 18+** (for frontend)
+- **4GB RAM** available
 
 ---
 
@@ -21,247 +21,172 @@ cd finance-tracker
 ### 2. Start All Services
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 This starts:
-- **MySQL** (port 3307)
-- **Elasticsearch** (port 9200)
-- **Neo4j** (ports 7474, 7687)
-- **Backend API** (port 8080)
 
-**Wait 30-60 seconds** for all services to be healthy.
+| Service | Port | Description |
+|---------|------|-------------|
+| **MySQL** | 3306 | Monolith database |
+| **PostgreSQL (users)** | 5433 | User-service database |
+| **PostgreSQL (transactions)** | 5434 | Transaction-service database |
+| **RabbitMQ** | 5672 / 15672 | Event bus + management UI |
+| **Monolith** | 8000 | Accounts, budgets, categories, goals, analytics |
+| **User Service** | 8001 | Registration, login, JWT issuing |
+| **Transaction Service** | 8002 | Transaction CRUD, CSV import |
+| **UserSync Consumer** | — | Syncs users from events to MySQL |
+| **AccountCreation Consumer** | — | Creates default accounts from events |
+
+**Wait 30-60 seconds** for all health checks to pass.
 
 ### 3. Verify Services Are Running
 
 ```bash
-docker-compose ps
-docker-compose logs backend
+docker compose ps
+curl http://localhost:8000/health   # Monolith
+curl http://localhost:8001/health   # User Service
+curl http://localhost:8002/health   # Transaction Service
 ```
 
-### 4. Initialize MySQL Database
-
-Tables are created automatically on first request via SQLAlchemy, or load from a dump:
+### 4. Start Frontend
 
 ```bash
-docker exec finance-mysql mysql -u root -p123456 finans_tracker < dumps/mysql/finans_tracker.sql
+cd frontend/finans-tracker-frontend
+yarn install
+yarn dev
 ```
 
-If restoring from a backup without the `created_at` column, run the migration:
+App: http://localhost:3001
+
+### 5. Seed Database (Optional)
+
+Categories are needed before creating transactions or budgets via the monolith:
 
 ```bash
-# Docker
-docker exec finance-backend python -m backend.migrations.mysql.add_created_at_to_transactions
+# Seed categories
+docker exec -it $(docker compose ps -q monolith) python -m backend.seed_categories
 
-# Local development
-uv run python -m backend.migrations.mysql.add_created_at_to_transactions
+# Generate test data (creates users, accounts, transactions, budgets, goals)
+docker exec -it $(docker compose ps -q monolith) python -m backend.generate_dummy_data
 ```
 
-### 4.1. Seed Categories (REQUIRED)
-
-Categories are required before creating transactions or budgets. Works with all three databases:
-
-```bash
-# Docker
-docker exec finance-backend python -m backend.seed_categories
-
-# Local development
-uv run python -m backend.seed_categories
-```
-
-### 4.2. Generate Test Data (Optional -- MySQL Only)
-
-```bash
-# Docker
-docker exec finance-backend python -m backend.generate_dummy_data
-
-# Local development
-uv run python -m backend.generate_dummy_data
-
-# Clear and regenerate
-uv run python -m backend.generate_dummy_data --clear
-```
-
-This creates test users (`johan`, `marie`, `testuser` -- all with password `test123`), accounts, transactions, budgets, goals, and account groups.
-
-For Elasticsearch and Neo4j, seed data via API endpoints or migration scripts.
-
-### 5. Load Elasticsearch Data (Optional)
-
-```bash
-docker exec finance-backend python scripts/load_elasticsearch.py
-```
-
-### 6. Load Neo4j Data (Optional)
-
-```bash
-chmod +x backend/scripts/load_neo4j.sh
-cd backend/scripts
-./load_neo4j.sh
-```
+Test users created by seed: `johan`, `marie`, `testuser` (password: `test123`).
 
 ---
 
-## Local Development (Windows)
+## User Registration Flow
+
+With the microservices architecture, registering a new user triggers an event-driven flow:
+
+1. **Register** via user-service (port 8001) — creates user in PostgreSQL
+2. **user.created event** published to RabbitMQ
+3. **UserSyncConsumer** picks up event, inserts user into monolith MySQL
+4. **AccountCreationConsumer** picks up event, creates default account in MySQL
+5. User can now log in and use the full application
+
+This happens automatically. No manual database setup needed for new users.
+
+---
+
+## Local Development (without Docker)
+
+### Backend (Monolith)
 
 ```powershell
 cd backend
 uv sync
-
-# Start the API
 uv run uvicorn backend.main:app --reload --port 8000
 ```
 
+You need MySQL running locally (or via Docker) with `DATABASE_URL` set in `.env`.
+
+### User Service
+
+```powershell
+cd services/user-service
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8001
+```
+
+Needs PostgreSQL on port 5433 and RabbitMQ on port 5672.
+
+### Transaction Service
+
+```powershell
+cd services/transaction-service
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8002
+```
+
+Needs PostgreSQL on port 5434 and RabbitMQ on port 5672.
+
+### Consumers
+
+```powershell
+# In separate terminals
+uv run python -m backend.consumers.worker --consumer user-sync
+uv run python -m backend.consumers.worker --consumer account-creation
+```
+
+### Frontend
+
+```powershell
+cd frontend/finans-tracker-frontend
+yarn install
+yarn dev
+```
+
 - API docs: http://localhost:8000/docs
-- Health: http://localhost:8000/health
+- Health: http://localhost:8000/health, http://localhost:8001/health, http://localhost:8002/health
 - GraphQL playground: http://localhost:8000/api/v1/graphql
+- RabbitMQ Management: http://localhost:15672 (guest/guest)
 
 ---
 
-## Verify Installation
+## Test the API
 
-### Test Backend Health
-
-```bash
-# Docker
-curl http://localhost:8080/health
-
-# Local development
-curl http://localhost:8000/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "ok",
-  "message": "Backend kører!",
-  "timestamp": 1234567890.123
-}
-```
-
-### Test MySQL Connection
+### 1. Register a User (via User Service)
 
 ```bash
-docker exec finance-mysql mysql -u root -p123456 -e "SHOW DATABASES;"
-```
-
-### Test Elasticsearch
-
-```bash
-curl http://localhost:9200/_cluster/health
-```
-
-### Test Neo4j
-
-Open browser: http://localhost:7474 (credentials: `neo4j` / `12345678`)
-
----
-
-## Switch Between Databases
-
-Edit `.env` file:
-
-```bash
-# Use MySQL (default)
-ACTIVE_DB=mysql
-
-# Use Elasticsearch
-ACTIVE_DB=elasticsearch
-
-# Use Neo4j
-ACTIVE_DB=neo4j
-```
-
-Restart backend:
-
-```bash
-docker-compose restart backend
-```
-
----
-
-## Test API
-
-### 1. Open API Documentation
-
-- **Docker:** http://localhost:8080/docs
-- **Local development:** http://localhost:8000/docs
-
-All domain endpoints are versioned under `/api/v1/`.
-
-### 2. Register a User
-
-```bash
-# Docker
-curl -X POST http://localhost:8080/api/v1/users/ \
+curl -X POST http://localhost:8001/api/v1/users/register \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "email": "test@example.com",
-    "password": "test123456"
-  }'
+  -d '{"username": "testuser", "email": "test@example.com", "password": "SecurePass123!"}'
+```
 
-# Local development
-curl -X POST http://localhost:8000/api/v1/users/ \
+### 2. Login (via User Service)
+
+```bash
+curl -X POST http://localhost:8001/api/v1/users/login \
+  -d "username=test@example.com&password=SecurePass123!"
+```
+
+Save the `access_token` from the response. This token works on all services.
+
+### 3. Create a Transaction (via Transaction Service)
+
+```bash
+curl -X POST http://localhost:8002/api/v1/transactions/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
-    "username": "testuser",
-    "email": "test@example.com",
-    "password": "test123456"
+    "account_id": 1,
+    "account_name": "Default Account",
+    "amount": "100.50",
+    "transaction_type": "expense",
+    "description": "Groceries",
+    "date": "2026-03-11"
   }'
 ```
 
-### 3. Login
+### 4. Create a Transaction (via Monolith)
 
 ```bash
-# Docker
-curl -X POST http://localhost:8080/api/v1/users/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username_or_email": "testuser",
-    "password": "test123456"
-  }'
-
-# Local development
-curl -X POST http://localhost:8000/api/v1/users/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username_or_email": "testuser",
-    "password": "test123456"
-  }'
-```
-
-Save the `access_token` from the response.
-
-### 4. Create a Transaction
-
-```bash
-# Docker
-curl -X POST http://localhost:8080/api/v1/transactions/ \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
-  -H "X-Account-ID: 1" \
-  -d '{
-    "amount": -100.50,
-    "description": "Test transaction",
-    "date": "2025-12-09",
-    "type": "expense",
-    "Category_idCategory": 1
-  }'
-
-# Local development
 curl -X POST http://localhost:8000/api/v1/transactions/ \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Account-ID: 1" \
-  -d '{
-    "amount": -100.50,
-    "description": "Test transaction",
-    "date": "2025-12-09",
-    "type": "expense",
-    "Category_idCategory": 1
-  }'
+  -d '{"amount": -100.50, "description": "Groceries", "date": "2026-03-11", "type": "expense", "Category_idCategory": 1}'
 ```
 
 ### 5. Query GraphQL Read Gateway
@@ -269,108 +194,92 @@ curl -X POST http://localhost:8000/api/v1/transactions/ \
 ```bash
 curl -X POST http://localhost:8000/api/v1/graphql \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Account-ID: 1" \
-  -d '{
-    "query": "{ financialOverview(accountId: 1) { totalIncome totalExpenses balance transactionCount } }"
-  }'
+  -d '{"query": "{ financialOverview(accountId: 1) { totalIncome totalExpenses balance transactionCount } }"}'
 ```
 
 ---
 
-## Database Dumps
-
-Test data is available in `dumps/` directory:
-
-- `dumps/mysql/` -- MySQL SQL dump
-- `dumps/elasticsearch/` -- JSON exports for each index
-- `dumps/neo4j/` -- Neo4j database dump
-
-### Create Dumps
+## Running Tests
 
 ```bash
-# Elasticsearch
-docker exec finance-backend python scripts/dump_elasticsearch.py
+# Monolith tests (~276 tests)
+cd backend && uv run pytest tests/ -v
 
-# Neo4j
-cd backend/scripts && chmod +x dump_neo4j.sh && ./dump_neo4j.sh
+# User service tests (33 tests)
+cd services/user-service && uv run pytest tests/ -v
 
-# MySQL
-docker exec finance-mysql mysqldump -u root -p123456 finans_tracker > dumps/mysql/finans_tracker.sql
+# Transaction service tests (57 tests)
+cd services/transaction-service && uv run pytest tests/ -v
+
+# E2E tests (requires docker compose up)
+uv run pytest tests/e2e/ -v -m e2e
 ```
 
 ---
 
 ## Troubleshooting
 
+### Service Not Starting
+
+```bash
+docker compose logs <service-name>
+docker compose ps
+```
+
 ### MySQL Connection Fails
 
-```bash
-docker logs finance-mysql
-docker exec finance-mysql mysqladmin ping -h localhost -u root -p123456
-```
-
-### Elasticsearch Not Starting
-
-Elasticsearch needs 4GB+ memory. Increase Docker Desktop memory, restart Docker, then:
+The MySQL password in docker-compose is `root`. If you previously used a different password, the old volume remembers it:
 
 ```bash
-docker-compose restart elasticsearch
+# Reset volumes (WARNING: deletes all data)
+docker compose down -v
+docker compose up -d
 ```
 
-### Neo4j Authentication Error
+### Consumer Not Processing Events
 
-Default credentials: `neo4j` / `12345678`. To reset:
+Check RabbitMQ Management UI at http://localhost:15672 (guest/guest). Look for:
+- Queues `monolith.user_sync` and `monolith.account_creation`
+- Dead-letter queues `*.dlq` for failed messages
+- Consumer logs: `docker compose logs user-sync-consumer` or `docker compose logs account-creation-consumer`
 
-```bash
-docker exec finance-neo4j neo4j-admin set-initial-password newpassword
-```
+### JWT Token Invalid Across Services
 
-Update `NEO4J_PASSWORD` in `.env` and restart backend.
-
-### Backend Not Starting
-
-```bash
-docker logs finance-backend
-docker-compose ps
-docker-compose build backend
-docker-compose up -d backend
-```
+All services must share the same JWT secret. In docker-compose, the monolith uses `SECRET_KEY` and microservices use `JWT_SECRET` — both are set to `dev-secret-key-change-in-production`.
 
 ### Port Already in Use
 
-If ports 3307, 8080, 9200, 7474, or 7687 are in use, stop the conflicting service or change ports in `docker-compose.yml`.
+| Port | Service | Alternative |
+|------|---------|-------------|
+| 3306 | MySQL | Change in docker-compose |
+| 5433 | PostgreSQL (users) | Change in docker-compose |
+| 5434 | PostgreSQL (transactions) | Change in docker-compose |
+| 5672 | RabbitMQ | Change in docker-compose |
+| 8000 | Monolith | Change in docker-compose |
+| 8001 | User Service | Change in docker-compose |
+| 8002 | Transaction Service | Change in docker-compose |
 
 ---
 
 ## Stop Services
 
 ```bash
-# Stop (keeps data)
-docker-compose down
+# Stop (keeps data in volumes)
+docker compose down
 
-# Stop and delete all data
-docker-compose down -v
+# Stop and delete all data (fresh start)
+docker compose down -v
 ```
 
 ---
 
-## Default Credentials
+## Default Credentials (Development)
 
 | Service | Username | Password |
 |---------|----------|----------|
-| MySQL | `root` | `123456` |
-| Neo4j | `neo4j` | `12345678` |
-| Test users | `johan`, `marie`, `testuser` | `test123` |
-
----
-
-## Useful Commands
-
-```bash
-docker-compose logs -f backend      # Follow backend logs
-docker exec -it finance-backend bash # Shell into container
-docker-compose restart backend       # Restart after changes
-docker-compose build backend         # Rebuild after code changes
-docker stats                         # Check resource usage
-```
+| MySQL | `root` | `root` |
+| RabbitMQ | `guest` | `guest` |
+| RabbitMQ Management UI | `guest` | `guest` |
+| Seeded test users | `johan`, `marie`, `testuser` | `test123` |

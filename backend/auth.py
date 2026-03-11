@@ -31,8 +31,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class TokenData(BaseModel):
     """Data indeholdt i JWT token"""
     user_id: int
-    username: str
-    email: str
+    username: Optional[str] = None
+    email: Optional[str] = None
 
 
 class Token(BaseModel):
@@ -81,28 +81,39 @@ def create_access_token(
     expire = datetime.utcnow() + expires_delta
     
     to_encode = {
+        "sub": str(user_id),
         "user_id": user_id,
         "username": username,
         "email": email,
-        "exp": expire
+        "exp": expire,
     }
     
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> Optional[TokenData]:
-    """Dekoder JWT token og returnerer data"""
+    """Dekoder JWT token og returnerer data.
+
+    Accepts both monolith format (``user_id`` claim) and
+    microservice format (``sub`` claim) for cross-service
+    JWT compatibility.
+    """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
-        username: str = payload.get("username")
-        email: str = payload.get("email")
-        
-        if user_id is None or username is None or email is None:
-            return None
-        
-        return TokenData(user_id=user_id, username=username, email=email)
-    except JWTError:
+
+        user_id = payload.get("user_id")
+        if user_id is None:
+            sub = payload.get("sub")
+            if sub is None:
+                return None
+            user_id = int(sub)
+
+        return TokenData(
+            user_id=user_id,
+            username=payload.get("username"),
+            email=payload.get("email"),
+        )
+    except (JWTError, ValueError, TypeError):
         return None
 
 
