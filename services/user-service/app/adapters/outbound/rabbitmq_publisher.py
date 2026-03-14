@@ -51,6 +51,14 @@ class RabbitMQPublisher(IEventPublisher):
             event.correlation_id,
         )
 
+    async def publish_raw(
+        self, message: Message, routing_key: str
+    ) -> None:
+        """Publish a pre-built message (used by outbox worker)."""
+        if self._exchange is None:
+            raise RuntimeError("RabbitMQPublisher is not connected")
+        await self._exchange.publish(message, routing_key=routing_key)
+
     async def close(self) -> None:
         if self._connection:
             await self._connection.close()

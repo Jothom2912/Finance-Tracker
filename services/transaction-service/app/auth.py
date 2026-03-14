@@ -12,7 +12,7 @@ from jose import JWTError, jwt
 from app.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="http://localhost:8001/api/v1/users/login",
+    tokenUrl="/api/v1/users/login",
 )
 
 

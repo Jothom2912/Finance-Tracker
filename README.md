@@ -44,6 +44,8 @@ This starts all services:
 | Monolith | 8000 | Accounts, budgets, categories, goals, analytics |
 | User Service | 8001 | Registration, login, JWT issuing |
 | Transaction Service | 8002 | Transaction CRUD, CSV import, planned transactions |
+| User Outbox Worker | — | Polls outbox table, publishes user events to RabbitMQ |
+| Transaction Outbox Worker | — | Polls outbox table, publishes transaction events to RabbitMQ |
 | UserSync Consumer | — | Syncs users from events to MySQL |
 | AccountCreation Consumer | — | Creates default accounts from events |
 
@@ -83,8 +85,14 @@ graph LR
     FE -->|transactions| TS[Transaction Service<br/>:8002]
     FE -->|accounts, budgets,<br/>categories, goals| MON[Monolith<br/>:8000]
 
-    US -->|user.created event| RMQ[RabbitMQ]
-    TS -->|transaction.created<br/>transaction.deleted| RMQ
+    US -->|"write domain data +<br/>outbox event (same tx)"| PG_U[(PostgreSQL<br/>Users + outbox)]
+    TS -->|"write domain data +<br/>outbox event (same tx)"| PG_T[(PostgreSQL<br/>Transactions + outbox)]
+
+    PG_U -->|poll pending| UOW[User Outbox<br/>Worker]
+    PG_T -->|poll pending| TOW[Transaction Outbox<br/>Worker]
+
+    UOW -->|publish| RMQ[RabbitMQ]
+    TOW -->|publish| RMQ
 
     RMQ -->|user.created| USC[UserSync<br/>Consumer]
     RMQ -->|user.created| ACC[AccountCreation<br/>Consumer]
@@ -92,8 +100,6 @@ graph LR
     USC -->|INSERT User| MYSQL[(MySQL)]
     ACC -->|INSERT Account| MYSQL
 
-    US --> PG_U[(PostgreSQL<br/>Users)]
-    TS --> PG_T[(PostgreSQL<br/>Transactions)]
     MON --> MYSQL
 ```
 
@@ -105,7 +111,7 @@ graph LR
 | **No cross-service FKs** | Services own their data. `user_id` in monolith tables is a plain integer, no FK constraint |
 | **Event-driven sync** | `user.created` events trigger MySQL user sync and default account creation |
 | **Shared JWT secret** | All services validate tokens with the same secret. User-service is the sole token issuer |
-| **Event publish after commit** | Avoids publishing events for rolled-back transactions. Trade-off: possible missing events on publish failure |
+| **Transactional outbox** | Domain data and event are written in the same DB transaction, eliminating the dual-write problem. A background worker polls the outbox table with `SELECT … FOR UPDATE SKIP LOCKED` and publishes to RabbitMQ. Guarantees at-least-once delivery |
 | **Denormalized data** | Transaction-service stores `account_name` and `category_name` alongside IDs |
 | **Amount as string in events** | Preserves decimal precision across JSON serialization |
 
@@ -165,6 +171,8 @@ sequenceDiagram
 | **Monolith** | 8000 | MySQL (3306) | Accounts, categories, budgets, goals, analytics, GraphQL gateway |
 | **User Service** | 8001 | PostgreSQL (5433) | User registration, login, JWT issuing (source of truth) |
 | **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions |
+| **User Outbox Worker** | — | PostgreSQL (5433) | Polls `outbox_events`, publishes user events to RabbitMQ |
+| **Transaction Outbox Worker** | — | PostgreSQL (5434) | Polls `outbox_events`, publishes transaction events to RabbitMQ |
 | **UserSync Consumer** | — | MySQL | Sync user data from events to MySQL User table |
 | **AccountCreation Consumer** | — | MySQL | Create default account from user.created events |
 
@@ -210,13 +218,15 @@ finance-tracker/
 ├── services/
 │   ├── user-service/                # User microservice
 │   │   ├── app/                     # FastAPI app (hexagonal)
-│   │   ├── migrations/              # Alembic migrations
+│   │   │   └── workers/             # Outbox publisher worker
+│   │   ├── migrations/              # Alembic migrations (incl. outbox_events)
 │   │   ├── tests/                   # Unit + integration tests
 │   │   └── Dockerfile
 │   │
 │   ├── transaction-service/         # Transaction microservice
 │   │   ├── app/                     # FastAPI app (hexagonal + UoW)
-│   │   ├── migrations/              # Alembic migrations
+│   │   │   └── workers/             # Outbox publisher worker
+│   │   ├── migrations/              # Alembic migrations (incl. outbox_events)
 │   │   ├── tests/                   # Unit + integration tests
 │   │   └── Dockerfile
 │   │
@@ -296,15 +306,26 @@ All protected endpoints require `Authorization: Bearer <jwt-token>`. Tokens are 
 sequenceDiagram
     participant FE as Frontend
     participant US as User Service
+    participant PG as PostgreSQL
+    participant OW as Outbox Worker
     participant RMQ as RabbitMQ
     participant USC as UserSync Consumer
     participant ACC as AccountCreation Consumer
     participant MYSQL as MySQL
 
     FE->>US: POST /register
-    US->>US: Create user in PostgreSQL
-    US->>RMQ: Publish user.created
+    US->>PG: BEGIN tx
+    US->>PG: INSERT user
+    US->>PG: INSERT outbox_events (user.created)
+    US->>PG: COMMIT
     US-->>FE: 201 + JWT token
+
+    loop Poll every 1s
+        OW->>PG: SELECT … FOR UPDATE SKIP LOCKED
+        PG-->>OW: pending events
+        OW->>RMQ: publish user.created
+        OW->>PG: UPDATE status = 'published'
+    end
 
     par Independent consumers
         RMQ->>USC: user.created (queue: monolith.user_sync)
@@ -317,19 +338,30 @@ sequenceDiagram
 
 ### Event Catalog
 
-| Event | Producer | Consumers | Routing Key |
-|-------|----------|-----------|-------------|
-| `UserCreatedEvent` | user-service | UserSyncConsumer, AccountCreationConsumer | `user.created` |
-| `TransactionCreatedEvent` | transaction-service | (future consumers) | `transaction.created` |
-| `TransactionDeletedEvent` | transaction-service | (future consumers) | `transaction.deleted` |
-| `AccountCreatedEvent` | AccountCreationConsumer | (future consumers) | `account.created` |
+| Event | Producer | Published via | Consumers | Routing Key |
+|-------|----------|---------------|-----------|-------------|
+| `UserCreatedEvent` | user-service | Outbox worker | UserSyncConsumer, AccountCreationConsumer | `user.created` |
+| `TransactionCreatedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.created` |
+| `TransactionDeletedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.deleted` |
+| `AccountCreatedEvent` | AccountCreationConsumer | Direct publish | (future consumers) | `account.created` |
+
+### Transactional Outbox (Event Publishing)
+
+Both user-service and transaction-service use the **transactional outbox pattern** to avoid the dual-write problem:
+
+1. Domain data and an `outbox_events` row are written in the **same database transaction**
+2. A standalone **outbox worker** polls the table using `SELECT … FOR UPDATE SKIP LOCKED`
+3. The worker publishes events to RabbitMQ and marks rows as `published`
+4. On publish failure, exponential backoff retries (up to 5 attempts)
+
+This guarantees **at-least-once delivery** — no event is lost even if the application crashes after commit. Downstream consumers must be idempotent.
 
 ### Consumer Reliability
 
 All consumers inherit from `BaseConsumer` with:
 - **Retry**: 3 attempts with exponential backoff
 - **Dead-letter queue**: Failed messages routed to `*.dlq`
-- **Idempotency**: Correlation-ID based deduplication
+- **Idempotency**: Correlation-ID based deduplication (in-memory, planned: Redis/DB-backed)
 - **Independent operation**: Each consumer has its own queue and fails independently
 
 ---
@@ -354,7 +386,7 @@ See `example.env` for the full list with descriptions.
 
 ## Testing
 
-The project has **300+ tests** organized following the testing pyramid:
+The project has **370+ tests** organized following the testing pyramid:
 
 ```
      +----------+
@@ -373,8 +405,8 @@ The project has **300+ tests** organized following the testing pyramid:
 | Service | Unit | Integration | E2E | Total |
 |---------|------|-------------|-----|-------|
 | Monolith | ~231 | 45 | — | ~276 |
-| User Service | 22 | 11 | — | 33 |
-| Transaction Service | 40 | 17 | — | 57 |
+| User Service | 27 | 11 | — | 38 |
+| Transaction Service | 41 | 17 | — | 58 |
 | Cross-service E2E | — | — | ~15 | ~15 |
 
 ### Running Tests
@@ -481,7 +513,7 @@ yarn install && yarn dev
 - [x] Monthly budget system with aggregate model
 - [x] Unit of Work pattern for transactional boundaries
 - [x] Architecture fitness tests (import boundary enforcement)
-- [x] 300+ tests (unit, integration, e2e)
+- [x] 370+ tests (unit, integration, e2e)
 - [x] User-service extraction (PostgreSQL, RabbitMQ events)
 - [x] Transaction-service extraction (PostgreSQL, UoW, CSV import)
 - [x] Event-driven sync (UserSync + AccountCreation consumers)
@@ -492,4 +524,5 @@ yarn install && yarn dev
 - [ ] Analytics service + Elasticsearch
 - [ ] AI categorization service
 - [ ] Frontend routing to microservices (currently partial)
-- [ ] Transactional outbox pattern
+- [x] Transactional outbox pattern (at-least-once delivery, dual-write elimination)
+- [ ] Consumer idempotency store (Redis/DB-backed, replacing in-memory dedup)

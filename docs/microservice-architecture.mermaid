@@ -18,11 +18,18 @@ graph TD
         subgraph userService ["User Service (port 8001)"]
             US["UserService\nRegistration, Login\nJWT Issuing (source of truth)"]
             US_DB[("PostgreSQL\nUsers, Credentials")]
+            US_OB[["outbox_events\n(same DB)"]]
         end
 
         subgraph transactionService ["Transaction Service (port 8002)"]
             TS["TransactionService\nCRUD, CSV Import\nPlanned Transactions\nToken validation only"]
             TS_DB[("PostgreSQL\nTransactions\nPlanned Transactions")]
+            TS_OB[["outbox_events\n(same DB)"]]
+        end
+
+        subgraph outboxWorkers ["Outbox Workers"]
+            UOW["User Outbox Worker\nPolls outbox_events\nSELECT … FOR UPDATE\nSKIP LOCKED"]
+            TOW["Transaction Outbox Worker\nPolls outbox_events\nSELECT … FOR UPDATE\nSKIP LOCKED"]
         end
 
         subgraph consumers ["Event Consumers"]
@@ -65,6 +72,16 @@ graph TD
     US --> US_DB
     TS --> TS_DB
 
+    %% Transactional outbox: service writes to outbox in same transaction
+    US -.->|"INSERT in same\ntransaction"| US_OB
+    TS -.->|"INSERT in same\ntransaction"| TS_OB
+
+    %% Outbox workers poll and publish
+    UOW -->|"SELECT … FOR UPDATE\nSKIP LOCKED"| US_OB
+    UOW -->|"publish"| RMQ
+    TOW -->|"SELECT … FOR UPDATE\nSKIP LOCKED"| TS_OB
+    TOW -->|"publish"| RMQ
+
     %% Consumers -> MySQL
     USC -->|"INSERT User"| MON_DB
     ACC -->|"INSERT Account"| MON_DB
@@ -74,15 +91,9 @@ graph TD
     FE -->|"Bearer token"| MON
     FE -->|"Bearer token"| TS
 
-    %% Event publishing
-    US -->|"user.created"| RMQ
-
     %% Event consuming (two independent queues, same routing key)
     RMQ -->|"user.created\n→ monolith.user_sync"| USC
     RMQ -->|"user.created\n→ monolith.account_creation"| ACC
-
-    %% Transaction events (for future consumers)
-    TS -->|"transaction.created\ntransaction.deleted"| RMQ
 
     %% Account creation saga
     ACC -->|"account.created /\naccount.creation_failed"| RMQ
@@ -94,7 +105,9 @@ graph TD
     classDef current fill:#e1f5fe,stroke:#0288d1
     classDef future fill:#fff3e0,stroke:#f57c00,stroke-dasharray: 5 5
     classDef infra fill:#f3e5f5,stroke:#7b1fa2
+    classDef outbox fill:#e8f5e9,stroke:#388e3c
 
     class MON,US,TS,USC,ACC current
     class BS,AS,CAT,GW future
     class RMQ,MON_DB,US_DB,TS_DB infra
+    class US_OB,TS_OB,UOW,TOW outbox

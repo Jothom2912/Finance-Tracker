@@ -21,7 +21,7 @@ class PostgresUserRepository(IUserRepository):
             password_hash=password_hash,
         )
         self._session.add(model)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(model)
         return self._to_credentials_entity(model)
 

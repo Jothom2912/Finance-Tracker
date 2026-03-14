@@ -41,3 +41,19 @@ class PlannedTransaction:
     next_execution: date
     is_active: bool
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class OutboxEntry:
+    """Read-only snapshot of a pending outbox event."""
+
+    id: str
+    aggregate_type: str
+    aggregate_id: str
+    event_type: str
+    payload_json: str
+    correlation_id: str | None
+    status: str
+    attempts: int
+    next_attempt_at: datetime
+    created_at: datetime

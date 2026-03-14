@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app import dependencies
 from app.adapters.inbound.rest_api import planned_router, transaction_router
-from app.adapters.outbound.rabbitmq_publisher import RabbitMQPublisher
 from app.config import settings
 from app.domain.exceptions import (
     CSVImportException,
@@ -21,22 +17,12 @@ from app.domain.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    publisher = RabbitMQPublisher(settings.RABBITMQ_URL)
-    await publisher.connect()
-    dependencies._publisher = publisher
-    logger.info("Transaction-service started")
-    yield
-    await publisher.close()
-    logger.info("Transaction-service stopped")
-
-
 app = FastAPI(
     title="Transaction Service",
-    version="0.1.0",
-    lifespan=lifespan,
+    version="0.2.0",
+    description="Handles financial transactions and planned transactions. "
+    "Domain events are persisted via transactional outbox and "
+    "published by a separate worker process.",
 )
 
 app.add_middleware(

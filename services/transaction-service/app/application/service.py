@@ -21,12 +21,7 @@ from app.application.dto import (
     UpdatePlannedTransactionDTO,
 )
 from app.application.ports.inbound import ITransactionService
-from app.application.ports.outbound import (
-    IEventPublisher,
-    IPlannedTransactionRepository,
-    ITransactionRepository,
-    IUnitOfWork,
-)
+from app.application.ports.outbound import IUnitOfWork
 from app.domain.entities import Transaction, TransactionType
 from app.domain.exceptions import (
     CSVImportException,
@@ -46,17 +41,16 @@ _CSV_REQUIRED_COLUMNS = {
 
 
 class TransactionService(ITransactionService):
-    def __init__(
-        self,
-        transaction_repo: ITransactionRepository,
-        planned_repo: IPlannedTransactionRepository,
-        uow: IUnitOfWork,
-        event_publisher: IEventPublisher,
-    ) -> None:
-        self._transaction_repo = transaction_repo
-        self._planned_repo = planned_repo
+    """Application service for financial transactions.
+
+    Uses a Unit of Work that exposes transaction/planned repos and
+    a transactional outbox.  Domain writes and event-intent rows
+    are committed atomically — the outbox publisher worker handles
+    delivery to RabbitMQ independently.
+    """
+
+    def __init__(self, uow: IUnitOfWork) -> None:
         self._uow = uow
-        self._event_publisher = event_publisher
 
     # ── Transactions ────────────────────────────────────────────────
 
@@ -64,7 +58,7 @@ class TransactionService(ITransactionService):
         self, user_id: int, dto: CreateTransactionDTO
     ) -> TransactionResponse:
         async with self._uow:
-            transaction = await self._transaction_repo.create(
+            transaction = await self._uow.transactions.create(
                 user_id=user_id,
                 account_id=dto.account_id,
                 account_name=dto.account_name,
@@ -75,28 +69,28 @@ class TransactionService(ITransactionService):
                 description=dto.description,
                 tx_date=dto.date,
             )
-            await self._uow.commit()
 
-        # Publish AFTER commit — trade-off: committed tx without event
-        # is safer than event for a rolled-back tx.
-        # Production improvement: transactional outbox pattern.
-        await self._event_publisher.publish(
-            TransactionCreatedEvent(
-                transaction_id=transaction.id,
-                account_id=transaction.account_id,
-                user_id=user_id,
-                amount=str(transaction.amount),
-                category=transaction.category_name or "",
-                description=transaction.description or "",
+            await self._uow.outbox.add(
+                event=TransactionCreatedEvent(
+                    transaction_id=transaction.id,
+                    account_id=transaction.account_id,
+                    user_id=user_id,
+                    amount=str(transaction.amount),
+                    category=transaction.category_name or "",
+                    description=transaction.description or "",
+                ),
+                aggregate_type="transaction",
+                aggregate_id=str(transaction.id),
             )
-        )
+
+            await self._uow.commit()
 
         return self._to_response(transaction)
 
     async def get_transaction(
         self, transaction_id: int, user_id: int
     ) -> TransactionResponse:
-        transaction = await self._transaction_repo.find_by_id(
+        transaction = await self._uow.transactions.find_by_id(
             transaction_id, user_id
         )
         if transaction is None:
@@ -107,21 +101,21 @@ class TransactionService(ITransactionService):
         self, user_id: int, filters: TransactionFiltersDTO
     ) -> list[TransactionResponse]:
         if filters.account_id is not None:
-            results = await self._transaction_repo.find_by_account(
+            results = await self._uow.transactions.find_by_account(
                 filters.account_id, user_id
             )
         elif filters.category_id is not None:
-            results = await self._transaction_repo.find_by_category(
+            results = await self._uow.transactions.find_by_category(
                 filters.category_id, user_id
             )
         elif (
             filters.start_date is not None and filters.end_date is not None
         ):
-            results = await self._transaction_repo.find_by_date_range(
+            results = await self._uow.transactions.find_by_date_range(
                 user_id, filters.start_date, filters.end_date
             )
         else:
-            results = await self._transaction_repo.find_by_user(
+            results = await self._uow.transactions.find_by_user(
                 user_id, skip=filters.skip, limit=filters.limit
             )
 
@@ -137,30 +131,31 @@ class TransactionService(ITransactionService):
     async def delete_transaction(
         self, transaction_id: int, user_id: int
     ) -> None:
-        # NOTE: In production, consider reversal transactions instead
-        # of hard deletes for full audit trail.
-        transaction = await self._transaction_repo.find_by_id(
+        transaction = await self._uow.transactions.find_by_id(
             transaction_id, user_id
         )
         if transaction is None:
             raise TransactionNotFoundException(transaction_id)
 
         async with self._uow:
-            deleted = await self._transaction_repo.delete(
+            deleted = await self._uow.transactions.delete(
                 transaction_id, user_id
             )
             if not deleted:
                 raise TransactionNotFoundException(transaction_id)
-            await self._uow.commit()
 
-        await self._event_publisher.publish(
-            TransactionDeletedEvent(
-                transaction_id=transaction_id,
-                account_id=transaction.account_id,
-                user_id=user_id,
-                amount=str(transaction.amount),
+            await self._uow.outbox.add(
+                event=TransactionDeletedEvent(
+                    transaction_id=transaction_id,
+                    account_id=transaction.account_id,
+                    user_id=user_id,
+                    amount=str(transaction.amount),
+                ),
+                aggregate_type="transaction",
+                aggregate_id=str(transaction_id),
             )
-        )
+
+            await self._uow.commit()
 
     async def import_csv(
         self, user_id: int, csv_content: str
@@ -226,20 +221,26 @@ class TransactionService(ITransactionService):
             )
 
         async with self._uow:
-            created = await self._transaction_repo.bulk_create(valid_rows)
-            await self._uow.commit()
+            created = await self._uow.transactions.bulk_create(valid_rows)
 
-        for tx in created:
-            await self._event_publisher.publish(
-                TransactionCreatedEvent(
-                    transaction_id=tx.id,
-                    account_id=tx.account_id,
-                    user_id=user_id,
-                    amount=str(tx.amount),
-                    category=tx.category_name or "",
-                    description=tx.description or "",
+            outbox_entries = [
+                (
+                    TransactionCreatedEvent(
+                        transaction_id=tx.id,
+                        account_id=tx.account_id,
+                        user_id=user_id,
+                        amount=str(tx.amount),
+                        category=tx.category_name or "",
+                        description=tx.description or "",
+                    ),
+                    "transaction",
+                    str(tx.id),
                 )
-            )
+                for tx in created
+            ]
+            await self._uow.outbox.add_batch(outbox_entries)
+
+            await self._uow.commit()
 
         return CSVImportResultDTO(
             imported=len(created), skipped=skipped, errors=errors
@@ -251,7 +252,7 @@ class TransactionService(ITransactionService):
         self, user_id: int, dto: CreatePlannedTransactionDTO
     ) -> PlannedTransactionResponse:
         async with self._uow:
-            planned = await self._planned_repo.create(
+            planned = await self._uow.planned.create(
                 user_id=user_id,
                 account_id=dto.account_id,
                 account_name=dto.account_name,
@@ -270,9 +271,9 @@ class TransactionService(ITransactionService):
         self, user_id: int, active_only: bool = True
     ) -> list[PlannedTransactionResponse]:
         if active_only:
-            results = await self._planned_repo.find_active(user_id)
+            results = await self._uow.planned.find_active(user_id)
         else:
-            results = await self._planned_repo.find_by_user(user_id)
+            results = await self._uow.planned.find_by_user(user_id)
         return [self._to_planned_response(p) for p in results]
 
     async def update_planned(
@@ -282,14 +283,14 @@ class TransactionService(ITransactionService):
         dto: UpdatePlannedTransactionDTO,
     ) -> PlannedTransactionResponse:
         async with self._uow:
-            existing = await self._planned_repo.find_by_id(
+            existing = await self._uow.planned.find_by_id(
                 planned_id, user_id
             )
             if existing is None:
                 raise PlannedTransactionNotFoundException(planned_id)
 
             fields = dto.model_dump(exclude_unset=True)
-            updated = await self._planned_repo.update(
+            updated = await self._uow.planned.update(
                 planned_id, user_id, **fields
             )
             await self._uow.commit()
@@ -299,12 +300,12 @@ class TransactionService(ITransactionService):
         self, planned_id: int, user_id: int
     ) -> None:
         async with self._uow:
-            existing = await self._planned_repo.find_by_id(
+            existing = await self._uow.planned.find_by_id(
                 planned_id, user_id
             )
             if existing is None:
                 raise PlannedTransactionNotFoundException(planned_id)
-            await self._planned_repo.deactivate(planned_id, user_id)
+            await self._uow.planned.deactivate(planned_id, user_id)
             await self._uow.commit()
 
     # ── Mapping helpers ─────────────────────────────────────────────

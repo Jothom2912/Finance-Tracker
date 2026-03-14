@@ -13,7 +13,7 @@ from app.application.dto import (
     UserResponse,
 )
 from app.application.ports.inbound import IUserService
-from app.application.ports.outbound import IEventPublisher, IUserRepository
+from app.application.ports.outbound import IUnitOfWork
 from app.domain.exceptions import (
     InvalidCredentialsException,
     UserAlreadyExistsException,
@@ -26,47 +26,53 @@ logger = logging.getLogger(__name__)
 class UserService(IUserService):
     """Application service implementing user use cases.
 
-    All infrastructure dependencies are constructor-injected as ports
-    or pure callables so the service layer stays free of framework
-    and library imports.
+    Uses a Unit of Work that exposes both the user repository and
+    the transactional outbox.  Domain writes and outbox inserts
+    happen in the same database transaction — eliminating the
+    dual-write problem between DB and message broker.
     """
 
     def __init__(
         self,
-        repository: IUserRepository,
-        event_publisher: IEventPublisher,
+        uow: IUnitOfWork,
         hash_password: Callable[[str], str],
         verify_password: Callable[[str, str], bool],
         create_token: Callable[[int], str],
     ) -> None:
-        self._repository = repository
-        self._event_publisher = event_publisher
+        self._uow = uow
         self._hash_password = hash_password
         self._verify_password = verify_password
         self._create_token = create_token
 
     async def register(self, dto: RegisterDTO) -> UserResponse:
-        if await self._repository.find_by_email(dto.email):
-            raise UserAlreadyExistsException("email", dto.email)
+        async with self._uow:
+            if await self._uow.users.find_by_email(dto.email):
+                raise UserAlreadyExistsException("email", dto.email)
 
-        if await self._repository.find_by_username(dto.username):
-            raise UserAlreadyExistsException("username", dto.username)
+            if await self._uow.users.find_by_username(dto.username):
+                raise UserAlreadyExistsException("username", dto.username)
 
-        password_hash = self._hash_password(dto.password)
+            password_hash = self._hash_password(dto.password)
 
-        user = await self._repository.create(
-            username=dto.username,
-            email=dto.email,
-            password_hash=password_hash,
-        )
+            user = await self._uow.users.create(
+                username=dto.username,
+                email=dto.email,
+                password_hash=password_hash,
+            )
 
-        event = UserCreatedEvent(
-            user_id=user.id,
-            email=user.email,
-            username=user.username,
-        )
-        await self._event_publisher.publish(event)
-        logger.info("Published UserCreatedEvent for user %s", user.id)
+            await self._uow.outbox.add(
+                event=UserCreatedEvent(
+                    user_id=user.id,
+                    email=user.email,
+                    username=user.username,
+                ),
+                aggregate_type="user",
+                aggregate_id=str(user.id),
+            )
+
+            await self._uow.commit()
+
+        logger.info("Registered user %s (outbox event queued)", user.id)
 
         return UserResponse(
             id=user.id,
@@ -78,9 +84,9 @@ class UserService(IUserService):
     async def login(self, dto: LoginDTO) -> TokenResponse:
         identifier = dto.username_or_email
         if "@" in identifier:
-            user = await self._repository.find_by_email(identifier)
+            user = await self._uow.users.find_by_email(identifier)
         else:
-            user = await self._repository.find_by_username(identifier)
+            user = await self._uow.users.find_by_username(identifier)
 
         if user is None:
             raise InvalidCredentialsException()
@@ -97,7 +103,7 @@ class UserService(IUserService):
         )
 
     async def get_user(self, user_id: int) -> UserResponse:
-        user = await self._repository.find_by_id(user_id)
+        user = await self._uow.users.find_by_id(user_id)
         if user is None:
             raise UserNotFoundException(user_id)
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from typing import Self
 
 from contracts.base import BaseEvent
 
 from app.domain.entities import (
+    OutboxEntry,
     PlannedTransaction,
     Transaction,
     TransactionType,
@@ -104,9 +106,51 @@ class IPlannedTransactionRepository(ABC):
     ) -> bool: ...
 
 
-class IUnitOfWork(ABC):
+class IOutboxRepository(ABC):
+    """Port for the transactional outbox.
+
+    ``add`` / ``add_batch`` are used by the application service inside
+    a UoW transaction.  The remaining methods are used by the outbox
+    publisher worker.
+    """
+
     @abstractmethod
-    async def __aenter__(self) -> IUnitOfWork: ...
+    async def add(
+        self,
+        event: BaseEvent,
+        aggregate_type: str,
+        aggregate_id: str,
+    ) -> None: ...
+
+    @abstractmethod
+    async def add_batch(
+        self,
+        entries: list[tuple[BaseEvent, str, str]],
+    ) -> None: ...
+
+    @abstractmethod
+    async def fetch_pending(
+        self, batch_size: int = 10
+    ) -> list[OutboxEntry]: ...
+
+    @abstractmethod
+    async def mark_published(self, event_id: str) -> None: ...
+
+    @abstractmethod
+    async def mark_failed(
+        self, event_id: str, next_attempt_at: datetime
+    ) -> None: ...
+
+
+class IUnitOfWork(ABC):
+    """Exposes all repositories sharing one database transaction."""
+
+    transactions: ITransactionRepository
+    planned: IPlannedTransactionRepository
+    outbox: IOutboxRepository
+
+    @abstractmethod
+    async def __aenter__(self) -> Self: ...
 
     @abstractmethod
     async def __aexit__(
@@ -124,5 +168,7 @@ class IUnitOfWork(ABC):
 
 
 class IEventPublisher(ABC):
+    """Used by the outbox publisher worker only."""
+
     @abstractmethod
     async def publish(self, event: BaseEvent) -> None: ...
