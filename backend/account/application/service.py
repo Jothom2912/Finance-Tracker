@@ -5,23 +5,27 @@ Orchestrates use cases using domain entities and ports."""
 import logging
 from typing import Optional
 
+from backend.account.application.dto import (
+    Account as AccountSchema,
+)
+from backend.account.application.dto import (
+    AccountBase,
+    AccountCreate,
+    AccountGroupsCreate,
+)
+from backend.account.application.dto import (
+    AccountGroups as AccountGroupSchema,
+)
 from backend.account.application.ports.inbound import IAccountService
 from backend.account.application.ports.outbound import (
-    IAccountRepository,
     IAccountGroupRepository,
+    IAccountRepository,
     IUserPort,
 )
 from backend.account.domain.entities import Account, AccountGroup
 from backend.account.domain.exceptions import (
-    UserNotFoundForAccount,
     InvalidUserInGroup,
-)
-from backend.account.application.dto import (
-    AccountCreate,
-    AccountBase,
-    Account as AccountSchema,
-    AccountGroupsCreate,
-    AccountGroups as AccountGroupSchema,
+    UserNotFoundForAccount,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,9 +72,7 @@ class AccountService(IAccountService):
         created = self._account_repo.create(account)
         return self._account_to_dto(created)
 
-    def update_account(
-        self, account_id: int, data: AccountBase
-    ) -> Optional[AccountSchema]:
+    def update_account(self, account_id: int, data: AccountBase) -> Optional[AccountSchema]:
         existing = self._account_repo.get_by_id(account_id)
         if not existing:
             return None
@@ -95,9 +97,7 @@ class AccountService(IAccountService):
             return None
         return self._group_to_dto(group)
 
-    def list_groups(
-        self, skip: int = 0, limit: int = 100
-    ) -> list[AccountGroupSchema]:
+    def list_groups(self, skip: int = 0, limit: int = 100) -> list[AccountGroupSchema]:
         groups = self._group_repo.get_all(skip=skip, limit=limit)
         return [self._group_to_dto(g) for g in groups]
 
@@ -120,9 +120,7 @@ class AccountService(IAccountService):
         created = self._group_repo.create(group, user_ids)
         return self._group_to_dto(created)
 
-    def update_group(
-        self, group_id: int, data: AccountGroupsCreate
-    ) -> Optional[AccountGroupSchema]:
+    def update_group(self, group_id: int, data: AccountGroupsCreate) -> Optional[AccountGroupSchema]:
         existing = self._group_repo.get_by_id(group_id)
         if not existing:
             return None
@@ -162,7 +160,5 @@ class AccountService(IAccountService):
             idAccountGroups=group.id,
             name=group.name,
             max_users=group.max_users,
-            users=[
-                {"idUser": u.id, "username": u.username} for u in group.users
-            ],
+            users=[{"idUser": u.id, "username": u.username} for u in group.users],
         )

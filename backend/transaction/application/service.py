@@ -2,6 +2,7 @@
 Application service for Transaction bounded context.
 Orchestrates use cases using domain entities and ports.
 """
+
 import io
 import logging
 from datetime import date, datetime
@@ -10,8 +11,7 @@ from typing import Optional
 import pandas as pd
 
 from backend.services.categorization import assign_category_automatically
-from backend.transaction.domain.entities import TransactionType
-
+from backend.shared.ports.unit_of_work import IUnitOfWork
 from backend.transaction.application.dto import (
     PlannedTransactionCreateDTO,
     PlannedTransactionResponseDTO,
@@ -20,13 +20,12 @@ from backend.transaction.application.dto import (
     TransactionResponseDTO,
 )
 from backend.transaction.application.ports.inbound import ITransactionService
-from backend.shared.ports.unit_of_work import IUnitOfWork
 from backend.transaction.application.ports.outbound import (
     ICategoryPort,
     IPlannedTransactionRepository,
     ITransactionRepository,
 )
-from backend.transaction.domain.entities import PlannedTransaction, Transaction
+from backend.transaction.domain.entities import PlannedTransaction, Transaction, TransactionType
 from backend.transaction.domain.exceptions import (
     AccountRequired,
     CategoryNotFound,
@@ -59,9 +58,7 @@ class TransactionService(ITransactionService):
     # Query use cases
     # ------------------------------------------------------------------
 
-    def get_transaction(
-        self, transaction_id: int
-    ) -> Optional[TransactionResponseDTO]:
+    def get_transaction(self, transaction_id: int) -> Optional[TransactionResponseDTO]:
         entity = self._transaction_repo.get_by_id(transaction_id)
         if not entity:
             return None
@@ -106,9 +103,7 @@ class TransactionService(ITransactionService):
     # Command use cases
     # ------------------------------------------------------------------
 
-    def create_transaction(
-        self, dto: TransactionCreateDTO
-    ) -> TransactionResponseDTO:
+    def create_transaction(self, dto: TransactionCreateDTO) -> TransactionResponseDTO:
         logger.debug("create_transaction: input = %s", dto.model_dump())
 
         category = self._category_port.get_by_id(dto.category_id)
@@ -140,9 +135,7 @@ class TransactionService(ITransactionService):
         logger.debug("create_transaction: Oprettet med ID: %s", created.id)
         return self._to_dto(created)
 
-    def update_transaction(
-        self, transaction_id: int, dto: TransactionCreateDTO
-    ) -> Optional[TransactionResponseDTO]:
+    def update_transaction(self, transaction_id: int, dto: TransactionCreateDTO) -> Optional[TransactionResponseDTO]:
         existing = self._transaction_repo.get_by_id(transaction_id)
         if not existing:
             return None
@@ -184,9 +177,7 @@ class TransactionService(ITransactionService):
     # Planned Transactions
     # ------------------------------------------------------------------
 
-    def get_planned_transaction(
-        self, pt_id: int
-    ) -> Optional[PlannedTransactionResponseDTO]:
+    def get_planned_transaction(self, pt_id: int) -> Optional[PlannedTransactionResponseDTO]:
         if not self._planned_transaction_repo:
             raise PlannedTransactionRepositoryNotConfigured()
         entity = self._planned_transaction_repo.get_by_id(pt_id)
@@ -194,17 +185,13 @@ class TransactionService(ITransactionService):
             return None
         return self._to_planned_dto(entity)
 
-    def list_planned_transactions(
-        self, skip: int = 0, limit: int = 100
-    ) -> list[PlannedTransactionResponseDTO]:
+    def list_planned_transactions(self, skip: int = 0, limit: int = 100) -> list[PlannedTransactionResponseDTO]:
         if not self._planned_transaction_repo:
             raise PlannedTransactionRepositoryNotConfigured()
         entities = self._planned_transaction_repo.get_all(skip=skip, limit=limit)
         return [self._to_planned_dto(e) for e in entities]
 
-    def create_planned_transaction(
-        self, dto: PlannedTransactionCreateDTO
-    ) -> PlannedTransactionResponseDTO:
+    def create_planned_transaction(self, dto: PlannedTransactionCreateDTO) -> PlannedTransactionResponseDTO:
         if not self._planned_transaction_repo:
             raise PlannedTransactionRepositoryNotConfigured()
 
@@ -249,40 +236,25 @@ class TransactionService(ITransactionService):
     # CSV Import
     # ------------------------------------------------------------------
 
-    def import_from_csv(
-        self, file_contents: bytes, account_id: int
-    ) -> list[TransactionResponseDTO]:
+    def import_from_csv(self, file_contents: bytes, account_id: int) -> list[TransactionResponseDTO]:
         csv_file = io.StringIO(file_contents.decode("utf-8"))
 
-        df = pd.read_csv(
-            csv_file, sep=";", decimal=",", thousands=".", dtype={"Beløb": str}
-        )
+        df = pd.read_csv(csv_file, sep=";", decimal=",", thousands=".", dtype={"Beløb": str})
 
         df = self._parse_csv_dates(df)
         df = df.dropna(subset=["date"])
 
         if df.empty:
-            raise ValueError(
-                "Ingen gyldige transaktioner fundet i CSV efter date parsing"
-            )
+            raise ValueError("Ingen gyldige transaktioner fundet i CSV efter date parsing")
 
         df["date"] = df["date"].dt.date
 
         # Parse amount
-        df["amount"] = (
-            df["Beløb"]
-            .str.replace(".", "", regex=False)
-            .str.replace(",", ".", regex=False)
-            .astype(float)
-        )
+        df["amount"] = df["Beløb"].str.replace(".", "", regex=False).str.replace(",", ".", regex=False).astype(float)
 
         # Get categories and build name->id lookup
         categories = self._category_port.get_all()
-        category_name_to_id: dict[str, int] = {
-            cat.name.lower(): cat.id
-            for cat in categories
-            if cat.name
-        }
+        category_name_to_id: dict[str, int] = {cat.name.lower(): cat.id for cat in categories if cat.name}
 
         # Create "Anden" category if missing
         if "anden" not in category_name_to_id:
@@ -293,9 +265,7 @@ class TransactionService(ITransactionService):
                 )
                 category_name_to_id["anden"] = default_cat.id
             except Exception as e:
-                raise ValueError(
-                    f"Kunne ikke oprette standardkategorien 'Anden': {e!s}"
-                )
+                raise ValueError(f"Kunne ikke oprette standardkategorien 'Anden': {e!s}")
 
         created_transactions: list[TransactionResponseDTO] = []
 
@@ -311,9 +281,7 @@ class TransactionService(ITransactionService):
                             str(row.get("Navn", "")),
                             str(row.get("Beskrivelse", "")),
                         ]
-                        cleaned_parts = [
-                            p for p in parts if p and p.lower() != "nan" and p.strip()
-                        ]
+                        cleaned_parts = [p for p in parts if p and p.lower() != "nan" and p.strip()]
                         full_description = " ".join(cleaned_parts).strip()
                         if not full_description:
                             full_description = "Ukendt beskrivelse"
@@ -324,11 +292,7 @@ class TransactionService(ITransactionService):
                             category_name_to_id=category_name_to_id,
                         )
 
-                        tx_type = (
-                            TransactionType.income.value
-                            if amount >= 0
-                            else TransactionType.expense.value
-                        )
+                        tx_type = TransactionType.income.value if amount >= 0 else TransactionType.expense.value
 
                         entity = Transaction(
                             id=None,
@@ -345,9 +309,7 @@ class TransactionService(ITransactionService):
                         created_transactions.append(self._to_dto(created))
 
                     except Exception as row_error:
-                        logger.warning(
-                            "Fejl ved import af række %s: %s", idx, row_error
-                        )
+                        logger.warning("Fejl ved import af række %s: %s", idx, row_error)
                         continue
 
                 if not created_transactions:
@@ -422,29 +384,19 @@ class TransactionService(ITransactionService):
     def _parse_csv_dates(df: "pd.DataFrame") -> "pd.DataFrame":
         """Parse date column from CSV with different formats."""
         if "Bogføringsdato" in df.columns:
-            df["date"] = pd.to_datetime(
-                df["Bogføringsdato"], errors="coerce", format="%d-%m-%Y"
-            )
+            df["date"] = pd.to_datetime(df["Bogføringsdato"], errors="coerce", format="%d-%m-%Y")
             if df["date"].isna().all():
-                df["date"] = pd.to_datetime(
-                    df["Bogføringsdato"], errors="coerce", format="%d/%m/%Y"
-                )
+                df["date"] = pd.to_datetime(df["Bogføringsdato"], errors="coerce", format="%d/%m/%Y")
             if df["date"].isna().all():
-                df["date"] = pd.to_datetime(
-                    df["Bogføringsdato"], errors="coerce", format="%Y/%m/%d"
-                )
+                df["date"] = pd.to_datetime(df["Bogføringsdato"], errors="coerce", format="%Y/%m/%d")
             if df["date"].isna().all():
                 df["date"] = pd.to_datetime(df["Bogføringsdato"], errors="coerce")
         elif "Dato" in df.columns:
-            df["date"] = pd.to_datetime(
-                df["Dato"], errors="coerce", format="%d-%m-%Y"
-            )
+            df["date"] = pd.to_datetime(df["Dato"], errors="coerce", format="%d-%m-%Y")
             if df["date"].isna().all():
                 df["date"] = pd.to_datetime(df["Dato"], errors="coerce")
         elif "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
         else:
-            raise ValueError(
-                "CSV mangler 'Bogføringsdato', 'Dato' eller 'date' kolonne"
-            )
+            raise ValueError("CSV mangler 'Bogføringsdato', 'Dato' eller 'date' kolonne")
         return df

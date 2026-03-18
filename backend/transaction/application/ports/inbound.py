@@ -2,6 +2,7 @@
 Inbound ports (driving adapters) for Transaction bounded context.
 Defines the service interface for external consumers.
 """
+
 from abc import ABC, abstractmethod
 from datetime import date
 from typing import Optional
@@ -38,15 +39,11 @@ class ITransactionService(ABC):
         pass
 
     @abstractmethod
-    def create_transaction(
-        self, dto: TransactionCreateDTO
-    ) -> TransactionResponseDTO:
+    def create_transaction(self, dto: TransactionCreateDTO) -> TransactionResponseDTO:
         pass
 
     @abstractmethod
-    def update_transaction(
-        self, transaction_id: int, dto: TransactionCreateDTO
-    ) -> Optional[TransactionResponseDTO]:
+    def update_transaction(self, transaction_id: int, dto: TransactionCreateDTO) -> Optional[TransactionResponseDTO]:
         pass
 
     @abstractmethod
@@ -54,27 +51,19 @@ class ITransactionService(ABC):
         pass
 
     @abstractmethod
-    def import_from_csv(
-        self, file_contents: bytes, account_id: int
-    ) -> list[TransactionResponseDTO]:
+    def import_from_csv(self, file_contents: bytes, account_id: int) -> list[TransactionResponseDTO]:
         pass
 
     @abstractmethod
-    def get_planned_transaction(
-        self, pt_id: int
-    ) -> Optional[PlannedTransactionResponseDTO]:
+    def get_planned_transaction(self, pt_id: int) -> Optional[PlannedTransactionResponseDTO]:
         pass
 
     @abstractmethod
-    def list_planned_transactions(
-        self, skip: int = 0, limit: int = 100
-    ) -> list[PlannedTransactionResponseDTO]:
+    def list_planned_transactions(self, skip: int = 0, limit: int = 100) -> list[PlannedTransactionResponseDTO]:
         pass
 
     @abstractmethod
-    def create_planned_transaction(
-        self, dto: PlannedTransactionCreateDTO
-    ) -> PlannedTransactionResponseDTO:
+    def create_planned_transaction(self, dto: PlannedTransactionCreateDTO) -> PlannedTransactionResponseDTO:
         pass
 
     @abstractmethod

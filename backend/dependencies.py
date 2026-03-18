@@ -18,66 +18,56 @@ Usage in routes:
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from backend.config import ANALYTICS_DB, DatabaseType
-from backend.database.mysql import get_db
-from backend.shared.adapters.mysql_unit_of_work import MySQLUnitOfWork
-
-# Hexagonal User domain
-from backend.user.application.service import UserService as HexUserService
-from backend.user.adapters.outbound.mysql_user_repository import (
-    MySQLUserRepository as HexMySQLUserRepository,
-)
-from backend.user.adapters.outbound.account_adapter import (
-    MySQLAccountAdapter as UserAccountAdapter,
-)
-
-# Hexagonal Goal domain
-from backend.goal.application.service import GoalService as HexGoalService
-from backend.goal.adapters.outbound.mysql_goal_repository import (
-    MySQLGoalRepository as HexMySQLGoalRepository,
-)
-from backend.goal.adapters.outbound.account_adapter import (
-    MySQLAccountAdapter as GoalAccountAdapter,
-)
-
-# Hexagonal Account domain
-from backend.account.application.service import AccountService as HexAccountService
-from backend.account.adapters.outbound.mysql_account_repository import (
-    MySQLAccountRepository as HexMySQLAccountRepository,
-)
 from backend.account.adapters.outbound.mysql_account_group_repository import (
     MySQLAccountGroupRepository as HexMySQLAccountGroupRepository,
 )
+from backend.account.adapters.outbound.mysql_account_repository import (
+    MySQLAccountRepository as HexMySQLAccountRepository,
+)
 from backend.account.adapters.outbound.user_adapter import MySQLUserAdapter
 
-# Hexagonal Transaction domain
-from backend.transaction.application.service import TransactionService
-from backend.transaction.adapters.outbound.mysql_repository import (
-    MySQLTransactionRepository,
-    MySQLPlannedTransactionRepository,
+# Hexagonal Account domain
+from backend.account.application.service import AccountService as HexAccountService
+from backend.analytics.adapters.outbound.elasticsearch_repository import (
+    ElasticsearchAnalyticsReadRepository,
 )
-from backend.transaction.adapters.outbound.mysql_category_adapter import (
-    MySQLCategoryAdapter as TransactionCategoryAdapter,
+from backend.analytics.adapters.outbound.mysql_repository import (
+    MySQLAnalyticsReadRepository,
+)
+from backend.analytics.adapters.outbound.neo4j_repository import (
+    Neo4jAnalyticsReadRepository,
 )
 
-# Hexagonal Category domain
-from backend.category.application.service import CategoryService
-from backend.category.adapters.outbound.mysql_repository import (
-    MySQLCategoryRepository as HexMySQLCategoryRepository,
+# Hexagonal Analytics domain
+from backend.analytics.application.service import AnalyticsService
+from backend.budget.adapters.outbound.category_adapter import (
+    MySQLCategoryAdapter as BudgetCategoryAdapter,
+)
+from backend.budget.adapters.outbound.mysql_repository import (
+    MySQLBudgetRepository as HexMySQLBudgetRepository,
 )
 
 # Hexagonal Budget domain
 from backend.budget.application.service import BudgetService as HexBudgetService
-from backend.budget.adapters.outbound.mysql_repository import (
-    MySQLBudgetRepository as HexMySQLBudgetRepository,
-)
-from backend.budget.adapters.outbound.category_adapter import (
-    MySQLCategoryAdapter as BudgetCategoryAdapter,
+from backend.category.adapters.outbound.mysql_repository import (
+    MySQLCategoryRepository as HexMySQLCategoryRepository,
 )
 
-# Hexagonal MonthlyBudget domain
-from backend.monthly_budget.application.service import (
-    MonthlyBudgetService,
+# Hexagonal Category domain
+from backend.category.application.service import CategoryService
+from backend.config import ANALYTICS_DB, DatabaseType
+from backend.database.mysql import get_db
+from backend.goal.adapters.outbound.account_adapter import (
+    MySQLAccountAdapter as GoalAccountAdapter,
+)
+from backend.goal.adapters.outbound.mysql_goal_repository import (
+    MySQLGoalRepository as HexMySQLGoalRepository,
+)
+
+# Hexagonal Goal domain
+from backend.goal.application.service import GoalService as HexGoalService
+from backend.monthly_budget.adapters.outbound.category_adapter import (
+    MySQLCategoryAdapter as MonthlyBudgetCategoryAdapter,
 )
 from backend.monthly_budget.adapters.outbound.mysql_repository import (
     MySQLMonthlyBudgetRepository,
@@ -85,21 +75,31 @@ from backend.monthly_budget.adapters.outbound.mysql_repository import (
 from backend.monthly_budget.adapters.outbound.transaction_adapter import (
     MySQLTransactionAdapter as MonthlyBudgetTransactionAdapter,
 )
-from backend.monthly_budget.adapters.outbound.category_adapter import (
-    MySQLCategoryAdapter as MonthlyBudgetCategoryAdapter,
+
+# Hexagonal MonthlyBudget domain
+from backend.monthly_budget.application.service import (
+    MonthlyBudgetService,
+)
+from backend.shared.adapters.mysql_unit_of_work import MySQLUnitOfWork
+from backend.transaction.adapters.outbound.mysql_category_adapter import (
+    MySQLCategoryAdapter as TransactionCategoryAdapter,
+)
+from backend.transaction.adapters.outbound.mysql_repository import (
+    MySQLPlannedTransactionRepository,
+    MySQLTransactionRepository,
 )
 
-# Hexagonal Analytics domain
-from backend.analytics.application.service import AnalyticsService
-from backend.analytics.adapters.outbound.mysql_repository import (
-    MySQLAnalyticsReadRepository,
+# Hexagonal Transaction domain
+from backend.transaction.application.service import TransactionService
+from backend.user.adapters.outbound.account_adapter import (
+    MySQLAccountAdapter as UserAccountAdapter,
 )
-from backend.analytics.adapters.outbound.elasticsearch_repository import (
-    ElasticsearchAnalyticsReadRepository,
+from backend.user.adapters.outbound.mysql_user_repository import (
+    MySQLUserRepository as HexMySQLUserRepository,
 )
-from backend.analytics.adapters.outbound.neo4j_repository import (
-    Neo4jAnalyticsReadRepository,
-)
+
+# Hexagonal User domain
+from backend.user.application.service import UserService as HexUserService
 
 
 def get_transaction_service(

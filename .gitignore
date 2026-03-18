@@ -26,6 +26,16 @@ dumps/
 
 # Test caches
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Ruff
+.ruff_cache/
+
+# Build artifacts
+*.egg-info/
+dist/
 
 # IDE
 .vscode/

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator, EmailStr, ConfigDict
-from datetime import datetime
-from typing import Optional, List
 import re
+from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
 from backend.validation_boundaries import USER_BVA
+
 
 # Forward references for relationships
 class AccountBase(BaseModel):
@@ -15,25 +18,24 @@ class AccountBase(BaseModel):
     saldo: float
     model_config = ConfigDict(from_attributes=True)
 
+
 class AccountGroupsBase(BaseModel):
     idAccountGroups: int
     name: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
+
 # --- Base Schema ---
 class UserBase(BaseModel):
     username: str = Field(
         ...,
-        min_length=USER_BVA.username_min_length,      # 3 chars
-        max_length=USER_BVA.username_max_length,      # 20 chars
-        description="Username (3-20 characters, alphanumeric + underscore)"
+        min_length=USER_BVA.username_min_length,  # 3 chars
+        max_length=USER_BVA.username_max_length,  # 20 chars
+        description="Username (3-20 characters, alphanumeric + underscore)",
     )
-    email: EmailStr = Field(
-        ...,
-        description="Valid email address"
-    )
+    email: EmailStr = Field(..., description="Valid email address")
 
-    @field_validator('username')
+    @field_validator("username")
     @classmethod
     def validate_username_format(cls, v: str) -> str:
         """BVA: Username må kun indeholde alphanumeriske tegn og underscore"""
@@ -41,7 +43,7 @@ class UserBase(BaseModel):
             raise ValueError("Username må kun indeholde bogstaver, tal og underscore (_)")
         return v
 
-    @field_validator('username')
+    @field_validator("username")
     @classmethod
     def validate_username_not_empty(cls, v: str) -> str:
         """BVA: Username må ikke være tomt eller kun whitespace"""
@@ -49,7 +51,7 @@ class UserBase(BaseModel):
             raise ValueError("Username må ikke være tomt")
         return v.strip()
 
-    @field_validator('email')
+    @field_validator("email")
     @classmethod
     def validate_email_format(cls, v: str) -> str:
         """BVA: Email skal være valid format (valideres af EmailStr)"""
@@ -60,11 +62,11 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(
         ...,
-        min_length=USER_BVA.password_min_length,      # 8 chars
-        description="Password (minimum 8 characters)"
+        min_length=USER_BVA.password_min_length,  # 8 chars
+        description="Password (minimum 8 characters)",
     )
 
-    @field_validator('password')
+    @field_validator("password")
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
         """BVA: Password skal være mindst 8 tegn
@@ -90,22 +92,19 @@ class User(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # --- Schema for login (email + password) ---
 class UserLogin(BaseModel):
     """Schema for login request (email or username + password)"""
-    username_or_email: str = Field(
-        ...,
-        description="Username or email address"
-    )
-    password: str = Field(
-        ...,
-        description="Password"
-    )
+
+    username_or_email: str = Field(..., description="Username or email address")
+    password: str = Field(..., description="Password")
 
 
 # --- Token response ---
 class TokenResponse(BaseModel):
     """Response ved succesfuldt login"""
+
     access_token: str
     token_type: str
     user_id: int

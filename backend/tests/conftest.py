@@ -2,6 +2,7 @@
 Pytest configuration file.
 This file ensures that the backend module can be imported correctly.
 """
+
 import sys
 from pathlib import Path
 

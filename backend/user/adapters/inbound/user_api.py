@@ -1,25 +1,28 @@
 """
 REST API adapter for User bounded context.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from backend.auth import get_current_user_id
+from backend.dependencies import get_user_service
 from backend.user.application.dto import (
-    User as UserSchema,
+    TokenResponse,
     UserCreate,
     UserLogin,
-    TokenResponse,
+)
+from backend.user.application.dto import (
+    User as UserSchema,
 )
 from backend.user.application.service import UserService
 from backend.user.domain.exceptions import (
     DuplicateEmail,
     DuplicateUsername,
-    UserOrEmailNotFound,
     InvalidCredentials,
+    UserOrEmailNotFound,
 )
-from backend.auth import get_current_user_id
-from backend.dependencies import get_user_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +51,7 @@ def options_login() -> dict:
     return {"message": "OK"}
 
 
-@router.post(
-    "/", response_model=UserSchema, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
 def create_user(
     user: UserCreate,
     service: UserService = Depends(get_user_service),
@@ -59,13 +60,9 @@ def create_user(
     try:
         return service.create_user(user)
     except (DuplicateEmail, DuplicateUsername) as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error(
-            "Uventet fejl ved oprettelse af bruger: %s", e, exc_info=True
-        )
+        logger.error("Uventet fejl ved oprettelse af bruger: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Uventet fejl ved oprettelse af bruger.",
@@ -116,10 +113,6 @@ def login(
 ) -> dict:
     """Login bruger med username/email og password. Returnér JWT token."""
     try:
-        return service.login_user(
-            credentials.username_or_email, credentials.password
-        )
+        return service.login_user(credentials.username_or_email, credentials.password)
     except (UserOrEmailNotFound, InvalidCredentials) as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))

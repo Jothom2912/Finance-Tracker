@@ -1,11 +1,13 @@
-import pytest
-from pydantic import ValidationError
 from datetime import date
 from typing import Optional
-from pydantic import BaseModel, ValidationError, Field, field_validator 
-from backend.budget.application.dto import BudgetCreate, BudgetBase
 
-#BudgetBase tests
+import pytest
+from pydantic import BaseModel, ValidationError
+
+from backend.budget.application.dto import BudgetBase, BudgetCreate
+
+# BudgetBase tests
+
 
 # Lower Boundary (N) - VALID (0.00)
 def test_base_amount_at_boundary_valid():
@@ -18,6 +20,7 @@ def test_base_amount_at_boundary_valid():
     # Assert
     assert valid_budget.amount == amount
 
+
 # Lower Boundary (N-1) - INVALID (-0.01)
 def test_base_amount_below_boundary_invalid():
     # Arrange
@@ -26,6 +29,7 @@ def test_base_amount_below_boundary_invalid():
     # Act & Assert
     with pytest.raises(ValidationError):
         BudgetBase(amount=amount)
+
 
 # Rounding Logic Check
 def test_base_amount_rounding():
@@ -63,6 +67,7 @@ def test_base_budget_date_valid_type():
 
 # BudgetCreate tests
 
+
 # Account ID - Optional Field (Default=None)
 def test_create_account_id_optional_default_none():
     # Act
@@ -93,7 +98,9 @@ def test_create_inheritance_amount_below_boundary_invalid():
     with pytest.raises(ValidationError):
         BudgetCreate(amount=amount)
 
+
 # BudgetUpdate Tests
+
 
 class BudgetUpdate(BaseModel):
     # For updates, all fields are optional

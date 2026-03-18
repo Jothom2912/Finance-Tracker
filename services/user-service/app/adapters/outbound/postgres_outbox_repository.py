@@ -3,10 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from contracts.base import BaseEvent
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from contracts.base import BaseEvent
 
 from app.application.ports.outbound import IOutboxRepository
 from app.domain.entities import OutboxEntry
@@ -36,9 +35,7 @@ class PostgresOutboxRepository(IOutboxRepository):
         self._session.add(model)
         await self._session.flush()
 
-    async def fetch_pending(
-        self, batch_size: int = 10
-    ) -> list[OutboxEntry]:
+    async def fetch_pending(self, batch_size: int = 10) -> list[OutboxEntry]:
         now = datetime.now(timezone.utc)
         stmt = (
             select(OutboxEventModel)
@@ -66,9 +63,7 @@ class PostgresOutboxRepository(IOutboxRepository):
         )
         await self._session.execute(stmt)
 
-    async def mark_failed(
-        self, event_id: str, next_attempt_at: datetime
-    ) -> None:
+    async def mark_failed(self, event_id: str, next_attempt_at: datetime) -> None:
         stmt = (
             update(OutboxEventModel)
             .where(OutboxEventModel.id == event_id)

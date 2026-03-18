@@ -1,15 +1,15 @@
 import pytest
 from pydantic import ValidationError
-from backend.account.application.dto import AccountCreate, AccountBase
 
+from backend.account.application.dto import AccountBase, AccountCreate
 
-#Account Name Length Boundary Value Analysis
+# Account Name Length Boundary Value Analysis
 
 
 # Lower Boundary (N-1) - INVALID (0 chars)
 def test_base_name_min_length_below_boundary_invalid():
     # ACT & ASSERT
-    
+
     with pytest.raises(ValidationError):
         AccountBase(name="", saldo=100.0)
 
@@ -18,13 +18,12 @@ def test_base_name_min_length_below_boundary_invalid():
 def test_base_name_min_length_at_boundary_valid():
     # ARRANGE
     name = "A"
-    
+
     # ACT
     valid_account = AccountBase(name=name, saldo=100.0)
-    
+
     # ASSERT
     assert valid_account.name == name
-
 
 
 # Upper Boundary (M) - VALID (30 chars)
@@ -48,7 +47,9 @@ def test_base_name_max_length_above_boundary_invalid():
     with pytest.raises(ValidationError):
         AccountBase(name=name, saldo=100.0)
 
+
 # Name Content Validation
+
 
 # Whitespace Only - INVALID
 def test_base_name_whitespace_only_invalid():
@@ -73,7 +74,8 @@ def test_base_name_whitespace_stripped_valid():
     assert valid_account.name == expected_name
 
 
-#Saldo/Balance Validation
+# Saldo/Balance Validation
+
 
 # Rounding Up
 def test_base_saldo_rounding_up():
@@ -101,9 +103,9 @@ def test_base_saldo_negative_value():
     assert account.saldo == expected_saldo
 
 
-
 # AccountCreate. Must have a User ID
 REQUIRED_USER_ID = 1
+
 
 # Missing User ID - INVALID
 def test_create_missing_user_id_invalid():
@@ -131,7 +133,8 @@ def test_create_user_id_valid():
     assert account.User_idUser == valid_id
 
 
-# Inheritance Confirmation 
+# Inheritance Confirmation
+
 
 def test_create_inheritance_name_max_length_invalid():
     # Arrange

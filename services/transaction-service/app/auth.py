@@ -3,6 +3,7 @@
 Tokens are created by user-service. All services share the same JWT_SECRET
 so tokens are valid across the platform.
 """
+
 from __future__ import annotations
 
 from fastapi import Depends, HTTPException, status

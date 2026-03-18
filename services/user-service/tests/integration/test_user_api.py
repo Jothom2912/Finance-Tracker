@@ -4,10 +4,9 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
+from contracts.events.user import UserCreatedEvent
 from httpx import AsyncClient
 from jose import jwt
-
-from contracts.events.user import UserCreatedEvent
 
 REGISTER_URL = "/api/v1/users/register"
 LOGIN_URL = "/api/v1/users/login"
@@ -27,9 +26,7 @@ async def _register(client: AsyncClient, **overrides: str) -> dict:
 
 
 async def _login(client: AsyncClient, username_or_email: str, password: str) -> dict:
-    resp = await client.post(
-        LOGIN_URL, json={"username_or_email": username_or_email, "password": password}
-    )
+    resp = await client.post(LOGIN_URL, json={"username_or_email": username_or_email, "password": password})
     return resp.json()
 
 
@@ -49,9 +46,7 @@ class TestRegister:
         assert "created_at" in data
 
     @pytest.mark.asyncio()
-    async def test_register_duplicate_email(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_register_duplicate_email(self, client: AsyncClient) -> None:
         await client.post(REGISTER_URL, json=VALID_USER)
 
         duplicate = {**VALID_USER, "username": "bob"}
@@ -60,9 +55,7 @@ class TestRegister:
         assert resp.status_code == 409
 
     @pytest.mark.asyncio()
-    async def test_register_duplicate_username(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_register_duplicate_username(self, client: AsyncClient) -> None:
         await client.post(REGISTER_URL, json=VALID_USER)
 
         duplicate = {**VALID_USER, "email": "bob@example.com"}
@@ -71,9 +64,7 @@ class TestRegister:
         assert resp.status_code == 409
 
     @pytest.mark.asyncio()
-    async def test_register_publishes_event(
-        self, client: AsyncClient, mock_publisher: AsyncMock
-    ) -> None:
+    async def test_register_publishes_event(self, client: AsyncClient, mock_publisher: AsyncMock) -> None:
         await client.post(REGISTER_URL, json=VALID_USER)
 
         mock_publisher.publish.assert_awaited_once()
@@ -144,14 +135,10 @@ class TestGetMe:
     @pytest.mark.asyncio()
     async def test_get_me_authenticated(self, client: AsyncClient) -> None:
         await client.post(REGISTER_URL, json=VALID_USER)
-        token_data = await _login(
-            client, "alice@example.com", "secret1234"
-        )
+        token_data = await _login(client, "alice@example.com", "secret1234")
         token = token_data["access_token"]
 
-        resp = await client.get(
-            ME_URL, headers={"Authorization": f"Bearer {token}"}
-        )
+        resp = await client.get(ME_URL, headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -166,9 +153,7 @@ class TestGetMe:
 
     @pytest.mark.asyncio()
     async def test_get_me_invalid_token(self, client: AsyncClient) -> None:
-        resp = await client.get(
-            ME_URL, headers={"Authorization": "Bearer garbage.token.here"}
-        )
+        resp = await client.get(ME_URL, headers={"Authorization": "Bearer garbage.token.here"})
 
         assert resp.status_code == 401
 
@@ -178,9 +163,7 @@ class TestGetMe:
 
 class TestCrossServiceJWT:
     @pytest.mark.asyncio()
-    async def test_monolith_format_token_accepted(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_monolith_format_token_accepted(self, client: AsyncClient) -> None:
         """A token using the monolith payload format (user_id claim)
         must be accepted by user-service.
         """

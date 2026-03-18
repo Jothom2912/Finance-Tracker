@@ -5,6 +5,7 @@ This adapter performs direct ES queries.
 Exit-plan: replace with projections via event bus (RabbitMQ)
 when microservice-split is implemented.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,13 +33,9 @@ class ElasticsearchAnalyticsReadRepository(IAnalyticsReadRepository):
             {"term": {"Account_idAccount": account_id}},
         ]
         if start_date:
-            must_clauses.append(
-                {"range": {"date": {"gte": start_date.isoformat()}}}
-            )
+            must_clauses.append({"range": {"date": {"gte": start_date.isoformat()}}})
         if end_date:
-            must_clauses.append(
-                {"range": {"date": {"lte": end_date.isoformat()}}}
-            )
+            must_clauses.append({"range": {"date": {"lte": end_date.isoformat()}}})
 
         try:
             response = self._es.search(
@@ -117,9 +114,7 @@ class ElasticsearchAnalyticsReadRepository(IAnalyticsReadRepository):
             return
         if isinstance(raw, str):
             try:
-                source["date"] = datetime.fromisoformat(
-                    raw.replace("Z", "+00:00")
-                ).date()
+                source["date"] = datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
             except ValueError:
                 try:
                     source["date"] = datetime.strptime(raw, "%Y-%m-%d").date()

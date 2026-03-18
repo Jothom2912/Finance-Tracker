@@ -2,12 +2,15 @@
 Inbound ports (driving adapters) - interfaces for use cases.
 These define what the User application can do.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from backend.user.application.dto import (
-    UserCreate,
     User as UserSchema,
+)
+from backend.user.application.dto import (
+    UserCreate,
 )
 
 
@@ -23,9 +26,7 @@ class IUserService(ABC):
         pass
 
     @abstractmethod
-    def list_users(
-        self, skip: int = 0, limit: int = 100
-    ) -> list[UserSchema]:
+    def list_users(self, skip: int = 0, limit: int = 100) -> list[UserSchema]:
         pass
 
     @abstractmethod

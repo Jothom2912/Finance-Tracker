@@ -1,6 +1,6 @@
 # backend/services/categorization.py
 
-# Denne fil kræver ingen top-level imports fra andre services eller models, 
+# Denne fil kræver ingen top-level imports fra andre services eller models,
 # hvilket er godt og hjælper med at undgå cirkulære imports.
 
 # category_rules ordbogen indeholder keywords og deres tilhørende kategorinavne.
@@ -24,9 +24,8 @@ category_rules = {
     "irma": "madvarer/dagligvarer",
     "meny": "madvarer/dagligvarer",
     "asian market": "madvarer/dagligvarer",
-    "slagter": "madvarer/dagligvarer", 
-    "bager": "madvarer/dagligvarer", 
-
+    "slagter": "madvarer/dagligvarer",
+    "bager": "madvarer/dagligvarer",
     # Restauranter/Takeaway/Café - Specifikke steder og delivery services
     "istanbul kabab": "restauranter/takeaway",
     "kosem restaurant": "restauranter/takeaway",
@@ -48,8 +47,7 @@ category_rules = {
     "cafe": "restauranter/takeaway",
     "sunset blvd": "restauranter/takeaway",
     "7-eleven": "restauranter/takeaway",
-    "dsb 7-eleven": "restauranter/takeaway", 
-
+    "dsb 7-eleven": "restauranter/takeaway",
     # Transport
     "dsb.dk/": "transport",
     "dsb service & retail": "transport",
@@ -58,8 +56,7 @@ category_rules = {
     "metro service a/s": "transport",
     "rejsekort": "transport",
     "bycyklen": "transport",
-    "rejsebillet.dk": "transport", 
-
+    "rejsebillet.dk": "transport",
     # Regninger/Faste udgifter
     "cph village": "husleje/bolig",
     "telenor a/s": "mobil/internet",
@@ -68,10 +65,9 @@ category_rules = {
     "energi": "el/vand/varme",
     "forsikring": "forsikringer",
     "abonnement": "abonnementer",
-    "spotify": "abonnementer", 
-    "netflix": "abonnementer", 
-    "fitness dk": "abonnementer", 
-
+    "spotify": "abonnementer",
+    "netflix": "abonnementer",
+    "fitness dk": "abonnementer",
     # Indkomst
     "su": "offentlig støtte",
     "boligstøtte": "offentlig støtte",
@@ -80,68 +76,58 @@ category_rules = {
     "tage kristensen": "betalinger fra andre",
     "lønoverførsel": "løn",
     "løn": "løn",
-
     # Opsparing/Investering
     "fra opsparing": "opsparing (ind)",
     "opsparing": "opsparing (ud)",
     "investering": "investering",
     "aktier": "investering",
-
     # Kontanter
     "pengeautomat": "hæveautomat",
     "nokas atm": "hæveautomat",
-    "atm": "hæveautomat", 
-
+    "atm": "hæveautomat",
     # Personlig pleje
     "hair by regina dreyf": "hårpleje/personlig pleje",
     "normal": "personlig pleje",
     "matas": "personlig pleje",
     "frisør": "hårpleje/personlig pleje",
-    "klinik": "personlig pleje", 
-
+    "klinik": "personlig pleje",
     # Medicinalvarer
     "hamlets apotek": "medicinalvarer",
     "soeborg apotek": "medicinalvarer",
     "haderslev hjorte apo": "medicinalvarer",
     "apotek": "medicinalvarer",
-
     # Hjem/DIY
     "silvan": "møbler/interiør/diy",
     "bauhaus": "møbler/interiør/dia",
     "ikea": "møbler/interiør/diy",
     "jem og fix": "møbler/interiør/diy",
-    "elgiganten": "elektronik/hjem", 
+    "elgiganten": "elektronik/hjem",
     "power": "elektronik/hjem",
-
     # Øl/Barer/Natteliv
     "irish pub": "øl/barer",
     "raevens bar": "øl/barer",
     "10er bar": "øl/barer",
     "escobar": "øl/barer",
     "bodega": "øl/barer",
-    "bar": "øl/barer", 
-
+    "bar": "øl/barer",
     # Fritid/Oplevelser
     "bison boulders aps": "underholdning/fritid",
     "biograf": "underholdning/fritid",
-    "parken": "underholdning/fritid", 
+    "parken": "underholdning/fritid",
     "teater": "underholdning/fritid",
     "museum": "underholdning/fritid",
     "zoo": "underholdning/fritid",
     "aquarium": "underholdning/fritid",
     "forlystelsespark": "underholdning/fritid",
-    "gaming": "underholdning/fritid", 
-
+    "gaming": "underholdning/fritid",
     # Sport/Fitness
     "fitness": "fitness/sport",
     "sportmaster": "sportstøj/udstyr",
     "intersport": "sportstøj/udstyr",
     "runningshop": "sportstøj/udstyr",
-
     # Vaskeri
     "airwallet - laundry": "vaskeri",
     "vaskeri": "vaskeri",
-
     # Bil/Benzin
     "q8 service": "bil/benzin",
     "circle k": "bil/benzin",
@@ -149,22 +135,19 @@ category_rules = {
     "benz": "bil/benzin",
     "tankstation": "bil/benzin",
     "bilvask": "bil/benzin",
-    "vaerksted": "bil/vedligeholdelse", 
+    "vaerksted": "bil/vedligeholdelse",
     "mekaniker": "bil/vedligeholdelse",
-
     # Finansielle udgifter/indtægter
     "gebyr": "gebyrer",
-    "renter": "renter", 
-
+    "renter": "renter",
     # Ukategoriseret/Diverse
-    "koebenhavns kommune": "anden", 
-    "trust": "anden", 
+    "koebenhavns kommune": "anden",
+    "trust": "anden",
     "diverse": "anden",
     "ukendt": "anden",
-    "div. overførsel": "anden", 
-
-    "mobilepay ind": "mobilepay ind", 
-    "mobilepay ud": "mobilepay ud", 
+    "div. overførsel": "anden",
+    "mobilepay ind": "mobilepay ind",
+    "mobilepay ud": "mobilepay ud",
     "vipps mobilepay": "mobilepay ind",
 }
 
@@ -175,17 +158,17 @@ def assign_category_automatically(transaction_description: str, amount: float, c
     """
     # Vi antager, at category_name_to_id allerede er i lowercase (hvilket det var i din service-kode)
     description_lower = transaction_description.lower().strip()
-    search_string = description_lower 
-    
+    search_string = description_lower
+
     # Standard fallback kategori ID
     fallback_id = category_name_to_id.get("anden")
 
     # Hvis "anden" ikke findes, er der en databasefejl, som transaction_service fanger.
     if fallback_id is None:
-         # I praksis bør transaction_service håndtere denne fejl, som du allerede har gjort.
-         # Returner None for at signalere en fejl, hvis det er nødvendigt, men din nuværende
-         # transaction_service forventer et int.
-         return -1 # Antager en ikke-eksisterende ID som fejlsignal, men din service kaster ValueError.
+        # I praksis bør transaction_service håndtere denne fejl, som du allerede har gjort.
+        # Returner None for at signalere en fejl, hvis det er nødvendigt, men din nuværende
+        # transaction_service forventer et int.
+        return -1  # Antager en ikke-eksisterende ID som fejlsignal, men din service kaster ValueError.
 
     # --- Trin 1: Håndter MobilePay og Indkomst (med prioritering af beløb) ---
 
@@ -221,7 +204,7 @@ def assign_category_automatically(transaction_description: str, amount: float, c
     # --- Trin 2: Specifikke finansielle udgifter (kan være positive/negative) ---
     if "gebyr" in search_string:
         return category_name_to_id.get("gebyrer", fallback_id)
-    
+
     # Negative renter (udgifter)
     if "renter" in search_string and amount < 0:
         return category_name_to_id.get("renter", fallback_id)
@@ -231,7 +214,7 @@ def assign_category_automatically(transaction_description: str, amount: float, c
         if keyword in search_string:
             # Returner kategoriens ID, hvis et match findes, ellers fallback til "anden".
             return category_name_to_id.get(category_name, fallback_id)
-    
+
     # --- Trin 4 & 5: Opsparing (Ud) og Hæveautomater (håndteres allerede i category_rules) ---
     # Da du har "opsparing" og "pengeautomat" i category_rules, vil disse matche i trin 3.
 

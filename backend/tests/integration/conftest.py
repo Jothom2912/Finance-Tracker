@@ -10,33 +10,31 @@ Provides:
 - Auth helpers (JWT login + headers)
 """
 
-import pytest
 import os
-from decimal import Decimal
 from datetime import date, timedelta
+from decimal import Decimal
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Force MySQL for tests - set ACTIVE_DB before importing anything that uses it
 os.environ["ACTIVE_DB"] = "mysql"
 
-from backend.main import app
-from backend.database.mysql import Base
 from backend.database import get_db
+from backend.database.mysql import Base
+from backend.main import app
 from backend.models.mysql import (
-    User,
     Account,
-    Category,
     Budget,
-    Transaction,
+    Category,
     Goal,
-    TransactionType,
+    Transaction,
+    User,
     budget_category_association,
 )
-
 
 # ============================================================================
 # Database & Environment
@@ -83,20 +81,20 @@ def test_db(test_engine):
 @pytest.fixture(scope="function")
 def mock_repositories(monkeypatch, test_db):
     """Patch all repository factories to use MySQL repos with test_db session."""
-    from backend.repositories.mysql.category_repository import MySQLCategoryRepository
-    from backend.repositories.mysql.transaction_repository import (
-        MySQLTransactionRepository,
+    from backend.repositories.mysql.account_group_repository import (
+        MySQLAccountGroupRepository,
     )
     from backend.repositories.mysql.account_repository import MySQLAccountRepository
     from backend.repositories.mysql.budget_repository import MySQLBudgetRepository
-    from backend.repositories.mysql.user_repository import MySQLUserRepository
+    from backend.repositories.mysql.category_repository import MySQLCategoryRepository
     from backend.repositories.mysql.goal_repository import MySQLGoalRepository
     from backend.repositories.mysql.planned_transaction_repository import (
         MySQLPlannedTransactionRepository,
     )
-    from backend.repositories.mysql.account_group_repository import (
-        MySQLAccountGroupRepository,
+    from backend.repositories.mysql.transaction_repository import (
+        MySQLTransactionRepository,
     )
+    from backend.repositories.mysql.user_repository import MySQLUserRepository
 
     # Create repository instances sharing the same test_db session
     cat_repo = MySQLCategoryRepository(db=test_db)
@@ -133,30 +131,15 @@ def mock_repositories(monkeypatch, test_db):
         return ag_repo
 
     # Patch in backend.repositories
-    monkeypatch.setattr(
-        "backend.repositories.get_category_repository", get_cat_repo
-    )
-    monkeypatch.setattr(
-        "backend.repositories.get_transaction_repository", get_trans_repo
-    )
-    monkeypatch.setattr(
-        "backend.repositories.get_account_repository", get_acc_repo
-    )
-    monkeypatch.setattr(
-        "backend.repositories.get_budget_repository", get_budget_repo
-    )
-    monkeypatch.setattr(
-        "backend.repositories.get_user_repository", get_user_repo
-    )
-    monkeypatch.setattr(
-        "backend.repositories.get_goal_repository", get_goal_repo
-    )
-    monkeypatch.setattr(
-        "backend.repositories.get_planned_transaction_repository", get_pt_repo
-    )
-    monkeypatch.setattr(
-        "backend.repositories.get_account_group_repository", get_ag_repo
-    )
+    monkeypatch.setattr("backend.repositories.get_category_repository", get_cat_repo)
+    monkeypatch.setattr("backend.repositories.get_transaction_repository", get_trans_repo)
+    monkeypatch.setattr("backend.repositories.get_account_repository", get_acc_repo)
+    monkeypatch.setattr("backend.repositories.get_budget_repository", get_budget_repo)
+    monkeypatch.setattr("backend.repositories.get_user_repository", get_user_repo)
+    monkeypatch.setattr("backend.repositories.get_goal_repository", get_goal_repo)
+    monkeypatch.setattr("backend.repositories.get_planned_transaction_repository", get_pt_repo)
+    monkeypatch.setattr("backend.repositories.get_account_group_repository", get_ag_repo)
+
 
 # ============================================================================
 # FastAPI Test Client
@@ -218,9 +201,7 @@ class Factory:
         return cat
 
     @staticmethod
-    def budget(
-        db: Session, account_id: int, category_id: int, amount: Decimal
-    ) -> Budget:
+    def budget(db: Session, account_id: int, category_id: int, amount: Decimal) -> Budget:
         budget = Budget(
             amount=amount,
             budget_date=date.today().replace(day=1),

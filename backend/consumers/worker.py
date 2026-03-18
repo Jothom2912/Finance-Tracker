@@ -12,6 +12,7 @@ Or via uv::
 
     uv run python -m backend.consumers.worker
 """
+
 from __future__ import annotations
 
 import argparse
@@ -93,9 +94,7 @@ async def _run_user_sync(session_factory: object) -> None:
     await consumer.run()
 
 
-async def _run_account_creation(
-    session_factory: object, publisher: _WorkerPublisher
-) -> None:
+async def _run_account_creation(session_factory: object, publisher: _WorkerPublisher) -> None:
     """Run only the account-creation consumer."""
     consumer = AccountCreationConsumer(
         rabbitmq_url=RABBITMQ_URL,

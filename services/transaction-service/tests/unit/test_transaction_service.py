@@ -5,7 +5,6 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.application.dto import (
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
@@ -14,7 +13,6 @@ from app.application.dto import (
 from app.application.service import TransactionService
 from app.domain.entities import PlannedTransaction, Transaction, TransactionType
 from app.domain.exceptions import (
-    CSVImportException,
     PlannedTransactionNotFoundException,
     TransactionNotFoundException,
 )
@@ -166,34 +164,24 @@ class TestListTransactions:
     @pytest.mark.asyncio()
     async def test_with_date_filter(self) -> None:
         service, uow = _build_service()
-        uow.transactions.find_by_date_range.return_value = [
-            _make_transaction()
-        ]
+        uow.transactions.find_by_date_range.return_value = [_make_transaction()]
         filters = TransactionFiltersDTO(
             start_date=date(2026, 1, 1),
             end_date=date(2026, 12, 31),
         )
 
-        results = await service.list_transactions(
-            user_id=10, filters=filters
-        )
+        results = await service.list_transactions(user_id=10, filters=filters)
 
-        uow.transactions.find_by_date_range.assert_awaited_once_with(
-            10, date(2026, 1, 1), date(2026, 12, 31)
-        )
+        uow.transactions.find_by_date_range.assert_awaited_once_with(10, date(2026, 1, 1), date(2026, 12, 31))
         assert len(results) == 1
 
     @pytest.mark.asyncio()
     async def test_with_account_filter(self) -> None:
         service, uow = _build_service()
-        uow.transactions.find_by_account.return_value = [
-            _make_transaction()
-        ]
+        uow.transactions.find_by_account.return_value = [_make_transaction()]
         filters = TransactionFiltersDTO(account_id=100)
 
-        results = await service.list_transactions(
-            user_id=10, filters=filters
-        )
+        results = await service.list_transactions(user_id=10, filters=filters)
 
         uow.transactions.find_by_account.assert_awaited_once_with(100, 10)
         assert len(results) == 1
@@ -206,9 +194,7 @@ class TestListTransactions:
 
         await service.list_transactions(user_id=10, filters=filters)
 
-        uow.transactions.find_by_user.assert_awaited_once_with(
-            10, skip=0, limit=50
-        )
+        uow.transactions.find_by_user.assert_awaited_once_with(10, skip=0, limit=50)
 
 
 class TestDeleteTransaction:
@@ -283,8 +269,7 @@ class TestImportCSV:
     async def test_all_invalid_no_outbox(self) -> None:
         service, uow = _build_service()
         csv_content = (
-            "date,amount,transaction_type,account_id,account_name\n"
-            "2026-03-01,INVALID,expense,100,Main Account\n"
+            "date,amount,transaction_type,account_id,account_name\n2026-03-01,INVALID,expense,100,Main Account\n"
         )
 
         result = await service.import_csv(user_id=10, csv_content=csv_content)

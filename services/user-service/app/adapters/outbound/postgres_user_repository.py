@@ -12,9 +12,7 @@ class PostgresUserRepository(IUserRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create(
-        self, username: str, email: str, password_hash: str
-    ) -> UserWithCredentials:
+    async def create(self, username: str, email: str, password_hash: str) -> UserWithCredentials:
         model = UserModel(
             username=username,
             email=email,
@@ -31,9 +29,7 @@ class PostgresUserRepository(IUserRepository):
         model = result.scalar_one_or_none()
         return self._to_credentials_entity(model) if model else None
 
-    async def find_by_username(
-        self, username: str
-    ) -> UserWithCredentials | None:
+    async def find_by_username(self, username: str) -> UserWithCredentials | None:
         stmt = select(UserModel).where(UserModel.username == username)
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()

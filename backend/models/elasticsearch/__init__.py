@@ -5,4 +5,3 @@ Elasticsearch models/mappings
 """
 
 __all__ = []
-

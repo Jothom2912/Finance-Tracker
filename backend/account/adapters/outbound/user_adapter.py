@@ -15,18 +15,8 @@ class MySQLUserAdapter(IUserPort):
         self._db = db
 
     def exists(self, user_id: int) -> bool:
-        return (
-            self._db.query(UserModel)
-            .filter(UserModel.idUser == user_id)
-            .first()
-        ) is not None
+        return (self._db.query(UserModel).filter(UserModel.idUser == user_id).first()) is not None
 
-    def get_users_by_ids(
-        self, user_ids: list[int]
-    ) -> list[tuple[int, str]]:
-        users = (
-            self._db.query(UserModel)
-            .filter(UserModel.idUser.in_(user_ids))
-            .all()
-        )
+    def get_users_by_ids(self, user_ids: list[int]) -> list[tuple[int, str]]:
+        users = self._db.query(UserModel).filter(UserModel.idUser.in_(user_ids)).all()
         return [(u.idUser, u.username) for u in users]

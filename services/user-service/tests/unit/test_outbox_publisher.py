@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.domain.entities import OutboxEntry
 from app.workers.outbox_publisher import MAX_BACKOFF_S, OutboxPublisherWorker
 
@@ -43,9 +42,7 @@ def worker(publisher: AsyncMock) -> OutboxPublisherWorker:
 
 class TestProcessBatch:
     @pytest.mark.asyncio()
-    async def test_publishes_pending_events(
-        self, worker: OutboxPublisherWorker, publisher: AsyncMock
-    ) -> None:
+    async def test_publishes_pending_events(self, worker: OutboxPublisherWorker, publisher: AsyncMock) -> None:
         entry = _make_entry()
         mock_repo = AsyncMock()
         mock_repo.fetch_pending.return_value = [entry]
@@ -55,12 +52,15 @@ class TestProcessBatch:
         ctx.__aenter__ = AsyncMock(return_value=mock_session)
         ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch(
-            "app.workers.outbox_publisher.async_session_factory",
-            return_value=ctx,
-        ), patch(
-            "app.workers.outbox_publisher.PostgresOutboxRepository",
-            return_value=mock_repo,
+        with (
+            patch(
+                "app.workers.outbox_publisher.async_session_factory",
+                return_value=ctx,
+            ),
+            patch(
+                "app.workers.outbox_publisher.PostgresOutboxRepository",
+                return_value=mock_repo,
+            ),
         ):
             count = await worker._process_batch()
 
@@ -70,9 +70,7 @@ class TestProcessBatch:
         mock_session.commit.assert_awaited_once()
 
     @pytest.mark.asyncio()
-    async def test_empty_outbox_returns_zero(
-        self, worker: OutboxPublisherWorker
-    ) -> None:
+    async def test_empty_outbox_returns_zero(self, worker: OutboxPublisherWorker) -> None:
         mock_repo = AsyncMock()
         mock_repo.fetch_pending.return_value = []
         mock_session = AsyncMock()
@@ -81,12 +79,15 @@ class TestProcessBatch:
         ctx.__aenter__ = AsyncMock(return_value=mock_session)
         ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch(
-            "app.workers.outbox_publisher.async_session_factory",
-            return_value=ctx,
-        ), patch(
-            "app.workers.outbox_publisher.PostgresOutboxRepository",
-            return_value=mock_repo,
+        with (
+            patch(
+                "app.workers.outbox_publisher.async_session_factory",
+                return_value=ctx,
+            ),
+            patch(
+                "app.workers.outbox_publisher.PostgresOutboxRepository",
+                return_value=mock_repo,
+            ),
         ):
             count = await worker._process_batch()
 
@@ -106,12 +107,15 @@ class TestProcessBatch:
         ctx.__aenter__ = AsyncMock(return_value=mock_session)
         ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch(
-            "app.workers.outbox_publisher.async_session_factory",
-            return_value=ctx,
-        ), patch(
-            "app.workers.outbox_publisher.PostgresOutboxRepository",
-            return_value=mock_repo,
+        with (
+            patch(
+                "app.workers.outbox_publisher.async_session_factory",
+                return_value=ctx,
+            ),
+            patch(
+                "app.workers.outbox_publisher.PostgresOutboxRepository",
+                return_value=mock_repo,
+            ),
         ):
             count = await worker._process_batch()
 

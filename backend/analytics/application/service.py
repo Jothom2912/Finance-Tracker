@@ -1,14 +1,15 @@
 """
 Application service for Analytics bounded context.
 """
+
 from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-from backend.analytics.application.ports.outbound import IAnalyticsReadRepository
 from backend.analytics.application.dto import FinancialOverview
+from backend.analytics.application.ports.outbound import IAnalyticsReadRepository
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +44,7 @@ class AnalyticsService:
         )
 
         categories = self._read_repo.get_categories()
-        category_id_to_name = {
-            cat.get("idCategory"): cat.get("name")
-            for cat in categories
-            if cat.get("idCategory")
-        }
+        category_id_to_name = {cat.get("idCategory"): cat.get("name") for cat in categories if cat.get("idCategory")}
 
         total_income = 0.0
         total_expenses = 0.0
@@ -69,9 +66,7 @@ class AnalyticsService:
                 category_id = transaction.get("Category_idCategory")
                 if category_id:
                     category_name = category_id_to_name.get(category_id, "Ukategoriseret")
-                    category_expenses[category_name] = (
-                        category_expenses.get(category_name, 0.0) + abs(amount)
-                    )
+                    category_expenses[category_name] = category_expenses.get(category_name, 0.0) + abs(amount)
             else:
                 current_account_balance += amount
 
@@ -84,9 +79,7 @@ class AnalyticsService:
             days_in_period = (end_date - start_date).days + 1
             months_in_period = max(1, days_in_period / 30.0)
 
-        average_monthly_expenses = (
-            total_expenses / months_in_period if months_in_period > 0 else 0.0
-        )
+        average_monthly_expenses = total_expenses / months_in_period if months_in_period > 0 else 0.0
 
         return FinancialOverview(
             start_date=start_date,

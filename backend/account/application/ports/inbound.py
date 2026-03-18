@@ -6,10 +6,14 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from backend.account.application.dto import (
-    AccountCreate,
-    AccountBase,
     Account as AccountSchema,
+)
+from backend.account.application.dto import (
+    AccountBase,
+    AccountCreate,
     AccountGroupsCreate,
+)
+from backend.account.application.dto import (
     AccountGroups as AccountGroupSchema,
 )
 
@@ -31,9 +35,7 @@ class IAccountService(ABC):
         pass
 
     @abstractmethod
-    def update_account(
-        self, account_id: int, data: AccountBase
-    ) -> Optional[AccountSchema]:
+    def update_account(self, account_id: int, data: AccountBase) -> Optional[AccountSchema]:
         pass
 
     # Account Group methods
@@ -42,9 +44,7 @@ class IAccountService(ABC):
         pass
 
     @abstractmethod
-    def list_groups(
-        self, skip: int = 0, limit: int = 100
-    ) -> list[AccountGroupSchema]:
+    def list_groups(self, skip: int = 0, limit: int = 100) -> list[AccountGroupSchema]:
         pass
 
     @abstractmethod
@@ -52,7 +52,5 @@ class IAccountService(ABC):
         pass
 
     @abstractmethod
-    def update_group(
-        self, group_id: int, data: AccountGroupsCreate
-    ) -> Optional[AccountGroupSchema]:
+    def update_group(self, group_id: int, data: AccountGroupsCreate) -> Optional[AccountGroupSchema]:
         pass

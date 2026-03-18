@@ -2,6 +2,7 @@
 Domain entities for Goal bounded context.
 Pure domain objects with no infrastructure dependencies.
 """
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -10,6 +11,7 @@ from typing import Optional
 @dataclass
 class Goal:
     """Goal domain entity representing a financial savings target."""
+
     id: Optional[int]
     name: Optional[str]
     target_amount: float

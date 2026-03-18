@@ -1,17 +1,10 @@
 """Integration tests for account flows (HTTP -> Service -> Repository -> DB)."""
 
-import pytest
-from decimal import Decimal
-
-from .conftest import Factory
-
 
 class TestAccountCreation:
     """Tests for creating accounts through the API."""
 
-    def test_create_account_returns_201(
-        self, test_client, test_db, mock_repositories, auth_headers
-    ):
+    def test_create_account_returns_201(self, test_client, test_db, mock_repositories, auth_headers):
         # Act
         response = test_client.post(
             "/api/v1/accounts/",
@@ -25,9 +18,7 @@ class TestAccountCreation:
         assert data["name"] == "Opsparingskonto"
         assert float(data["saldo"]) == 25000.0
 
-    def test_create_account_without_auth_returns_401(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_create_account_without_auth_returns_401(self, test_client, test_db, mock_repositories):
         # Act - no Authorization header
         response = test_client.post(
             "/api/v1/accounts/",
@@ -37,9 +28,7 @@ class TestAccountCreation:
         # Assert
         assert response.status_code == 401
 
-    def test_create_multiple_accounts(
-        self, test_client, test_db, mock_repositories, auth_headers
-    ):
+    def test_create_multiple_accounts(self, test_client, test_db, mock_repositories, auth_headers):
         # Act
         r1 = test_client.post(
             "/api/v1/accounts/",
@@ -77,18 +66,14 @@ class TestAccountRetrieval:
         account_names = [a["name"] for a in data]
         assert "Lønkonto" in account_names
 
-    def test_get_accounts_without_auth_returns_401(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_get_accounts_without_auth_returns_401(self, test_client, test_db, mock_repositories):
         # Act
         response = test_client.get("/api/v1/accounts/")
 
         # Assert
         assert response.status_code == 401
 
-    def test_get_account_by_id_returns_200(
-        self, test_client, test_db, mock_repositories, auth_headers, seed_account
-    ):
+    def test_get_account_by_id_returns_200(self, test_client, test_db, mock_repositories, auth_headers, seed_account):
         # Act
         response = test_client.get(
             f"/api/v1/accounts/{seed_account.idAccount}",
@@ -100,9 +85,7 @@ class TestAccountRetrieval:
         data = response.json()
         assert data["name"] == "Lønkonto"
 
-    def test_get_nonexistent_account_returns_404(
-        self, test_client, test_db, mock_repositories, auth_headers
-    ):
+    def test_get_nonexistent_account_returns_404(self, test_client, test_db, mock_repositories, auth_headers):
         # Act
         response = test_client.get("/api/v1/accounts/99999", headers=auth_headers)
 
@@ -113,9 +96,7 @@ class TestAccountRetrieval:
 class TestAccountUpdate:
     """Tests for updating accounts."""
 
-    def test_update_account_name_and_saldo(
-        self, test_client, test_db, mock_repositories, auth_headers, seed_account
-    ):
+    def test_update_account_name_and_saldo(self, test_client, test_db, mock_repositories, auth_headers, seed_account):
         # Act
         response = test_client.put(
             f"/api/v1/accounts/{seed_account.idAccount}",
@@ -129,9 +110,7 @@ class TestAccountUpdate:
         assert data["name"] == "Updated Konto"
         assert float(data["saldo"]) == 15000.0
 
-    def test_update_account_without_auth_returns_401(
-        self, test_client, test_db, mock_repositories, seed_account
-    ):
+    def test_update_account_without_auth_returns_401(self, test_client, test_db, mock_repositories, seed_account):
         # Act
         response = test_client.put(
             f"/api/v1/accounts/{seed_account.idAccount}",

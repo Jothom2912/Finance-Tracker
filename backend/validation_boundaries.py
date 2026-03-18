@@ -5,8 +5,9 @@ Dette modul definerer alle grænseværdier for validering af entities.
 """
 
 from dataclasses import dataclass
-from typing import Tuple
 from decimal import Decimal
+from typing import Tuple
+
 
 # ============================================================================
 # CATEGORY - Grænseværdier (4.1)

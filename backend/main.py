@@ -1,8 +1,8 @@
-from contextlib import asynccontextmanager
 import json
 import logging
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,9 +39,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Adds a correlation ID to every request and logs method/path/status/duration."""
 
     async def dispatch(self, request: Request, call_next):
-        correlation_id = request.headers.get(
-            "x-correlation-id", str(uuid.uuid4())
-        )
+        correlation_id = request.headers.get("x-correlation-id", str(uuid.uuid4()))
         start = time.perf_counter()
 
         response: Response = await call_next(request)
@@ -71,25 +69,29 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         return response
 
+
 # Hexagonal architecture routers
-from backend.transaction.adapters.inbound.rest_api import (
-    router as transaction_router,
-    planned_router as planned_transaction_router,
-)
-from backend.category.adapters.inbound.rest_api import router as category_router
-from backend.budget.adapters.inbound.rest_api import router as budget_router
 from backend.account.adapters.inbound.account_api import router as account_router
 from backend.account.adapters.inbound.account_group_api import router as account_group_router
+from backend.analytics.adapters.inbound.graphql_api import create_graphql_router
+from backend.analytics.adapters.inbound.rest_api import (
+    budget_summary_router,
+    dashboard_router,
+)
+from backend.budget.adapters.inbound.rest_api import router as budget_router
+from backend.category.adapters.inbound.rest_api import router as category_router
 from backend.goal.adapters.inbound.goal_api import router as goal_router
-from backend.user.adapters.inbound.user_api import router as user_router
 from backend.monthly_budget.adapters.inbound.rest_api import (
     router as monthly_budget_router,
 )
-from backend.analytics.adapters.inbound.rest_api import (
-    dashboard_router,
-    budget_summary_router,
+from backend.transaction.adapters.inbound.rest_api import (
+    planned_router as planned_transaction_router,
 )
-from backend.analytics.adapters.inbound.graphql_api import create_graphql_router
+from backend.transaction.adapters.inbound.rest_api import (
+    router as transaction_router,
+)
+from backend.user.adapters.inbound.user_api import router as user_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -97,6 +99,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting FastAPI application...")
     yield
     logger.info("Stopping FastAPI application...")
+
 
 app = FastAPI(title="Personlig Finans Tracker API", lifespan=lifespan)
 
@@ -111,14 +114,17 @@ app.add_middleware(
     max_age=3600,
 )
 
+
 @app.get("/", tags=["Root"])
 def read_root():
     return {"message": "Velkommen til din Personlige Finans Tracker API!"}
+
 
 @app.get("/health", tags=["Health"])
 def health_check():
     """Health check endpoint."""
     return {"status": "ok", "message": "Backend kører!", "timestamp": time.time()}
+
 
 # ---------------------------------------------------------------------------
 # API v1 router -- all domain routes under /api/v1/

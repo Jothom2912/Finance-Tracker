@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.account.application.dto import (
     Account as AccountSchema,
-    AccountCreate,
+)
+from backend.account.application.dto import (
     AccountBase,
+    AccountCreate,
 )
 from backend.account.application.service import AccountService
 from backend.account.domain.exceptions import UserNotFoundForAccount
@@ -50,9 +52,7 @@ def get_account(
     return account
 
 
-@router.post(
-    "/", response_model=AccountSchema, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=AccountSchema, status_code=status.HTTP_201_CREATED)
 def create_account(
     account_data: AccountBase,
     service: AccountService = Depends(get_account_service),
@@ -67,9 +67,7 @@ def create_account(
     try:
         return service.create_account(data)
     except UserNotFoundForAccount as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/{account_id}", response_model=AccountSchema)

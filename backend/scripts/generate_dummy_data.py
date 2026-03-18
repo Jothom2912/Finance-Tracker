@@ -3,29 +3,31 @@
 Script til at generere dummy data til test af migration og applikationen.
 Følger korrekt struktur: User → Account → Category → Transaction → Budget → Goal
 """
-import sys
+
 import io
+import sys
 
 # Fix encoding for Windows console
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-from datetime import datetime, date, timedelta
-from decimal import Decimal
 import random
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+
 import bcrypt
 
 from backend.database.mysql import SessionLocal, create_db_tables
-from backend.models.mysql.user import User
 from backend.models.mysql.account import Account
-from backend.models.mysql.category import Category
-from backend.models.mysql.transaction import Transaction
+from backend.models.mysql.account_groups import AccountGroups
 from backend.models.mysql.budget import Budget
+from backend.models.mysql.category import Category
+from backend.models.mysql.common import account_group_user_association, budget_category_association
 from backend.models.mysql.goal import Goal
 from backend.models.mysql.planned_transactions import PlannedTransactions
-from backend.models.mysql.account_groups import AccountGroups
-from backend.models.mysql.common import budget_category_association, account_group_user_association
+from backend.models.mysql.transaction import Transaction
+from backend.models.mysql.user import User
 
 # Minimum counts to guarantee a sizeable dataset
 MIN_USERS = 10
@@ -93,11 +95,12 @@ def generate_dummy_data(clear_existing: bool = False):
 
         for user_info in user_data:
             # Tjek om user allerede findes (på username ELLER email)
-            existing = db.query(User).filter(
-                (User.username == user_info["username"]) | 
-                (User.email == user_info["email"])
-            ).first()
-            
+            existing = (
+                db.query(User)
+                .filter((User.username == user_info["username"]) | (User.email == user_info["email"]))
+                .first()
+            )
+
             if not existing:
                 # Ingen eksisterende user - opret ny
                 user = User(
@@ -110,21 +113,26 @@ def generate_dummy_data(clear_existing: bool = False):
                     db.add(user)
                     db.flush()  # Flush for at få ID uden commit
                     users.append(user)
-                except Exception as e:
+                except Exception:
                     # Hvis der er en fejl (fx duplicate key), prøv at hente eksisterende user
                     db.rollback()
-                    existing = db.query(User).filter(
-                        (User.username == user_info["username"]) | 
-                        (User.email == user_info["email"])
-                    ).first()
+                    existing = (
+                        db.query(User)
+                        .filter((User.username == user_info["username"]) | (User.email == user_info["email"]))
+                        .first()
+                    )
                     if existing:
-                        print(f"  ⚠ User '{user_info['username']}' findes allerede (ID: {existing.idUser}) - bruger eksisterende")
+                        print(
+                            f"  ⚠ User '{user_info['username']}' findes allerede (ID: {existing.idUser}) - bruger eksisterende"
+                        )
                         users.append(existing)
                     else:
                         raise  # Re-raise hvis det ikke er en duplicate key fejl
             else:
                 # User findes allerede - brug eksisterende
-                print(f"  ⚠ User '{user_info['username']}' findes allerede (ID: {existing.idUser}) - bruger eksisterende")
+                print(
+                    f"  ⚠ User '{user_info['username']}' findes allerede (ID: {existing.idUser}) - bruger eksisterende"
+                )
                 users.append(existing)
 
         db.commit()
@@ -169,7 +177,7 @@ def generate_dummy_data(clear_existing: bool = False):
         account_names = ["Min privat", "Fælles konto", "Opsparing", "Budget konto"]
 
         for user in users:
-            for account_name in (account_names[:2] if user.username == "johan" else account_names[:1]):
+            for account_name in account_names[:2] if user.username == "johan" else account_names[:1]:
                 account = Account(
                     name=f"{account_name} ({user.username})",
                     saldo=Decimal(random.uniform(1000, 50000)),
@@ -181,7 +189,7 @@ def generate_dummy_data(clear_existing: bool = False):
         while len(accounts) < MIN_ACCOUNTS and users:
             user = random.choice(users)
             extra_account = Account(
-                name=f"Ekstra konto {len(accounts)+1} ({user.username})",
+                name=f"Ekstra konto {len(accounts) + 1} ({user.username})",
                 saldo=Decimal(random.uniform(1000, 50000)),
                 User_idUser=user.idUser,
             )
@@ -381,7 +389,7 @@ def generate_dummy_data(clear_existing: bool = False):
         print("\n" + "=" * 60)
         print("✅ DUMMY DATA GENERERET!")
         print("=" * 60)
-        print(f"\n📊 STATISTIK:")
+        print("\n📊 STATISTIK:")
         print(f"  👤 Brugere: {db.query(User).count()}")
         print(f"  💳 Konti: {db.query(Account).count()}")
         print(f"  📁 Kategorier: {db.query(Category).count()}")
@@ -400,6 +408,7 @@ def generate_dummy_data(clear_existing: bool = False):
         db.rollback()
         print(f"\n✗ Fejl ved generering af dummy data: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         db.close()

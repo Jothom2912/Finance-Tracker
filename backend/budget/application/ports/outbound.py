@@ -2,6 +2,7 @@
 Outbound ports (driven adapters) for Budget bounded context.
 Defines interfaces for infrastructure dependencies.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 

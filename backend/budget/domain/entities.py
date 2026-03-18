@@ -2,6 +2,7 @@
 Domain entities for Budget bounded context.
 Pure domain objects with no infrastructure dependencies.
 """
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -10,6 +11,7 @@ from typing import Optional
 @dataclass
 class Budget:
     """Budget domain entity."""
+
     id: Optional[int]
     amount: float
     budget_date: Optional[date]

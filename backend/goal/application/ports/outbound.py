@@ -2,6 +2,7 @@
 Outbound ports (driven adapters) - interfaces for infrastructure.
 These define what the Goal application needs from the outside world.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 

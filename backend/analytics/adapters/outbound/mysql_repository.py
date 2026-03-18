@@ -5,6 +5,7 @@ This adapter performs direct SQL queries against MySQL.
 Exit-plan: replace with projections via event bus (RabbitMQ)
 when microservice-split is implemented.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -29,17 +30,13 @@ class MySQLAnalyticsReadRepository(IAnalyticsReadRepository):
         end_date: Optional[date] = None,
         limit: int = 10000,
     ) -> list[dict]:
-        query = self._db.query(TransactionModel).filter(
-            TransactionModel.Account_idAccount == account_id
-        )
+        query = self._db.query(TransactionModel).filter(TransactionModel.Account_idAccount == account_id)
         if start_date:
             query = query.filter(TransactionModel.date >= start_date)
         if end_date:
             query = query.filter(TransactionModel.date <= end_date)
 
-        models = (
-            query.order_by(TransactionModel.date.desc()).limit(limit).all()
-        )
+        models = query.order_by(TransactionModel.date.desc()).limit(limit).all()
         return [self._serialize_transaction(m) for m in models]
 
     def get_categories(self) -> list[dict]:
@@ -79,11 +76,7 @@ class MySQLAnalyticsReadRepository(IAnalyticsReadRepository):
             "type": model.type,
             "Category_idCategory": model.Category_idCategory,
             "Account_idAccount": model.Account_idAccount,
-            "created_at": (
-                model.created_at.isoformat()
-                if hasattr(model, "created_at") and model.created_at
-                else None
-            ),
+            "created_at": (model.created_at.isoformat() if hasattr(model, "created_at") and model.created_at else None),
         }
 
     @staticmethod
@@ -95,9 +88,7 @@ class MySQLAnalyticsReadRepository(IAnalyticsReadRepository):
         return {
             "idBudget": model.idBudget,
             "amount": float(model.amount) if model.amount else 0.0,
-            "budget_date": (
-                model.budget_date.isoformat() if model.budget_date else None
-            ),
+            "budget_date": (model.budget_date.isoformat() if model.budget_date else None),
             "Account_idAccount": model.Account_idAccount,
             "Category_idCategory": category_id,
         }

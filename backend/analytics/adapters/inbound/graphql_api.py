@@ -11,6 +11,7 @@ domain boundaries. The gateway injects services from other bounded
 contexts via FastAPI DI rather than accessing their repositories directly,
 preserving each domain's encapsulation.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +21,7 @@ from typing import Any, Optional
 
 import strawberry
 from fastapi import Depends
+from sqlalchemy.orm import Session
 from strawberry.fastapi import GraphQLRouter
 from strawberry.types import Info
 
@@ -37,8 +39,6 @@ from backend.dependencies import (
 from backend.goal.application.service import GoalService
 from backend.monthly_budget.application.service import MonthlyBudgetService
 from backend.transaction.application.service import TransactionService
-
-from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -119,9 +119,7 @@ class TrendType:
     previous_month_expenses: float
 
 
-@strawberry.type(
-    description="Current month overview with optional trend vs previous month"
-)
+@strawberry.type(description="Current month overview with optional trend vs previous month")
 class CurrentMonthOverviewType:
     start_date: date
     end_date: date
@@ -175,9 +173,7 @@ async def get_graphql_context(
 def _require_account_id(ctx: dict[str, Any]) -> int:
     account_id = ctx.get("account_id")
     if not account_id:
-        raise ValueError(
-            "Account ID required. Send Authorization and/or X-Account-ID header."
-        )
+        raise ValueError("Account ID required. Send Authorization and/or X-Account-ID header.")
     return account_id
 
 
@@ -188,7 +184,6 @@ def _require_account_id(ctx: dict[str, Any]) -> int:
 
 @strawberry.type(description="Read-only queries across Finance Tracker domains")
 class Query:
-
     @strawberry.field(description="Financial overview for the active account")
     def financial_overview(
         self,
@@ -236,10 +231,7 @@ class Query:
             start_date=start_date,
             end_date=end_date,
         )
-        return [
-            MonthlyExpensesType(month=r["month"], total_expenses=r["total_expenses"])
-            for r in results
-        ]
+        return [MonthlyExpensesType(month=r["month"], total_expenses=r["total_expenses"]) for r in results]
 
     @strawberry.field(description="Budget summary for a specific month")
     def budget_summary(
@@ -252,9 +244,7 @@ class Query:
         account_id = _require_account_id(ctx)
         mb_service: MonthlyBudgetService = ctx["monthly_budget_service"]
 
-        result = mb_service.get_summary(
-            account_id=account_id, month=month, year=year
-        )
+        result = mb_service.get_summary(account_id=account_id, month=month, year=year)
         return BudgetSummaryType(
             month=str(result.month).zfill(2),
             year=str(result.year),
@@ -275,9 +265,7 @@ class Query:
             over_budget_count=result.over_budget_count,
         )
 
-    @strawberry.field(
-        description="Financial overview for the current calendar month with trend vs previous month"
-    )
+    @strawberry.field(description="Financial overview for the current calendar month with trend vs previous month")
     def current_month_overview(self, info: Info) -> CurrentMonthOverviewType:
         ctx = info.context
         account_id = _require_account_id(ctx)
@@ -312,15 +300,9 @@ class Query:
             return round(((current - previous) / abs(previous)) * 100, 1)
 
         trend = TrendType(
-            income_change_percent=_pct_change(
-                result.total_income, prev_result.total_income
-            ),
-            expense_change_percent=_pct_change(
-                result.total_expenses, prev_result.total_expenses
-            ),
-            net_change_diff=round(
-                result.net_change_in_period - prev_result.net_change_in_period, 2
-            ),
+            income_change_percent=_pct_change(result.total_income, prev_result.total_income),
+            expense_change_percent=_pct_change(result.total_expenses, prev_result.total_expenses),
+            net_change_diff=round(result.net_change_in_period - prev_result.net_change_in_period, 2),
             previous_month_income=prev_result.total_income,
             previous_month_expenses=prev_result.total_expenses,
         )
@@ -356,9 +338,7 @@ class Query:
                 target_date=g.target_date,
                 status=g.status,
                 percent_complete=(
-                    round((g.current_amount / g.target_amount) * 100, 1)
-                    if g.target_amount > 0
-                    else 100.0
+                    round((g.current_amount / g.target_amount) * 100, 1) if g.target_amount > 0 else 100.0
                 ),
             )
             for g in goals
@@ -380,14 +360,10 @@ class Query:
         _, last_day = monthrange(year, month)
         end = date(year, month, last_day)
 
-        result = service.get_financial_overview(
-            account_id=account_id, start_date=start, end_date=end
-        )
+        result = service.get_financial_overview(account_id=account_id, start_date=start, end_date=end)
 
         total = result.total_expenses or 1.0
-        sorted_cats = sorted(
-            result.expenses_by_category.items(), key=lambda x: x[1], reverse=True
-        )[:limit]
+        sorted_cats = sorted(result.expenses_by_category.items(), key=lambda x: x[1], reverse=True)[:limit]
 
         return [
             TopSpendingCategoryType(
@@ -404,9 +380,7 @@ class Query:
     def categories(self, info: Info) -> list[CategoryType]:
         service: CategoryService = info.context["category_service"]
         results = service.list_categories()
-        return [
-            CategoryType(id=c.idCategory, name=c.name, type=c.type) for c in results
-        ]
+        return [CategoryType(id=c.idCategory, name=c.name, type=c.type) for c in results]
 
     @strawberry.field(description="List transactions for the active account")
     def transactions(

@@ -1,0 +1,40 @@
+[project]
+name = "finans-tracker-backend"
+version = "0.1.0"
+description = "Finans Tracker monolith backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "python-multipart",
+    "passlib[bcrypt]",
+    "python-jose[cryptography]",
+    "sqlalchemy",
+    "pymysql",
+    "requests",
+    "pandas",
+    "tabulate",
+    "elasticsearch<9.0.0",
+    "neo4j",
+    "strawberry-graphql[fastapi]",
+    "aio-pika",
+    "python-dotenv",
+    "pydantic[email]",
+    "finans-tracker-contracts",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "httpx",
+]
+
+[tool.uv.sources]
+finans-tracker-contracts = { path = "../services/shared/contracts" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

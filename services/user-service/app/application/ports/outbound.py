@@ -13,17 +13,13 @@ class IUserRepository(ABC):
     """Port for user persistence."""
 
     @abstractmethod
-    async def create(
-        self, username: str, email: str, password_hash: str
-    ) -> UserWithCredentials: ...
+    async def create(self, username: str, email: str, password_hash: str) -> UserWithCredentials: ...
 
     @abstractmethod
     async def find_by_email(self, email: str) -> UserWithCredentials | None: ...
 
     @abstractmethod
-    async def find_by_username(
-        self, username: str
-    ) -> UserWithCredentials | None: ...
+    async def find_by_username(self, username: str) -> UserWithCredentials | None: ...
 
     @abstractmethod
     async def find_by_id(self, user_id: int) -> User | None: ...
@@ -57,17 +53,13 @@ class IOutboxRepository(ABC):
     ) -> None: ...
 
     @abstractmethod
-    async def fetch_pending(
-        self, batch_size: int = 10
-    ) -> list[OutboxEntry]: ...
+    async def fetch_pending(self, batch_size: int = 10) -> list[OutboxEntry]: ...
 
     @abstractmethod
     async def mark_published(self, event_id: str) -> None: ...
 
     @abstractmethod
-    async def mark_failed(
-        self, event_id: str, next_attempt_at: datetime
-    ) -> None: ...
+    async def mark_failed(self, event_id: str, next_attempt_at: datetime) -> None: ...
 
 
 class IUnitOfWork(ABC):

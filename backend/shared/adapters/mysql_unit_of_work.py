@@ -4,6 +4,7 @@ MySQL adapter for IUnitOfWork.
 Wraps an existing SQLAlchemy session — does NOT create one.
 Session is injected via constructor.
 """
+
 from __future__ import annotations
 
 from sqlalchemy.orm import Session

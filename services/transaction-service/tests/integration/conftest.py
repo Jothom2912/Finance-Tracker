@@ -28,9 +28,7 @@ from app.dependencies import get_publisher
 from app.main import app as fastapi_app
 
 _engine = create_async_engine("sqlite+aiosqlite://", echo=False)
-_session_factory = async_sessionmaker(
-    _engine, class_=AsyncSession, expire_on_commit=False
-)
+_session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -62,9 +60,7 @@ async def _setup_db():
 @pytest_asyncio.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=fastapi_app)
-    async with AsyncClient(
-        transport=transport, base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 

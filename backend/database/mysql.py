@@ -2,10 +2,12 @@
 """
 MySQL Database Connection
 """
+
+import logging
+import os
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
-import os
-import logging
 
 from backend.config import DATABASE_URL
 
@@ -15,8 +17,9 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 # Check if we're running in pytest or CI environment (tests don't need real DATABASE_URL)
-import sys
 import inspect
+import sys
+
 
 def _is_test_environment():
     """Check if we're running in a test environment"""
@@ -43,6 +46,7 @@ def _is_test_environment():
         return True
 
     return False
+
 
 _is_pytest = _is_test_environment()
 
@@ -77,6 +81,7 @@ else:
     engine = None
     SessionLocal = None
 
+
 def get_db():
     """Dependency til at få en database session"""
     if SessionLocal is None:
@@ -86,6 +91,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 def test_database_connection():
     """
@@ -107,6 +113,7 @@ def test_database_connection():
         logger.error(f"❌ {error_msg}")
         return False, error_msg
 
+
 def create_db_tables():
     """
     Opretter databasetabeller med robust error handling.
@@ -127,21 +134,23 @@ def create_db_tables():
         # Step 2: Import models
         logger.info("📦 Importerer models...")
         try:
-            from backend.models.mysql import (
-                transaction,
+            from backend.models.mysql import (  # noqa: F401
                 account,
-                category,
-                user,
-                budget,
-                goal,
                 account_groups,
-                planned_transactions,
+                budget,
+                category,
+                goal,
                 monthly_budget,
+                planned_transactions,
+                transaction,
+                user,
             )
+
             logger.info("✅ Alle models importeret succesfuldt")
         except ImportError as e:
             logger.error(f"❌ Fejl ved import af models: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return False
 
@@ -155,10 +164,9 @@ def create_db_tables():
 
         # Step 4: Verificer at tabeller blev oprettet
         with engine.connect() as conn:
-            result = conn.execute(text(
-                "SELECT COUNT(*) FROM information_schema.tables "
-                "WHERE table_schema = DATABASE()"
-            ))
+            result = conn.execute(
+                text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()")
+            )
             table_count = result.fetchone()[0]
             logger.info(f"✅ Database indeholder {table_count} tabeller")
 
@@ -174,9 +182,11 @@ def create_db_tables():
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error message: {str(e)}")
         import traceback
+
         logger.error(traceback.format_exc())
         logger.warning("⚠️ Backend vil fortsætte, men database er muligvis ikke tilgængelig")
         return False
+
 
 def drop_all_tables():
     """Sletter alle tabeller - BRUG MED FORSIGTIGHED!"""
@@ -184,10 +194,6 @@ def drop_all_tables():
         raise RuntimeError("Database not initialized. DATABASE_URL must be set in .env file")
     logger.warning("⚠️ DROPPING ALL TABLES - THIS WILL DELETE ALL DATA!")
     try:
-        from backend.models.mysql import (
-            transaction, account, category, user, budget, goal,
-            account_groups, planned_transactions, monthly_budget,
-        )
         Base.metadata.drop_all(bind=engine)
         logger.info("✅ All tables dropped from database")
     except Exception as e:

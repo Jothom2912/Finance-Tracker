@@ -2,6 +2,7 @@
 REST API adapter for Transaction bounded context.
 Handles HTTP concerns and delegates to application service.
 """
+
 import logging
 from datetime import date
 from typing import List, Optional
@@ -50,25 +51,19 @@ def create_transaction_route(
         )
 
     if transaction.account_id is None:
-        transaction = transaction.model_copy(
-            update={"account_id": account_id}
-        )
+        transaction = transaction.model_copy(update={"account_id": account_id})
 
     try:
         return service.create_transaction(transaction)
     except CategoryNotFound as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except AccountRequired:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID er påkrævet for at oprette en transaktion.",
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/upload-csv/", response_model=List[TransactionResponseDTO])
@@ -94,13 +89,9 @@ async def upload_transactions_csv_route(
         return service.import_from_csv(contents, account_id)
     except KeyError as e:
         detail = f"Fejl i CSV-format: {e}. Kontrollér separatorer og kolonner."
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=detail
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         if "EmptyDataError" in str(type(e).__name__):
             raise HTTPException(
@@ -179,9 +170,7 @@ def update_transaction_route(
 ):
     """Opdaterer en eksisterende transaktion."""
     if transaction.account_id is None and account_id:
-        transaction = transaction.model_copy(
-            update={"account_id": account_id}
-        )
+        transaction = transaction.model_copy(update={"account_id": account_id})
 
     try:
         result = service.update_transaction(transaction_id, transaction)
@@ -192,13 +181,9 @@ def update_transaction_route(
             )
         return result
     except CategoryNotFound as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -236,9 +221,7 @@ def create_pt_route(
     try:
         return service.create_planned_transaction(pt_data)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @planned_router.get("/", response_model=List[PlannedTransactionResponseDTO])
@@ -282,6 +265,4 @@ def update_pt_route(
             )
         return result
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -1,18 +1,21 @@
 """
 MySQL adapter for MonthlyBudget repository.
 """
+
 from __future__ import annotations
 
 from typing import Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from backend.monthly_budget.application.ports.outbound import IMonthlyBudgetRepository
-from backend.monthly_budget.domain.entities import BudgetLine, MonthlyBudget
 from backend.models.mysql.monthly_budget import (
     BudgetLine as BudgetLineModel,
+)
+from backend.models.mysql.monthly_budget import (
     MonthlyBudget as MonthlyBudgetModel,
 )
+from backend.monthly_budget.application.ports.outbound import IMonthlyBudgetRepository
+from backend.monthly_budget.domain.entities import BudgetLine, MonthlyBudget
 
 
 class MySQLMonthlyBudgetRepository(IMonthlyBudgetRepository):
@@ -23,9 +26,7 @@ class MySQLMonthlyBudgetRepository(IMonthlyBudgetRepository):
             raise ValueError("db: Session parameter is required")
         self._db = db
 
-    def get_by_id_for_account(
-        self, budget_id: int, account_id: int
-    ) -> Optional[MonthlyBudget]:
+    def get_by_id_for_account(self, budget_id: int, account_id: int) -> Optional[MonthlyBudget]:
         model = (
             self._db.query(MonthlyBudgetModel)
             .options(joinedload(MonthlyBudgetModel.lines))
@@ -37,9 +38,7 @@ class MySQLMonthlyBudgetRepository(IMonthlyBudgetRepository):
         )
         return self._to_entity(model) if model else None
 
-    def get_by_account_and_period(
-        self, account_id: int, month: int, year: int
-    ) -> Optional[MonthlyBudget]:
+    def get_by_account_and_period(self, account_id: int, month: int, year: int) -> Optional[MonthlyBudget]:
         model = (
             self._db.query(MonthlyBudgetModel)
             .options(joinedload(MonthlyBudgetModel.lines))

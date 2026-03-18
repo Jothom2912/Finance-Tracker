@@ -1,13 +1,13 @@
 """Integration tests for the GraphQL read gateway endpoint."""
 
+from datetime import date
 from decimal import Decimal
-from datetime import date, timedelta
 
 import pytest
 
-from backend.models.mysql.monthly_budget import MonthlyBudget, BudgetLine
-from .conftest import Factory
+from backend.models.mysql.monthly_budget import BudgetLine, MonthlyBudget
 
+from .conftest import Factory
 
 GRAPHQL_URL = "/api/v1/graphql"
 
@@ -27,7 +27,6 @@ def _gql(client, query: str, variables: dict | None = None, headers: dict | None
 
 
 class TestFinancialOverviewQuery:
-
     def test_returns_overview_with_valid_account(
         self, test_client, test_db, mock_repositories, seed_account, seed_categories, account_headers
     ):
@@ -52,9 +51,7 @@ class TestFinancialOverviewQuery:
         assert "totalExpenses" in data
         assert isinstance(data["expensesByCategory"], list)
 
-    def test_returns_error_without_account(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_returns_error_without_account(self, test_client, test_db, mock_repositories):
         query = "{ financialOverview { totalIncome } }"
         status, body = _gql(test_client, query)
 
@@ -63,7 +60,6 @@ class TestFinancialOverviewQuery:
 
 
 class TestExpensesByMonthQuery:
-
     def test_returns_monthly_expenses(
         self, test_client, test_db, mock_repositories, seed_account, seed_categories, account_headers
     ):
@@ -92,7 +88,6 @@ class TestExpensesByMonthQuery:
 
 
 class TestBudgetSummaryQuery:
-
     def test_returns_budget_summary(
         self, test_client, test_db, mock_repositories, seed_account, seed_categories, account_headers
     ):
@@ -100,7 +95,8 @@ class TestBudgetSummaryQuery:
         category = seed_categories[0]
 
         mb = MonthlyBudget(
-            month=today.month, year=today.year,
+            month=today.month,
+            year=today.year,
             account_id=seed_account.idAccount,
         )
         test_db.add(mb)
@@ -112,8 +108,11 @@ class TestBudgetSummaryQuery:
         )
         test_db.add(line)
         Factory.transaction(
-            test_db, seed_account.idAccount, category.idCategory,
-            amount=Decimal("-1000"), type="expense",
+            test_db,
+            seed_account.idAccount,
+            category.idCategory,
+            amount=Decimal("-1000"),
+            type="expense",
         )
         test_db.flush()
         test_db.expire_all()
@@ -132,7 +131,8 @@ class TestBudgetSummaryQuery:
         }
         """
         status, body = _gql(
-            test_client, query,
+            test_client,
+            query,
             variables={"month": today.month, "year": today.year},
             headers=account_headers,
         )
@@ -144,17 +144,22 @@ class TestBudgetSummaryQuery:
 
 
 class TestCurrentMonthOverviewQuery:
-
     def test_returns_current_month_data(
         self, test_client, test_db, mock_repositories, seed_account, seed_categories, account_headers
     ):
         Factory.transaction(
-            test_db, seed_account.idAccount, seed_categories[2].idCategory,
-            amount=Decimal("5000"), type="income",
+            test_db,
+            seed_account.idAccount,
+            seed_categories[2].idCategory,
+            amount=Decimal("5000"),
+            type="income",
         )
         Factory.transaction(
-            test_db, seed_account.idAccount, seed_categories[0].idCategory,
-            amount=Decimal("-1200"), type="expense",
+            test_db,
+            seed_account.idAccount,
+            seed_categories[0].idCategory,
+            amount=Decimal("-1200"),
+            type="expense",
         )
         test_db.flush()
         test_db.expire_all()
@@ -198,9 +203,7 @@ class TestCurrentMonthOverviewQuery:
         assert float(trend["previousMonthIncome"]) >= 0
         assert float(trend["previousMonthExpenses"]) >= 0
 
-    def test_returns_error_without_account(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_returns_error_without_account(self, test_client, test_db, mock_repositories):
         query = "{ currentMonthOverview { totalIncome } }"
         status, body = _gql(test_client, query)
 
@@ -228,19 +231,21 @@ class TestCurrentMonthOverviewQuery:
 
 
 class TestGoalProgressQuery:
-
-    def test_returns_goals_with_progress(
-        self, test_client, test_db, mock_repositories, seed_account, account_headers
-    ):
+    def test_returns_goals_with_progress(self, test_client, test_db, mock_repositories, seed_account, account_headers):
         Factory.goal(
-            test_db, seed_account.idAccount,
-            name="Ferie", target_amount=Decimal("10000"),
+            test_db,
+            seed_account.idAccount,
+            name="Ferie",
+            target_amount=Decimal("10000"),
             current_amount=Decimal("3500"),
         )
         Factory.goal(
-            test_db, seed_account.idAccount,
-            name="Nødopsparing", target_amount=Decimal("50000"),
-            current_amount=Decimal("50000"), status="completed",
+            test_db,
+            seed_account.idAccount,
+            name="Nødopsparing",
+            target_amount=Decimal("50000"),
+            current_amount=Decimal("50000"),
+            status="completed",
         )
         test_db.flush()
         test_db.expire_all()
@@ -283,9 +288,7 @@ class TestGoalProgressQuery:
         assert "errors" not in body
         assert body["data"]["goalProgress"] == []
 
-    def test_returns_error_without_account(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_returns_error_without_account(self, test_client, test_db, mock_repositories):
         query = "{ goalProgress { id } }"
         status, body = _gql(test_client, query)
 
@@ -294,17 +297,22 @@ class TestGoalProgressQuery:
 
 
 class TestTopSpendingCategoriesQuery:
-
     def test_returns_top_categories_sorted_by_amount(
         self, test_client, test_db, mock_repositories, seed_account, seed_categories, account_headers
     ):
         Factory.transaction(
-            test_db, seed_account.idAccount, seed_categories[0].idCategory,
-            amount=Decimal("-3000"), type="expense",
+            test_db,
+            seed_account.idAccount,
+            seed_categories[0].idCategory,
+            amount=Decimal("-3000"),
+            type="expense",
         )
         Factory.transaction(
-            test_db, seed_account.idAccount, seed_categories[1].idCategory,
-            amount=Decimal("-1500"), type="expense",
+            test_db,
+            seed_account.idAccount,
+            seed_categories[1].idCategory,
+            amount=Decimal("-1500"),
+            type="expense",
         )
         test_db.flush()
         test_db.expire_all()
@@ -320,7 +328,8 @@ class TestTopSpendingCategoriesQuery:
         }
         """
         status, body = _gql(
-            test_client, query,
+            test_client,
+            query,
             variables={"month": today.month, "year": today.year, "limit": 5},
             headers=account_headers,
         )
@@ -337,12 +346,18 @@ class TestTopSpendingCategoriesQuery:
         self, test_client, test_db, mock_repositories, seed_account, seed_categories, account_headers
     ):
         Factory.transaction(
-            test_db, seed_account.idAccount, seed_categories[0].idCategory,
-            amount=Decimal("-2000"), type="expense",
+            test_db,
+            seed_account.idAccount,
+            seed_categories[0].idCategory,
+            amount=Decimal("-2000"),
+            type="expense",
         )
         Factory.transaction(
-            test_db, seed_account.idAccount, seed_categories[1].idCategory,
-            amount=Decimal("-1000"), type="expense",
+            test_db,
+            seed_account.idAccount,
+            seed_categories[1].idCategory,
+            amount=Decimal("-1000"),
+            type="expense",
         )
         test_db.flush()
         test_db.expire_all()
@@ -356,7 +371,8 @@ class TestTopSpendingCategoriesQuery:
         }
         """
         status, body = _gql(
-            test_client, query,
+            test_client,
+            query,
             variables={"month": today.month, "year": today.year, "limit": 1},
             headers=account_headers,
         )
@@ -365,9 +381,7 @@ class TestTopSpendingCategoriesQuery:
         assert "errors" not in body
         assert len(body["data"]["topSpendingCategories"]) == 1
 
-    def test_returns_error_without_account(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_returns_error_without_account(self, test_client, test_db, mock_repositories):
         today = date.today()
         query = """
         query ($month: Int!, $year: Int!) {
@@ -377,7 +391,8 @@ class TestTopSpendingCategoriesQuery:
         }
         """
         status, body = _gql(
-            test_client, query,
+            test_client,
+            query,
             variables={"month": today.month, "year": today.year},
         )
 
@@ -391,10 +406,7 @@ class TestTopSpendingCategoriesQuery:
 
 
 class TestCategoriesQuery:
-
-    def test_returns_all_categories(
-        self, test_client, test_db, mock_repositories, seed_categories
-    ):
+    def test_returns_all_categories(self, test_client, test_db, mock_repositories, seed_categories):
         query = "{ categories { id name type } }"
         status, body = _gql(test_client, query)
 
@@ -408,13 +420,16 @@ class TestCategoriesQuery:
 
 
 class TestTransactionsQuery:
-
     def test_returns_transactions_for_account(
         self, test_client, test_db, mock_repositories, seed_account, seed_categories, account_headers
     ):
         Factory.transaction(
-            test_db, seed_account.idAccount, seed_categories[0].idCategory,
-            amount=Decimal("-250"), description="Test GQL tx", type="expense",
+            test_db,
+            seed_account.idAccount,
+            seed_categories[0].idCategory,
+            amount=Decimal("-250"),
+            description="Test GQL tx",
+            type="expense",
         )
         test_db.flush()
         test_db.expire_all()
@@ -447,10 +462,7 @@ class TestTransactionsQuery:
 
 
 class TestSchemaValidation:
-
-    def test_invalid_field_name_returns_error(
-        self, test_client, test_db, mock_repositories, seed_categories
-    ):
+    def test_invalid_field_name_returns_error(self, test_client, test_db, mock_repositories, seed_categories):
         query = "{ categories { id name nonExistentField } }"
         status, body = _gql(test_client, query)
 
@@ -459,27 +471,21 @@ class TestSchemaValidation:
         error_msg = body["errors"][0]["message"]
         assert "nonExistentField" in error_msg
 
-    def test_invalid_query_name_returns_error(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_invalid_query_name_returns_error(self, test_client, test_db, mock_repositories):
         query = "{ unknownQuery { id } }"
         status, body = _gql(test_client, query)
 
         assert status == 200
         assert body.get("errors") is not None
 
-    def test_missing_required_argument_returns_error(
-        self, test_client, test_db, mock_repositories, account_headers
-    ):
+    def test_missing_required_argument_returns_error(self, test_client, test_db, mock_repositories, account_headers):
         query = "{ budgetSummary { month year } }"
         status, body = _gql(test_client, query, headers=account_headers)
 
         assert status == 200
         assert body.get("errors") is not None
 
-    def test_mutations_not_available(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_mutations_not_available(self, test_client, test_db, mock_repositories):
         query = """
         mutation {
             createTransaction(amount: 100) { id }
@@ -497,25 +503,16 @@ class TestSchemaValidation:
 
 
 class TestCorrelationId:
-
-    def test_response_includes_correlation_id_header(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_response_includes_correlation_id_header(self, test_client, test_db, mock_repositories):
         response = test_client.get("/health")
         assert "x-correlation-id" in response.headers
 
-    def test_custom_correlation_id_is_echoed_back(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_custom_correlation_id_is_echoed_back(self, test_client, test_db, mock_repositories):
         custom_id = "test-correlation-12345"
-        response = test_client.get(
-            "/health", headers={"X-Correlation-ID": custom_id}
-        )
+        response = test_client.get("/health", headers={"X-Correlation-ID": custom_id})
         assert response.headers.get("x-correlation-id") == custom_id
 
-    def test_graphql_response_includes_correlation_id(
-        self, test_client, test_db, mock_repositories, seed_categories
-    ):
+    def test_graphql_response_includes_correlation_id(self, test_client, test_db, mock_repositories, seed_categories):
         resp = test_client.post(
             GRAPHQL_URL,
             json={"query": "{ categories { id name } }"},

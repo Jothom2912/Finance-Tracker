@@ -2,6 +2,7 @@
 Anti-corruption layer adapter for Category domain.
 Implements the Transaction domain's ICategoryPort.
 """
+
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -20,11 +21,7 @@ class MySQLCategoryAdapter(ICategoryPort):
         self._db = db
 
     def get_by_id(self, category_id: int) -> Optional[CategoryInfo]:
-        model = (
-            self._db.query(CategoryModel)
-            .filter(CategoryModel.idCategory == category_id)
-            .first()
-        )
+        model = self._db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
         return self._to_info(model) if model else None
 
     def get_all(self) -> list[CategoryInfo]:

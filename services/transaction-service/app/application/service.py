@@ -22,7 +22,7 @@ from app.application.dto import (
 )
 from app.application.ports.inbound import ITransactionService
 from app.application.ports.outbound import IUnitOfWork
-from app.domain.entities import Transaction, TransactionType
+from app.domain.entities import Transaction
 from app.domain.exceptions import (
     CSVImportException,
     PlannedTransactionNotFoundException,
@@ -54,9 +54,7 @@ class TransactionService(ITransactionService):
 
     # ── Transactions ────────────────────────────────────────────────
 
-    async def create_transaction(
-        self, user_id: int, dto: CreateTransactionDTO
-    ) -> TransactionResponse:
+    async def create_transaction(self, user_id: int, dto: CreateTransactionDTO) -> TransactionResponse:
         async with self._uow:
             transaction = await self._uow.transactions.create(
                 user_id=user_id,
@@ -87,60 +85,34 @@ class TransactionService(ITransactionService):
 
         return self._to_response(transaction)
 
-    async def get_transaction(
-        self, transaction_id: int, user_id: int
-    ) -> TransactionResponse:
-        transaction = await self._uow.transactions.find_by_id(
-            transaction_id, user_id
-        )
+    async def get_transaction(self, transaction_id: int, user_id: int) -> TransactionResponse:
+        transaction = await self._uow.transactions.find_by_id(transaction_id, user_id)
         if transaction is None:
             raise TransactionNotFoundException(transaction_id)
         return self._to_response(transaction)
 
-    async def list_transactions(
-        self, user_id: int, filters: TransactionFiltersDTO
-    ) -> list[TransactionResponse]:
+    async def list_transactions(self, user_id: int, filters: TransactionFiltersDTO) -> list[TransactionResponse]:
         if filters.account_id is not None:
-            results = await self._uow.transactions.find_by_account(
-                filters.account_id, user_id
-            )
+            results = await self._uow.transactions.find_by_account(filters.account_id, user_id)
         elif filters.category_id is not None:
-            results = await self._uow.transactions.find_by_category(
-                filters.category_id, user_id
-            )
-        elif (
-            filters.start_date is not None and filters.end_date is not None
-        ):
-            results = await self._uow.transactions.find_by_date_range(
-                user_id, filters.start_date, filters.end_date
-            )
+            results = await self._uow.transactions.find_by_category(filters.category_id, user_id)
+        elif filters.start_date is not None and filters.end_date is not None:
+            results = await self._uow.transactions.find_by_date_range(user_id, filters.start_date, filters.end_date)
         else:
-            results = await self._uow.transactions.find_by_user(
-                user_id, skip=filters.skip, limit=filters.limit
-            )
+            results = await self._uow.transactions.find_by_user(user_id, skip=filters.skip, limit=filters.limit)
 
         if filters.transaction_type is not None:
-            results = [
-                t
-                for t in results
-                if t.transaction_type == filters.transaction_type
-            ]
+            results = [t for t in results if t.transaction_type == filters.transaction_type]
 
         return [self._to_response(t) for t in results]
 
-    async def delete_transaction(
-        self, transaction_id: int, user_id: int
-    ) -> None:
-        transaction = await self._uow.transactions.find_by_id(
-            transaction_id, user_id
-        )
+    async def delete_transaction(self, transaction_id: int, user_id: int) -> None:
+        transaction = await self._uow.transactions.find_by_id(transaction_id, user_id)
         if transaction is None:
             raise TransactionNotFoundException(transaction_id)
 
         async with self._uow:
-            deleted = await self._uow.transactions.delete(
-                transaction_id, user_id
-            )
+            deleted = await self._uow.transactions.delete(transaction_id, user_id)
             if not deleted:
                 raise TransactionNotFoundException(transaction_id)
 
@@ -157,9 +129,7 @@ class TransactionService(ITransactionService):
 
             await self._uow.commit()
 
-    async def import_csv(
-        self, user_id: int, csv_content: str
-    ) -> CSVImportResultDTO:
+    async def import_csv(self, user_id: int, csv_content: str) -> CSVImportResultDTO:
         reader = csv.DictReader(io.StringIO(csv_content))
 
         if reader.fieldnames is None:
@@ -168,9 +138,7 @@ class TransactionService(ITransactionService):
         present = set(reader.fieldnames)
         missing = _CSV_REQUIRED_COLUMNS - present
         if missing:
-            raise CSVImportException(
-                f"CSV missing required columns: {', '.join(sorted(missing))}"
-            )
+            raise CSVImportException(f"CSV missing required columns: {', '.join(sorted(missing))}")
 
         valid_rows: list[dict] = []
         errors: list[str] = []
@@ -184,31 +152,19 @@ class TransactionService(ITransactionService):
 
                 tx_type = row["transaction_type"].strip().lower()
                 if tx_type not in ("income", "expense"):
-                    raise ValueError(
-                        f"invalid transaction_type: {tx_type}"
-                    )
+                    raise ValueError(f"invalid transaction_type: {tx_type}")
 
                 valid_rows.append(
                     {
                         "user_id": user_id,
                         "account_id": int(row["account_id"]),
                         "account_name": row["account_name"].strip(),
-                        "category_id": (
-                            int(row["category_id"])
-                            if row.get("category_id")
-                            else None
-                        ),
-                        "category_name": (
-                            row.get("category_name", "").strip() or None
-                        ),
+                        "category_id": (int(row["category_id"]) if row.get("category_id") else None),
+                        "category_name": (row.get("category_name", "").strip() or None),
                         "amount": amount,
                         "transaction_type": tx_type,
-                        "description": (
-                            row.get("description", "").strip() or None
-                        ),
-                        "tx_date": date.fromisoformat(
-                            row["date"].strip()
-                        ),
+                        "description": (row.get("description", "").strip() or None),
+                        "tx_date": date.fromisoformat(row["date"].strip()),
                     }
                 )
             except (ValueError, KeyError, InvalidOperation) as exc:
@@ -216,9 +172,7 @@ class TransactionService(ITransactionService):
                 skipped += 1
 
         if not valid_rows:
-            return CSVImportResultDTO(
-                imported=0, skipped=skipped, errors=errors
-            )
+            return CSVImportResultDTO(imported=0, skipped=skipped, errors=errors)
 
         async with self._uow:
             created = await self._uow.transactions.bulk_create(valid_rows)
@@ -242,15 +196,11 @@ class TransactionService(ITransactionService):
 
             await self._uow.commit()
 
-        return CSVImportResultDTO(
-            imported=len(created), skipped=skipped, errors=errors
-        )
+        return CSVImportResultDTO(imported=len(created), skipped=skipped, errors=errors)
 
     # ── Planned transactions ────────────────────────────────────────
 
-    async def create_planned(
-        self, user_id: int, dto: CreatePlannedTransactionDTO
-    ) -> PlannedTransactionResponse:
+    async def create_planned(self, user_id: int, dto: CreatePlannedTransactionDTO) -> PlannedTransactionResponse:
         async with self._uow:
             planned = await self._uow.planned.create(
                 user_id=user_id,
@@ -267,9 +217,7 @@ class TransactionService(ITransactionService):
             await self._uow.commit()
         return self._to_planned_response(planned)
 
-    async def list_planned(
-        self, user_id: int, active_only: bool = True
-    ) -> list[PlannedTransactionResponse]:
+    async def list_planned(self, user_id: int, active_only: bool = True) -> list[PlannedTransactionResponse]:
         if active_only:
             results = await self._uow.planned.find_active(user_id)
         else:
@@ -283,26 +231,18 @@ class TransactionService(ITransactionService):
         dto: UpdatePlannedTransactionDTO,
     ) -> PlannedTransactionResponse:
         async with self._uow:
-            existing = await self._uow.planned.find_by_id(
-                planned_id, user_id
-            )
+            existing = await self._uow.planned.find_by_id(planned_id, user_id)
             if existing is None:
                 raise PlannedTransactionNotFoundException(planned_id)
 
             fields = dto.model_dump(exclude_unset=True)
-            updated = await self._uow.planned.update(
-                planned_id, user_id, **fields
-            )
+            updated = await self._uow.planned.update(planned_id, user_id, **fields)
             await self._uow.commit()
         return self._to_planned_response(updated)
 
-    async def deactivate_planned(
-        self, planned_id: int, user_id: int
-    ) -> None:
+    async def deactivate_planned(self, planned_id: int, user_id: int) -> None:
         async with self._uow:
-            existing = await self._uow.planned.find_by_id(
-                planned_id, user_id
-            )
+            existing = await self._uow.planned.find_by_id(planned_id, user_id)
             if existing is None:
                 raise PlannedTransactionNotFoundException(planned_id)
             await self._uow.planned.deactivate(planned_id, user_id)

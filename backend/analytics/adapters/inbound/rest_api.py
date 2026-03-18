@@ -1,6 +1,7 @@
 """
 REST API adapter for Analytics bounded context.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -8,12 +9,12 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from backend.analytics.application.dto import FinancialOverview
 from backend.analytics.application.service import AnalyticsService
 from backend.auth import get_account_id_from_headers
+from backend.budget.application.dto import BudgetSummary
 from backend.dependencies import get_analytics_service, get_monthly_budget_service
 from backend.monthly_budget.application.service import MonthlyBudgetService
-from backend.budget.application.dto import BudgetSummary
-from backend.analytics.application.dto import FinancialOverview
 
 dashboard_router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 budget_summary_router = APIRouter(prefix="/budgets", tags=["Budgets"])
@@ -31,9 +32,7 @@ def get_financial_overview_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først.",
         )
-    return service.get_financial_overview(
-        account_id=account_id, start_date=start_date, end_date=end_date
-    )
+    return service.get_financial_overview(account_id=account_id, start_date=start_date, end_date=end_date)
 
 
 @dashboard_router.get("/expenses-by-month/", response_model=list[dict[str, Any]])
@@ -48,9 +47,7 @@ def get_expenses_by_month_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først.",
         )
-    return service.get_expenses_by_month(
-        account_id=account_id, start_date=start_date, end_date=end_date
-    )
+    return service.get_expenses_by_month(account_id=account_id, start_date=start_date, end_date=end_date)
 
 
 @budget_summary_router.get("/summary", response_model=BudgetSummary)
@@ -73,10 +70,7 @@ async def get_budget_summary_route(
     except (ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                "Ugyldige værdier: month og year skal være heltal. "
-                f"Fik month={month}, year={year}"
-            ),
+            detail=(f"Ugyldige værdier: month og year skal være heltal. Fik month={month}, year={year}"),
         )
 
     if month_int < 1 or month_int > 12:
@@ -90,9 +84,7 @@ async def get_budget_summary_route(
             detail=f"Year skal være mellem 2000 og 9999. Fik: {year_int}",
         )
 
-    summary = mb_service.get_summary(
-        account_id=account_id, month=month_int, year=year_int
-    )
+    summary = mb_service.get_summary(account_id=account_id, month=month_int, year=year_int)
 
     return BudgetSummary(
         month=f"{summary.month:02d}",

@@ -2,6 +2,7 @@
 Application service for Budget bounded context.
 Orchestrates use cases using domain entities and ports.
 """
+
 import logging
 from datetime import date
 from typing import Optional
@@ -87,9 +88,7 @@ class BudgetService(IBudgetService):
         logger.debug("Budget %s oprettet", created.id)
         return self._to_dto(created)
 
-    def update_budget(
-        self, budget_id: int, dto: BudgetUpdateDTO
-    ) -> Optional[BudgetResponseDTO]:
+    def update_budget(self, budget_id: int, dto: BudgetUpdateDTO) -> Optional[BudgetResponseDTO]:
         existing = self._budget_repo.get_by_id(budget_id)
         if not existing:
             return None

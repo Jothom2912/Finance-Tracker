@@ -1,11 +1,11 @@
 """Integration tests for budget flows (HTTP -> Service -> Repository -> DB)."""
 
-import pytest
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
 
 from backend.models.mysql.monthly_budget import BudgetLine as MonthlyBudgetLineModel
 from backend.models.mysql.monthly_budget import MonthlyBudget as MonthlyBudgetModel
+
 from .conftest import Factory
 
 
@@ -41,9 +41,7 @@ class TestBudgetCreation:
         data = response.json()
         assert float(data["amount"]) == 5000.0
 
-    def test_create_budget_without_account_returns_400(
-        self, test_client, test_db, mock_repositories, seed_categories
-    ):
+    def test_create_budget_without_account_returns_400(self, test_client, test_db, mock_repositories, seed_categories):
         # Arrange - no X-Account-ID header and no Authorization header
         category = seed_categories[0]
 
@@ -121,9 +119,7 @@ class TestBudgetRetrieval:
         assert isinstance(data, list)
         assert len(data) >= 1
 
-    def test_get_budget_by_id_returns_200(
-        self, test_client, test_db, mock_repositories, seed_account, seed_categories
-    ):
+    def test_get_budget_by_id_returns_200(self, test_client, test_db, mock_repositories, seed_account, seed_categories):
         # Arrange
         budget = Factory.budget(
             test_db,
@@ -141,9 +137,7 @@ class TestBudgetRetrieval:
         assert response.status_code == 200
         assert float(response.json()["amount"]) == 3000.0
 
-    def test_get_nonexistent_budget_returns_404(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_get_nonexistent_budget_returns_404(self, test_client, test_db, mock_repositories):
         # Act
         response = test_client.get("/api/v1/budgets/99999")
 
@@ -154,9 +148,7 @@ class TestBudgetRetrieval:
 class TestBudgetLifecycle:
     """Tests for updating and deleting budgets."""
 
-    def test_update_budget_amount(
-        self, test_client, test_db, mock_repositories, seed_account, seed_categories
-    ):
+    def test_update_budget_amount(self, test_client, test_db, mock_repositories, seed_account, seed_categories):
         # Arrange
         budget = Factory.budget(
             test_db,
@@ -177,9 +169,7 @@ class TestBudgetLifecycle:
         assert response.status_code == 200
         assert float(response.json()["amount"]) == 7000.0
 
-    def test_delete_budget_returns_204(
-        self, test_client, test_db, mock_repositories, seed_account, seed_categories
-    ):
+    def test_delete_budget_returns_204(self, test_client, test_db, mock_repositories, seed_account, seed_categories):
         # Arrange
         budget = Factory.budget(
             test_db,
@@ -196,9 +186,7 @@ class TestBudgetLifecycle:
         # Assert
         assert response.status_code == 204
 
-    def test_delete_nonexistent_budget_returns_404(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_delete_nonexistent_budget_returns_404(self, test_client, test_db, mock_repositories):
         # Act
         response = test_client.delete("/api/v1/budgets/99999")
 

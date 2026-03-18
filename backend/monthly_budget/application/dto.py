@@ -1,13 +1,13 @@
 """
 DTOs / Pydantic schemas for MonthlyBudget bounded context.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ── Request schemas ──────────────────────────────────────────────
 

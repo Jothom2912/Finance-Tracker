@@ -4,10 +4,11 @@ Revision ID: 001
 Revises:
 Create Date: 2026-03-11
 """
+
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "001"
 down_revision: str | None = None

@@ -2,9 +2,10 @@
 """MySQL implementation of account group repository."""
 
 import logging
-from typing import List, Dict, Optional
-from sqlalchemy.orm import Session
+from typing import Dict, List, Optional
+
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from backend.models.mysql.account_groups import AccountGroups as AGModel
 from backend.models.mysql.user import User as UserModel
@@ -30,11 +31,7 @@ class MySQLAccountGroupRepository(IAccountGroupRepository):
 
     def get_by_id(self, group_id: int) -> Optional[Dict]:
         try:
-            group = (
-                self.db.query(AGModel)
-                .filter(AGModel.idAccountGroups == group_id)
-                .first()
-            )
+            group = self.db.query(AGModel).filter(AGModel.idAccountGroups == group_id).first()
             return self._serialize(group) if group else None
         except Exception as e:
             raise ValueError(f"Fejl ved hentning af kontogruppe: {e}")
@@ -47,11 +44,7 @@ class MySQLAccountGroupRepository(IAccountGroupRepository):
 
             # Tilknyt brugere
             if user_ids:
-                users = (
-                    self.db.query(UserModel)
-                    .filter(UserModel.idUser.in_(user_ids))
-                    .all()
-                )
+                users = self.db.query(UserModel).filter(UserModel.idUser.in_(user_ids)).all()
                 if len(users) != len(user_ids):
                     raise ValueError("Mindst én bruger ID er ugyldig.")
                 db_group.users.extend(users)
@@ -72,22 +65,14 @@ class MySQLAccountGroupRepository(IAccountGroupRepository):
 
     def update(self, group_id: int, group_data: Dict) -> Optional[Dict]:
         try:
-            db_group = (
-                self.db.query(AGModel)
-                .filter(AGModel.idAccountGroups == group_id)
-                .first()
-            )
+            db_group = self.db.query(AGModel).filter(AGModel.idAccountGroups == group_id).first()
             if not db_group:
                 return None
 
             # Håndter user_ids separat
             user_ids = group_data.pop("user_ids", None)
             if user_ids is not None:
-                users = (
-                    self.db.query(UserModel)
-                    .filter(UserModel.idUser.in_(user_ids))
-                    .all()
-                )
+                users = self.db.query(UserModel).filter(UserModel.idUser.in_(user_ids)).all()
                 if len(users) != len(user_ids):
                     raise ValueError("Mindst én ny bruger ID er ugyldig.")
                 db_group.users = users
@@ -116,8 +101,5 @@ class MySQLAccountGroupRepository(IAccountGroupRepository):
             "idAccountGroups": group.idAccountGroups,
             "name": group.name,
             "max_users": getattr(group, "max_users", 20),
-            "users": [
-                {"idUser": u.idUser, "username": u.username}
-                for u in group.users
-            ],
+            "users": [{"idUser": u.idUser, "username": u.username} for u in group.users],
         }

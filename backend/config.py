@@ -4,9 +4,11 @@ Centralized configuration - all environment variables are loaded here.
 Other modules should import config values from this module instead of
 calling os.getenv() or load_dotenv() directly.
 """
+
 import os
 from enum import Enum
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load .env from project root (parent of backend/)
@@ -22,11 +24,13 @@ load_dotenv(dotenv_path=_env_path)
 # Database Configuration
 # =============================================================================
 
+
 class DatabaseType(Enum):
     MYSQL = "mysql"
     ELASTICSEARCH = "elasticsearch"
     NEO4J = "neo4j"
     HYBRID = "hybrid"
+
 
 ACTIVE_DB = os.getenv("ACTIVE_DB", DatabaseType.MYSQL.value)
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -75,6 +79,5 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 # =============================================================================
 
 CORS_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
+    origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
 ]

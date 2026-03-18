@@ -5,6 +5,7 @@ This adapter performs direct Cypher queries.
 Exit-plan: replace with projections via event bus (RabbitMQ)
 when microservice-split is implemented.
 """
+
 from __future__ import annotations
 
 import logging
@@ -90,11 +91,7 @@ class Neo4jAnalyticsReadRepository(IAnalyticsReadRepository):
             return []
 
     def get_budgets(self, account_id: int) -> list[dict]:
-        query = (
-            "MATCH (a:Account)-[:HAS_BUDGET]->(b:Budget)"
-            " WHERE a.idAccount = $account_id"
-            " RETURN b"
-        )
+        query = "MATCH (a:Account)-[:HAS_BUDGET]->(b:Budget) WHERE a.idAccount = $account_id RETURN b"
         try:
             with self._driver.session() as session:
                 result = session.run(query, account_id=account_id)

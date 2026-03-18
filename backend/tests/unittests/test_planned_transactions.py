@@ -1,25 +1,25 @@
-from pydantic import ValidationError
-import pytest
 from datetime import date, timedelta
-from typing import Optional
 
-from backend.transaction.application.dto import PlannedTransactionsBase, PlannedTransactionsCreate, TransactionBase
+import pytest
+from pydantic import ValidationError
+
+from backend.transaction.application.dto import PlannedTransactionsBase, PlannedTransactionsCreate
 
 
-
-# MOCK DEPENDENCY 
+# MOCK DEPENDENCY
 # This class acts as a mock for the imported PLANNED_TRANSACTION_BVA
 # to satisfy the schema's requirement for valid_intervals.
 class PLANNED_TRANSACTION_BVA:
     valid_intervals = ["daily", "weekly", "monthly"]
 
-#HELPER CONSTANTS
-VALID_AMOUNT = 100.00
 
+# HELPER CONSTANTS
+VALID_AMOUNT = 100.00
 
 
 # Unit Logic Tests (Using PlannedTransactionsBase)
 # Amount Boundary Value Analysis
+
 
 # Zero Amount (invalid)
 def test_base_amount_is_zero_invalid():
@@ -66,7 +66,8 @@ def test_base_amount_rounding():
     assert txn.amount == expected_amount
 
 
-#Planned Date Validation Future or Current Date
+# Planned Date Validation Future or Current Date
+
 
 # Past Date (invalid)
 def test_base_planned_date_past_invalid():
@@ -101,7 +102,9 @@ def test_base_planned_date_future_valid():
     # Assert
     assert txn.planned_date == future_date
 
-# Repeat Interval Validation 
+
+# Repeat Interval Validation
+
 
 # Weekly is valid
 def test_base_repeat_interval_weekly_valid():
@@ -139,6 +142,7 @@ def test_base_repeat_interval_none_valid():
 
 # Name Field Validation
 
+
 def test_base_name_max_length_invalid():
     # Arrange
     name = "A" * 46
@@ -149,6 +153,7 @@ def test_base_name_max_length_invalid():
 
 
 # Integration Tests (PlannedTransactionsCreate)
+
 
 def test_create_schema_basic_instantiation_valid():
     # Arrange

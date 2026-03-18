@@ -14,9 +14,7 @@ class MonthlyBudgetNotFound(MonthlyBudgetException):
 
 class MonthlyBudgetAlreadyExists(MonthlyBudgetException):
     def __init__(self, month: int, year: int):
-        super().__init__(
-            f"Der findes allerede et budget for {month:02d}/{year}."
-        )
+        super().__init__(f"Der findes allerede et budget for {month:02d}/{year}.")
 
 
 class CategoryNotFoundForBudgetLine(MonthlyBudgetException):
@@ -31,6 +29,4 @@ class AccountRequiredForMonthlyBudget(MonthlyBudgetException):
 
 class NoBudgetToCopy(MonthlyBudgetException):
     def __init__(self, month: int, year: int):
-        super().__init__(
-            f"Ingen budget fundet for {month:02d}/{year} at kopiere fra."
-        )
+        super().__init__(f"Ingen budget fundet for {month:02d}/{year} at kopiere fra.")

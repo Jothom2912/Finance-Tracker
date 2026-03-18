@@ -2,14 +2,15 @@
 """
 Import data from JSON dumps to Elasticsearch
 """
-import sys
+
 import os
+import sys
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from elasticsearch import Elasticsearch
 import json
+
 from backend.database.elasticsearch import get_es_client
 
 DUMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps", "elasticsearch")
@@ -25,7 +26,7 @@ INDEX_MAPPINGS = {
                 "date": {"type": "date"},
                 "type": {"type": "keyword"},
                 "Category_idCategory": {"type": "integer"},
-                "Account_idAccount": {"type": "integer"}
+                "Account_idAccount": {"type": "integer"},
             }
         }
     },
@@ -35,7 +36,7 @@ INDEX_MAPPINGS = {
                 "idCategory": {"type": "integer"},
                 "name": {"type": "keyword"},
                 "type": {"type": "keyword"},
-                "description": {"type": "text"}
+                "description": {"type": "text"},
             }
         }
     },
@@ -45,7 +46,7 @@ INDEX_MAPPINGS = {
                 "idAccount": {"type": "integer"},
                 "name": {"type": "text"},
                 "saldo": {"type": "float"},
-                "User_idUser": {"type": "integer"}
+                "User_idUser": {"type": "integer"},
             }
         }
     },
@@ -55,7 +56,7 @@ INDEX_MAPPINGS = {
                 "idUser": {"type": "integer"},
                 "username": {"type": "keyword"},
                 "email": {"type": "keyword"},
-                "created_at": {"type": "date"}
+                "created_at": {"type": "date"},
             }
         }
     },
@@ -65,7 +66,7 @@ INDEX_MAPPINGS = {
                 "idBudget": {"type": "integer"},
                 "amount": {"type": "float"},
                 "budget_date": {"type": "date"},
-                "Account_idAccount": {"type": "integer"}
+                "Account_idAccount": {"type": "integer"},
             }
         }
     },
@@ -78,65 +79,66 @@ INDEX_MAPPINGS = {
                 "current_amount": {"type": "float"},
                 "target_date": {"type": "date"},
                 "status": {"type": "keyword"},
-                "Account_idAccount": {"type": "integer"}
+                "Account_idAccount": {"type": "integer"},
             }
         }
-    }
+    },
 }
+
 
 def load_elasticsearch():
     """Import all JSON dumps to Elasticsearch"""
     es = get_es_client()
-    
+
     print("=" * 60)
     print("📥 Elasticsearch Load Script")
     print("=" * 60)
-    
+
     # Test connection
     if not es.ping():
         print("❌ Cannot connect to Elasticsearch!")
         return False
-    
-    print(f"✅ Connected to Elasticsearch")
+
+    print("✅ Connected to Elasticsearch")
     print(f"📁 Dump directory: {DUMP_DIR}\n")
-    
+
     if not os.path.exists(DUMP_DIR):
         print(f"❌ Dump directory does not exist: {DUMP_DIR}")
         return False
-    
+
     total_documents = 0
-    
+
     # Get all JSON files
     json_files = [f for f in os.listdir(DUMP_DIR) if f.endswith(".json")]
-    
+
     if not json_files:
         print(f"⚠️  No JSON files found in {DUMP_DIR}")
         return False
-    
+
     for filename in sorted(json_files):
         index_name = filename.replace(".json", "")
         filepath = os.path.join(DUMP_DIR, filename)
-        
+
         try:
             print(f"📥 Loading {index_name}...")
-            
+
             # Read dump file
             with open(filepath, "r", encoding="utf-8") as f:
                 documents = json.load(f)
-            
+
             if not documents:
                 print(f"⚠️  No documents in {filename}, skipping...")
                 continue
-            
+
             # Delete existing index if it exists
             if es.indices.exists(index=index_name):
                 print(f"🗑️  Deleting existing index '{index_name}'...")
                 es.indices.delete(index=index_name)
-            
+
             # Try to load mapping from dump file first
             mapping_file = os.path.join(DUMP_DIR, f"{index_name}.mapping.json")
             mapping_to_use = None
-            
+
             if os.path.exists(mapping_file):
                 try:
                     with open(mapping_file, "r", encoding="utf-8") as f:
@@ -145,12 +147,12 @@ def load_elasticsearch():
                     print(f"📋 Loaded mapping from {index_name}.mapping.json")
                 except Exception as e:
                     print(f"⚠️  Could not load mapping file: {str(e)}")
-            
+
             # Fallback to hardcoded mappings if dump mapping doesn't exist
             if not mapping_to_use and index_name in INDEX_MAPPINGS:
                 mapping_to_use = INDEX_MAPPINGS[index_name]
                 print(f"📋 Using hardcoded mapping for {index_name}")
-            
+
             # Create index with mapping
             if mapping_to_use:
                 es.indices.create(index=index_name, body=mapping_to_use)
@@ -158,7 +160,7 @@ def load_elasticsearch():
             else:
                 es.indices.create(index=index_name)
                 print(f"⚠️  Created index '{index_name}' without mapping (using dynamic mapping)")
-            
+
             # Bulk insert
             bulk_data = []
             for doc in documents:
@@ -176,19 +178,14 @@ def load_elasticsearch():
                     doc_id = doc["idBudget"]
                 elif "idGoal" in doc:
                     doc_id = doc["idGoal"]
-                
-                bulk_data.append({
-                    "index": {
-                        "_index": index_name,
-                        "_id": doc_id
-                    }
-                })
+
+                bulk_data.append({"index": {"_index": index_name, "_id": doc_id}})
                 bulk_data.append(doc)
-            
+
             if bulk_data:
                 # Execute bulk insert
                 response = es.bulk(body=bulk_data, refresh=True)
-                
+
                 # Check for errors
                 if response.get("errors"):
                     errors = [item for item in response["items"] if "error" in item.get("index", {})]
@@ -199,20 +196,21 @@ def load_elasticsearch():
                 else:
                     print(f"✅ Loaded {len(documents)} documents to {index_name}")
                     total_documents += len(documents)
-            
+
         except Exception as e:
             print(f"❌ Error loading {filename}: {str(e)}")
             import traceback
+
             traceback.print_exc()
             continue
-    
+
     print("\n" + "=" * 60)
     print(f"✅ Load complete! Total documents: {total_documents}")
     print("=" * 60)
-    
+
     return True
+
 
 if __name__ == "__main__":
     success = load_elasticsearch()
     sys.exit(0 if success else 1)
-

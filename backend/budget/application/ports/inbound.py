@@ -2,6 +2,7 @@
 Inbound ports (driving adapters) for Budget bounded context.
 Defines the service interface for external consumers.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -28,9 +29,7 @@ class IBudgetService(ABC):
         pass
 
     @abstractmethod
-    def update_budget(
-        self, budget_id: int, dto: BudgetUpdateDTO
-    ) -> Optional[BudgetResponseDTO]:
+    def update_budget(self, budget_id: int, dto: BudgetUpdateDTO) -> Optional[BudgetResponseDTO]:
         pass
 
     @abstractmethod

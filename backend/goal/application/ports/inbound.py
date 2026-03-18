@@ -2,13 +2,16 @@
 Inbound ports (driving adapters) - interfaces for use cases.
 These define what the Goal application can do.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from backend.goal.application.dto import (
-    GoalCreate,
-    GoalBase,
     Goal as GoalSchema,
+)
+from backend.goal.application.dto import (
+    GoalBase,
+    GoalCreate,
 )
 
 
@@ -28,9 +31,7 @@ class IGoalService(ABC):
         pass
 
     @abstractmethod
-    def update_goal(
-        self, goal_id: int, data: GoalBase
-    ) -> Optional[GoalSchema]:
+    def update_goal(self, goal_id: int, data: GoalBase) -> Optional[GoalSchema]:
         pass
 
     @abstractmethod

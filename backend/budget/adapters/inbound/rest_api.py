@@ -2,6 +2,7 @@
 REST API adapter for Budget bounded context.
 Handles HTTP concerns and delegates to application service.
 """
+
 import logging
 from typing import List, Optional
 
@@ -53,9 +54,7 @@ async def get_budget_by_id_route(
     """Retrieve details for a specific budget by its ID."""
     budget = service.get_budget(budget_id)
     if not budget:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
     return budget
 
 
@@ -94,10 +93,7 @@ async def create_budget_route(
     budget_dict.pop("month", None)
     budget_dict.pop("year", None)
 
-    if (
-        "Account_idAccount" not in budget_dict
-        or budget_dict.get("Account_idAccount") is None
-    ):
+    if "Account_idAccount" not in budget_dict or budget_dict.get("Account_idAccount") is None:
         budget_dict["Account_idAccount"] = account_id
 
     budget_with_account = BudgetCreateDTO(**budget_dict)
@@ -106,19 +102,13 @@ async def create_budget_route(
         new_budget = service.create_budget(budget_with_account)
         return new_budget
     except (CategoryNotFoundForBudget, AccountRequiredForBudget, CategoryRequiredForBudget) as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
         error_msg = str(e)
         if "category_id" in error_msg.lower() or "kategori" in error_msg.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
         if "Integritetsfejl" in error_msg or "ugyldig" in error_msg.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Could not create budget: {error_msg}",
@@ -164,18 +154,12 @@ async def update_budget_route(
 
         updated_budget = service.update_budget(budget_id, budget_with_date)
         if not updated_budget:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
         return updated_budget
     except CategoryNotFoundForBudget as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except HTTPException:
         raise
     except Exception:
@@ -193,7 +177,5 @@ async def delete_budget_route(
 ):
     """Delete a specific budget."""
     if not service.delete_budget(budget_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
     return

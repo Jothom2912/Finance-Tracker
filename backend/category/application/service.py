@@ -2,6 +2,7 @@
 Application service for Category bounded context.
 Orchestrates use cases using domain entities and ports.
 """
+
 from typing import Optional
 
 from backend.category.application.dto import CategoryCreateDTO, CategoryResponseDTO
@@ -42,14 +43,10 @@ class CategoryService(ICategoryService):
             return None
         return self._to_dto(category)
 
-    def list_categories(
-        self, skip: int = 0, limit: int = 100
-    ) -> list[CategoryResponseDTO]:
+    def list_categories(self, skip: int = 0, limit: int = 100) -> list[CategoryResponseDTO]:
         """List categories with pagination."""
         all_categories = self._category_repo.get_all()
-        return [
-            self._to_dto(c) for c in all_categories[skip : skip + limit]
-        ]
+        return [self._to_dto(c) for c in all_categories[skip : skip + limit]]
 
     # ------------------------------------------------------------------
     # Command use cases
@@ -69,9 +66,7 @@ class CategoryService(ICategoryService):
         created = self._category_repo.create(category)
         return self._to_dto(created)
 
-    def update_category(
-        self, category_id: int, dto: CategoryCreateDTO
-    ) -> Optional[CategoryResponseDTO]:
+    def update_category(self, category_id: int, dto: CategoryCreateDTO) -> Optional[CategoryResponseDTO]:
         """Update an existing category. Raises if new name conflicts."""
         existing = self._category_repo.get_by_id(category_id)
         if not existing:
@@ -104,9 +99,5 @@ class CategoryService(ICategoryService):
         return CategoryResponseDTO(
             idCategory=category.id,
             name=category.name,
-            type=(
-                category.type.value
-                if hasattr(category.type, "value")
-                else category.type
-            ),
+            type=(category.type.value if hasattr(category.type, "value") else category.type),
         )

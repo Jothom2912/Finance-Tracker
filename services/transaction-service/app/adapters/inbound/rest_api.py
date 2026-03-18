@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, UploadFile, status
 
@@ -70,9 +69,7 @@ async def list_transactions(
     return await service.list_transactions(user_id, filters)
 
 
-@transaction_router.get(
-    "/{transaction_id}", response_model=TransactionResponse
-)
+@transaction_router.get("/{transaction_id}", response_model=TransactionResponse)
 async def get_transaction(
     transaction_id: int,
     user_id: int = Depends(get_current_user_id),
@@ -94,9 +91,7 @@ async def delete_transaction(
     await service.delete_transaction(transaction_id, user_id)
 
 
-@transaction_router.post(
-    "/import-csv", response_model=CSVImportResultDTO
-)
+@transaction_router.post("/import-csv", response_model=CSVImportResultDTO)
 async def import_csv(
     file: UploadFile,
     user_id: int = Depends(get_current_user_id),
@@ -131,9 +126,7 @@ async def list_planned(
     return await service.list_planned(user_id, active_only)
 
 
-@planned_router.patch(
-    "/{planned_id}", response_model=PlannedTransactionResponse
-)
+@planned_router.patch("/{planned_id}", response_model=PlannedTransactionResponse)
 async def update_planned(
     planned_id: int,
     body: UpdatePlannedTransactionDTO,

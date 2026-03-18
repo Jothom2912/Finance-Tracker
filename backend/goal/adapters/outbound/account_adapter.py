@@ -2,6 +2,7 @@
 Anti-corruption layer for Account domain.
 Allows Goal domain to check account existence without coupling to Account internals.
 """
+
 from sqlalchemy.orm import Session
 
 from backend.goal.application.ports.outbound import IAccountPort
@@ -15,8 +16,4 @@ class MySQLAccountAdapter(IAccountPort):
         self._db = db
 
     def exists(self, account_id: int) -> bool:
-        return (
-            self._db.query(AccountModel)
-            .filter(AccountModel.idAccount == account_id)
-            .first()
-        ) is not None
+        return (self._db.query(AccountModel).filter(AccountModel.idAccount == account_id).first()) is not None

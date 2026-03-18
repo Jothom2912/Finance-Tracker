@@ -2,26 +2,29 @@
 User Service - Application layer use case implementation.
 Orchestrates domain logic and infrastructure through ports.
 """
+
 import logging
 from datetime import datetime
 from typing import Optional
 
+from backend.auth import create_access_token, hash_password, verify_password
+from backend.user.application.dto import (
+    User as UserSchema,
+)
+from backend.user.application.dto import (
+    UserCreate,
+)
 from backend.user.application.ports.inbound import IUserService
 from backend.user.application.ports.outbound import (
-    IUserRepository,
     IAccountPort,
+    IUserRepository,
 )
 from backend.user.domain.entities import User
 from backend.user.domain.exceptions import (
     DuplicateEmail,
     DuplicateUsername,
-    UserOrEmailNotFound,
     InvalidCredentials,
-)
-from backend.auth import hash_password, verify_password, create_access_token
-from backend.user.application.dto import (
-    UserCreate,
-    User as UserSchema,
+    UserOrEmailNotFound,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,9 +65,7 @@ class UserService(IUserService):
             return None
         return self._to_dto(user)
 
-    def list_users(
-        self, skip: int = 0, limit: int = 100
-    ) -> list[UserSchema]:
+    def list_users(self, skip: int = 0, limit: int = 100) -> list[UserSchema]:
         """List users with pagination."""
         all_users = self._user_repo.get_all()
         return [self._to_dto(u) for u in all_users[skip : skip + limit]]
@@ -98,9 +99,7 @@ class UserService(IUserService):
         # Create default account
         try:
             self._account_port.create_default_account(created.id)
-            logger.info(
-                "Default account created for user %s", created.id
-            )
+            logger.info("Default account created for user %s", created.id)
         except Exception as e:
             logger.warning(
                 "Failed to create default account for user %s: %s",

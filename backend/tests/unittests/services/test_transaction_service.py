@@ -7,34 +7,34 @@ Each test verifies a specific piece of business logic in the service layer.
 Updated for hexagonal architecture (backend.transaction.*).
 """
 
-import pytest
-from unittest.mock import Mock
 from datetime import date, datetime
+from unittest.mock import Mock
 
-from backend.transaction.application.service import TransactionService
+import pytest
+
+from backend.shared.ports.unit_of_work import IUnitOfWork
+from backend.transaction.application.dto import (
+    PlannedTransactionsBase,
+    PlannedTransactionsCreate,
+    TransactionCreate,
+    TransactionType,
+)
 from backend.transaction.application.ports.outbound import (
-    ITransactionRepository,
     ICategoryPort,
     IPlannedTransactionRepository,
+    ITransactionRepository,
 )
+from backend.transaction.application.service import TransactionService
 from backend.transaction.domain.entities import (
     CategoryInfo,
     PlannedTransaction,
     Transaction,
 )
-from backend.shared.ports.unit_of_work import IUnitOfWork
 from backend.transaction.domain.exceptions import (
     AccountRequired,
     CategoryNotFound,
     PlannedTransactionRepositoryNotConfigured,
 )
-from backend.transaction.application.dto import (
-    TransactionCreate,
-    TransactionType,
-    PlannedTransactionsCreate,
-    PlannedTransactionsBase,
-)
-
 
 # ============================================================================
 # Fixtures
@@ -128,9 +128,7 @@ def _make_category_info(
     return CategoryInfo(id=category_id, name=name, type=category_type)
 
 
-def _make_planned_entity(
-    pt_id: int = 1, name: str = "Husleje", amount: float = -8000.0
-) -> PlannedTransaction:
+def _make_planned_entity(pt_id: int = 1, name: str = "Husleje", amount: float = -8000.0) -> PlannedTransaction:
     return PlannedTransaction(id=pt_id, name=name, amount=amount)
 
 
@@ -334,9 +332,7 @@ class TestGetTransaction:
 class TestCreateTransaction:
     """Tests for create_transaction business logic."""
 
-    def test_creates_transaction_successfully(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_creates_transaction_successfully(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_by_id.return_value = _make_category_info(1, "Mad")
         mock_transaction_repo.create.return_value = _make_transaction_entity(
@@ -369,9 +365,7 @@ class TestCreateTransaction:
         with pytest.raises(AccountRequired):
             service.create_transaction(transaction)
 
-    def test_sets_date_to_today_when_not_provided(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_sets_date_to_today_when_not_provided(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_by_id.return_value = _make_category_info(1, "Mad")
         mock_transaction_repo.create.return_value = _make_transaction_entity(tx_id=1)
@@ -386,9 +380,7 @@ class TestCreateTransaction:
         call_data = mock_transaction_repo.create.call_args[0][0]
         assert call_data.date == date.today()
 
-    def test_sets_created_at_timestamp(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_sets_created_at_timestamp(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_by_id.return_value = _make_category_info(1, "Mad")
         mock_transaction_repo.create.return_value = _make_transaction_entity(tx_id=1)
@@ -402,9 +394,7 @@ class TestCreateTransaction:
         assert call_data.created_at is not None
         assert isinstance(call_data.created_at, datetime)
 
-    def test_converts_type_enum_to_string(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_converts_type_enum_to_string(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_by_id.return_value = _make_category_info(1, "Mad")
         mock_transaction_repo.create.return_value = _make_transaction_entity(tx_id=1)
@@ -417,9 +407,7 @@ class TestCreateTransaction:
         call_data = mock_transaction_repo.create.call_args[0][0]
         assert call_data.type == "expense"
 
-    def test_validates_category_before_creating(
-        self, service, mock_category_repo, mock_transaction_repo
-    ):
+    def test_validates_category_before_creating(self, service, mock_category_repo, mock_transaction_repo):
         # Arrange
         mock_category_repo.get_by_id.return_value = None
 
@@ -439,9 +427,7 @@ class TestCreateTransaction:
 class TestUpdateTransaction:
     """Tests for update_transaction business logic."""
 
-    def test_returns_none_when_transaction_not_found(
-        self, service, mock_transaction_repo
-    ):
+    def test_returns_none_when_transaction_not_found(self, service, mock_transaction_repo):
         # Arrange
         mock_transaction_repo.get_by_id.return_value = None
 
@@ -454,29 +440,21 @@ class TestUpdateTransaction:
         # Assert
         assert result is None
 
-    def test_updates_successfully(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_updates_successfully(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         existing = _make_transaction_entity(tx_id=1, category_id=1, amount=-500.0)
         mock_transaction_repo.get_by_id.return_value = existing
-        mock_transaction_repo.update.return_value = _make_transaction_entity(
-            tx_id=1, amount=-600.0
-        )
+        mock_transaction_repo.update.return_value = _make_transaction_entity(tx_id=1, amount=-600.0)
         update_data = _make_transaction_create(amount=-600.0)
 
         # Act
-        result = service.update_transaction(
-            transaction_id=1, dto=update_data
-        )
+        result = service.update_transaction(transaction_id=1, dto=update_data)
 
         # Assert
         assert result.amount == -600.0
         mock_transaction_repo.update.assert_called_once()
 
-    def test_validates_new_category_when_changed(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_validates_new_category_when_changed(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         existing = _make_transaction_entity(tx_id=1, category_id=1)
         mock_transaction_repo.get_by_id.return_value = existing
@@ -487,9 +465,7 @@ class TestUpdateTransaction:
         with pytest.raises(CategoryNotFound):
             service.update_transaction(transaction_id=1, dto=update_data)
 
-    def test_skips_category_validation_when_unchanged(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_skips_category_validation_when_unchanged(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         existing = _make_transaction_entity(tx_id=1, category_id=1)
         mock_transaction_repo.get_by_id.return_value = existing
@@ -502,9 +478,7 @@ class TestUpdateTransaction:
         # Assert - category_repo.get_by_id should NOT have been called
         mock_category_repo.get_by_id.assert_not_called()
 
-    def test_converts_type_enum_to_string_in_update(
-        self, service, mock_transaction_repo
-    ):
+    def test_converts_type_enum_to_string_in_update(self, service, mock_transaction_repo):
         # Arrange
         existing = _make_transaction_entity(tx_id=1, category_id=1)
         mock_transaction_repo.get_by_id.return_value = existing
@@ -587,9 +561,7 @@ class TestPlannedTransactions:
         # Assert
         mock_planned_repo.get_all.assert_called_once_with(skip=10, limit=25)
 
-    def test_get_planned_transaction_returns_result(
-        self, service, mock_planned_repo
-    ):
+    def test_get_planned_transaction_returns_result(self, service, mock_planned_repo):
         # Arrange
         expected = _make_planned_entity(pt_id=1, name="Husleje", amount=-8000.0)
         mock_planned_repo.get_by_id.return_value = expected
@@ -601,9 +573,7 @@ class TestPlannedTransactions:
         assert result.id == 1
         assert result.name == "Husleje"
 
-    def test_get_planned_transaction_returns_none(
-        self, service, mock_planned_repo
-    ):
+    def test_get_planned_transaction_returns_none(self, service, mock_planned_repo):
         # Arrange
         mock_planned_repo.get_by_id.return_value = None
 
@@ -615,9 +585,7 @@ class TestPlannedTransactions:
 
     def test_create_planned_transaction_delegates(self, service, mock_planned_repo):
         # Arrange
-        mock_planned_repo.create.return_value = _make_planned_entity(
-            pt_id=1, name="Husleje"
-        )
+        mock_planned_repo.create.return_value = _make_planned_entity(pt_id=1, name="Husleje")
         pt_data = PlannedTransactionsCreate(
             name="Husleje",
             amount=-8000.0,
@@ -634,12 +602,8 @@ class TestPlannedTransactions:
 
     def test_update_planned_transaction_delegates(self, service, mock_planned_repo):
         # Arrange
-        mock_planned_repo.get_by_id.return_value = _make_planned_entity(
-            pt_id=1, name="Husleje"
-        )
-        mock_planned_repo.update.return_value = _make_planned_entity(
-            pt_id=1, name="Husleje Ny", amount=-9000.0
-        )
+        mock_planned_repo.get_by_id.return_value = _make_planned_entity(pt_id=1, name="Husleje")
+        mock_planned_repo.update.return_value = _make_planned_entity(pt_id=1, name="Husleje Ny", amount=-9000.0)
         pt_data = PlannedTransactionsBase(name="Husleje Ny", amount=-9000.0)
 
         # Act
@@ -701,9 +665,7 @@ class TestImportFromCsv:
         header = "Bogføringsdato;Beløb;Modtager;Afsender;Navn;Beskrivelse"
         return f"{header}\n{rows}".encode("utf-8")
 
-    def test_imports_valid_csv(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_imports_valid_csv(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_all.return_value = [
             _make_category_info(1, "Anden"),
@@ -719,9 +681,7 @@ class TestImportFromCsv:
         assert len(result) == 1
         mock_transaction_repo.create.assert_called_once()
 
-    def test_imports_multiple_rows(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_imports_multiple_rows(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_all.return_value = [
             _make_category_info(1, "Anden"),
@@ -731,10 +691,7 @@ class TestImportFromCsv:
             _make_transaction_entity(tx_id=2),
         ]
 
-        csv_data = self._make_csv(
-            "2024/01/15;-150,50;Netto;;;Netto køb\n"
-            "2024/01/16;-75,00;DSB;;;DSB billet"
-        )
+        csv_data = self._make_csv("2024/01/15;-150,50;Netto;;;Netto køb\n2024/01/16;-75,00;DSB;;;DSB billet")
 
         # Act
         result = service.import_from_csv(csv_data, account_id=1)
@@ -742,9 +699,7 @@ class TestImportFromCsv:
         # Assert
         assert len(result) == 2
 
-    def test_creates_anden_category_if_missing(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_creates_anden_category_if_missing(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_all.return_value = []  # No categories exist
         mock_category_repo.create.return_value = _make_category_info(99, "Anden")
@@ -760,9 +715,7 @@ class TestImportFromCsv:
         create_kwargs = mock_category_repo.create.call_args.kwargs
         assert create_kwargs["name"] == "Anden"
 
-    def test_raises_on_empty_csv_after_parsing(
-        self, service, mock_category_repo
-    ):
+    def test_raises_on_empty_csv_after_parsing(self, service, mock_category_repo):
         # Arrange - CSV with header but invalid dates that result in empty df
         csv_data = self._make_csv("not-a-date;-150,50;Netto;;;Netto køb")
 
@@ -778,9 +731,7 @@ class TestImportFromCsv:
         with pytest.raises(ValueError, match="CSV mangler"):
             service.import_from_csv(csv_data, account_id=1)
 
-    def test_sets_account_id_on_imported_transactions(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_sets_account_id_on_imported_transactions(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_all.return_value = [
             _make_category_info(1, "Anden"),
@@ -796,9 +747,7 @@ class TestImportFromCsv:
         call_data = mock_transaction_repo.create.call_args[0][0]
         assert call_data.account_id == 42
 
-    def test_negative_amount_is_categorized_as_expense(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_negative_amount_is_categorized_as_expense(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_all.return_value = [
             _make_category_info(1, "Anden"),
@@ -814,9 +763,7 @@ class TestImportFromCsv:
         call_data = mock_transaction_repo.create.call_args[0][0]
         assert call_data.type == "expense"
 
-    def test_positive_amount_is_categorized_as_income(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_positive_amount_is_categorized_as_income(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_all.return_value = [
             _make_category_info(1, "Anden"),
@@ -832,9 +779,7 @@ class TestImportFromCsv:
         call_data = mock_transaction_repo.create.call_args[0][0]
         assert call_data.type == "income"
 
-    def test_amount_is_stored_as_absolute_value(
-        self, service, mock_transaction_repo, mock_category_repo
-    ):
+    def test_amount_is_stored_as_absolute_value(self, service, mock_transaction_repo, mock_category_repo):
         # Arrange
         mock_category_repo.get_all.return_value = [
             _make_category_info(1, "Anden"),

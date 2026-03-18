@@ -1,9 +1,10 @@
 import pytest
 from pydantic import ValidationError
+
 from backend.category.application.dto import CategoryCreate
 
-
 # Category Name Boundary Value Tests
+
 
 # Lower Boundary (N-1) - INVALID
 def test_name_min_length_below_boundary_invalid():
@@ -14,6 +15,7 @@ def test_name_min_length_below_boundary_invalid():
     # Act & Assert
     with pytest.raises(ValidationError):
         CategoryCreate(name=name, type=category_type)
+
 
 # Lower Boundary (N) - VALID
 def test_name_min_length_at_boundary_valid():
@@ -27,16 +29,18 @@ def test_name_min_length_at_boundary_valid():
     # Assert
     assert valid_category.name == name
 
+
 # Upper Boundary (M) - VALID
 def test_name_max_length_at_boundary_valid():
     # ARRANGE: Name length 30 (maximum valid)
     name = "A" * 30
-    
+
     # ACT
     valid_category = CategoryCreate(name=name, type="income")
-    
+
     # ASSERT
     assert len(valid_category.name) == 30
+
 
 # Upper Boundary (M+1) - INVALID
 def test_name_max_length_above_boundary_invalid():
@@ -48,7 +52,9 @@ def test_name_max_length_above_boundary_invalid():
     with pytest.raises(ValidationError):
         CategoryCreate(name=name, type=category_type)
 
+
 # Type Field Validation (Equivalence Partitioning)
+
 
 # Valid Type: income
 def test_type_valid_value_income():
@@ -60,6 +66,7 @@ def test_type_valid_value_income():
 
     # Assert
     assert valid_category.type == valid_type
+
 
 # Valid Type: expense
 def test_type_valid_value_expense():

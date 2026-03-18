@@ -5,6 +5,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
+from app.application.ports.outbound import IEventPublisher
+from app.database import Base, get_db
+from app.dependencies import get_publisher
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -12,16 +15,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.application.ports.outbound import IEventPublisher
-from app.database import Base, get_db
-from app.dependencies import get_publisher
-
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 engine = create_async_engine(TEST_DB_URL, echo=False)
-TestSessionLocal = async_sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
+TestSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 @pytest_asyncio.fixture()

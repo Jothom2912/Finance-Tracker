@@ -4,14 +4,13 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from contracts.events.account import (
     AccountCreatedEvent,
     AccountCreationFailedEvent,
 )
 
 from backend.account.domain.entities import Account
-from backend.consumers.base import BaseConsumer, HEADER_RETRY_COUNT
+from backend.consumers.base import HEADER_RETRY_COUNT, BaseConsumer
 from backend.consumers.user_created import UserCreatedConsumer
 
 
@@ -51,15 +50,11 @@ class TestUserCreatedHandle:
         factory = MagicMock(return_value=session)
         publisher = AsyncMock()
 
-        created_account = Account(
-            id=10, name="Default Account", saldo=0.0, user_id=1
-        )
+        created_account = Account(id=10, name="Default Account", saldo=0.0, user_id=1)
 
         consumer = _make_consumer(factory, publisher)
 
-        with patch(
-            "backend.consumers.user_created.MySQLAccountRepository"
-        ) as mock_repo_cls:
+        with patch("backend.consumers.user_created.MySQLAccountRepository") as mock_repo_cls:
             mock_repo_cls.return_value.create.return_value = created_account
             await consumer.handle(_valid_event_data())
 
@@ -74,14 +69,10 @@ class TestUserCreatedHandle:
         factory = MagicMock(return_value=session)
         publisher = AsyncMock()
 
-        created_account = Account(
-            id=10, name="Default Account", saldo=0.0, user_id=1
-        )
+        created_account = Account(id=10, name="Default Account", saldo=0.0, user_id=1)
         consumer = _make_consumer(factory, publisher)
 
-        with patch(
-            "backend.consumers.user_created.MySQLAccountRepository"
-        ) as mock_repo_cls:
+        with patch("backend.consumers.user_created.MySQLAccountRepository") as mock_repo_cls:
             mock_repo_cls.return_value.create.return_value = created_account
             await consumer.handle(_valid_event_data())
 
@@ -98,18 +89,12 @@ class TestUserCreatedHandle:
         factory = MagicMock(return_value=session)
         publisher = AsyncMock()
 
-        created_account = Account(
-            id=10, name="Default Account", saldo=0.0, user_id=1
-        )
+        created_account = Account(id=10, name="Default Account", saldo=0.0, user_id=1)
         consumer = _make_consumer(factory, publisher)
 
-        with patch(
-            "backend.consumers.user_created.MySQLAccountRepository"
-        ) as mock_repo_cls:
+        with patch("backend.consumers.user_created.MySQLAccountRepository") as mock_repo_cls:
             mock_repo_cls.return_value.create.return_value = created_account
-            await consumer.handle(
-                _valid_event_data(correlation_id="trace-abc-123")
-            )
+            await consumer.handle(_valid_event_data(correlation_id="trace-abc-123"))
 
         event = publisher.publish.call_args[0][0]
         assert event.correlation_id == "trace-abc-123"
@@ -122,12 +107,8 @@ class TestUserCreatedHandle:
 
         consumer = _make_consumer(factory, publisher)
 
-        with patch(
-            "backend.consumers.user_created.MySQLAccountRepository"
-        ) as mock_repo_cls:
-            mock_repo_cls.return_value.create.side_effect = RuntimeError(
-                "DB down"
-            )
+        with patch("backend.consumers.user_created.MySQLAccountRepository") as mock_repo_cls:
+            mock_repo_cls.return_value.create.side_effect = RuntimeError("DB down")
             with pytest.raises(RuntimeError):
                 await consumer.handle(_valid_event_data())
 
@@ -144,12 +125,8 @@ class TestUserCreatedHandle:
 
         consumer = _make_consumer(factory, publisher)
 
-        with patch(
-            "backend.consumers.user_created.MySQLAccountRepository"
-        ) as mock_repo_cls:
-            mock_repo_cls.return_value.create.side_effect = RuntimeError(
-                "fail"
-            )
+        with patch("backend.consumers.user_created.MySQLAccountRepository") as mock_repo_cls:
+            mock_repo_cls.return_value.create.side_effect = RuntimeError("fail")
             with pytest.raises(RuntimeError, match="fail"):
                 await consumer.handle(_valid_event_data())
 
@@ -187,9 +164,7 @@ class _FailingConsumer(BaseConsumer):
         raise RuntimeError("boom")
 
 
-def _make_message(
-    body: dict, retry_count: int | None = None
-) -> MagicMock:
+def _make_message(body: dict, retry_count: int | None = None) -> MagicMock:
     msg = MagicMock()
     msg.body = json.dumps(body).encode("utf-8")
     msg.headers = {}

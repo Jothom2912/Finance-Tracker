@@ -2,6 +2,7 @@
 Domain entities for Transaction bounded context.
 Pure domain objects with no infrastructure dependencies.
 """
+
 import enum
 from dataclasses import dataclass
 from datetime import date, datetime

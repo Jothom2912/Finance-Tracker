@@ -35,30 +35,22 @@ app.add_middleware(
 
 
 @app.exception_handler(TransactionNotFoundException)
-async def transaction_not_found_handler(
-    _request: Request, exc: TransactionNotFoundException
-) -> JSONResponse:
+async def transaction_not_found_handler(_request: Request, exc: TransactionNotFoundException) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @app.exception_handler(PlannedTransactionNotFoundException)
-async def planned_not_found_handler(
-    _request: Request, exc: PlannedTransactionNotFoundException
-) -> JSONResponse:
+async def planned_not_found_handler(_request: Request, exc: PlannedTransactionNotFoundException) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @app.exception_handler(InvalidTransactionException)
-async def invalid_transaction_handler(
-    _request: Request, exc: InvalidTransactionException
-) -> JSONResponse:
+async def invalid_transaction_handler(_request: Request, exc: InvalidTransactionException) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.exception_handler(CSVImportException)
-async def csv_import_handler(
-    _request: Request, exc: CSVImportException
-) -> JSONResponse:
+async def csv_import_handler(_request: Request, exc: CSVImportException) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 

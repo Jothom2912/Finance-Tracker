@@ -43,9 +43,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         await self._session.refresh(model)
         return self._to_entity(model)
 
-    async def find_by_id(
-        self, transaction_id: int, user_id: int
-    ) -> Transaction | None:
+    async def find_by_id(self, transaction_id: int, user_id: int) -> Transaction | None:
         stmt = select(TransactionModel).where(
             TransactionModel.id == transaction_id,
             TransactionModel.user_id == user_id,
@@ -54,9 +52,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
 
-    async def find_by_user(
-        self, user_id: int, skip: int = 0, limit: int = 50
-    ) -> list[Transaction]:
+    async def find_by_user(self, user_id: int, skip: int = 0, limit: int = 50) -> list[Transaction]:
         stmt = (
             select(TransactionModel)
             .where(TransactionModel.user_id == user_id)
@@ -67,9 +63,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
-    async def find_by_account(
-        self, account_id: int, user_id: int
-    ) -> list[Transaction]:
+    async def find_by_account(self, account_id: int, user_id: int) -> list[Transaction]:
         stmt = (
             select(TransactionModel)
             .where(
@@ -81,9 +75,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
-    async def find_by_category(
-        self, category_id: int, user_id: int
-    ) -> list[Transaction]:
+    async def find_by_category(self, category_id: int, user_id: int) -> list[Transaction]:
         stmt = (
             select(TransactionModel)
             .where(
@@ -95,9 +87,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
-    async def find_by_date_range(
-        self, user_id: int, start: date, end: date
-    ) -> list[Transaction]:
+    async def find_by_date_range(self, user_id: int, start: date, end: date) -> list[Transaction]:
         stmt = (
             select(TransactionModel)
             .where(
@@ -123,9 +113,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         await self._session.flush()
         return True
 
-    async def bulk_create(
-        self, transactions: list[dict]
-    ) -> list[Transaction]:
+    async def bulk_create(self, transactions: list[dict]) -> list[Transaction]:
         models = []
         for tx in transactions:
             tx_type = tx.get("transaction_type", "expense")

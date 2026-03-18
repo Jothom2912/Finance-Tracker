@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from app.application.dto import (
-    EMAIL_MAX,
     PASSWORD_MAX,
     PASSWORD_MIN,
     USERNAME_MAX,
     USERNAME_MIN,
     RegisterDTO,
 )
+from pydantic import ValidationError
 
 
 class TestUsernameValidation:

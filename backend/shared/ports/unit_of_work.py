@@ -5,6 +5,7 @@ Wraps an existing session (does NOT create a new one).
 The request-scoped session is created by get_db() and
 injected via constructor.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -22,8 +23,7 @@ class IUnitOfWork(ABC):
     """
 
     @abstractmethod
-    def __enter__(self) -> "IUnitOfWork":
-        ...
+    def __enter__(self) -> "IUnitOfWork": ...
 
     @abstractmethod
     def __exit__(
@@ -31,13 +31,10 @@ class IUnitOfWork(ABC):
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: object,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @abstractmethod
-    def commit(self) -> None:
-        ...
+    def commit(self) -> None: ...
 
     @abstractmethod
-    def rollback(self) -> None:
-        ...
+    def rollback(self) -> None: ...

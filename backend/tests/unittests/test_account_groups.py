@@ -1,11 +1,11 @@
 import pytest
 from pydantic import ValidationError
+
 from backend.account.application.dto import (
     AccountGroupsBase,
     AccountGroupsCreate,
 )
 from backend.validation_boundaries import ACCOUNT_GROUP_BVA
-
 
 # Helper Constants
 
@@ -14,6 +14,7 @@ VALID_MAX_USERS = ACCOUNT_GROUP_BVA.max_users
 
 
 # AccountGroupsBase — Name Validation (BVA)
+
 
 # Min Length (N-1) - INVALID (0 chars)
 def test_base_name_min_length_below_boundary_invalid():
@@ -84,6 +85,7 @@ def test_base_name_whitespace_stripped_valid():
 
 # AccountGroupsBase — max_users Validation (BVA)
 
+
 def test_base_max_users_below_boundary_invalid():
     # Arrange
     max_users = 0
@@ -93,7 +95,6 @@ def test_base_max_users_below_boundary_invalid():
         AccountGroupsBase(name=VALID_NAME, max_users=max_users)
 
     assert "greater than or equal to 1" in str(excinfo.value)
-
 
 
 # Lower Boundary (N) - VALID (1)
@@ -132,8 +133,8 @@ def test_base_max_users_above_boundary_invalid():
     assert "less than or equal to" in str(excinfo.value)
 
 
-
 # AccountGroupsCreate — user_ids Validation
+
 
 # Default user_ids - VALID (empty list)
 def test_create_user_ids_default_empty_valid():
@@ -177,6 +178,7 @@ def test_create_user_ids_above_max_users_invalid():
 
 
 # Inheritance Checks
+
 
 # Inheritance Check - Name Max Length
 def test_create_inheritance_name_max_length_invalid():

@@ -3,6 +3,7 @@ MySQL adapter for IAccountResolver.
 
 Read-only — no commit/rollback. Uses injected session.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -20,11 +21,7 @@ class MySQLAccountResolver(IAccountResolver):
         self._session = session
 
     def get_account_id_for_user(self, user_id: int) -> Optional[int]:
-        account = (
-            self._session.query(AccountModel)
-            .filter(AccountModel.User_idUser == user_id)
-            .first()
-        )
+        account = self._session.query(AccountModel).filter(AccountModel.User_idUser == user_id).first()
         if account is None:
             return None
         return account.idAccount

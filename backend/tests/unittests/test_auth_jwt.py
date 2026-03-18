@@ -4,11 +4,11 @@ Verifies that the monolith's auth module produces tokens with the
 ``sub`` claim and can decode tokens issued in both the monolith format
 (``user_id``) and the microservice format (``sub``).
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-import pytest
 from jose import jwt
 
 from backend.auth import (
@@ -21,17 +21,13 @@ from backend.config import SECRET_KEY
 
 class TestCreateTokenFormat:
     def test_token_contains_sub_field(self) -> None:
-        token = create_access_token(
-            user_id=42, username="alice", email="alice@example.com"
-        )
+        token = create_access_token(user_id=42, username="alice", email="alice@example.com")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
         assert payload["sub"] == "42"
 
     def test_token_still_contains_legacy_fields(self) -> None:
-        token = create_access_token(
-            user_id=7, username="bob", email="bob@example.com"
-        )
+        token = create_access_token(user_id=7, username="bob", email="bob@example.com")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
         assert payload["user_id"] == 7
@@ -81,9 +77,7 @@ class TestDecodeTokenCrossFormat:
 
     def test_decode_combined_format(self) -> None:
         """Token with both sub and user_id prefers user_id."""
-        token = create_access_token(
-            user_id=99, username="eve", email="eve@example.com"
-        )
+        token = create_access_token(user_id=99, username="eve", email="eve@example.com")
 
         data = decode_token(token)
 

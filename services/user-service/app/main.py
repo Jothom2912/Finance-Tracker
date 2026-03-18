@@ -34,23 +34,17 @@ app.add_middleware(
 
 
 @app.exception_handler(UserAlreadyExistsException)
-async def user_already_exists_handler(
-    _request: Request, exc: UserAlreadyExistsException
-) -> JSONResponse:
+async def user_already_exists_handler(_request: Request, exc: UserAlreadyExistsException) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.exception_handler(InvalidCredentialsException)
-async def invalid_credentials_handler(
-    _request: Request, exc: InvalidCredentialsException
-) -> JSONResponse:
+async def invalid_credentials_handler(_request: Request, exc: InvalidCredentialsException) -> JSONResponse:
     return JSONResponse(status_code=401, content={"detail": str(exc)})
 
 
 @app.exception_handler(UserNotFoundException)
-async def user_not_found_handler(
-    _request: Request, exc: UserNotFoundException
-) -> JSONResponse:
+async def user_not_found_handler(_request: Request, exc: UserNotFoundException) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 

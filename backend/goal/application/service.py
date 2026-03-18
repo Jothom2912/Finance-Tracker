@@ -2,21 +2,24 @@
 Goal Service - Application layer use case implementation.
 Orchestrates domain logic and infrastructure through ports.
 """
+
 import logging
 from typing import Optional
 
+from backend.goal.application.dto import (
+    Goal as GoalSchema,
+)
+from backend.goal.application.dto import (
+    GoalBase,
+    GoalCreate,
+)
 from backend.goal.application.ports.inbound import IGoalService
 from backend.goal.application.ports.outbound import (
-    IGoalRepository,
     IAccountPort,
+    IGoalRepository,
 )
 from backend.goal.domain.entities import Goal
 from backend.goal.domain.exceptions import AccountNotFoundForGoal
-from backend.goal.application.dto import (
-    GoalCreate,
-    GoalBase,
-    Goal as GoalSchema,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +77,7 @@ class GoalService(IGoalService):
         created = self._goal_repo.create(goal)
         return self._to_dto(created)
 
-    def update_goal(
-        self, goal_id: int, data: GoalBase
-    ) -> Optional[GoalSchema]:
+    def update_goal(self, goal_id: int, data: GoalBase) -> Optional[GoalSchema]:
         """Update an existing goal."""
         existing = self._goal_repo.get_by_id(goal_id)
         if not existing:

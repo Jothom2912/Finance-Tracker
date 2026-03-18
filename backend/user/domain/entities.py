@@ -2,6 +2,7 @@
 Domain entities for User bounded context.
 Pure domain objects with no infrastructure dependencies.
 """
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -10,6 +11,7 @@ from typing import Optional
 @dataclass
 class User:
     """User domain entity (without credentials)."""
+
     id: Optional[int]
     username: str
     email: str
@@ -29,6 +31,7 @@ class UserWithCredentials:
     This entity is intentionally separate from User to enforce
     that credentials are never accidentally exposed in read operations.
     """
+
     id: int
     username: str
     email: str

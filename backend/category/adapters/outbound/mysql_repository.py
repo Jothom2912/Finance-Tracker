@@ -1,6 +1,7 @@
 """
 MySQL adapter for Category repository.
 """
+
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -20,19 +21,11 @@ class MySQLCategoryRepository(ICategoryRepository):
         self._db = db
 
     def get_by_id(self, category_id: int) -> Optional[Category]:
-        model = (
-            self._db.query(CategoryModel)
-            .filter(CategoryModel.idCategory == category_id)
-            .first()
-        )
+        model = self._db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
         return self._to_entity(model) if model else None
 
     def get_by_name(self, name: str) -> Optional[Category]:
-        model = (
-            self._db.query(CategoryModel)
-            .filter(CategoryModel.name == name)
-            .first()
-        )
+        model = self._db.query(CategoryModel).filter(CategoryModel.name == name).first()
         return self._to_entity(model) if model else None
 
     def get_all(self) -> list[Category]:
@@ -42,11 +35,7 @@ class MySQLCategoryRepository(ICategoryRepository):
     def create(self, category: Category) -> Category:
         model = CategoryModel(
             name=category.name,
-            type=(
-                category.type.value
-                if isinstance(category.type, CategoryType)
-                else category.type
-            ),
+            type=(category.type.value if isinstance(category.type, CategoryType) else category.type),
         )
         self._db.add(model)
         self._db.commit()
@@ -54,29 +43,17 @@ class MySQLCategoryRepository(ICategoryRepository):
         return self._to_entity(model)
 
     def update(self, category: Category) -> Category:
-        model = (
-            self._db.query(CategoryModel)
-            .filter(CategoryModel.idCategory == category.id)
-            .first()
-        )
+        model = self._db.query(CategoryModel).filter(CategoryModel.idCategory == category.id).first()
 
         model.name = category.name
-        model.type = (
-            category.type.value
-            if isinstance(category.type, CategoryType)
-            else category.type
-        )
+        model.type = category.type.value if isinstance(category.type, CategoryType) else category.type
 
         self._db.commit()
         self._db.refresh(model)
         return self._to_entity(model)
 
     def delete(self, category_id: int) -> bool:
-        model = (
-            self._db.query(CategoryModel)
-            .filter(CategoryModel.idCategory == category_id)
-            .first()
-        )
+        model = self._db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
         if not model:
             return False
 

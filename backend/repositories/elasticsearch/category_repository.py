@@ -1,15 +1,18 @@
 # backend/repositories/elasticsearch/category_repository.py
 import logging
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 from elasticsearch import Elasticsearch
+
 from backend.database.elasticsearch import get_es_client
 from backend.repositories.base import ICategoryRepository
 
 logger = logging.getLogger(__name__)
 
+
 class ElasticsearchCategoryRepository(ICategoryRepository):
     """Elasticsearch implementation of category repository."""
-    
+
     def __init__(self, es_client: Elasticsearch = None):
         if es_client is None:
             self.es = get_es_client()
@@ -17,7 +20,7 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
             self.es = es_client
         self.index = "categories"
         self._ensure_index()
-    
+
     def _ensure_index(self):
         """Ensure the categories index exists."""
         try:
@@ -35,23 +38,19 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
                         "properties": {
                             "idCategory": {"type": "integer"},
                             "name": {"type": "keyword"},
-                            "type": {"type": "keyword"}
+                            "type": {"type": "keyword"},
                         }
-                    }
+                    },
                 )
             except Exception as create_error:
                 # If it's a version error, we can't fix it here - need to downgrade client or upgrade server
                 if "version" not in str(create_error).lower() and "compatible-with" not in str(create_error).lower():
                     logger.warning("Index %s setup: %s", self.index, create_error)
-    
+
     def get_all(self) -> List[Dict]:
         """Get all categories from Elasticsearch."""
         try:
-            response = self.es.search(
-                index=self.index,
-                query={"match_all": {}},
-                size=10000
-            )
+            response = self.es.search(index=self.index, query={"match_all": {}}, size=10000)
             categories = []
             for hit in response["hits"]["hits"]:
                 source = hit["_source"].copy()
@@ -72,7 +71,7 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
         except Exception as e:
             logger.error("Error getting all categories: %s", e)
             return []
-    
+
     def get_by_id(self, category_id: int) -> Optional[Dict]:
         """Get category by ID from Elasticsearch."""
         try:
@@ -94,51 +93,37 @@ class ElasticsearchCategoryRepository(ICategoryRepository):
         except Exception as e:
             logger.error("Error getting category %d: %s", category_id, e)
             return None
-    
+
     def create(self, category_data: Dict) -> Dict:
         """Create new category in Elasticsearch."""
         # Generate ID if not provided
         if "idCategory" not in category_data or category_data.get("idCategory") is None:
             try:
                 # Get max ID from existing categories
-                response = self.es.search(
-                    index=self.index,
-                    size=0,
-                    aggs={"max_id": {"max": {"field": "idCategory"}}}
-                )
+                response = self.es.search(index=self.index, size=0, aggs={"max_id": {"max": {"field": "idCategory"}}})
                 max_id = response.get("aggregations", {}).get("max_id", {}).get("value")
                 category_data["idCategory"] = int(max_id or 0) + 1
             except Exception:
                 category_data["idCategory"] = 1
-        
+
         try:
-            self.es.index(
-                index=self.index,
-                document=category_data,
-                id=category_data.get("idCategory"),
-                refresh=True
-            )
+            self.es.index(index=self.index, document=category_data, id=category_data.get("idCategory"), refresh=True)
             # Ensure idCategory is set in returned data
             category_data["idCategory"] = int(category_data.get("idCategory"))
             return category_data
         except Exception as e:
             logger.error("Error creating category: %s", e)
             raise ValueError(f"Failed to create category: {str(e)}")
-    
+
     def update(self, category_id: int, category_data: Dict) -> Dict:
         """Update category in Elasticsearch."""
         try:
-            self.es.update(
-                index=self.index,
-                id=category_id,
-                doc=category_data,
-                refresh=True
-            )
+            self.es.update(index=self.index, id=category_id, doc=category_data, refresh=True)
             return self.get_by_id(category_id) or category_data
         except Exception as e:
             logger.error("Error updating category %d: %s", category_id, e)
             return category_data
-    
+
     def delete(self, category_id: int) -> bool:
         """Delete category from Elasticsearch."""
         try:

@@ -2,6 +2,7 @@
 Inbound ports (driving adapters) for Category bounded context.
 Defines the service interface for external consumers.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -20,9 +21,7 @@ class ICategoryService(ABC):
         pass
 
     @abstractmethod
-    def list_categories(
-        self, skip: int = 0, limit: int = 100
-    ) -> list[CategoryResponseDTO]:
+    def list_categories(self, skip: int = 0, limit: int = 100) -> list[CategoryResponseDTO]:
         pass
 
     @abstractmethod
@@ -30,9 +29,7 @@ class ICategoryService(ABC):
         pass
 
     @abstractmethod
-    def update_category(
-        self, category_id: int, dto: CategoryCreateDTO
-    ) -> Optional[CategoryResponseDTO]:
+    def update_category(self, category_id: int, dto: CategoryCreateDTO) -> Optional[CategoryResponseDTO]:
         pass
 
     @abstractmethod

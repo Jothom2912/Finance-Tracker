@@ -3,14 +3,14 @@
 from sqlalchemy import UniqueConstraint
 
 from .common import (
+    DECIMAL,
     Base,
     Column,
-    Integer,
-    DECIMAL,
     DateTime,
     ForeignKey,
-    relationship,
+    Integer,
     func,
+    relationship,
 )
 
 
@@ -37,9 +37,7 @@ class MonthlyBudget(Base):
         lazy="joined",
     )
 
-    __table_args__ = (
-        UniqueConstraint("account_id", "month", "year", name="uq_account_month_year"),
-    )
+    __table_args__ = (UniqueConstraint("account_id", "month", "year", name="uq_account_month_year"),)
 
     def __repr__(self) -> str:
         return f"<MonthlyBudget(id={self.id}, {self.year}-{self.month:02d})>"
@@ -66,11 +64,7 @@ class BudgetLine(Base):
     monthly_budget = relationship("MonthlyBudget", back_populates="lines")
     category = relationship("Category")
 
-    __table_args__ = (
-        UniqueConstraint(
-            "monthly_budget_id", "category_id", name="uq_budget_category"
-        ),
-    )
+    __table_args__ = (UniqueConstraint("monthly_budget_id", "category_id", name="uq_budget_category"),)
 
     def __repr__(self) -> str:
         return f"<BudgetLine(id={self.id}, cat={self.category_id}, amount={self.amount})>"

@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.account.application.dto import (
     AccountGroups as AccountGroupSchema,
+)
+from backend.account.application.dto import (
     AccountGroupsCreate,
 )
 from backend.account.application.service import AccountService
@@ -54,9 +56,7 @@ def create_group(
     try:
         return service.create_group(group_data)
     except InvalidUserInGroup as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/{group_id}", response_model=AccountGroupSchema)
@@ -75,6 +75,4 @@ def update_group(
             )
         return result
     except InvalidUserInGroup as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

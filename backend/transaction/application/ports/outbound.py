@@ -2,6 +2,7 @@
 Outbound ports (driven adapters) for Transaction bounded context.
 Defines interfaces for infrastructure dependencies.
 """
+
 from abc import ABC, abstractmethod
 from datetime import date
 from typing import Dict, Optional

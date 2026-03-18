@@ -1,19 +1,22 @@
 """
 REST API adapter for Goal bounded context.
 """
-from typing import Optional, Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from typing import Any, Dict, Optional
 
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+
+from backend.auth import get_account_id_from_headers
+from backend.dependencies import get_goal_service
 from backend.goal.application.dto import (
     Goal as GoalSchema,
-    GoalCreate,
+)
+from backend.goal.application.dto import (
     GoalBase,
+    GoalCreate,
 )
 from backend.goal.application.service import GoalService
 from backend.goal.domain.exceptions import AccountNotFoundForGoal
-from backend.auth import get_account_id_from_headers
-from backend.dependencies import get_goal_service
 
 router = APIRouter(
     prefix="/goals",
@@ -21,19 +24,14 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/", response_model=GoalSchema, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=GoalSchema, status_code=status.HTTP_201_CREATED)
 def create_goal(
     goal_data: Dict[str, Any] = Body(...),
     service: GoalService = Depends(get_goal_service),
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ) -> GoalSchema:
     """Opretter et nyt sparemål."""
-    if (
-        "Account_idAccount" not in goal_data
-        or goal_data.get("Account_idAccount") is None
-    ):
+    if "Account_idAccount" not in goal_data or goal_data.get("Account_idAccount") is None:
         if not account_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -45,22 +43,16 @@ def create_goal(
         goal = GoalCreate(**goal_data)
         return service.create_goal(goal)
     except AccountNotFoundForGoal as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/", response_model=list[GoalSchema])
 def list_goals(
     service: GoalService = Depends(get_goal_service),
     account_id: Optional[int] = Query(None),
-    account_id_from_header: Optional[int] = Depends(
-        get_account_id_from_headers
-    ),
+    account_id_from_header: Optional[int] = Depends(get_account_id_from_headers),
 ) -> list[GoalSchema]:
     """Henter alle mål for en given konto."""
     final_account_id = account_id or account_id_from_header

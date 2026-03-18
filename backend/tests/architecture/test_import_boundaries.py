@@ -8,12 +8,11 @@ These tests verify that hexagonal architecture boundaries are respected:
 
 Tests are initially xfail-marked and unlocked PR-by-PR.
 """
+
 from __future__ import annotations
 
 import ast
 from pathlib import Path
-
-import pytest
 
 BOUNDED_CONTEXTS = [
     "transaction",
@@ -54,9 +53,7 @@ def test_no_legacy_repo_imports_in_hex_contexts() -> None:
             for imp in get_imports_from_file(str(py_file)):
                 if imp.startswith("backend.repositories"):
                     violations.append(f"{py_file}: {imp}")
-    assert not violations, (
-        "Legacy repo imports in hex contexts:\n" + "\n".join(violations)
-    )
+    assert not violations, "Legacy repo imports in hex contexts:\n" + "\n".join(violations)
 
 
 def test_application_layer_no_infra_imports() -> None:
@@ -78,9 +75,7 @@ def test_application_layer_no_infra_imports() -> None:
                     ]
                 ):
                     violations.append(f"{py_file}: {imp}")
-    assert not violations, (
-        "Infra imports in application layer:\n" + "\n".join(violations)
-    )
+    assert not violations, "Infra imports in application layer:\n" + "\n".join(violations)
 
 
 def test_auth_no_legacy_repos() -> None:
@@ -88,6 +83,4 @@ def test_auth_no_legacy_repos() -> None:
     auth_file = BACKEND_ROOT / "auth.py"
     imports = get_imports_from_file(str(auth_file))
     violations = [i for i in imports if i.startswith("backend.repositories")]
-    assert not violations, (
-        "Legacy repo imports in auth.py:\n" + "\n".join(violations)
-    )
+    assert not violations, "Legacy repo imports in auth.py:\n" + "\n".join(violations)

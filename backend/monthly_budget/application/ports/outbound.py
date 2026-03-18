@@ -1,6 +1,7 @@
 """
 Outbound ports (driven adapters) for MonthlyBudget bounded context.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -11,15 +12,11 @@ class IMonthlyBudgetRepository(ABC):
     """Port for monthly budget persistence."""
 
     @abstractmethod
-    def get_by_id_for_account(
-        self, budget_id: int, account_id: int
-    ) -> Optional[MonthlyBudget]:
+    def get_by_id_for_account(self, budget_id: int, account_id: int) -> Optional[MonthlyBudget]:
         pass
 
     @abstractmethod
-    def get_by_account_and_period(
-        self, account_id: int, month: int, year: int
-    ) -> Optional[MonthlyBudget]:
+    def get_by_account_and_period(self, account_id: int, month: int, year: int) -> Optional[MonthlyBudget]:
         pass
 
     @abstractmethod
@@ -39,9 +36,7 @@ class ITransactionPort(ABC):
     """Anti-corruption port for reading expense data from transactions."""
 
     @abstractmethod
-    def get_expenses_by_category(
-        self, account_id: int, month: int, year: int
-    ) -> dict[int, float]:
+    def get_expenses_by_category(self, account_id: int, month: int, year: int) -> dict[int, float]:
         """Return {category_id: total_spent} for the given period."""
         pass
 

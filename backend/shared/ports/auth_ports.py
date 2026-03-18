@@ -4,6 +4,7 @@ Cross-cutting auth contract.
 Rule: this file may ONLY contain auth-related ports.
 Keep it ultra-slim — this is NOT a shared dump.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

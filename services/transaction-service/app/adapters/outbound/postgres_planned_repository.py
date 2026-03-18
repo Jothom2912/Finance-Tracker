@@ -47,9 +47,7 @@ class PostgresPlannedTransactionRepository(IPlannedTransactionRepository):
         await self._session.refresh(model)
         return self._to_entity(model)
 
-    async def find_by_id(
-        self, planned_id: int, user_id: int
-    ) -> PlannedTransaction | None:
+    async def find_by_id(self, planned_id: int, user_id: int) -> PlannedTransaction | None:
         stmt = select(PlannedTransactionModel).where(
             PlannedTransactionModel.id == planned_id,
             PlannedTransactionModel.user_id == user_id,
@@ -58,9 +56,7 @@ class PostgresPlannedTransactionRepository(IPlannedTransactionRepository):
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
 
-    async def find_by_user(
-        self, user_id: int
-    ) -> list[PlannedTransaction]:
+    async def find_by_user(self, user_id: int) -> list[PlannedTransaction]:
         stmt = (
             select(PlannedTransactionModel)
             .where(PlannedTransactionModel.user_id == user_id)
@@ -69,9 +65,7 @@ class PostgresPlannedTransactionRepository(IPlannedTransactionRepository):
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
-    async def find_active(
-        self, user_id: int
-    ) -> list[PlannedTransaction]:
+    async def find_active(self, user_id: int) -> list[PlannedTransaction]:
         stmt = (
             select(PlannedTransactionModel)
             .where(
@@ -83,9 +77,7 @@ class PostgresPlannedTransactionRepository(IPlannedTransactionRepository):
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
-    async def update(
-        self, planned_id: int, user_id: int, **fields: object
-    ) -> PlannedTransaction:
+    async def update(self, planned_id: int, user_id: int, **fields: object) -> PlannedTransaction:
         stmt = select(PlannedTransactionModel).where(
             PlannedTransactionModel.id == planned_id,
             PlannedTransactionModel.user_id == user_id,
@@ -103,9 +95,7 @@ class PostgresPlannedTransactionRepository(IPlannedTransactionRepository):
         await self._session.refresh(model)
         return self._to_entity(model)
 
-    async def deactivate(
-        self, planned_id: int, user_id: int
-    ) -> bool:
+    async def deactivate(self, planned_id: int, user_id: int) -> bool:
         stmt = select(PlannedTransactionModel).where(
             PlannedTransactionModel.id == planned_id,
             PlannedTransactionModel.user_id == user_id,

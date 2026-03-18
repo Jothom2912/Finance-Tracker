@@ -2,6 +2,7 @@
 Outbound ports (driven adapters) - interfaces for infrastructure.
 These define what the User application needs from the outside world.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -29,16 +30,12 @@ class IUserRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_username_for_auth(
-        self, username: str
-    ) -> Optional[UserWithCredentials]:
+    def get_by_username_for_auth(self, username: str) -> Optional[UserWithCredentials]:
         """Get user with credentials for authentication."""
         pass
 
     @abstractmethod
-    def get_by_email_for_auth(
-        self, email: str
-    ) -> Optional[UserWithCredentials]:
+    def get_by_email_for_auth(self, email: str) -> Optional[UserWithCredentials]:
         """Get user with credentials for authentication."""
         pass
 

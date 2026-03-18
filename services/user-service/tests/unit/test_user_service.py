@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.application.dto import LoginDTO, RegisterDTO
 from app.application.service import UserService
 from app.domain.entities import User, UserWithCredentials
@@ -71,16 +70,12 @@ def _make_user(
 
 class TestRegister:
     @pytest.mark.asyncio()
-    async def test_register_success(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_register_success(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_email.return_value = None
         uow.users.find_by_username.return_value = None
         uow.users.create.return_value = _make_user_with_creds()
 
-        dto = RegisterDTO(
-            username="alice", email="alice@example.com", password="secret123"
-        )
+        dto = RegisterDTO(username="alice", email="alice@example.com", password="secret123")
         result = await service.register(dto)
 
         assert result.id == 1
@@ -93,18 +88,12 @@ class TestRegister:
         )
 
     @pytest.mark.asyncio()
-    async def test_register_writes_outbox_event(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_register_writes_outbox_event(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_email.return_value = None
         uow.users.find_by_username.return_value = None
-        uow.users.create.return_value = _make_user_with_creds(
-            user_id=42, username="zara", email="zara@example.com"
-        )
+        uow.users.create.return_value = _make_user_with_creds(user_id=42, username="zara", email="zara@example.com")
 
-        dto = RegisterDTO(
-            username="zara", email="zara@example.com", password="secret123"
-        )
+        dto = RegisterDTO(username="zara", email="zara@example.com", password="secret123")
         await service.register(dto)
 
         uow.outbox.add.assert_awaited_once()
@@ -118,29 +107,21 @@ class TestRegister:
         assert call_kwargs["aggregate_id"] == "42"
 
     @pytest.mark.asyncio()
-    async def test_register_commits_uow(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_register_commits_uow(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_email.return_value = None
         uow.users.find_by_username.return_value = None
         uow.users.create.return_value = _make_user_with_creds()
 
-        dto = RegisterDTO(
-            username="alice", email="alice@example.com", password="secret123"
-        )
+        dto = RegisterDTO(username="alice", email="alice@example.com", password="secret123")
         await service.register(dto)
 
         uow.commit.assert_awaited_once()
 
     @pytest.mark.asyncio()
-    async def test_register_duplicate_email(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_register_duplicate_email(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_email.return_value = _make_user_with_creds()
 
-        dto = RegisterDTO(
-            username="bob", email="alice@example.com", password="secret123"
-        )
+        dto = RegisterDTO(username="bob", email="alice@example.com", password="secret123")
 
         with pytest.raises(UserAlreadyExistsException):
             await service.register(dto)
@@ -148,15 +129,11 @@ class TestRegister:
         uow.outbox.add.assert_not_awaited()
 
     @pytest.mark.asyncio()
-    async def test_register_duplicate_username(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_register_duplicate_username(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_email.return_value = None
         uow.users.find_by_username.return_value = _make_user_with_creds()
 
-        dto = RegisterDTO(
-            username="alice", email="new@example.com", password="secret123"
-        )
+        dto = RegisterDTO(username="alice", email="new@example.com", password="secret123")
 
         with pytest.raises(UserAlreadyExistsException):
             await service.register(dto)
@@ -169,14 +146,10 @@ class TestRegister:
 
 class TestLogin:
     @pytest.mark.asyncio()
-    async def test_login_success_with_email(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_login_success_with_email(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_email.return_value = _make_user_with_creds()
 
-        dto = LoginDTO(
-            username_or_email="alice@example.com", password="secret123"
-        )
+        dto = LoginDTO(username_or_email="alice@example.com", password="secret123")
         result = await service.login(dto)
 
         assert result.access_token == "token_1"
@@ -185,9 +158,7 @@ class TestLogin:
         assert result.username == "alice"
 
     @pytest.mark.asyncio()
-    async def test_login_success_with_username(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_login_success_with_username(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_username.return_value = _make_user_with_creds()
 
         dto = LoginDTO(username_or_email="alice", password="secret123")
@@ -197,9 +168,7 @@ class TestLogin:
         assert result.user_id == 1
 
     @pytest.mark.asyncio()
-    async def test_login_wrong_password(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_login_wrong_password(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_email.return_value = _make_user_with_creds()
 
         dto = LoginDTO(
@@ -211,14 +180,10 @@ class TestLogin:
             await service.login(dto)
 
     @pytest.mark.asyncio()
-    async def test_login_user_not_found(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_login_user_not_found(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_email.return_value = None
 
-        dto = LoginDTO(
-            username_or_email="nobody@example.com", password="secret123"
-        )
+        dto = LoginDTO(username_or_email="nobody@example.com", password="secret123")
 
         with pytest.raises(InvalidCredentialsException):
             await service.login(dto)
@@ -229,9 +194,7 @@ class TestLogin:
 
 class TestGetUser:
     @pytest.mark.asyncio()
-    async def test_get_user_success(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_get_user_success(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_id.return_value = _make_user()
 
         result = await service.get_user(1)
@@ -241,9 +204,7 @@ class TestGetUser:
         assert result.email == "alice@example.com"
 
     @pytest.mark.asyncio()
-    async def test_get_user_not_found(
-        self, service: UserService, uow: MagicMock
-    ) -> None:
+    async def test_get_user_not_found(self, service: UserService, uow: MagicMock) -> None:
         uow.users.find_by_id.return_value = None
 
         with pytest.raises(UserNotFoundException):

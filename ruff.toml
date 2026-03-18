@@ -1,0 +1,21 @@
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I"]
+
+# Baseline ignores - clean up incrementally, then remove from this list
+ignore = [
+    "E402",   # module-import-not-at-top (intentional in conftest/config files)
+    "E501",   # line-too-long (ruff format handles most cases)
+    "E722",   # bare-except (replace with `except Exception:`)
+    "E741",   # ambiguous-variable-name
+    "W291",   # trailing-whitespace (in non-Python content)
+]
+
+[lint.per-file-ignores]
+"**/migrations/**" = ["F401"]
+"**/__init__.py" = ["F401"]
+
+[format]
+quote-style = "double"

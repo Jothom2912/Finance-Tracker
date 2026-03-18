@@ -1,6 +1,7 @@
 """
 MySQL adapter for Transaction and PlannedTransaction repositories.
 """
+
 import logging
 from datetime import date, datetime
 from decimal import Decimal
@@ -31,11 +32,7 @@ class MySQLTransactionRepository(ITransactionRepository):
         self._db = db
 
     def get_by_id(self, transaction_id: int) -> Optional[Transaction]:
-        model = (
-            self._db.query(TransactionModel)
-            .filter(TransactionModel.idTransaction == transaction_id)
-            .first()
-        )
+        model = self._db.query(TransactionModel).filter(TransactionModel.idTransaction == transaction_id).first()
         return self._to_entity(model) if model else None
 
     def get_all(
@@ -54,20 +51,11 @@ class MySQLTransactionRepository(ITransactionRepository):
         if end_date:
             query = query.filter(TransactionModel.date <= end_date)
         if category_id:
-            query = query.filter(
-                TransactionModel.Category_idCategory == category_id
-            )
+            query = query.filter(TransactionModel.Category_idCategory == category_id)
         if account_id:
-            query = query.filter(
-                TransactionModel.Account_idAccount == account_id
-            )
+            query = query.filter(TransactionModel.Account_idAccount == account_id)
 
-        models = (
-            query.order_by(TransactionModel.date.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        models = query.order_by(TransactionModel.date.desc()).offset(offset).limit(limit).all()
         return [self._to_entity(m) for m in models]
 
     def create(self, transaction: Transaction) -> Transaction:
@@ -90,11 +78,7 @@ class MySQLTransactionRepository(ITransactionRepository):
         return self._to_entity(model)
 
     def update(self, transaction: Transaction) -> Optional[Transaction]:
-        model = (
-            self._db.query(TransactionModel)
-            .filter(TransactionModel.idTransaction == transaction.id)
-            .first()
-        )
+        model = self._db.query(TransactionModel).filter(TransactionModel.idTransaction == transaction.id).first()
         if not model:
             return None
 
@@ -115,11 +99,7 @@ class MySQLTransactionRepository(ITransactionRepository):
         return self._to_entity(model)
 
     def delete(self, transaction_id: int) -> bool:
-        model = (
-            self._db.query(TransactionModel)
-            .filter(TransactionModel.idTransaction == transaction_id)
-            .first()
-        )
+        model = self._db.query(TransactionModel).filter(TransactionModel.idTransaction == transaction_id).first()
         if not model:
             return False
 
@@ -137,17 +117,13 @@ class MySQLTransactionRepository(ITransactionRepository):
         query = self._db.query(TransactionModel)
 
         if search_text:
-            query = query.filter(
-                TransactionModel.description.ilike(f"%{search_text}%")
-            )
+            query = query.filter(TransactionModel.description.ilike(f"%{search_text}%"))
         if start_date:
             query = query.filter(TransactionModel.date >= start_date)
         if end_date:
             query = query.filter(TransactionModel.date <= end_date)
         if category_id:
-            query = query.filter(
-                TransactionModel.Category_idCategory == category_id
-            )
+            query = query.filter(TransactionModel.Category_idCategory == category_id)
 
         models = query.order_by(TransactionModel.date.desc()).all()
         return [self._to_entity(m) for m in models]
@@ -168,11 +144,7 @@ class MySQLTransactionRepository(ITransactionRepository):
 
         summary: Dict = {}
         for t in transactions:
-            category = (
-                self._db.query(CategoryModel)
-                .filter(CategoryModel.idCategory == t.Category_idCategory)
-                .first()
-            )
+            category = self._db.query(CategoryModel).filter(CategoryModel.idCategory == t.Category_idCategory).first()
             cat_name = category.name if category else "Unknown"
 
             if cat_name not in summary:
@@ -203,11 +175,7 @@ class MySQLTransactionRepository(ITransactionRepository):
             type=model.type or "expense",
             category_id=model.Category_idCategory,
             account_id=model.Account_idAccount,
-            created_at=(
-                model.created_at
-                if hasattr(model, "created_at")
-                else None
-            ),
+            created_at=(model.created_at if hasattr(model, "created_at") else None),
         )
 
 
@@ -228,12 +196,7 @@ class MySQLPlannedTransactionRepository(IPlannedTransactionRepository):
         return self._to_entity(model) if model else None
 
     def get_all(self, skip: int = 0, limit: int = 100) -> list[PlannedTransaction]:
-        models = (
-            self._db.query(PlannedTransactionModel)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        models = self._db.query(PlannedTransactionModel).offset(skip).limit(limit).all()
         return [self._to_entity(m) for m in models]
 
     def create(self, planned: PlannedTransaction) -> PlannedTransaction:
@@ -272,10 +235,6 @@ class MySQLPlannedTransactionRepository(IPlannedTransactionRepository):
         return PlannedTransaction(
             id=model.idPlannedTransactions,
             name=model.name,
-            amount=(
-                float(model.amount)
-                if isinstance(model.amount, Decimal)
-                else (model.amount or 0.0)
-            ),
+            amount=(float(model.amount) if isinstance(model.amount, Decimal) else (model.amount or 0.0)),
             transaction_id=model.Transaction_idTransaction,
         )

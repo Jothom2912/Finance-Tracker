@@ -18,14 +18,10 @@ class CreateTransactionDTO(BaseModel):
     account_id: int = Field(gt=0)
     account_name: str = Field(max_length=ACCOUNT_NAME_MAX)
     category_id: int | None = Field(default=None, gt=0)
-    category_name: str | None = Field(
-        default=None, max_length=CATEGORY_NAME_MAX
-    )
+    category_name: str | None = Field(default=None, max_length=CATEGORY_NAME_MAX)
     amount: Decimal = Field(ge=AMOUNT_MIN, le=AMOUNT_MAX, decimal_places=2)
     transaction_type: TransactionType
-    description: str | None = Field(
-        default=None, max_length=DESCRIPTION_MAX
-    )
+    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX)
     date: date
 
 
@@ -65,24 +61,16 @@ class CreatePlannedTransactionDTO(BaseModel):
     account_id: int = Field(gt=0)
     account_name: str = Field(max_length=ACCOUNT_NAME_MAX)
     category_id: int | None = Field(default=None, gt=0)
-    category_name: str | None = Field(
-        default=None, max_length=CATEGORY_NAME_MAX
-    )
+    category_name: str | None = Field(default=None, max_length=CATEGORY_NAME_MAX)
     amount: Decimal = Field(ge=AMOUNT_MIN, le=AMOUNT_MAX, decimal_places=2)
     transaction_type: TransactionType
-    description: str | None = Field(
-        default=None, max_length=DESCRIPTION_MAX
-    )
-    recurrence: str = Field(
-        pattern=r"^(daily|weekly|biweekly|monthly|yearly)$"
-    )
+    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX)
+    recurrence: str = Field(pattern=r"^(daily|weekly|biweekly|monthly|yearly)$")
     next_execution: date
 
 
 class UpdatePlannedTransactionDTO(BaseModel):
-    amount: Decimal | None = Field(
-        default=None, ge=AMOUNT_MIN, le=AMOUNT_MAX, decimal_places=2
-    )
+    amount: Decimal | None = Field(default=None, ge=AMOUNT_MIN, le=AMOUNT_MAX, decimal_places=2)
     description: str | None = None
     recurrence: str | None = Field(
         default=None,

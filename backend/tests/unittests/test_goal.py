@@ -1,8 +1,9 @@
-from pydantic import ValidationError
-import pytest
 from datetime import date, timedelta
-from backend.goal.application.dto import GoalBase, GoalCreate
 
+import pytest
+from pydantic import ValidationError
+
+from backend.goal.application.dto import GoalBase, GoalCreate
 
 # Helper data for valid goal creation
 VALID_NAME = "Test Goal"
@@ -11,6 +12,7 @@ VALID_CURRENT = 50.00
 REQUIRED_ACCOUNT_ID = 1
 
 # GoalBase Tests
+
 
 # Target Amount BVA - Negative (INVALID)
 def test_base_target_amount_negative_invalid():
@@ -32,6 +34,7 @@ def test_base_target_amount_zero_valid():
     # Assert
     assert goal.target_amount == target_amount
 
+
 # Current Amount BVA - Negative (INVALID)
 def test_base_current_amount_negative_invalid():
     # Arrange
@@ -40,6 +43,7 @@ def test_base_current_amount_negative_invalid():
     # Act & Assert
     with pytest.raises(ValidationError):
         GoalBase(target_amount=VALID_TARGET, current_amount=current_amount)
+
 
 # Target Amount Rounding Check
 def test_base_target_amount_rounding():
@@ -53,7 +57,9 @@ def test_base_target_amount_rounding():
     # Assert
     assert goal.target_amount == expected_amount
 
+
 # Test current amount cant exceed target amount
+
 
 # Current > Target (INVALID)
 def test_base_current_greater_than_target_invalid():
@@ -64,6 +70,7 @@ def test_base_current_greater_than_target_invalid():
     # Act & Assert
     with pytest.raises(ValueError, match="kan ikke være større end target amount"):
         GoalBase(target_amount=target, current_amount=current)
+
 
 # Current == Target (VALID)
 def test_base_current_equal_to_target_valid():
@@ -77,6 +84,7 @@ def test_base_current_equal_to_target_valid():
     # Assert
     assert goal.target_amount == target
     assert goal.current_amount == current
+
 
 # Current < Target (VALID)
 def test_base_current_less_than_target_valid():
@@ -94,6 +102,7 @@ def test_base_current_less_than_target_valid():
 
 # Target Date Validation
 
+
 # Past Date (INVALID)
 def test_base_target_date_past_invalid():
     # Arrange
@@ -102,6 +111,7 @@ def test_base_target_date_past_invalid():
     # Act & Assert
     with pytest.raises(ValueError, match="Deadline skal være i fremtiden"):
         GoalBase(target_amount=VALID_TARGET, target_date=past_date)
+
 
 # Today's Date (INVALID)
 def test_base_target_date_today_invalid():
@@ -124,7 +134,9 @@ def test_base_target_date_future_valid():
     # Assert
     assert goal.target_date == future_date
 
+
 # Name field validation
+
 
 # Name - Max Length Check (INVALID)
 def test_base_name_max_length_invalid():
@@ -135,7 +147,9 @@ def test_base_name_max_length_invalid():
     with pytest.raises(ValidationError):
         GoalBase(target_amount=VALID_TARGET, name=name)
 
+
 # GoalCreate Tests
+
 
 # Missing Account ID (INVALID)
 def test_create_missing_account_id_invalid():
@@ -145,6 +159,7 @@ def test_create_missing_account_id_invalid():
 
     # Assert
     assert "Account_idAccount" in str(excinfo.value)
+
 
 # Valid Account ID (VALID)
 def test_create_account_id_valid():
@@ -165,8 +180,4 @@ def test_create_inheritance_target_date_today_invalid():
 
     # Act & Assert
     with pytest.raises(ValueError, match="Deadline skal være i fremtiden"):
-        GoalCreate(
-            target_amount=VALID_TARGET,
-            Account_idAccount=REQUIRED_ACCOUNT_ID,
-            target_date=today
-        )
+        GoalCreate(target_amount=VALID_TARGET, Account_idAccount=REQUIRED_ACCOUNT_ID, target_date=today)

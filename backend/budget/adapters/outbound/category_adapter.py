@@ -2,6 +2,7 @@
 Anti-corruption layer adapter for Category domain.
 Implements the Budget domain's ICategoryPort.
 """
+
 from sqlalchemy.orm import Session
 
 from backend.budget.application.ports.outbound import ICategoryPort
@@ -15,9 +16,4 @@ class MySQLCategoryAdapter(ICategoryPort):
         self._db = db
 
     def exists(self, category_id: int) -> bool:
-        return (
-            self._db.query(CategoryModel)
-            .filter(CategoryModel.idCategory == category_id)
-            .first()
-            is not None
-        )
+        return self._db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first() is not None

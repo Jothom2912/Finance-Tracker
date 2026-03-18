@@ -1,6 +1,5 @@
 """Integration tests for goal flows (HTTP -> Service -> Repository -> DB)."""
 
-import pytest
 from decimal import Decimal
 
 from .conftest import Factory
@@ -9,9 +8,7 @@ from .conftest import Factory
 class TestGoalCreation:
     """Tests for creating goals through the API."""
 
-    def test_create_goal_returns_201(
-        self, test_client, test_db, mock_repositories, account_headers, seed_account
-    ):
+    def test_create_goal_returns_201(self, test_client, test_db, mock_repositories, account_headers, seed_account):
         # Act - omit target_date (optional) to avoid SQLite string-to-date issue
         response = test_client.post(
             "/api/v1/goals/",
@@ -28,9 +25,7 @@ class TestGoalCreation:
         assert data["name"] == "Sommerferie"
         assert float(data["target_amount"]) == 15000.0
 
-    def test_create_goal_without_account_returns_400(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_create_goal_without_account_returns_400(self, test_client, test_db, mock_repositories):
         # Act - no account header, no auth
         response = test_client.post(
             "/api/v1/goals/",
@@ -66,9 +61,7 @@ class TestGoalCreation:
 class TestGoalRetrieval:
     """Tests for fetching goals."""
 
-    def test_get_goals_returns_list(
-        self, test_client, test_db, mock_repositories, account_headers, seed_account
-    ):
+    def test_get_goals_returns_list(self, test_client, test_db, mock_repositories, account_headers, seed_account):
         # Arrange - create goals directly in DB
         Factory.goal(test_db, seed_account.idAccount, name="Ferie")
         Factory.goal(test_db, seed_account.idAccount, name="Nødopsparing")
@@ -90,9 +83,7 @@ class TestGoalRetrieval:
         assert "Ferie" in names
         assert "Nødopsparing" in names
 
-    def test_get_goal_by_id_returns_200(
-        self, test_client, test_db, mock_repositories, seed_account
-    ):
+    def test_get_goal_by_id_returns_200(self, test_client, test_db, mock_repositories, seed_account):
         # Arrange
         goal = Factory.goal(test_db, seed_account.idAccount, name="Specifikt mål")
         test_db.flush()
@@ -105,9 +96,7 @@ class TestGoalRetrieval:
         assert response.status_code == 200
         assert response.json()["name"] == "Specifikt mål"
 
-    def test_get_nonexistent_goal_returns_404(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_get_nonexistent_goal_returns_404(self, test_client, test_db, mock_repositories):
         # Act
         response = test_client.get("/api/v1/goals/99999")
 
@@ -118,9 +107,7 @@ class TestGoalRetrieval:
 class TestGoalLifecycle:
     """Tests for updating and deleting goals."""
 
-    def test_update_goal_progress(
-        self, test_client, test_db, mock_repositories, seed_account
-    ):
+    def test_update_goal_progress(self, test_client, test_db, mock_repositories, seed_account):
         # Arrange - create goal without target_date to avoid SQLite compat issue
         goal = Factory.goal(
             test_db,
@@ -149,9 +136,7 @@ class TestGoalLifecycle:
         data = response.json()
         assert float(data["current_amount"]) == 2500.0
 
-    def test_delete_goal_returns_204(
-        self, test_client, test_db, mock_repositories, seed_account
-    ):
+    def test_delete_goal_returns_204(self, test_client, test_db, mock_repositories, seed_account):
         # Arrange
         goal = Factory.goal(test_db, seed_account.idAccount)
         test_db.flush()
@@ -163,9 +148,7 @@ class TestGoalLifecycle:
         # Assert
         assert response.status_code == 204
 
-    def test_delete_nonexistent_goal_returns_404(
-        self, test_client, test_db, mock_repositories
-    ):
+    def test_delete_nonexistent_goal_returns_404(self, test_client, test_db, mock_repositories):
         # Act
         response = test_client.delete("/api/v1/goals/99999")
 

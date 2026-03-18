@@ -5,4 +5,3 @@ Neo4j models/query templates
 """
 
 __all__ = []
-

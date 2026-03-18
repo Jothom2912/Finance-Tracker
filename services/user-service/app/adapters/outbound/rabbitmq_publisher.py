@@ -5,7 +5,6 @@ import logging
 import aio_pika
 from aio_pika import DeliveryMode, ExchangeType, Message
 from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
-
 from contracts.base import BaseEvent
 
 from app.application.ports.outbound import IEventPublisher
@@ -51,9 +50,7 @@ class RabbitMQPublisher(IEventPublisher):
             event.correlation_id,
         )
 
-    async def publish_raw(
-        self, message: Message, routing_key: str
-    ) -> None:
+    async def publish_raw(self, message: Message, routing_key: str) -> None:
         """Publish a pre-built message (used by outbox worker)."""
         if self._exchange is None:
             raise RuntimeError("RabbitMQPublisher is not connected")

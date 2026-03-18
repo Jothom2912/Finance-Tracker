@@ -1,7 +1,9 @@
 # backend/repositories/elasticsearch/budget_repository.py
 import logging
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 from elasticsearch import Elasticsearch
+
 from backend.database.elasticsearch import get_es_client
 from backend.repositories.base import IBudgetRepository
 
@@ -10,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class ElasticsearchBudgetRepository(IBudgetRepository):
     """Elasticsearch implementation of budget repository."""
-    
+
     def __init__(self, es_client: Elasticsearch = None):
         if es_client is None:
             self.es = get_es_client()
@@ -18,7 +20,7 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             self.es = es_client
         self.index = "budgets"
         self._ensure_index()
-    
+
     def _ensure_index(self):
         """Ensure the budgets index exists."""
         try:
@@ -33,32 +35,24 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
                             "amount": {"type": "float"},
                             "budget_date": {"type": "date"},
                             "Account_idAccount": {"type": "integer"},
-                            "Category_idCategory": {"type": "integer"}  # ✅ Tilføj dette
+                            "Category_idCategory": {"type": "integer"},  # ✅ Tilføj dette
                         }
-                    }
+                    },
                 )
             except Exception as e:
                 logger.warning("Note: Index %s setup: %s", self.index, e)
-    
+
     def get_all(self, account_id: Optional[int] = None) -> List[Dict]:
         """Get all budgets from Elasticsearch, optionally filtered by account_id."""
         must_clauses = []
-        
+
         if account_id is not None:
             must_clauses.append({"term": {"Account_idAccount": account_id}})
-        
-        query = {
-            "bool": {
-                "must": must_clauses if must_clauses else [{"match_all": {}}]
-            }
-        }
-        
+
+        query = {"bool": {"must": must_clauses if must_clauses else [{"match_all": {}}]}}
+
         try:
-            response = self.es.search(
-                index=self.index,
-                query=query,
-                sort=[{"idBudget": "asc"}]
-            )
+            response = self.es.search(index=self.index, query=query, sort=[{"idBudget": "asc"}])
             budgets = []
             for hit in response["hits"]["hits"]:
                 source = hit["_source"].copy()
@@ -76,9 +70,9 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
                     source["idBudget"] = int(source["idBudget"])
                 budgets.append(source)
             return budgets
-        except Exception as e:
+        except Exception:
             return []
-    
+
     def get_by_id(self, budget_id: int) -> Optional[Dict]:
         """Get budget by ID from Elasticsearch."""
         try:
@@ -99,53 +93,44 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             return source
         except Exception:
             return None
-    
+
     def create(self, budget_data: Dict) -> Dict:
         """Create new budget in Elasticsearch."""
         # Generate ID if not provided
         if "idBudget" not in budget_data or budget_data.get("idBudget") is None:
             try:
                 # Get max ID from existing budgets
-                response = self.es.search(
-                    index=self.index,
-                    size=0,
-                    aggs={"max_id": {"max": {"field": "idBudget"}}}
-                )
+                response = self.es.search(index=self.index, size=0, aggs={"max_id": {"max": {"field": "idBudget"}}})
                 max_id = response.get("aggregations", {}).get("max_id", {}).get("value")
                 budget_data["idBudget"] = int(max_id or 0) + 1
             except Exception:
                 budget_data["idBudget"] = 1
-        
+
         # Get Category_idCategory from budget_data (support both field names)
         category_id = budget_data.get("Category_idCategory") or budget_data.get("category_id")
-        
+
         doc = {
             "idBudget": budget_data.get("idBudget"),
             "amount": budget_data.get("amount"),
             "budget_date": budget_data.get("budget_date"),
             "Account_idAccount": budget_data.get("Account_idAccount"),
-            "Category_idCategory": category_id  # ✅ Tilføj dette
+            "Category_idCategory": category_id,  # ✅ Tilføj dette
         }
-        
+
         try:
-            self.es.index(
-                index=self.index,
-                id=doc["idBudget"],
-                document=doc,
-                refresh=True
-            )
+            self.es.index(index=self.index, id=doc["idBudget"], document=doc, refresh=True)
             # Ensure idBudget is set in returned data
             doc["idBudget"] = int(doc.get("idBudget"))
             return doc
         except Exception as e:
             raise ValueError(f"Failed to create budget: {str(e)}")
-    
+
     def update(self, budget_id: int, budget_data: Dict) -> Dict:
         """Update budget in Elasticsearch."""
         existing = self.get_by_id(budget_id)
         if not existing:
             raise ValueError(f"Budget {budget_id} not found")
-        
+
         updated = existing.copy()
         if "amount" in budget_data:
             updated["amount"] = budget_data["amount"]
@@ -157,18 +142,13 @@ class ElasticsearchBudgetRepository(IBudgetRepository):
             updated["Category_idCategory"] = budget_data["Category_idCategory"]
         elif "category_id" in budget_data:  # Support both field names
             updated["Category_idCategory"] = budget_data["category_id"]
-        
+
         try:
-            self.es.index(
-                index=self.index,
-                id=budget_id,
-                document=updated,
-                refresh=True
-            )
+            self.es.index(index=self.index, id=budget_id, document=updated, refresh=True)
             return updated
         except Exception as e:
             raise ValueError(f"Failed to update budget: {str(e)}")
-    
+
     def delete(self, budget_id: int) -> bool:
         """Delete budget from Elasticsearch."""
         try:

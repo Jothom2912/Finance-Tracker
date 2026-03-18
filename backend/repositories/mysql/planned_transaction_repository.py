@@ -2,8 +2,9 @@
 """MySQL implementation of planned transaction repository."""
 
 import logging
-from typing import List, Dict, Optional
 from decimal import Decimal
+from typing import Dict, List, Optional
+
 from sqlalchemy.orm import Session
 
 from backend.models.mysql.planned_transactions import PlannedTransactions as PTModel
@@ -29,11 +30,7 @@ class MySQLPlannedTransactionRepository(IPlannedTransactionRepository):
 
     def get_by_id(self, pt_id: int) -> Optional[Dict]:
         try:
-            pt = (
-                self.db.query(PTModel)
-                .filter(PTModel.idPlannedTransactions == pt_id)
-                .first()
-            )
+            pt = self.db.query(PTModel).filter(PTModel.idPlannedTransactions == pt_id).first()
             return self._serialize(pt) if pt else None
         except Exception as e:
             raise ValueError(f"Fejl ved hentning af planlagt transaktion: {e}")
@@ -51,11 +48,7 @@ class MySQLPlannedTransactionRepository(IPlannedTransactionRepository):
 
     def update(self, pt_id: int, pt_data: Dict) -> Optional[Dict]:
         try:
-            db_pt = (
-                self.db.query(PTModel)
-                .filter(PTModel.idPlannedTransactions == pt_id)
-                .first()
-            )
+            db_pt = self.db.query(PTModel).filter(PTModel.idPlannedTransactions == pt_id).first()
             if not db_pt:
                 return None
 

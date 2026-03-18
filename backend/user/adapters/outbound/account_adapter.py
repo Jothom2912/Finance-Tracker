@@ -3,13 +3,14 @@ Anti-corruption layer for Account domain.
 Allows User domain to create default accounts and resolve account IDs
 without coupling to Account internals.
 """
+
 import logging
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from backend.user.application.ports.outbound import IAccountPort
 from backend.models.mysql.account import Account as AccountModel
+from backend.user.application.ports.outbound import IAccountPort
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,5 @@ class MySQLAccountAdapter(IAccountPort):
 
     def get_first_account_id(self, user_id: int) -> Optional[int]:
         """Get the first account ID for a user."""
-        model = (
-            self._db.query(AccountModel)
-            .filter(AccountModel.User_idUser == user_id)
-            .first()
-        )
+        model = self._db.query(AccountModel).filter(AccountModel.User_idUser == user_id).first()
         return model.idAccount if model else None

@@ -1,6 +1,7 @@
 """
 MySQL adapter for Budget repository.
 """
+
 from typing import Optional
 
 from sqlalchemy.orm import Session, joinedload
@@ -84,9 +85,7 @@ class MySQLBudgetRepository(IBudgetRepository):
         # Update category via association table
         if budget.category_id is not None:
             self._db.execute(
-                budget_category_association.delete().where(
-                    budget_category_association.c.Budget_idBudget == budget.id
-                )
+                budget_category_association.delete().where(budget_category_association.c.Budget_idBudget == budget.id)
             )
             self._db.execute(
                 budget_category_association.insert().values(
@@ -108,11 +107,7 @@ class MySQLBudgetRepository(IBudgetRepository):
         return self._to_entity(model)
 
     def delete(self, budget_id: int) -> bool:
-        model = (
-            self._db.query(BudgetModel)
-            .filter(BudgetModel.idBudget == budget_id)
-            .first()
-        )
+        model = self._db.query(BudgetModel).filter(BudgetModel.idBudget == budget_id).first()
         if not model:
             return False
 

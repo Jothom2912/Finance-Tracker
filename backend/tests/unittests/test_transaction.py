@@ -1,14 +1,16 @@
+from datetime import date, timedelta
+
 import pytest
 from pydantic import ValidationError
-from datetime import date, timedelta
+
 from backend.transaction.application.dto import (
     TransactionBase,
-    TransactionType,
     TransactionCreate,
+    TransactionType,
 )
 
-
 # TransactionBase — Amount BVA
+
 
 # Zero Amount (INVALID)
 def test_base_amount_is_zero_invalid():
@@ -69,6 +71,7 @@ def test_base_amount_rounding():
 
 # TransactionBase — Type Validation
 
+
 # Valid Type: income
 def test_base_type_valid_income():
     # Act
@@ -102,6 +105,7 @@ def test_base_type_invalid_value():
 
 
 # TransactionBase — Date Validation
+
 
 # Date: Today (VALID)
 def test_base_date_today_valid():
@@ -151,6 +155,7 @@ def test_base_date_future_invalid():
 
 # TransactionBase — Description Validation
 
+
 # Description Max Length (INVALID)
 def test_base_description_max_length_invalid():
     # Arrange
@@ -177,10 +182,7 @@ def test_create_missing_category_id_invalid():
         TransactionCreate(amount=10.00, type=TransactionType.income)
 
     # Assert
-    assert (
-        "Category_idCategory" in str(excinfo.value)
-        or "category_id" in str(excinfo.value)
-    )
+    assert "Category_idCategory" in str(excinfo.value) or "category_id" in str(excinfo.value)
 
 
 # Valid Category ID (VALID)

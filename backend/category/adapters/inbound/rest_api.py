@@ -2,6 +2,7 @@
 REST API adapter for Category bounded context.
 Handles HTTP concerns and delegates to application service.
 """
+
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -50,9 +51,7 @@ def read_category_route(
     """Henter kategori by ID."""
     category = service.get_category(category_id)
     if category is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Kategori ikke fundet."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kategori ikke fundet.")
     return category
 
 
@@ -66,9 +65,7 @@ def update_category_route(
     try:
         updated = service.update_category(category_id, category)
         if updated is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Kategori ikke fundet."
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kategori ikke fundet.")
         return updated
     except (DuplicateCategoryName, DuplicateCategoryNameOnUpdate) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -83,7 +80,5 @@ def delete_category_route(
 ):
     """Sletter kategori."""
     if not service.delete_category(category_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Kategori ikke fundet."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kategori ikke fundet.")
     return None

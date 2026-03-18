@@ -1,6 +1,7 @@
 """
 MySQL implementation of Goal repository port.
 """
+
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -17,11 +18,7 @@ class MySQLGoalRepository(IGoalRepository):
         self._db = db
 
     def get_by_id(self, goal_id: int) -> Optional[Goal]:
-        model = (
-            self._db.query(GoalModel)
-            .filter(GoalModel.idGoal == goal_id)
-            .first()
-        )
+        model = self._db.query(GoalModel).filter(GoalModel.idGoal == goal_id).first()
         return self._to_entity(model) if model else None
 
     def get_all(self, account_id: Optional[int] = None) -> list[Goal]:
@@ -46,11 +43,7 @@ class MySQLGoalRepository(IGoalRepository):
         return self._to_entity(model)
 
     def update(self, goal: Goal) -> Goal:
-        model = (
-            self._db.query(GoalModel)
-            .filter(GoalModel.idGoal == goal.id)
-            .first()
-        )
+        model = self._db.query(GoalModel).filter(GoalModel.idGoal == goal.id).first()
 
         model.name = goal.name
         model.target_amount = goal.target_amount
@@ -63,11 +56,7 @@ class MySQLGoalRepository(IGoalRepository):
         return self._to_entity(model)
 
     def delete(self, goal_id: int) -> bool:
-        model = (
-            self._db.query(GoalModel)
-            .filter(GoalModel.idGoal == goal_id)
-            .first()
-        )
+        model = self._db.query(GoalModel).filter(GoalModel.idGoal == goal_id).first()
         if not model:
             return False
 
@@ -79,12 +68,8 @@ class MySQLGoalRepository(IGoalRepository):
         return Goal(
             id=model.idGoal,
             name=model.name,
-            target_amount=(
-                float(model.target_amount) if model.target_amount else 0.0
-            ),
-            current_amount=(
-                float(model.current_amount) if model.current_amount else 0.0
-            ),
+            target_amount=(float(model.target_amount) if model.target_amount else 0.0),
+            current_amount=(float(model.current_amount) if model.current_amount else 0.0),
             target_date=model.target_date,
             status=model.status,
             account_id=model.Account_idAccount,

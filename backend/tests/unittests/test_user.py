@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
-from backend.user.application.dto import UserBase, UserCreate
 
+from backend.user.application.dto import UserBase, UserCreate
 
 # -------------------------
 # Helper Constants
@@ -15,6 +15,7 @@ MIN_PASSWORD_LENGTH = 8  # From USER_BVA
 # -------------------------
 # UserBase — Username BVA
 # -------------------------
+
 
 # Min Length (N-1) - INVALID (2 chars)
 def test_base_username_min_length_below_boundary_invalid():
@@ -64,6 +65,7 @@ def test_base_username_max_length_above_boundary_invalid():
 # UserBase — Username Format Validation
 # -------------------------
 
+
 # Invalid Characters (contains space)
 def test_base_username_format_invalid_characters():
     # Arrange
@@ -106,6 +108,7 @@ def test_base_username_whitespace_only_invalid():
 # UserBase — Email Validation
 # -------------------------
 
+
 # Invalid Email Format
 def test_base_email_format_invalid():
     # Arrange
@@ -133,6 +136,7 @@ def test_base_email_normalization_valid():
 # UserCreate Tests
 # -------------------------
 
+
 # Missing Password (INVALID)
 def test_create_missing_password_invalid():
     # Act & Assert
@@ -158,10 +162,7 @@ def test_create_password_min_length_below_boundary_invalid():
 
     # Assert
     assert "password" in str(excinfo.value)
-    assert (
-        f"String should have at least {MIN_PASSWORD_LENGTH} characters"
-        in str(excinfo.value)
-    )
+    assert f"String should have at least {MIN_PASSWORD_LENGTH} characters" in str(excinfo.value)
 
 
 # Password Min Length (N) - VALID

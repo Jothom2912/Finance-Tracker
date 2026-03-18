@@ -2,6 +2,7 @@
 Application service for MonthlyBudget bounded context.
 Orchestrates use cases using domain entities and ports.
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,24 +50,18 @@ class MonthlyBudgetService(IMonthlyBudgetService):
 
     # ── Queries ──────────────────────────────────────────────────
 
-    def get_or_none(
-        self, account_id: int, month: int, year: int
-    ) -> Optional[MonthlyBudgetResponse]:
+    def get_or_none(self, account_id: int, month: int, year: int) -> Optional[MonthlyBudgetResponse]:
         budget = self._budget_repo.get_by_account_and_period(account_id, month, year)
         if not budget:
             return None
         return self._to_response(budget)
 
-    def get_summary(
-        self, account_id: int, month: int, year: int
-    ) -> MonthlyBudgetSummary:
+    def get_summary(self, account_id: int, month: int, year: int) -> MonthlyBudgetSummary:
         if not account_id:
             raise AccountRequiredForMonthlyBudget()
 
         budget = self._budget_repo.get_by_account_and_period(account_id, month, year)
-        expenses = self._transaction_port.get_expenses_by_category(
-            account_id, month, year
-        )
+        expenses = self._transaction_port.get_expenses_by_category(account_id, month, year)
         category_names = self._category_port.get_all_names()
 
         items: list[MonthlyBudgetSummaryItem] = []
@@ -87,9 +82,7 @@ class MonthlyBudgetService(IMonthlyBudgetService):
                 items.append(
                     MonthlyBudgetSummaryItem(
                         category_id=line.category_id,
-                        category_name=category_names.get(
-                            line.category_id, "Ukendt"
-                        ),
+                        category_name=category_names.get(line.category_id, "Ukendt"),
                         budget_amount=round(line.amount, 2),
                         spent_amount=round(spent, 2),
                         remaining_amount=round(remaining, 2),
@@ -129,15 +122,11 @@ class MonthlyBudgetService(IMonthlyBudgetService):
 
     # ── Commands ─────────────────────────────────────────────────
 
-    def create(
-        self, account_id: int, dto: MonthlyBudgetCreate
-    ) -> MonthlyBudgetResponse:
+    def create(self, account_id: int, dto: MonthlyBudgetCreate) -> MonthlyBudgetResponse:
         if not account_id:
             raise AccountRequiredForMonthlyBudget()
 
-        existing = self._budget_repo.get_by_account_and_period(
-            account_id, dto.month, dto.year
-        )
+        existing = self._budget_repo.get_by_account_and_period(account_id, dto.month, dto.year)
         if existing:
             raise MonthlyBudgetAlreadyExists(dto.month, dto.year)
 
@@ -148,29 +137,21 @@ class MonthlyBudgetService(IMonthlyBudgetService):
             month=dto.month,
             year=dto.year,
             account_id=account_id,
-            lines=[
-                BudgetLine(id=None, category_id=l.category_id, amount=l.amount)
-                for l in dto.lines
-            ],
+            lines=[BudgetLine(id=None, category_id=l.category_id, amount=l.amount) for l in dto.lines],
         )
 
         created = self._budget_repo.create(budget)
         logger.debug("MonthlyBudget %s created for %02d/%d", created.id, dto.month, dto.year)
         return self._to_response(created)
 
-    def update(
-        self, budget_id: int, account_id: int, dto: MonthlyBudgetUpdate
-    ) -> MonthlyBudgetResponse:
+    def update(self, budget_id: int, account_id: int, dto: MonthlyBudgetUpdate) -> MonthlyBudgetResponse:
         existing = self._budget_repo.get_by_id_for_account(budget_id, account_id)
         if not existing:
             raise MonthlyBudgetNotFound(budget_id)
 
         self._validate_categories([line.category_id for line in dto.lines])
 
-        existing.lines = [
-            BudgetLine(id=None, category_id=l.category_id, amount=l.amount)
-            for l in dto.lines
-        ]
+        existing.lines = [BudgetLine(id=None, category_id=l.category_id, amount=l.amount) for l in dto.lines]
 
         updated = self._budget_repo.update(existing)
         return self._to_response(updated)
@@ -178,21 +159,15 @@ class MonthlyBudgetService(IMonthlyBudgetService):
     def delete(self, budget_id: int, account_id: int) -> bool:
         return self._budget_repo.delete(budget_id, account_id)
 
-    def copy_to_month(
-        self, account_id: int, dto: CopyBudgetRequest
-    ) -> MonthlyBudgetResponse:
+    def copy_to_month(self, account_id: int, dto: CopyBudgetRequest) -> MonthlyBudgetResponse:
         if not account_id:
             raise AccountRequiredForMonthlyBudget()
 
-        source = self._budget_repo.get_by_account_and_period(
-            account_id, dto.source_month, dto.source_year
-        )
+        source = self._budget_repo.get_by_account_and_period(account_id, dto.source_month, dto.source_year)
         if not source or not source.lines:
             raise NoBudgetToCopy(dto.source_month, dto.source_year)
 
-        existing_target = self._budget_repo.get_by_account_and_period(
-            account_id, dto.target_month, dto.target_year
-        )
+        existing_target = self._budget_repo.get_by_account_and_period(account_id, dto.target_month, dto.target_year)
         if existing_target:
             raise MonthlyBudgetAlreadyExists(dto.target_month, dto.target_year)
 
@@ -201,17 +176,16 @@ class MonthlyBudgetService(IMonthlyBudgetService):
             month=dto.target_month,
             year=dto.target_year,
             account_id=account_id,
-            lines=[
-                BudgetLine(id=None, category_id=l.category_id, amount=l.amount)
-                for l in source.lines
-            ],
+            lines=[BudgetLine(id=None, category_id=l.category_id, amount=l.amount) for l in source.lines],
         )
 
         created = self._budget_repo.create(new_budget)
         logger.debug(
             "Copied budget from %02d/%d to %02d/%d",
-            dto.source_month, dto.source_year,
-            dto.target_month, dto.target_year,
+            dto.source_month,
+            dto.source_year,
+            dto.target_month,
+            dto.target_year,
         )
         return self._to_response(created)
 

@@ -5,9 +5,12 @@ Pydantic schemas for Category use cases.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 from backend.validation_boundaries import CATEGORY_BVA
+
 
 # Forward references for relationships (minimal info)
 class TransactionBase(BaseModel):
@@ -15,6 +18,7 @@ class TransactionBase(BaseModel):
     amount: float
     type: str
     model_config = ConfigDict(from_attributes=True)
+
 
 class BudgetBase(BaseModel):
     idBudget: int
@@ -28,19 +32,16 @@ class CategoryBase(BaseModel):
         ...,
         min_length=CATEGORY_BVA.name_min_length,
         max_length=CATEGORY_BVA.name_max_length,
-        description="Category name (1-30 characters)"
+        description="Category name (1-30 characters)",
     )
-    type: str = Field(
-        ...,
-        description="Category type: 'income' or 'expense'"
-    )
+    type: str = Field(..., description="Category type: 'income' or 'expense'")
     description: Optional[str] = Field(
         default=None,
         max_length=CATEGORY_BVA.description_max_length,
-        description="Optional category description (max 200 characters)"
+        description="Optional category description (max 200 characters)",
     )
 
-    @field_validator('type')
+    @field_validator("type")
     @classmethod
     def validate_type(cls, v: str) -> str:
         """BVA: Type må være enten 'income' eller 'expense'"""
@@ -48,7 +49,7 @@ class CategoryBase(BaseModel):
             raise ValueError(f"Type må være en af {CATEGORY_BVA.valid_types}, fik: {v}")
         return v
 
-    @field_validator('name')
+    @field_validator("name")
     @classmethod
     def validate_name_not_empty(cls, v: str) -> str:
         """BVA: Navn må ikke være tomt eller kun mellemrum"""
@@ -56,7 +57,7 @@ class CategoryBase(BaseModel):
             raise ValueError("Navn må ikke være tomt")
         return v.strip()
 
-    @field_validator('description')
+    @field_validator("description")
     @classmethod
     def validate_description_not_empty(cls, v: Optional[str]) -> Optional[str]:
         """BVA: Hvis beskrivelse exists, må den ikke være kun mellemrum"""
@@ -69,10 +70,11 @@ class CategoryBase(BaseModel):
 class CategoryCreate(CategoryBase):
     pass
 
+
 # --- Schema for reading data ---
 class Category(CategoryBase):
     idCategory: int
-    
+
     # Relationships
     transactions: List[TransactionBase] = []
     budgets: List[BudgetBase] = []

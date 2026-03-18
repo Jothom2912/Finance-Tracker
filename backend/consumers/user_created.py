@@ -55,9 +55,7 @@ class UserCreatedConsumer(BaseConsumer):
         )
 
         try:
-            account = await asyncio.to_thread(
-                self._create_default_account, event.user_id
-            )
+            account = await asyncio.to_thread(self._create_default_account, event.user_id)
 
             await self._publisher.publish(
                 AccountCreatedEvent(
@@ -88,9 +86,7 @@ class UserCreatedConsumer(BaseConsumer):
         session = self._session_factory()
         try:
             repo = MySQLAccountRepository(session)
-            account = repo.create(
-                Account(id=None, name="Default Account", saldo=0.0, user_id=user_id)
-            )
+            account = repo.create(Account(id=None, name="Default Account", saldo=0.0, user_id=user_id))
             return account
         except Exception:
             session.rollback()

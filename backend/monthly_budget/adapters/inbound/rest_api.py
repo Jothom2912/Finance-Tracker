@@ -1,6 +1,7 @@
 """
 REST API adapter for MonthlyBudget bounded context.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,6 @@ from backend.monthly_budget.application.dto import (
 )
 from backend.monthly_budget.application.service import MonthlyBudgetService
 from backend.monthly_budget.domain.exceptions import (
-    AccountRequiredForMonthlyBudget,
     CategoryNotFoundForBudgetLine,
     MonthlyBudgetAlreadyExists,
     MonthlyBudgetNotFound,

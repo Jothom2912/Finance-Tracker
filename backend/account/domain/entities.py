@@ -9,6 +9,7 @@ from typing import Optional
 @dataclass
 class Account:
     """Account domain entity."""
+
     id: Optional[int]
     name: str
     saldo: float
@@ -24,6 +25,7 @@ class Account:
 @dataclass
 class AccountGroupUser:
     """Simplified user representation within account group context."""
+
     id: int
     username: str
 
@@ -31,6 +33,7 @@ class AccountGroupUser:
 @dataclass
 class AccountGroup:
     """Account group domain entity."""
+
     id: Optional[int]
     name: str
     max_users: int

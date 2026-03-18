@@ -8,6 +8,7 @@ Uses ``SELECT ... FOR UPDATE SKIP LOCKED`` so multiple worker instances
 can run concurrently without double-publishing.  Events are delivered
 at-least-once; downstream consumers must be idempotent.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,9 +68,7 @@ class OutboxPublisherWorker:
     async def _process_batch(self) -> int:
         async with async_session_factory() as session:
             repo = PostgresOutboxRepository(session)
-            entries = await repo.fetch_pending(
-                batch_size=self._batch_size
-            )
+            entries = await repo.fetch_pending(batch_size=self._batch_size)
             if not entries:
                 return 0
 
@@ -90,9 +89,7 @@ class OutboxPublisherWorker:
                 delivery_mode=DeliveryMode.PERSISTENT,
                 content_type="application/json",
             )
-            await self._publisher.publish_raw(
-                message, routing_key=entry.event_type
-            )
+            await self._publisher.publish_raw(message, routing_key=entry.event_type)
             await repo.mark_published(entry.id)
             logger.info(
                 "Published %s (id=%s, correlation=%s)",
@@ -101,14 +98,11 @@ class OutboxPublisherWorker:
                 entry.correlation_id,
             )
         except Exception:
-            backoff = min(2 ** entry.attempts * 5, MAX_BACKOFF_S)
-            next_at = datetime.now(timezone.utc) + timedelta(
-                seconds=backoff
-            )
+            backoff = min(2**entry.attempts * 5, MAX_BACKOFF_S)
+            next_at = datetime.now(timezone.utc) + timedelta(seconds=backoff)
             await repo.mark_failed(entry.id, next_at)
             logger.warning(
-                "Failed to publish %s (id=%s, attempt=%d, "
-                "next_retry=%s)",
+                "Failed to publish %s (id=%s, attempt=%d, next_retry=%s)",
                 entry.event_type,
                 entry.id,
                 entry.attempts + 1,

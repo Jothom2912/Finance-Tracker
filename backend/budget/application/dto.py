@@ -1,4 +1,5 @@
 """DTOs for Budget bounded context."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -6,22 +7,15 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.validation_boundaries import BUDGET_BVA
-
 
 class BudgetBase(BaseModel):
-    amount: float = Field(
-        ...,
-        ge=0,
-        description="The budgeted amount for the category (must be >= 0)."
+    amount: float = Field(..., ge=0, description="The budgeted amount for the category (must be >= 0).")
+    budget_date: Optional[date] = Field(default=None, description="Budget date")
+    Account_idAccount: Optional[int] = Field(
+        None, description="ID of the account this budget belongs to. Optional - backend tilføjer det automatisk."
     )
-    budget_date: Optional[date] = Field(
-        default=None,
-        description="Budget date"
-    )
-    Account_idAccount: Optional[int] = Field(None, description="ID of the account this budget belongs to. Optional - backend tilføjer det automatisk.")
 
-    @field_validator('amount')
+    @field_validator("amount")
     @classmethod
     def validate_amount(cls, v: float) -> float:
         """BVA: Amount må være >= 0 (grænse: 0.00 gyldig, -0.01 ugyldig)"""
@@ -31,7 +25,9 @@ class BudgetBase(BaseModel):
 
 
 class BudgetCreate(BudgetBase):
-    Account_idAccount: Optional[int] = Field(None, description="ID of the account. Optional - backend tilføjer det automatisk fra header.")
+    Account_idAccount: Optional[int] = Field(
+        None, description="ID of the account. Optional - backend tilføjer det automatisk fra header."
+    )
     month: Optional[str] = Field(None, description="Month (MM format) - will be converted to budget_date")
     year: Optional[str] = Field(None, description="Year (YYYY format) - will be converted to budget_date")
     category_id: Optional[int] = Field(None, description="Category ID - will be linked via association table")

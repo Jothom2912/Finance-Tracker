@@ -45,11 +45,7 @@ class UserSyncConsumer(BaseConsumer):
         """Synchronous DB work — called via ``asyncio.to_thread``."""
         session = self._session_factory()
         try:
-            existing = (
-                session.query(UserModel)
-                .filter(UserModel.idUser == event.user_id)
-                .first()
-            )
+            existing = session.query(UserModel).filter(UserModel.idUser == event.user_id).first()
             if existing:
                 logger.info(
                     "User %d already exists in MySQL — skipping",

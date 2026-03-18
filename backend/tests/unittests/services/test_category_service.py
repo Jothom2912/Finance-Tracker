@@ -4,19 +4,19 @@ Unit tests for CategoryService business logic.
 Updated for hexagonal architecture (backend.category.*).
 """
 
-import pytest
 from unittest.mock import Mock
 
-from backend.category.application.service import CategoryService
+import pytest
+
+from backend.category.application.dto import CategoryCreate
 from backend.category.application.ports.outbound import ICategoryRepository
+from backend.category.application.service import CategoryService
 from backend.category.domain.entities import Category as CategoryEntity
-from backend.category.domain.value_objects import CategoryType
 from backend.category.domain.exceptions import (
     DuplicateCategoryName,
     DuplicateCategoryNameOnUpdate,
 )
-from backend.category.application.dto import CategoryCreate
-
+from backend.category.domain.value_objects import CategoryType
 
 # ============================================================================
 # Fixtures
@@ -110,9 +110,7 @@ class TestListCategories:
         assert len(result) == 2
 
     def test_applies_pagination(self, service, mock_category_repo):
-        mock_category_repo.get_all.return_value = [
-            _category_entity(i, f"Cat {i}") for i in range(10)
-        ]
+        mock_category_repo.get_all.return_value = [_category_entity(i, f"Cat {i}") for i in range(10)]
 
         result = service.list_categories(skip=2, limit=3)
 
@@ -161,9 +159,7 @@ class TestCreateCategory:
 
     def test_converts_type_enum_to_string(self, service, mock_category_repo):
         mock_category_repo.get_by_name.return_value = None
-        mock_category_repo.create.return_value = _category_entity(
-            1, "Løn", CategoryType.INCOME
-        )
+        mock_category_repo.create.return_value = _category_entity(1, "Løn", CategoryType.INCOME)
         category = CategoryCreate(name="Løn", type="income")
 
         service.create_category(category)
@@ -198,9 +194,7 @@ class TestUpdateCategory:
 
     def test_raises_when_name_conflicts_with_other(self, service, mock_category_repo):
         mock_category_repo.get_by_id.return_value = _category_entity(1, "Mad")
-        mock_category_repo.get_by_name.return_value = _category_entity(
-            2, "Transport"
-        )
+        mock_category_repo.get_by_name.return_value = _category_entity(2, "Transport")
         data = CategoryCreate(name="Transport", type="expense")
 
         with pytest.raises(DuplicateCategoryNameOnUpdate):
@@ -208,9 +202,7 @@ class TestUpdateCategory:
 
     def test_allows_keeping_same_name(self, service, mock_category_repo):
         mock_category_repo.get_by_id.return_value = _category_entity(1, "Mad")
-        mock_category_repo.update.return_value = _category_entity(
-            1, "Mad", CategoryType.INCOME
-        )
+        mock_category_repo.update.return_value = _category_entity(1, "Mad", CategoryType.INCOME)
         data = CategoryCreate(name="Mad", type="income")  # Same name, different type
 
         result = service.update_category(category_id=1, dto=data)

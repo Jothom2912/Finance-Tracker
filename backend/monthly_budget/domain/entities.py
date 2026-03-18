@@ -2,6 +2,7 @@
 Domain entities for MonthlyBudget bounded context.
 Pure domain objects with no infrastructure dependencies.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

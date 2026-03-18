@@ -16,19 +16,11 @@ class MySQLAccountRepository(IAccountRepository):
         self._db = db
 
     def get_by_id(self, account_id: int) -> Optional[Account]:
-        model = (
-            self._db.query(AccountModel)
-            .filter(AccountModel.idAccount == account_id)
-            .first()
-        )
+        model = self._db.query(AccountModel).filter(AccountModel.idAccount == account_id).first()
         return self._to_entity(model) if model else None
 
     def get_all(self, user_id: int) -> list[Account]:
-        models = (
-            self._db.query(AccountModel)
-            .filter(AccountModel.User_idUser == user_id)
-            .all()
-        )
+        models = self._db.query(AccountModel).filter(AccountModel.User_idUser == user_id).all()
         return [self._to_entity(m) for m in models]
 
     def create(self, account: Account) -> Account:
@@ -43,11 +35,7 @@ class MySQLAccountRepository(IAccountRepository):
         return self._to_entity(model)
 
     def update(self, account: Account) -> Account:
-        model = (
-            self._db.query(AccountModel)
-            .filter(AccountModel.idAccount == account.id)
-            .first()
-        )
+        model = self._db.query(AccountModel).filter(AccountModel.idAccount == account.id).first()
 
         model.name = account.name
         model.saldo = account.saldo
@@ -57,11 +45,7 @@ class MySQLAccountRepository(IAccountRepository):
         return self._to_entity(model)
 
     def delete(self, account_id: int) -> bool:
-        model = (
-            self._db.query(AccountModel)
-            .filter(AccountModel.idAccount == account_id)
-            .first()
-        )
+        model = self._db.query(AccountModel).filter(AccountModel.idAccount == account_id).first()
         if not model:
             return False
 

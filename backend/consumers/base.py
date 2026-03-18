@@ -120,8 +120,7 @@ class BaseConsumer(ABC):
 
             if retry_count < self._max_retries:
                 logger.warning(
-                    "Handler failed (correlation_id=%s, retry=%d/%d) — "
-                    "republishing",
+                    "Handler failed (correlation_id=%s, retry=%d/%d) — republishing",
                     cid,
                     retry_count + 1,
                     self._max_retries,
@@ -131,8 +130,7 @@ class BaseConsumer(ABC):
                 await message.ack()
             else:
                 logger.error(
-                    "Handler failed after %d retries (correlation_id=%s) — "
-                    "sending to DLQ",
+                    "Handler failed after %d retries (correlation_id=%s) — sending to DLQ",
                     self._max_retries,
                     cid,
                     exc_info=True,
@@ -146,9 +144,7 @@ class BaseConsumer(ABC):
         headers = message.headers or {}
         return int(headers.get(HEADER_RETRY_COUNT, 0))
 
-    async def _republish(
-        self, original: AbstractIncomingMessage, retry_count: int
-    ) -> None:
+    async def _republish(self, original: AbstractIncomingMessage, retry_count: int) -> None:
         assert self._channel is not None
         assert self._exchange is not None
 

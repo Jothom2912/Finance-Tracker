@@ -3,6 +3,7 @@ FastAPI dependency factory for auth-related ports.
 
 Isolated module to avoid circular imports between auth.py and dependencies.py.
 """
+
 from __future__ import annotations
 
 from fastapi import Depends

@@ -4,14 +4,13 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from pydantic import ValidationError
-
 from app.application.dto import (
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
     TransactionFiltersDTO,
 )
 from app.domain.entities import TransactionType
+from pydantic import ValidationError
 
 
 def _valid_tx(**overrides) -> dict:  # type: ignore[no-untyped-def]
@@ -49,16 +48,12 @@ class TestAmountBoundaries:
             CreateTransactionDTO(**_valid_tx(amount=Decimal("0.00")))
 
     def test_at_maximum_valid(self) -> None:
-        dto = CreateTransactionDTO(
-            **_valid_tx(amount=Decimal("9999999999.99"))
-        )
+        dto = CreateTransactionDTO(**_valid_tx(amount=Decimal("9999999999.99")))
         assert dto.amount == Decimal("9999999999.99")
 
     def test_above_maximum_invalid(self) -> None:
         with pytest.raises(ValidationError):
-            CreateTransactionDTO(
-                **_valid_tx(amount=Decimal("10000000000.00"))
-            )
+            CreateTransactionDTO(**_valid_tx(amount=Decimal("10000000000.00")))
 
     def test_negative_amount_invalid(self) -> None:
         with pytest.raises(ValidationError):
@@ -67,9 +62,7 @@ class TestAmountBoundaries:
 
 class TestDescriptionBoundaries:
     def test_at_max_valid(self) -> None:
-        dto = CreateTransactionDTO(
-            **_valid_tx(description="x" * 500)
-        )
+        dto = CreateTransactionDTO(**_valid_tx(description="x" * 500))
         assert len(dto.description) == 500
 
     def test_above_max_invalid(self) -> None:
@@ -93,15 +86,11 @@ class TestAccountId:
 
 class TestTransactionTypeValidation:
     def test_income_valid(self) -> None:
-        dto = CreateTransactionDTO(
-            **_valid_tx(transaction_type=TransactionType.INCOME)
-        )
+        dto = CreateTransactionDTO(**_valid_tx(transaction_type=TransactionType.INCOME))
         assert dto.transaction_type == TransactionType.INCOME
 
     def test_expense_valid(self) -> None:
-        dto = CreateTransactionDTO(
-            **_valid_tx(transaction_type=TransactionType.EXPENSE)
-        )
+        dto = CreateTransactionDTO(**_valid_tx(transaction_type=TransactionType.EXPENSE))
         assert dto.transaction_type == TransactionType.EXPENSE
 
     def test_invalid_type(self) -> None:
@@ -120,9 +109,7 @@ class TestRecurrenceValidation:
 
     def test_invalid_value(self) -> None:
         with pytest.raises(ValidationError):
-            CreatePlannedTransactionDTO(
-                **_valid_planned(recurrence="bimonthly")
-            )
+            CreatePlannedTransactionDTO(**_valid_planned(recurrence="bimonthly"))
 
 
 class TestFiltersLimitBoundaries:

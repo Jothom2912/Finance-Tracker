@@ -4,10 +4,11 @@ Revision ID: 002
 Revises: 001
 Create Date: 2026-03-14
 """
+
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "002"
 down_revision: str = "001"
@@ -30,9 +31,7 @@ def upgrade() -> None:
             nullable=False,
             server_default="pending",
         ),
-        sa.Column(
-            "attempts", sa.Integer(), nullable=False, server_default="0"
-        ),
+        sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
         sa.Column(
             "next_attempt_at",
             sa.DateTime(),
