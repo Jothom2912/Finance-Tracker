@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 from jose import jwt
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _tx_payload(**overrides) -> dict:  # type: ignore[no-untyped-def]
@@ -181,11 +183,11 @@ class TestDeleteTransaction:
         assert get_resp.status_code == 404
 
     @pytest.mark.asyncio()
-    async def test_publishes_event(
+    async def test_writes_outbox_event(
         self,
         client: AsyncClient,
         auth_headers: dict,
-        mock_publisher: AsyncMock,
+        db_session: AsyncSession,
     ) -> None:
         create_resp = await client.post(
             "/api/v1/transactions/",
@@ -193,14 +195,21 @@ class TestDeleteTransaction:
             headers=auth_headers,
         )
         tx_id = create_resp.json()["id"]
-        mock_publisher.reset_mock()
 
         await client.delete(f"/api/v1/transactions/{tx_id}", headers=auth_headers)
 
-        mock_publisher.publish.assert_awaited()
-        event = mock_publisher.publish.call_args[0][0]
-        assert event.event_type == "transaction.deleted"
-        assert event.transaction_id == tx_id
+        from app.models import OutboxEventModel
+
+        result = await db_session.execute(
+            select(OutboxEventModel).where(OutboxEventModel.event_type == "transaction.deleted")
+        )
+        entries = result.scalars().all()
+
+        assert len(entries) == 1
+        assert entries[0].aggregate_type == "transaction"
+        assert entries[0].status == "pending"
+        payload = json.loads(entries[0].payload_json)
+        assert payload["transaction_id"] == tx_id
 
 
 # ── CSV Import ──────────────────────────────────────────────────────
@@ -361,11 +370,11 @@ class TestCrossServiceJWT:
 
 class TestEventPublishing:
     @pytest.mark.asyncio()
-    async def test_create_publishes_transaction_created(
+    async def test_create_writes_outbox_event(
         self,
         client: AsyncClient,
         auth_headers: dict,
-        mock_publisher: AsyncMock,
+        db_session: AsyncSession,
     ) -> None:
         resp = await client.post(
             "/api/v1/transactions/",
@@ -374,8 +383,17 @@ class TestEventPublishing:
         )
 
         assert resp.status_code == 201
-        mock_publisher.publish.assert_awaited()
-        event = mock_publisher.publish.call_args[0][0]
-        assert event.event_type == "transaction.created"
-        assert event.amount == "49.99"
-        assert event.user_id == 1
+
+        from app.models import OutboxEventModel
+
+        result = await db_session.execute(
+            select(OutboxEventModel).where(OutboxEventModel.event_type == "transaction.created")
+        )
+        entries = result.scalars().all()
+
+        assert len(entries) == 1
+        assert entries[0].aggregate_type == "transaction"
+        assert entries[0].status == "pending"
+        payload = json.loads(entries[0].payload_json)
+        assert payload["amount"] == "49.99"
+        assert payload["user_id"] == 1

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncGenerator
+
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ.setdefault("JWT_SECRET", "test-secret")
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient

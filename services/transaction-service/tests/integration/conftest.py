@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+
+TEST_SECRET = "integration-test-secret"
+TEST_ALGORITHM = "HS256"
+
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
+os.environ.setdefault("JWT_SECRET", TEST_SECRET)
 
 import pytest
 import pytest_asyncio
@@ -14,17 +20,12 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-TEST_SECRET = "integration-test-secret"
-TEST_ALGORITHM = "HS256"
-
 import app.config as _cfg
 
 _cfg.settings.JWT_SECRET = TEST_SECRET  # type: ignore[misc]
 _cfg.settings.JWT_ALGORITHM = TEST_ALGORITHM  # type: ignore[misc]
 
-from app.application.ports.outbound import IEventPublisher
 from app.database import Base, get_db
-from app.dependencies import get_publisher
 from app.main import app as fastapi_app
 
 _engine = create_async_engine("sqlite+aiosqlite://", echo=False)
@@ -36,15 +37,7 @@ async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-_mock_publisher = AsyncMock(spec=IEventPublisher)
-
-
-async def _override_get_publisher() -> IEventPublisher:
-    return _mock_publisher
-
-
 fastapi_app.dependency_overrides[get_db] = _override_get_db
-fastapi_app.dependency_overrides[get_publisher] = _override_get_publisher
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -54,7 +47,12 @@ async def _setup_db():
     yield
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    _mock_publisher.reset_mock()
+
+
+@pytest_asyncio.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    async with _session_factory() as session:
+        yield session
 
 
 @pytest_asyncio.fixture
@@ -80,8 +78,3 @@ def auth_headers() -> dict[str, str]:
 @pytest.fixture
 def user2_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {_make_token(2)}"}
-
-
-@pytest.fixture
-def mock_publisher() -> AsyncMock:
-    return _mock_publisher
