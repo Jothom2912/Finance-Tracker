@@ -1,18 +1,16 @@
-%% Finans Tracker - Target State Microservice Architecture
-%% Last updated: 2026-03-18
-%%
-%% This diagram shows the target-state architecture after full monolith extraction.
-%% The monolith is NOT shown - it will be decommissioned via strangler fig pattern.
-%%
-%% Color legend:
-%%   Blue    = Currently deployed services
-%%   Green   = Phase 1: Extract from monolith
-%%   Orange  = Phase 2: Future services
-%%   Purple  = Infrastructure (databases, message broker)
-%%   Red     = Outbox pattern (workers + outbox tables)
-%%   Yellow  = Search infrastructure (Elasticsearch)
-
 graph TD
+    %% Finans Tracker - Target State Microservice Architecture
+    %% Last updated: 2026-03-18
+    %%
+    %% Target-state after full monolith extraction (strangler fig pattern).
+    %%
+    %% Color legend:
+    %%   Blue    = Currently deployed services
+    %%   Green   = Phase 1: Extract from monolith
+    %%   Orange  = Phase 2: Future services
+    %%   Purple  = Infrastructure (databases, message broker)
+    %%   Red     = Outbox pattern (workers + outbox tables)
+    %%   Yellow  = Search infrastructure (Elasticsearch)
     %% ──────────────────────────────────────────────
     %% Clients
     %% ──────────────────────────────────────────────
