@@ -1,0 +1,311 @@
+/* ── Category Spending Overview ── */
+
+.spending-overview {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.spending-overview.loading-state,
+.spending-overview.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-secondary);
+}
+
+.spending-overview.empty-state h3 {
+  color: var(--color-text-primary);
+  margin: 0 0 0.5rem;
+  font-size: var(--font-size-lg);
+}
+
+.spending-overview.empty-state p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+/* ── Stats grid ── */
+.spending-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.spending-stat-card {
+  text-align: center;
+  padding: 1.25rem;
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition-fast);
+}
+
+.spending-stat-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.spending-stat-value {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 0.375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.spending-stat-value.expense {
+  color: var(--color-error-500);
+}
+
+.spending-stat-value.within-budget {
+  color: var(--color-success-500);
+}
+
+.spending-stat-value.over-budget {
+  color: var(--color-error-500);
+}
+
+.spending-stat-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+/* ── Bar chart section ── */
+.spending-chart-full {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.spending-chart-full > h3 {
+  margin: 0 0 0.75rem;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.chart-legend {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background-color: #0088FE;
+}
+
+.legend-swatch.budget {
+  background-color: #e2e8f0;
+}
+
+.spending-total-row {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: var(--color-brand-50);
+  color: var(--color-brand-600);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  border: 1px solid var(--color-brand-100);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Budget compliance section ── */
+.budget-compliance-section {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.5rem;
+}
+
+.budget-compliance-section > h3 {
+  margin: 0 0 1rem;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.budget-compliance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── Compliance row ── */
+.compliance-row {
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+  transition: box-shadow var(--transition-fast);
+}
+
+.compliance-row:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.compliance-row.over {
+  border-left: 3px solid var(--color-error-500);
+}
+
+.compliance-row.warning {
+  border-left: 3px solid var(--color-warning-500);
+}
+
+.compliance-row.ok {
+  border-left: 3px solid var(--color-success-500);
+}
+
+.compliance-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.625rem;
+}
+
+.compliance-name {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.compliance-status {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.compliance-status.ok {
+  background: var(--color-success-50);
+  color: var(--color-success-600);
+}
+
+.compliance-status.warning {
+  background: var(--color-warning-50);
+  color: var(--color-warning-600);
+}
+
+.compliance-status.over {
+  background: var(--color-error-50);
+  color: var(--color-error-600);
+}
+
+/* ── Compliance bar ── */
+.compliance-bar-wrapper {
+  margin-bottom: 0.625rem;
+}
+
+.compliance-bar {
+  height: 8px;
+  background: var(--color-bg-sunken);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.compliance-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.compliance-fill.ok {
+  background: var(--color-success-500);
+}
+
+.compliance-fill.warning {
+  background: var(--color-warning-500);
+}
+
+.compliance-fill.over {
+  background: var(--color-error-500);
+}
+
+/* ── Compliance amounts ── */
+.compliance-amounts {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.compliance-spent {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.compliance-divider {
+  color: var(--color-text-muted);
+}
+
+.compliance-budget {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.compliance-remaining {
+  color: var(--color-success-500);
+  font-weight: 600;
+  margin-left: 0.25rem;
+}
+
+.compliance-remaining.over {
+  color: var(--color-error-500);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .spending-stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .spending-stat-value {
+    font-size: var(--font-size-xl);
+  }
+
+  .compliance-amounts {
+    flex-wrap: wrap;
+  }
+
+  .spending-chart-full {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .spending-stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

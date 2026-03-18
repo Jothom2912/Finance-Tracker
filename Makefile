@@ -5,7 +5,7 @@ INFRA_SERVICES = mysql postgres postgres-transactions rabbitmq
 BACKEND_DIR = backend
 USER_SERVICE_DIR = services/user-service
 TX_SERVICE_DIR = services/transaction-service
-FRONTEND_DIR = frontend/finans-tracker-frontend
+FRONTEND_DIR = services/frontend
 
 help: ## Show available targets
 	@printf '\nAvailable targets:\n\n'

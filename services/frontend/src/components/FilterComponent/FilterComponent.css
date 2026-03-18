@@ -1,0 +1,124 @@
+/* ── Filter Component ── */
+
+.filter-component-container {
+    width: 100%;
+}
+
+.filter-component-container h4 {
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    margin: 0 0 1rem 0;
+}
+
+.controls-section .filter-component-container {
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+    border: none;
+}
+
+.filter-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+    margin-bottom: 0;
+}
+
+.filter-component-container .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    flex: 1;
+    min-width: 140px;
+    margin-bottom: 0;
+}
+
+.filter-component-container label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+}
+
+.filter-component-container input[type="date"],
+.filter-component-container select {
+    padding: 0.625rem 0.875rem;
+    border: 1.5px solid var(--color-border-light);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-surface);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 0;
+}
+
+.filter-component-container input[type="date"]:focus,
+.filter-component-container select:focus {
+    outline: none;
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 3px rgba(54, 79, 199, 0.1);
+}
+
+.filter-component-container input[type="date"]:hover,
+.filter-component-container select:hover {
+    border-color: var(--color-border-medium);
+}
+
+.filter-component-container input[type="date"]::-webkit-datetime-edit-text,
+.filter-component-container input[type="date"]::-webkit-datetime-edit-month-field,
+.filter-component-container input[type="date"]::-webkit-datetime-edit-day-field,
+.filter-component-container input[type="date"]::-webkit-datetime-edit-year-field {
+    color: var(--color-text-primary);
+}
+
+.filter-component-container input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.5;
+}
+
+.filter-component-container input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 0.8;
+}
+
+.filter-component-container .button {
+    background: var(--color-brand-500);
+    color: var(--color-text-inverse);
+    padding: 0.625rem 1.25rem;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    align-self: flex-end;
+}
+
+.filter-component-container .button:hover {
+    background: var(--color-brand-600);
+}
+
+.filter-component-container .button.secondary {
+    background: var(--color-brand-500);
+}
+
+@media (max-width: 768px) {
+    .filter-inputs {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-component-container .form-group {
+        min-width: 100%;
+    }
+
+    .filter-component-container .button {
+        width: 100%;
+        align-self: stretch;
+    }
+}

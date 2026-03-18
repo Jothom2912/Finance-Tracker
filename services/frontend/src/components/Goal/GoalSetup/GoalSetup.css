@@ -1,0 +1,256 @@
+/* ── Goal Setup ── */
+
+.goal-setup-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.goal-form {
+  background: var(--color-bg-surface);
+  padding: 1.75rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.375rem;
+  font-size: var(--font-size-sm);
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1.5px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgba(54, 79, 199, 0.1);
+}
+
+.form-group input:hover,
+.form-group select:hover {
+  border-color: var(--color-border-medium);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.form-actions-right {
+  display: flex;
+  gap: 0.625rem;
+}
+
+.submit-button {
+  background: var(--color-brand-500);
+  color: var(--color-text-inverse);
+  border: none;
+  padding: 0.625rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.submit-button:hover:not(:disabled) {
+  background: var(--color-brand-600);
+}
+
+.submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel-button {
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-medium);
+  padding: 0.625rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancel-button:hover:not(:disabled) {
+  background: var(--color-bg-sunken);
+}
+
+.cancel-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.delete-button {
+  background: var(--color-error-50);
+  color: var(--color-error-500);
+  border: 1px solid var(--color-error-100);
+  padding: 0.625rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.delete-button:hover:not(:disabled) {
+  background: var(--color-error-100);
+}
+
+.delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Existing Goals ── */
+.existing-goals {
+  background: var(--color-bg-surface);
+  padding: 1.75rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-card);
+}
+
+.existing-goals h3 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 1.25rem 0;
+}
+
+.goals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.goal-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.875rem 1rem;
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+  transition: box-shadow var(--transition-fast);
+  position: relative;
+  padding-left: 1.25rem;
+}
+
+.goal-list-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-brand-500);
+  border-radius: 3px 0 0 3px;
+}
+
+.goal-list-item:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.goal-list-info {
+  flex: 1;
+}
+
+.goal-list-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 0.125rem;
+  font-size: var(--font-size-sm);
+}
+
+.goal-list-amount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.goal-list-status {
+  margin-left: 0.75rem;
+}
+
+.status-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.status-badge.active {
+  background: var(--color-success-50);
+  color: var(--color-success-600);
+}
+
+.status-badge.completed {
+  background: var(--color-success-100);
+  color: var(--color-success-700);
+}
+
+.status-badge.paused {
+  background: var(--color-error-50);
+  color: var(--color-error-600);
+}
+
+@media (max-width: 768px) {
+  .goal-form {
+    padding: 1.25rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .form-actions-right {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .submit-button,
+  .cancel-button,
+  .delete-button {
+    width: 100%;
+  }
+}

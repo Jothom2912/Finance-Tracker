@@ -1,0 +1,118 @@
+/* ── Summary Cards ── */
+
+.dashboard-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-card {
+  background: var(--color-bg-surface);
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--color-border-light);
+  text-align: left;
+  transition: box-shadow var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+}
+
+.summary-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.summary-card h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.amount {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  margin: 0;
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.income-amount {
+  color: var(--color-success-500);
+}
+
+.expenses-amount {
+  color: var(--color-error-500);
+}
+
+.net-change-amount.positive,
+.balance-amount.positive {
+  color: var(--color-success-500);
+}
+
+.net-change-amount.negative,
+.balance-amount.negative {
+  color: var(--color-error-500);
+}
+
+.income-card::before {
+  background: var(--color-success-500);
+}
+
+.expenses-card::before {
+  background: var(--color-error-500);
+}
+
+.net-change-card::before {
+  background: var(--color-brand-500);
+}
+
+.balance-card::before {
+  background: var(--color-info-500);
+}
+
+/* ── Trend Badge ── */
+
+.trend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: var(--letter-spacing-normal);
+}
+
+.trend-arrow {
+  font-size: 0.625rem;
+}
+
+.trend-positive {
+  background: var(--color-success-100, #dcfce7);
+  color: var(--color-success-700, #15803d);
+}
+
+.trend-negative {
+  background: var(--color-error-100, #fee2e2);
+  color: var(--color-error-700, #b91c1c);
+}
+
+.trend-neutral {
+  background: var(--color-bg-tertiary, #f3f4f6);
+  color: var(--color-text-secondary, #6b7280);
+}

@@ -1,0 +1,113 @@
+/* ── Categories Page ── */
+
+.categories-page {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.categories-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.categories-page-header h2 {
+  color: var(--color-text-primary);
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.manage-categories-btn {
+  padding: 0.625rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-500);
+  color: var(--color-text-inverse);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  font-family: inherit;
+}
+
+.manage-categories-btn:hover {
+  background: var(--color-brand-600);
+}
+
+.manage-categories-btn:focus-visible {
+  outline: none;
+  background: var(--color-brand-600);
+  box-shadow: 0 0 0 3px rgba(54, 79, 199, 0.15);
+}
+
+/* ── No account state ── */
+.categories-no-account {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.no-account-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  line-height: 1;
+}
+
+.categories-no-account h3 {
+  color: var(--color-text-primary);
+  margin: 0 0 0.5rem;
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+
+.categories-no-account p {
+  color: var(--color-text-secondary);
+  margin: 0 0 1.5rem;
+  font-size: var(--font-size-sm);
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+.select-account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1.5rem;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-500);
+  color: var(--color-text-inverse);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.select-account-btn:hover,
+.select-account-btn:focus-visible {
+  background: var(--color-brand-600);
+}
+
+@media (max-width: 768px) {
+  .categories-page-header h2 {
+    font-size: var(--font-size-2xl);
+  }
+
+  .categories-page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .manage-categories-btn {
+    text-align: center;
+  }
+}

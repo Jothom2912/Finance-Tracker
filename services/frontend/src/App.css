@@ -1,0 +1,95 @@
+/* ── App Layout ── */
+
+.App {
+    min-height: 100vh;
+    background: var(--color-bg-base);
+}
+
+main {
+    padding: 1.5rem 1.5rem 3rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: calc(100vh - 60px);
+}
+
+/* ── Notifications ── */
+
+.notification-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 400px;
+    width: 100%;
+    pointer-events: none;
+}
+
+.notification {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    animation: notification-slide-in var(--transition-slow) ease-out;
+    pointer-events: auto;
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    border: 1px solid transparent;
+    backdrop-filter: blur(8px);
+}
+
+.notification--success {
+    background-color: var(--color-success-50);
+    color: var(--color-success-700);
+    border-color: var(--color-success-100);
+    border-left: 3px solid var(--color-success-500);
+}
+
+.notification--error {
+    background-color: var(--color-error-50);
+    color: var(--color-error-700);
+    border-color: var(--color-error-100);
+    border-left: 3px solid var(--color-error-500);
+}
+
+.notification__message {
+    flex: 1;
+    margin-right: 0.75rem;
+}
+
+.notification__dismiss {
+    background: none;
+    border: none;
+    font-size: 1.125rem;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.5;
+    padding: 0.125rem 0.25rem;
+    line-height: 1;
+    transition: opacity var(--transition-fast);
+}
+
+.notification__dismiss:hover {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    main {
+        padding: 1rem 1rem 2rem;
+    }
+}
+
+@keyframes notification-slide-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
