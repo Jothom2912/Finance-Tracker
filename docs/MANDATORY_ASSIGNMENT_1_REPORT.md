@@ -607,10 +607,10 @@ flowchart LR
 |------|----------|----------|
 | Project overview | `README.md` (root) | New developers, evaluators |
 | Installation guide | `INSTALLATION.md` | Developers setting up locally |
-| Backend architecture | `backend/README.md` | Backend developers |
-| Structure map | `backend/docs/STRUCTURE.md` | Architecture reference |
-| Database comparison | `backend/DATABASE_COMPARISON.md` | Database selection decisions |
-| Repository pattern | `backend/repositories/README.md` | Data layer developers |
+| Backend architecture | `services/monolith/README.md` | Backend developers |
+| Structure map | `services/monolith/docs/STRUCTURE.md` | Architecture reference |
+| Database comparison | `services/monolith/DATABASE_COMPARISON.md` | Database selection decisions |
+| Repository pattern | `services/monolith/backend/repositories/README.md` | Data layer developers |
 | API documentation | Auto-generated at `/docs` | API consumers |
 | GraphQL schema | Auto-generated at `/api/v1/graphql` | GraphQL consumers |
 | Assignment report | `docs/MANDATORY_ASSIGNMENT_1_REPORT.md` | Course evaluation |
@@ -642,7 +642,7 @@ All domain routes are versioned under `/api/v1/`. Infrastructure endpoints (`/he
 
 ### 13.2 Database Versioning
 
-**Current state:** Database schema is managed by SQLAlchemy's `create_all()` which creates tables on startup. Manual migration scripts exist in `backend/migrations/`.
+**Current state:** Database schema is managed by SQLAlchemy's `create_all()` which creates tables on startup. Manual migration scripts exist in `services/monolith/backend/migrations/`.
 
 **Planned evolution:** Alembic (SQLAlchemy's migration tool) for:
 - Versioned migration files with up/down operations

@@ -29,17 +29,17 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: make -C backend install-deps
+        run: make -C services/monolith install-deps
 
       - name: Lint
-        run: make -C backend lint
+        run: make -C services/monolith lint
 
       - name: Format check
-        run: make -C backend format-check
+        run: make -C services/monolith format-check
 
       - name: Run tests
         run: |
-          cd backend && uv run pytest tests/ -v --cov=. --cov-report=xml --cov-report=term
+          cd services/monolith && uv run pytest tests/ -v --cov=backend --cov-report=xml --cov-report=term
         env:
           ACTIVE_DB: mysql
           SECRET_KEY: test-secret-key-for-ci
@@ -47,7 +47,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          file: ./backend/coverage.xml
+          file: ./services/monolith/coverage.xml
           flags: backend
           name: codecov-umbrella
           fail_ci_if_error: false

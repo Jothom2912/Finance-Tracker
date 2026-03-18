@@ -13,4 +13,4 @@ This service will provide dashboard analytics, reporting, data aggregation, and 
 ## Current Location
 
 Analytics logic currently lives in:
-- `backend/analytics/` — dashboard overview, expenses-by-month, GraphQL read gateway
+- `services/monolith/backend/analytics/` — dashboard overview, expenses-by-month, GraphQL read gateway

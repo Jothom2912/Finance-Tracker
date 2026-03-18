@@ -13,5 +13,5 @@ This service will manage budgets, monthly budgets, and budget lines when extract
 ## Current Location
 
 Budget logic currently lives in:
-- `backend/budget/` — legacy per-category budgets
-- `backend/monthly_budget/` — aggregate-based monthly budgets with budget lines
+- `services/monolith/backend/budget/` — legacy per-category budgets
+- `services/monolith/backend/monthly_budget/` — aggregate-based monthly budgets with budget lines

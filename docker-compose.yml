@@ -53,7 +53,7 @@ services:
   monolith:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: services/monolith/Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -106,7 +106,7 @@ services:
   user-sync-consumer:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: services/monolith/Dockerfile
     command: ["python", "-m", "backend.consumers.worker", "--consumer", "user-sync"]
     environment:
       DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
@@ -121,7 +121,7 @@ services:
   account-creation-consumer:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: services/monolith/Dockerfile
     command: ["python", "-m", "backend.consumers.worker", "--consumer", "account-creation"]
     environment:
       DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker

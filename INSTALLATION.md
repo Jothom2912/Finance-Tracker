@@ -52,7 +52,7 @@ curl http://localhost:8002/health   # Transaction Service
 ### 4. Start Frontend
 
 ```bash
-cd frontend/finans-tracker-frontend
+cd services/frontend
 yarn install
 yarn dev
 ```
@@ -94,8 +94,8 @@ This happens automatically. No manual database setup needed for new users.
 ### Backend (Monolith)
 
 ```powershell
-cd backend
-uv sync
+cd services/monolith
+uv sync --dev
 uv run uvicorn backend.main:app --reload --port 8000
 ```
 
@@ -124,7 +124,8 @@ Needs PostgreSQL on port 5434 and RabbitMQ on port 5672.
 ### Consumers
 
 ```powershell
-# In separate terminals
+# In separate terminals (from services/monolith/)
+cd services/monolith
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
 ```
@@ -132,7 +133,7 @@ uv run python -m backend.consumers.worker --consumer account-creation
 ### Frontend
 
 ```powershell
-cd frontend/finans-tracker-frontend
+cd services/frontend
 yarn install
 yarn dev
 ```
@@ -204,8 +205,11 @@ curl -X POST http://localhost:8000/api/v1/graphql \
 ## Running Tests
 
 ```bash
-# Monolith tests (~276 tests)
-cd backend && uv run pytest tests/ -v
+# All tests via root Makefile
+make test
+
+# Monolith tests (~288 tests)
+cd services/monolith && uv run pytest tests/ -v
 
 # User service tests (33 tests)
 cd services/user-service && uv run pytest tests/ -v

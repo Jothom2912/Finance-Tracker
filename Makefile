@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .PHONY: help install-deps dev dev-docker dev-backend dev-user-service dev-transaction-service dev-frontend down logs build test test-e2e lint format format-check check clean
 
 INFRA_SERVICES = mysql postgres postgres-transactions rabbitmq
-BACKEND_DIR = backend
+BACKEND_DIR = services/monolith
 USER_SERVICE_DIR = services/user-service
 TX_SERVICE_DIR = services/transaction-service
 FRONTEND_DIR = services/frontend

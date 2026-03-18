@@ -54,7 +54,7 @@ This starts all services:
 ### Frontend
 
 ```bash
-cd frontend/finans-tracker-frontend
+cd services/frontend
 yarn install
 yarn dev
 ```
@@ -192,30 +192,30 @@ sequenceDiagram
 
 ```
 finance-tracker/
-├── backend/                         # Monolith (FastAPI)
-│   ├── main.py                      # App, middleware, router registration
-│   ├── config.py                    # Environment configuration
-│   ├── auth.py                      # JWT auth (creates + validates tokens)
-│   ├── dependencies.py              # FastAPI DI wiring
-│   ├── consumers/                   # RabbitMQ event consumers
-│   │   ├── base.py                  # BaseConsumer (retry, DLQ, idempotency)
-│   │   ├── user_sync.py             # UserSyncConsumer
-│   │   ├── account_creation.py      # AccountCreationConsumer
-│   │   └── worker.py                # Consumer runner (--consumer flag)
-│   ├── transaction/                 # Bounded context (hexagonal)
-│   ├── category/                    # Bounded context
-│   ├── budget/                      # Legacy budget context
-│   ├── monthly_budget/              # Aggregate-based monthly budgets
-│   ├── analytics/                   # Dashboard + GraphQL read gateway
-│   ├── account/                     # Account + groups
-│   ├── goal/                        # Goals
-│   ├── user/                        # Local user management
-│   ├── shared/                      # Cross-cutting ports/adapters
-│   ├── models/mysql/                # SQLAlchemy ORM models
-│   ├── database/                    # Connection managers
-│   └── tests/                       # Unit + integration tests
-│
 ├── services/
+│   ├── monolith/                    # Monolith (FastAPI)
+│   │   ├── backend/                 # Python package (all imports: backend.*)
+│   │   │   ├── main.py              # App, middleware, router registration
+│   │   │   ├── config.py            # Environment configuration
+│   │   │   ├── auth.py              # JWT auth (creates + validates tokens)
+│   │   │   ├── dependencies.py      # FastAPI DI wiring
+│   │   │   ├── consumers/           # RabbitMQ event consumers
+│   │   │   ├── transaction/         # Bounded context (hexagonal)
+│   │   │   ├── category/            # Bounded context
+│   │   │   ├── budget/              # Legacy budget context
+│   │   │   ├── monthly_budget/      # Aggregate-based monthly budgets
+│   │   │   ├── analytics/           # Dashboard + GraphQL read gateway
+│   │   │   ├── account/             # Account + groups
+│   │   │   ├── goal/                # Goals
+│   │   │   ├── user/                # Local user management
+│   │   │   ├── shared/              # Cross-cutting ports/adapters
+│   │   │   ├── models/mysql/        # SQLAlchemy ORM models
+│   │   │   └── database/            # Connection managers
+│   │   ├── tests/                   # Unit + integration tests
+│   │   ├── pyproject.toml
+│   │   ├── Makefile
+│   │   └── Dockerfile
+│   │
 │   ├── user-service/                # User microservice
 │   │   ├── app/                     # FastAPI app (hexagonal)
 │   │   │   └── workers/             # Outbox publisher worker
@@ -230,23 +230,23 @@ finance-tracker/
 │   │   ├── tests/                   # Unit + integration tests
 │   │   └── Dockerfile
 │   │
+│   ├── frontend/                    # React SPA (Vite)
+│   │   ├── src/
+│   │   │   ├── components/          # UI components
+│   │   │   ├── pages/               # Page components
+│   │   │   ├── context/             # Auth context
+│   │   │   ├── hooks/               # Custom hooks
+│   │   │   └── utils/               # API client
+│   │   └── package.json
+│   │
 │   └── shared/
 │       └── contracts/               # Shared event schemas (Pydantic)
 │           └── contracts/events/    # UserCreated, TransactionCreated, etc.
 │
-├── frontend/
-│   └── finans-tracker-frontend/     # React SPA (Vite)
-│       ├── src/
-│       │   ├── components/          # UI components
-│       │   ├── pages/               # Page components
-│       │   ├── context/             # Auth context
-│       │   ├── hooks/               # Custom hooks
-│       │   └── utils/               # API client
-│       └── package.json
-│
 ├── tests/
 │   └── e2e/                         # End-to-end tests (cross-service)
 │
+├── Makefile                         # Root orchestration
 ├── docker-compose.yml               # Full stack orchestration
 ├── INSTALLATION.md
 └── README.md
@@ -412,8 +412,11 @@ The project has **370+ tests** organized following the testing pyramid:
 ### Running Tests
 
 ```bash
+# All tests via root Makefile
+make test
+
 # Monolith tests
-cd backend && uv run pytest tests/ -v
+cd services/monolith && uv run pytest tests/ -v
 
 # User service tests
 cd services/user-service && uv run pytest tests/ -v
@@ -454,26 +457,24 @@ docker compose up -d
 ### Local Development (without Docker)
 
 ```bash
+# Start infrastructure only
+make dev
+
 # Backend (monolith)
-cd backend && uv sync
-uv run uvicorn backend.main:app --reload --port 8000
+cd services/monolith && make dev
 
 # User service
-cd services/user-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8001
+cd services/user-service && make dev
 
 # Transaction service
-cd services/transaction-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8002
+cd services/transaction-service && make dev
 
-# Consumers (in separate terminals)
+# Consumers (in separate terminals from services/monolith/)
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
 
 # Frontend
-cd frontend/finans-tracker-frontend
+cd services/frontend
 yarn install && yarn dev
 ```
 
@@ -491,13 +492,13 @@ yarn install && yarn dev
 | Document | Description |
 |----------|-------------|
 | [INSTALLATION.md](INSTALLATION.md) | Full setup guide with Docker and seeding |
-| [backend/README.md](backend/README.md) | Monolith architecture, router map, consumers |
-| [backend/docs/STRUCTURE.md](backend/docs/STRUCTURE.md) | Hexagonal structure map and bounded contexts |
+| [services/monolith/README.md](services/monolith/README.md) | Monolith architecture, router map, consumers |
+| [services/monolith/docs/STRUCTURE.md](services/monolith/docs/STRUCTURE.md) | Hexagonal structure map and bounded contexts |
 | [services/user-service/README.md](services/user-service/README.md) | User service API, events, JWT format |
 | [services/transaction-service/README.md](services/transaction-service/README.md) | Transaction service API, UoW pattern, CSV import |
 | [services/shared/contracts/README.md](services/shared/contracts/README.md) | Shared event contracts (Pydantic models) |
 | [docs/microservice-architecture.mermaid](docs/microservice-architecture.mermaid) | Full architecture diagram (current + future) |
-| [backend/DATABASE_COMPARISON.md](backend/DATABASE_COMPARISON.md) | MySQL vs Elasticsearch vs Neo4j comparison |
+| [services/monolith/DATABASE_COMPARISON.md](services/monolith/DATABASE_COMPARISON.md) | MySQL vs Elasticsearch vs Neo4j comparison |
 | [docs/MANDATORY_ASSIGNMENT_1_REPORT.md](docs/MANDATORY_ASSIGNMENT_1_REPORT.md) | Assignment 1 report |
 
 ---
