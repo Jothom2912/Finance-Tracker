@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock
 
 import pytest
-from contracts.events.user import UserCreatedEvent
 from httpx import AsyncClient
 from jose import jwt
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 REGISTER_URL = "/api/v1/users/register"
 LOGIN_URL = "/api/v1/users/login"
@@ -64,15 +65,23 @@ class TestRegister:
         assert resp.status_code == 409
 
     @pytest.mark.asyncio()
-    async def test_register_publishes_event(self, client: AsyncClient, mock_publisher: AsyncMock) -> None:
+    async def test_register_writes_outbox_event(self, client: AsyncClient, db_session: AsyncSession) -> None:
         await client.post(REGISTER_URL, json=VALID_USER)
 
-        mock_publisher.publish.assert_awaited_once()
-        event = mock_publisher.publish.call_args[0][0]
-        assert isinstance(event, UserCreatedEvent)
-        assert event.event_type == "user.created"
-        assert event.email == "alice@example.com"
-        assert event.username == "alice"
+        from app.models import OutboxEventModel
+
+        result = await db_session.execute(select(OutboxEventModel))
+        entries = result.scalars().all()
+
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.event_type == "user.created"
+        assert entry.aggregate_type == "user"
+        assert entry.status == "pending"
+
+        payload = json.loads(entry.payload_json)
+        assert payload["email"] == "alice@example.com"
+        assert payload["username"] == "alice"
 
 
 # ── Login ───────────────────────────────────────────────────────────

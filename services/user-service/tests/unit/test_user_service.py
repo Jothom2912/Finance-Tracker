@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from app.application.dto import LoginDTO, RegisterDTO
 from app.application.service import UserService
 from app.domain.entities import User, UserWithCredentials
