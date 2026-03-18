@@ -1,113 +1,176 @@
+%% Finans Tracker - Target State Microservice Architecture
+%% Last updated: 2026-03-18
+%%
+%% This diagram shows the target-state architecture after full monolith extraction.
+%% The monolith is NOT shown - it will be decommissioned via strangler fig pattern.
+%%
+%% Color legend:
+%%   Blue    = Currently deployed services
+%%   Green   = Phase 1: Extract from monolith
+%%   Orange  = Phase 2: Future services
+%%   Purple  = Infrastructure (databases, message broker)
+%%   Red     = Outbox pattern (workers + outbox tables)
+%%   Yellow  = Search infrastructure (Elasticsearch)
+
 graph TD
+    %% ──────────────────────────────────────────────
+    %% Clients
+    %% ──────────────────────────────────────────────
     subgraph Clients
-        FE["React Frontend\n(Vite)"]
+        FE["React Frontend - Vite<br/>Direct service routing<br/>No API Gateway"]
     end
 
+    %% ──────────────────────────────────────────────
+    %% External integrations
+    %% ──────────────────────────────────────────────
     subgraph External
-        TINK["Tink API\nPSD2 Bank Data"]
-        LLM["LLM Provider\nClaude / Ollama"]
-        OAUTH["OAuth Provider\nGoogle / MitID"]
+        TINK["Tink API<br/>PSD2 Bank Data"]
+        LLM["LLM Provider<br/>Claude / Ollama"]
+        OAUTH["OAuth Provider<br/>Google / MitID"]
     end
 
+    %% ──────────────────────────────────────────────
+    %% Currently deployed services
+    %% ──────────────────────────────────────────────
     subgraph currentServices ["Currently Deployed Services"]
-        subgraph monolith ["Monolith (port 8000)"]
-            MON["FastAPI Monolith\nAccounts, Categories,\nBudgets, Goals,\nTransactions, Analytics,\nGraphQL Read Gateway"]
-            MON_DB[("MySQL\nAccounts, Categories\nBudgets, Goals\nTransactions, Users (cache)")]
+        subgraph userService ["User Service - port 8001"]
+            US["UserService<br/>Registration, Login<br/>JWT Issuing - source of truth"]
+            US_DB[("PostgreSQL<br/>Users, Credentials")]
+            US_OB[["outbox_events"]]
         end
 
-        subgraph userService ["User Service (port 8001)"]
-            US["UserService\nRegistration, Login\nJWT Issuing (source of truth)"]
-            US_DB[("PostgreSQL\nUsers, Credentials")]
-            US_OB[["outbox_events\n(same DB)"]]
-        end
-
-        subgraph transactionService ["Transaction Service (port 8002)"]
-            TS["TransactionService\nCRUD, CSV Import\nPlanned Transactions\nToken validation only"]
-            TS_DB[("PostgreSQL\nTransactions\nPlanned Transactions")]
-            TS_OB[["outbox_events\n(same DB)"]]
-        end
-
-        subgraph outboxWorkers ["Outbox Workers"]
-            UOW["User Outbox Worker\nPolls outbox_events\nSELECT … FOR UPDATE\nSKIP LOCKED"]
-            TOW["Transaction Outbox Worker\nPolls outbox_events\nSELECT … FOR UPDATE\nSKIP LOCKED"]
-        end
-
-        subgraph consumers ["Event Consumers"]
-            USC["UserSyncConsumer\nSync user to MySQL\nQueue: monolith.user_sync"]
-            ACC["AccountCreationConsumer\nCreate default account\nQueue: monolith.account_creation"]
+        subgraph transactionService ["Transaction Service - port 8002"]
+            TS["TransactionService<br/>Transaction CRUD, CSV Import<br/>Planned Transactions<br/>Category CRUD owner"]
+            TS_DB[("PostgreSQL<br/>Transactions<br/>Planned Transactions<br/>Categories")]
+            TS_OB[["outbox_events"]]
         end
     end
 
-    subgraph futureServices ["Future Services (not yet extracted)"]
-        subgraph budgetService ["Budget Service"]
-            BS["BudgetService"]
-            BS_DB[("PostgreSQL")]
+    %% ──────────────────────────────────────────────
+    %% Phase 1: Extract from monolith
+    %% ──────────────────────────────────────────────
+    subgraph phase1 ["Phase 1 - Extract from Monolith"]
+        subgraph budgetService ["Budget Service - port 8003"]
+            BS["BudgetService<br/>Budgets, MonthlyBudgets<br/>Expense aggregates via events<br/>Category local copy via events"]
+            BS_DB[("PostgreSQL<br/>Budgets<br/>Categories - local copy<br/>Expense aggregates per category")]
+            BS_OB[["outbox_events"]]
         end
 
-        subgraph analyticsService ["Analytics Service"]
-            AS["AnalyticsService\nGraphQL Gateway"]
-            AS_DB[("Elasticsearch")]
+        subgraph accountService ["Account Service - port 8004"]
+            ACCS["AccountService<br/>Accounts, Account Groups<br/>Goals<br/>Minimal user data from events"]
+            ACCS_DB[("PostgreSQL<br/>Accounts, Goals<br/>Users - cached from events")]
+            ACCS_OB[["outbox_events"]]
         end
 
-        subgraph aiService ["AI / Categorization Service"]
-            CAT["CategorizationService\nRule → ML → LLM"]
-        end
-
-        subgraph apiGateway ["API Gateway"]
-            GW["API Gateway\nRouting, Rate Limiting\nJWT Validation, CORS"]
+        subgraph analyticsService ["Analytics BFF - port 8005"]
+            AS["AnalyticsService<br/>Dashboard aggregation<br/>GraphQL read gateway<br/>Hybrid: ES for aggregation + HTTP for lookups"]
+            AS_ES[("Elasticsearch<br/>Denormalized read store<br/>Projected from all domain events")]
         end
     end
 
+    %% ──────────────────────────────────────────────
+    %% Phase 2: Future services
+    %% ──────────────────────────────────────────────
+    subgraph phase2 ["Phase 2 - Future"]
+        subgraph aiService ["AI Categorization Service"]
+            CAT["CategorizationService<br/>Rule - ML - LLM fallback<br/>Human-in-the-loop feedback"]
+        end
+    end
+
+    %% ──────────────────────────────────────────────
+    %% Outbox workers (one per service)
+    %% ──────────────────────────────────────────────
+    subgraph outboxWorkers ["Outbox Workers"]
+        UOW["User Outbox Worker<br/>SELECT FOR UPDATE SKIP LOCKED"]
+        TOW["Transaction Outbox Worker"]
+        AOW["Account Outbox Worker"]
+        BOW["Budget Outbox Worker"]
+    end
+
+    %% ──────────────────────────────────────────────
+    %% Event backbone
+    %% ──────────────────────────────────────────────
     subgraph eventBackbone ["Event Backbone"]
-        RMQ["RabbitMQ\nExchange: finans_tracker.events\nTopic routing"]
+        RMQ["RabbitMQ<br/>Exchange: finans_tracker.events<br/>Topic routing"]
     end
 
-    %% Client -> Services (current: direct, future: via gateway)
-    FE -->|"REST /api/v1/*\n(accounts, budgets,\ncategories, goals)"| MON
-    FE -->|"REST /api/v1/users/*\n(register, login)"| US
-    FE -->|"REST /api/v1/transactions/*\n(future: via gateway)"| TS
+    %% ──────────────────────────────────────────────
+    %% Frontend → Services (direct routing, no gateway)
+    %% ──────────────────────────────────────────────
+    FE -->|"REST /users"| US
+    FE -->|"REST /transactions<br/>/categories"| TS
+    FE -->|"REST /budgets"| BS
+    FE -->|"REST /accounts<br/>/goals"| ACCS
+    FE -->|"GraphQL /analytics"| AS
 
-    %% Services -> Own databases
-    MON --> MON_DB
+    %% ──────────────────────────────────────────────
+    %% External integrations
+    %% ──────────────────────────────────────────────
+    TINK -.->|"bank transactions"| TS
+    LLM -.->|"categorization"| CAT
+    OAUTH -.->|"auth tokens"| US
+
+    %% ──────────────────────────────────────────────
+    %% Services → Own databases
+    %% ──────────────────────────────────────────────
     US --> US_DB
     TS --> TS_DB
+    BS --> BS_DB
+    ACCS --> ACCS_DB
+    AS --> AS_ES
 
-    %% Transactional outbox: service writes to outbox in same transaction
-    US -.->|"INSERT in same\ntransaction"| US_OB
-    TS -.->|"INSERT in same\ntransaction"| TS_OB
+    %% ──────────────────────────────────────────────
+    %% Transactional outbox (write in same DB transaction)
+    %% ──────────────────────────────────────────────
+    US -.->|"same txn"| US_OB
+    TS -.->|"same txn"| TS_OB
+    BS -.->|"same txn"| BS_OB
+    ACCS -.->|"same txn"| ACCS_OB
 
-    %% Outbox workers poll and publish
-    UOW -->|"SELECT … FOR UPDATE\nSKIP LOCKED"| US_OB
+    %% ──────────────────────────────────────────────
+    %% Outbox workers: poll → publish
+    %% ──────────────────────────────────────────────
+    UOW -->|"poll"| US_OB
     UOW -->|"publish"| RMQ
-    TOW -->|"SELECT … FOR UPDATE\nSKIP LOCKED"| TS_OB
+    TOW -->|"poll"| TS_OB
     TOW -->|"publish"| RMQ
+    BOW -->|"poll"| BS_OB
+    BOW -->|"publish"| RMQ
+    AOW -->|"poll"| ACCS_OB
+    AOW -->|"publish"| RMQ
 
-    %% Consumers -> MySQL
-    USC -->|"INSERT User"| MON_DB
-    ACC -->|"INSERT Account"| MON_DB
+    %% ──────────────────────────────────────────────
+    %% Sync HTTP lookups (minimal, only where needed)
+    %% ──────────────────────────────────────────────
+    AS -->|"HTTP: user details<br/>for dashboard display"| US
 
-    %% JWT flow
-    US -->|"Issues JWT\n(sub claim)"| FE
-    FE -->|"Bearer token"| MON
-    FE -->|"Bearer token"| TS
+    %% ──────────────────────────────────────────────
+    %% Event flows: RabbitMQ → consumers
+    %% ──────────────────────────────────────────────
+    RMQ -->|"user.created"| ACCS
+    RMQ -->|"transaction.created/deleted"| BS
+    RMQ -->|"category.created/updated/deleted"| BS
+    RMQ -->|"all domain events"| AS
+    RMQ -.->|"transaction.created<br/>Phase 2"| CAT
 
-    %% Event consuming (two independent queues, same routing key)
-    RMQ -->|"user.created\n→ monolith.user_sync"| USC
-    RMQ -->|"user.created\n→ monolith.account_creation"| ACC
+    %% ──────────────────────────────────────────────
+    %% JWT auth flow
+    %% ──────────────────────────────────────────────
+    US -->|"Issues JWT"| FE
 
-    %% Account creation saga
-    ACC -->|"account.created /\naccount.creation_failed"| RMQ
-
-    %% Future event flows
-    RMQ -.->|"ALL events"| AS
-
+    %% ──────────────────────────────────────────────
     %% Styling
+    %% ──────────────────────────────────────────────
     classDef current fill:#e1f5fe,stroke:#0288d1
-    classDef future fill:#fff3e0,stroke:#f57c00,stroke-dasharray: 5 5
+    classDef phase1sty fill:#e8f5e9,stroke:#388e3c
+    classDef phase2sty fill:#fff3e0,stroke:#f57c00,stroke-dasharray: 5 5
     classDef infra fill:#f3e5f5,stroke:#7b1fa2
-    classDef outbox fill:#e8f5e9,stroke:#388e3c
+    classDef outbox fill:#fce4ec,stroke:#c62828
+    classDef search fill:#fff9c4,stroke:#f9a825
 
-    class MON,US,TS,USC,ACC current
-    class BS,AS,CAT,GW future
-    class RMQ,MON_DB,US_DB,TS_DB infra
-    class US_OB,TS_OB,UOW,TOW outbox
+    class US,TS current
+    class ACCS,BS,AS phase1sty
+    class CAT phase2sty
+    class RMQ,US_DB,TS_DB,ACCS_DB,BS_DB infra
+    class US_OB,TS_OB,ACCS_OB,BS_OB,UOW,TOW,AOW,BOW outbox
+    class AS_ES search
