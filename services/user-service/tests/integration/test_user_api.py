@@ -197,3 +197,27 @@ class TestCrossServiceJWT:
 
         assert resp.status_code == 200
         assert resp.json()["username"] == "alice"
+
+    @pytest.mark.asyncio()
+    async def test_user_service_token_contains_monolith_claims(self, client: AsyncClient) -> None:
+        """Tokens issued by user-service must include user_id, username,
+        and email claims so the monolith can decode them without changes.
+        """
+        await client.post(REGISTER_URL, json=VALID_USER)
+        from app.config import settings
+
+        login_resp = await client.post(
+            LOGIN_URL,
+            json={"username_or_email": "alice@example.com", "password": "secret1234"},
+        )
+        token = login_resp.json()["access_token"]
+
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+
+        assert payload["sub"] == str(payload["user_id"])
+        assert payload["username"] == "alice"
+        assert payload["email"] == "alice@example.com"

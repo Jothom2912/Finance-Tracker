@@ -36,11 +36,11 @@ class CategoryService(ICategoryService):
         self._uow = uow
 
     async def create_category(self, dto: CreateCategoryDTO) -> CategoryResponseDTO:
-        existing = await self._uow.categories.find_by_name(dto.name)
-        if existing is not None:
-            raise DuplicateCategoryNameException(dto.name)
-
         async with self._uow:
+            existing = await self._uow.categories.find_by_name(dto.name)
+            if existing is not None:
+                raise DuplicateCategoryNameException(dto.name)
+
             category = await self._uow.categories.create(dto.name, dto.type)
 
             await self._uow.outbox.add(
@@ -57,11 +57,13 @@ class CategoryService(ICategoryService):
         return self._to_response(category)
 
     async def get_categories(self) -> list[CategoryResponseDTO]:
-        categories = await self._uow.categories.find_all()
+        async with self._uow:
+            categories = await self._uow.categories.find_all()
         return [self._to_response(c) for c in categories]
 
     async def get_category(self, category_id: int) -> CategoryResponseDTO:
-        category = await self._uow.categories.find_by_id(category_id)
+        async with self._uow:
+            category = await self._uow.categories.find_by_id(category_id)
         if category is None:
             raise CategoryNotFoundException(category_id)
         return self._to_response(category)
@@ -71,22 +73,22 @@ class CategoryService(ICategoryService):
     ) -> CategoryResponseDTO:
         fields = dto.model_dump(exclude_unset=True)
 
-        existing = await self._uow.categories.find_by_id(category_id)
-        if existing is None:
-            raise CategoryNotFoundException(category_id)
-
-        if not fields:
-            return self._to_response(existing)
-
-        if "name" in fields and fields["name"] != existing.name:
-            duplicate = await self._uow.categories.find_by_name(fields["name"])
-            if duplicate is not None:
-                raise DuplicateCategoryNameException(fields["name"])
-
-        previous_name = existing.name
-        previous_type = existing.type.value
-
         async with self._uow:
+            existing = await self._uow.categories.find_by_id(category_id)
+            if existing is None:
+                raise CategoryNotFoundException(category_id)
+
+            if not fields:
+                return self._to_response(existing)
+
+            if "name" in fields and fields["name"] != existing.name:
+                duplicate = await self._uow.categories.find_by_name(fields["name"])
+                if duplicate is not None:
+                    raise DuplicateCategoryNameException(fields["name"])
+
+            previous_name = existing.name
+            previous_type = existing.type.value
+
             updated = await self._uow.categories.update(category_id, **fields)
 
             await self._uow.outbox.add(
@@ -105,15 +107,15 @@ class CategoryService(ICategoryService):
         return self._to_response(updated)
 
     async def delete_category(self, category_id: int) -> None:
-        existing = await self._uow.categories.find_by_id(category_id)
-        if existing is None:
-            raise CategoryNotFoundException(category_id)
-
-        tx_count = await self._uow.categories.count_transactions(category_id)
-        if tx_count > 0:
-            raise CategoryInUseException(category_id)
-
         async with self._uow:
+            existing = await self._uow.categories.find_by_id(category_id)
+            if existing is None:
+                raise CategoryNotFoundException(category_id)
+
+            tx_count = await self._uow.categories.count_transactions(category_id)
+            if tx_count > 0:
+                raise CategoryInUseException(category_id)
+
             await self._uow.categories.delete(category_id)
 
             await self._uow.outbox.add(

@@ -40,7 +40,7 @@ def service(uow: MagicMock) -> UserService:
         uow=uow,
         hash_password=lambda pw: f"hashed_{pw}",
         verify_password=lambda plain, hashed: hashed == f"hashed_{plain}",
-        create_token=lambda uid: f"token_{uid}",
+        create_token=lambda uid, uname, email: f"token_{uid}",
     )
 
 

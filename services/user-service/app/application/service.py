@@ -37,7 +37,7 @@ class UserService(IUserService):
         uow: IUnitOfWork,
         hash_password: Callable[[str], str],
         verify_password: Callable[[str, str], bool],
-        create_token: Callable[[int], str],
+        create_token: Callable[[int, str, str], str],
     ) -> None:
         self._uow = uow
         self._hash_password = hash_password
@@ -82,11 +82,12 @@ class UserService(IUserService):
         )
 
     async def login(self, dto: LoginDTO) -> TokenResponse:
-        identifier = dto.username_or_email
-        if "@" in identifier:
-            user = await self._uow.users.find_by_email(identifier)
-        else:
-            user = await self._uow.users.find_by_username(identifier)
+        async with self._uow:
+            identifier = dto.username_or_email
+            if "@" in identifier:
+                user = await self._uow.users.find_by_email(identifier)
+            else:
+                user = await self._uow.users.find_by_username(identifier)
 
         if user is None:
             raise InvalidCredentialsException()
@@ -94,7 +95,7 @@ class UserService(IUserService):
         if not self._verify_password(dto.password, user.password_hash):
             raise InvalidCredentialsException()
 
-        access_token = self._create_token(user.id)
+        access_token = self._create_token(user.id, user.username, user.email)
 
         return TokenResponse(
             access_token=access_token,
@@ -103,7 +104,9 @@ class UserService(IUserService):
         )
 
     async def get_user(self, user_id: int) -> UserResponse:
-        user = await self._uow.users.find_by_id(user_id)
+        async with self._uow:
+            user = await self._uow.users.find_by_id(user_id)
+
         if user is None:
             raise UserNotFoundException(user_id)
 

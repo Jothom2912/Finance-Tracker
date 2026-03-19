@@ -64,8 +64,10 @@ class PostgresCategoryRepository(ICategoryRepository):
         return True
 
     async def count_transactions(self, category_id: int) -> int:
-        stmt = select(func.count()).where(
-            TransactionModel.category_id == category_id
+        stmt = (
+            select(func.count())
+            .select_from(TransactionModel)
+            .where(TransactionModel.category_id == category_id)
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()

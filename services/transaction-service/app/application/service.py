@@ -24,7 +24,7 @@ from app.application.dto import (
 )
 from app.application.ports.inbound import ITransactionService
 from app.application.ports.outbound import IUnitOfWork
-from app.domain.entities import Transaction
+from app.domain.entities import PlannedTransaction, Transaction
 from app.domain.exceptions import (
     CSVImportException,
     PlannedTransactionNotFoundException,
@@ -88,20 +88,22 @@ class TransactionService(ITransactionService):
         return self._to_response(transaction)
 
     async def get_transaction(self, transaction_id: int, user_id: int) -> TransactionResponse:
-        transaction = await self._uow.transactions.find_by_id(transaction_id, user_id)
+        async with self._uow:
+            transaction = await self._uow.transactions.find_by_id(transaction_id, user_id)
         if transaction is None:
             raise TransactionNotFoundException(transaction_id)
         return self._to_response(transaction)
 
     async def list_transactions(self, user_id: int, filters: TransactionFiltersDTO) -> list[TransactionResponse]:
-        if filters.account_id is not None:
-            results = await self._uow.transactions.find_by_account(filters.account_id, user_id)
-        elif filters.category_id is not None:
-            results = await self._uow.transactions.find_by_category(filters.category_id, user_id)
-        elif filters.start_date is not None and filters.end_date is not None:
-            results = await self._uow.transactions.find_by_date_range(user_id, filters.start_date, filters.end_date)
-        else:
-            results = await self._uow.transactions.find_by_user(user_id, skip=filters.skip, limit=filters.limit)
+        async with self._uow:
+            if filters.account_id is not None:
+                results = await self._uow.transactions.find_by_account(filters.account_id, user_id)
+            elif filters.category_id is not None:
+                results = await self._uow.transactions.find_by_category(filters.category_id, user_id)
+            elif filters.start_date is not None and filters.end_date is not None:
+                results = await self._uow.transactions.find_by_date_range(user_id, filters.start_date, filters.end_date)
+            else:
+                results = await self._uow.transactions.find_by_user(user_id, skip=filters.skip, limit=filters.limit)
 
         if filters.transaction_type is not None:
             results = [t for t in results if t.transaction_type == filters.transaction_type]
@@ -113,17 +115,17 @@ class TransactionService(ITransactionService):
     ) -> TransactionResponse:
         fields = dto.model_dump(exclude_unset=True)
 
-        existing = await self._uow.transactions.find_by_id(transaction_id, user_id)
-        if existing is None:
-            raise TransactionNotFoundException(transaction_id)
-
-        if not fields:
-            return self._to_response(existing)
-
-        previous_amount = existing.amount
-        previous_category = existing.category_name or ""
-
         async with self._uow:
+            existing = await self._uow.transactions.find_by_id(transaction_id, user_id)
+            if existing is None:
+                raise TransactionNotFoundException(transaction_id)
+
+            if not fields:
+                return self._to_response(existing)
+
+            previous_amount = existing.amount
+            previous_category = existing.category_name or ""
+
             updated = await self._uow.transactions.update(transaction_id, user_id, **fields)
 
             await self._uow.outbox.add(
@@ -146,11 +148,11 @@ class TransactionService(ITransactionService):
         return self._to_response(updated)
 
     async def delete_transaction(self, transaction_id: int, user_id: int) -> None:
-        transaction = await self._uow.transactions.find_by_id(transaction_id, user_id)
-        if transaction is None:
-            raise TransactionNotFoundException(transaction_id)
-
         async with self._uow:
+            transaction = await self._uow.transactions.find_by_id(transaction_id, user_id)
+            if transaction is None:
+                raise TransactionNotFoundException(transaction_id)
+
             deleted = await self._uow.transactions.delete(transaction_id, user_id)
             if not deleted:
                 raise TransactionNotFoundException(transaction_id)
@@ -306,7 +308,7 @@ class TransactionService(ITransactionService):
         )
 
     @staticmethod
-    def _to_planned_response(entity):  # type: ignore[no-untyped-def]
+    def _to_planned_response(entity: PlannedTransaction) -> PlannedTransactionResponse:
         return PlannedTransactionResponse(
             id=entity.id,
             user_id=entity.user_id,
