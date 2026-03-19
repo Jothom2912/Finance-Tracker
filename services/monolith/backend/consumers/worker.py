@@ -25,6 +25,7 @@ from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
 
 from backend.config import DATABASE_URL, RABBITMQ_URL
 from backend.consumers.account_creation import AccountCreationConsumer
+from backend.consumers.category_sync import CategorySyncConsumer
 from backend.consumers.user_sync import UserSyncConsumer
 
 logging.basicConfig(
@@ -104,6 +105,15 @@ async def _run_account_creation(session_factory: object, publisher: _WorkerPubli
     await consumer.run()
 
 
+async def _run_category_sync(session_factory: object) -> None:
+    """Run only the category-sync consumer."""
+    consumer = CategorySyncConsumer(
+        rabbitmq_url=RABBITMQ_URL,
+        db_session_factory=session_factory,
+    )
+    await consumer.run()
+
+
 async def main(consumer_name: str | None = None) -> None:
     logger.info("Starting consumer worker …")
 
@@ -119,11 +129,15 @@ async def main(consumer_name: str | None = None) -> None:
         elif consumer_name == "account-creation":
             logger.info("Running account-creation consumer only")
             await _run_account_creation(session_factory, publisher)
+        elif consumer_name == "category-sync":
+            logger.info("Running category-sync consumer only")
+            await _run_category_sync(session_factory)
         else:
             logger.info("Running all consumers")
             await asyncio.gather(
                 _run_user_sync(session_factory),
                 _run_account_creation(session_factory, publisher),
+                _run_category_sync(session_factory),
             )
     finally:
         await publisher.close()
@@ -133,7 +147,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="RabbitMQ consumer worker")
     parser.add_argument(
         "--consumer",
-        choices=["user-sync", "account-creation"],
+        choices=["user-sync", "account-creation", "category-sync"],
         default=None,
         help="Run a specific consumer (default: all)",
     )

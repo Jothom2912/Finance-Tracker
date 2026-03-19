@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../utils/apiClient';
+import { USER_SERVICE_URL } from '../config/serviceUrls';
 import '../styles/LoginPage.css';
-
-const USER_SERVICE_URL =
-  import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:8001/api/v1/users';
 
 function LoginPage() {
   const navigate = useNavigate();

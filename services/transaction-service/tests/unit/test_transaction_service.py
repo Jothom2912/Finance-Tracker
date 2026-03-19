@@ -10,6 +10,7 @@ from app.application.dto import (
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
     TransactionFiltersDTO,
+    UpdateTransactionDTO,
 )
 from app.application.service import TransactionService
 from app.domain.entities import PlannedTransaction, Transaction, TransactionType
@@ -196,6 +197,75 @@ class TestListTransactions:
         await service.list_transactions(user_id=10, filters=filters)
 
         uow.transactions.find_by_user.assert_awaited_once_with(10, skip=0, limit=50)
+
+
+class TestUpdateTransaction:
+    @pytest.mark.asyncio()
+    async def test_success(self) -> None:
+        service, uow = _build_service()
+        existing = _make_transaction()
+        updated = _make_transaction(amount=Decimal("75.00"), description="Updated")
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = updated
+        dto = UpdateTransactionDTO(amount=Decimal("75.00"), description="Updated")
+
+        result = await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        uow.transactions.update.assert_awaited_once()
+        uow.commit.assert_awaited_once()
+        assert result.amount == Decimal("75.00")
+        assert result.description == "Updated"
+
+    @pytest.mark.asyncio()
+    async def test_writes_outbox_event_with_previous_values(self) -> None:
+        service, uow = _build_service()
+        existing = _make_transaction(
+            amount=Decimal("49.99"), category_name="Food",
+        )
+        updated = _make_transaction(
+            amount=Decimal("75.00"), category_name="Transport",
+        )
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = updated
+        dto = UpdateTransactionDTO(
+            amount=Decimal("75.00"),
+            category_id=10,
+            category_name="Transport",
+        )
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        uow.outbox.add.assert_awaited_once()
+        event = uow.outbox.add.call_args[1]["event"]
+        assert event.event_type == "transaction.updated"
+        assert event.amount == "75.00"
+        assert event.previous_amount == "49.99"
+        assert event.category == "Transport"
+        assert event.previous_category == "Food"
+
+    @pytest.mark.asyncio()
+    async def test_not_found(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.find_by_id.return_value = None
+        dto = UpdateTransactionDTO(amount=Decimal("75.00"))
+
+        with pytest.raises(TransactionNotFoundException):
+            await service.update_transaction(transaction_id=99, user_id=10, dto=dto)
+
+    @pytest.mark.asyncio()
+    async def test_no_op_when_empty_body(self) -> None:
+        service, uow = _build_service()
+        existing = _make_transaction()
+        uow.transactions.find_by_id.return_value = existing
+        dto = UpdateTransactionDTO()
+
+        result = await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        uow.transactions.update.assert_not_awaited()
+        uow.outbox.add.assert_not_awaited()
+        uow.commit.assert_not_awaited()
+        assert result.id == existing.id
+        assert result.amount == existing.amount
 
 
 class TestDeleteTransaction:

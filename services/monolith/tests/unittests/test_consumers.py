@@ -4,10 +4,15 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
 from backend.account.domain.entities import Account
 from backend.consumers.account_creation import AccountCreationConsumer
 from backend.consumers.base import HEADER_RETRY_COUNT, BaseConsumer
 from backend.consumers.user_sync import UserSyncConsumer
+from backend.models.mysql.processed_event import ProcessedEvent
 from contracts.events.account import (
     AccountCreatedEvent,
     AccountCreationFailedEvent,
@@ -239,15 +244,29 @@ class TestConsumerIndependence:
         assert sync._routing_key == account._routing_key == "user.created"
 
 
-# ── BaseConsumer idempotency (preserved from original tests) ────────
+# ── BaseConsumer idempotency (DB-backed) ───────────────────────────
+
+
+@pytest.fixture()
+def idempotency_db():
+    """In-memory SQLite with only the processed_events table for testing."""
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    ProcessedEvent.__table__.create(engine)
+    factory = sessionmaker(bind=engine)
+    return factory
 
 
 class _StubConsumer(BaseConsumer):
-    def __init__(self) -> None:
+    def __init__(self, db_session_factory: object) -> None:
         super().__init__(
             rabbitmq_url="amqp://localhost",
             queue_name="test.queue",
             routing_key="test.event",
+            db_session_factory=db_session_factory,
         )
         self.call_count = 0
 
@@ -256,11 +275,12 @@ class _StubConsumer(BaseConsumer):
 
 
 class _FailingConsumer(BaseConsumer):
-    def __init__(self) -> None:
+    def __init__(self, db_session_factory: object) -> None:
         super().__init__(
             rabbitmq_url="amqp://localhost",
             queue_name="test.queue",
             routing_key="test.event",
+            db_session_factory=db_session_factory,
             max_retries=2,
         )
 
@@ -281,9 +301,9 @@ def _make_message(body: dict, retry_count: int | None = None) -> MagicMock:
 
 class TestIdempotency:
     @pytest.mark.asyncio()
-    async def test_skips_duplicate(self) -> None:
-        consumer = _StubConsumer()
-        msg = _make_message({"correlation_id": "dup-1"})
+    async def test_skips_duplicate(self, idempotency_db) -> None:
+        consumer = _StubConsumer(idempotency_db)
+        msg = _make_message({"correlation_id": "dup-1", "event_type": "test.event"})
 
         await consumer._on_message(msg)
         await consumer._on_message(msg)
@@ -291,25 +311,73 @@ class TestIdempotency:
         assert consumer.call_count == 1
 
     @pytest.mark.asyncio()
-    async def test_allows_different_events(self) -> None:
-        consumer = _StubConsumer()
-        msg_a = _make_message({"correlation_id": "id-a"})
-        msg_b = _make_message({"correlation_id": "id-b"})
+    async def test_allows_different_events(self, idempotency_db) -> None:
+        consumer = _StubConsumer(idempotency_db)
+        msg_a = _make_message({"correlation_id": "id-a", "event_type": "test.event"})
+        msg_b = _make_message({"correlation_id": "id-b", "event_type": "test.event"})
 
         await consumer._on_message(msg_a)
         await consumer._on_message(msg_b)
 
         assert consumer.call_count == 2
 
-
-class TestRetryLogic:
     @pytest.mark.asyncio()
-    async def test_retry_increments_count(self) -> None:
-        consumer = _FailingConsumer()
+    async def test_same_event_different_consumers(self, idempotency_db) -> None:
+        """Two consumers with different queue names can both process the same correlation_id."""
+        consumer_a = _StubConsumer(idempotency_db)
+        consumer_a._queue_name = "service.consumer_a"
+
+        consumer_b = _StubConsumer(idempotency_db)
+        consumer_b._queue_name = "service.consumer_b"
+
+        msg = _make_message({"correlation_id": "shared-1", "event_type": "test.event"})
+
+        await consumer_a._on_message(msg)
+        await consumer_b._on_message(msg)
+
+        assert consumer_a.call_count == 1
+        assert consumer_b.call_count == 1
+
+    @pytest.mark.asyncio()
+    async def test_records_event_in_db(self, idempotency_db) -> None:
+        consumer = _StubConsumer(idempotency_db)
+        msg = _make_message({"correlation_id": "rec-1", "event_type": "test.event"})
+
+        await consumer._on_message(msg)
+
+        session = idempotency_db()
+        row = session.query(ProcessedEvent).filter_by(correlation_id="rec-1").first()
+        session.close()
+
+        assert row is not None
+        assert row.consumer_name == "test.queue"
+        assert row.event_type == "test.event"
+
+    @pytest.mark.asyncio()
+    async def test_no_record_on_handler_failure(self, idempotency_db) -> None:
+        """Failed handlers must NOT record the event so it can be retried."""
+        consumer = _FailingConsumer(idempotency_db)
         consumer._exchange = AsyncMock()
         consumer._channel = AsyncMock()
 
-        msg = _make_message({"correlation_id": "retry-1"}, retry_count=0)
+        msg = _make_message({"correlation_id": "fail-1", "event_type": "test.event"}, retry_count=0)
+        await consumer._on_message(msg)
+
+        session = idempotency_db()
+        row = session.query(ProcessedEvent).filter_by(correlation_id="fail-1").first()
+        session.close()
+
+        assert row is None
+
+
+class TestRetryLogic:
+    @pytest.mark.asyncio()
+    async def test_retry_increments_count(self, idempotency_db) -> None:
+        consumer = _FailingConsumer(idempotency_db)
+        consumer._exchange = AsyncMock()
+        consumer._channel = AsyncMock()
+
+        msg = _make_message({"correlation_id": "retry-1", "event_type": "test.event"}, retry_count=0)
 
         await consumer._on_message(msg)
 
@@ -319,12 +387,12 @@ class TestRetryLogic:
         msg.ack.assert_awaited_once()
 
     @pytest.mark.asyncio()
-    async def test_max_retries_sends_to_dlq(self) -> None:
-        consumer = _FailingConsumer()
+    async def test_max_retries_sends_to_dlq(self, idempotency_db) -> None:
+        consumer = _FailingConsumer(idempotency_db)
         consumer._exchange = AsyncMock()
         consumer._channel = AsyncMock()
 
-        msg = _make_message({"correlation_id": "dlq-1"}, retry_count=2)
+        msg = _make_message({"correlation_id": "dlq-1", "event_type": "test.event"}, retry_count=2)
 
         await consumer._on_message(msg)
 

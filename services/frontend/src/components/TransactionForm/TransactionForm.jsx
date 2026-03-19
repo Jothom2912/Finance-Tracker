@@ -1,6 +1,5 @@
-// src/components/TransactionForm/TransactionForm.js
 import React, { useState, useEffect } from 'react';
-import apiClient from '../../utils/apiClient';
+import { createTransaction as apiCreateTransaction, updateTransaction as apiUpdateTransaction } from '../../api/transactions';
 import './TransactionForm.css';
 
 function TransactionForm({
@@ -61,38 +60,28 @@ function TransactionForm({
             return;
         }
 
+        const selectedCategory = categories.find((cat) => (cat.id || cat.idCategory) === categoryId);
+
         const transactionData = {
             amount: finalAmount,
             category_id: categoryId,
-            transaction_date: date,
+            category_name: selectedCategory?.name || null,
+            date: date,
             description: description,
-            type: isExpense ? 'expense' : 'income'
+            type: isExpense ? 'expense' : 'income',
         };
 
         try {
-            console.log('📤 Sender transaktion data:', transactionData);
             const transactionId = transactionToEdit?.idTransaction || transactionToEdit?.id;
-            const response = transactionToEdit
-                ? await apiClient.put(`/transactions/${transactionId}`, transactionData)
-                : await apiClient.post('/transactions/', transactionData);
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('❌ Backend fejl:', errorData);
-                const errorMessage = Array.isArray(errorData.detail)
-                    ? errorData.detail.map(e => e.msg || JSON.stringify(e)).join(', ')
-                    : errorData.detail || `HTTP error! status: ${response.status}`;
-                throw new Error(errorMessage);
-            }
-
             if (transactionToEdit) {
+                await apiUpdateTransaction(transactionId, transactionData);
                 onTransactionUpdated();
             } else {
+                await apiCreateTransaction(transactionData);
                 onTransactionAdded();
             }
             setSuccessMessage(transactionToEdit ? 'Transaktion opdateret!' : 'Transaktion tilføjet!');
         } catch (err) {
-            console.error("Fejl ved håndtering af transaktion:", err);
             setError(`Fejl: ${err.message}`);
         }
     };

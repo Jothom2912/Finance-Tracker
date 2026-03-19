@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import MessageDisplay from '../MessageDisplay';
-import apiClient from '../../utils/apiClient';
+import { createCategory, updateCategory, deleteCategory as apiDeleteCategory } from '../../api/categories';
 import './CategoryManagement.css';
 
 // Ændret props: Fjernet 'fetchCategories', 'error', 'successMessage'
@@ -57,19 +57,11 @@ function CategoryManagement({
         };
 
         try {
-            const response = editingCategory
-                ? await apiClient.put(`/categories/${editingCategory.id}`, categoryData)
-                : await apiClient.post('/categories/', categoryData);
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                const errorMessage = errorData.detail ?
-                                    (Array.isArray(errorData.detail) ? errorData.detail.map(d => d.msg).join(", ") : errorData.detail)
-                                    : "Ukendt fejl";
-                throw new Error(errorMessage);
+            if (editingCategory) {
+                await updateCategory(editingCategory.id, categoryData);
+            } else {
+                await createCategory(categoryData);
             }
-
-            await response.json();
 
             setLocalSuccessMessage(editingCategory ? 'Kategori opdateret!' : 'Kategori oprettet!');
             setSuccessMessage(editingCategory ? 'Kategori opdateret!' : 'Kategori oprettet!'); // Send besked til App.js
@@ -97,12 +89,7 @@ function CategoryManagement({
     const handleDeleteCategory = async (categoryId) => {
         if (window.confirm("Er du sikker på, at du vil slette denne kategori? Transaktioner tilknyttet vil miste deres kategori.")) {
             try {
-                const response = await apiClient.delete(`/categories/${categoryId}`);
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-                }
+                await apiDeleteCategory(categoryId);
 
                 setLocalSuccessMessage('Kategori slettet!');
                 setSuccessMessage('Kategori slettet!'); // Send besked til App.js

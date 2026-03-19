@@ -46,6 +46,7 @@ class AccountCreationConsumer(BaseConsumer):
             rabbitmq_url=rabbitmq_url,
             queue_name="monolith.account_creation",
             routing_key="user.created",
+            db_session_factory=db_session_factory,
         )
         self._session_factory = db_session_factory
         self._publisher = publisher

@@ -8,6 +8,8 @@ from typing import Self
 from contracts.base import BaseEvent
 
 from app.domain.entities import (
+    Category,
+    CategoryType,
     OutboxEntry,
     PlannedTransaction,
     Transaction,
@@ -44,6 +46,9 @@ class ITransactionRepository(ABC):
 
     @abstractmethod
     async def find_by_date_range(self, user_id: int, start: date, end: date) -> list[Transaction]: ...
+
+    @abstractmethod
+    async def update(self, transaction_id: int, user_id: int, **fields: object) -> Transaction: ...
 
     @abstractmethod
     async def delete(self, transaction_id: int, user_id: int) -> bool: ...
@@ -84,6 +89,29 @@ class IPlannedTransactionRepository(ABC):
     async def deactivate(self, planned_id: int, user_id: int) -> bool: ...
 
 
+class ICategoryRepository(ABC):
+    @abstractmethod
+    async def create(self, name: str, category_type: CategoryType) -> Category: ...
+
+    @abstractmethod
+    async def find_all(self) -> list[Category]: ...
+
+    @abstractmethod
+    async def find_by_id(self, category_id: int) -> Category | None: ...
+
+    @abstractmethod
+    async def find_by_name(self, name: str) -> Category | None: ...
+
+    @abstractmethod
+    async def update(self, category_id: int, **fields: object) -> Category: ...
+
+    @abstractmethod
+    async def delete(self, category_id: int) -> bool: ...
+
+    @abstractmethod
+    async def count_transactions(self, category_id: int) -> int: ...
+
+
 class IOutboxRepository(ABC):
     """Port for the transactional outbox.
 
@@ -121,6 +149,7 @@ class IUnitOfWork(ABC):
 
     transactions: ITransactionRepository
     planned: IPlannedTransactionRepository
+    categories: ICategoryRepository
     outbox: IOutboxRepository
 
     @abstractmethod

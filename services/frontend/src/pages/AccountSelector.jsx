@@ -13,8 +13,9 @@ export default function AccountSelector() {
   const [newAccountName, setNewAccountName] = useState('');
   const [error, setError] = useState(null);
 
-  const selectAccount = useCallback((accountId) => {
+  const selectAccount = useCallback((accountId, accountName) => {
     localStorage.setItem('account_id', String(accountId));
+    localStorage.setItem('account_name', accountName || 'Default');
     navigate('/dashboard');
   }, [navigate]);
 
@@ -45,7 +46,7 @@ export default function AccountSelector() {
       setNewAccountName('');
       setShowCreateForm(false);
       setError(null);
-      selectAccount(newAccount.idAccount || newAccount.id);
+      selectAccount(newAccount.idAccount || newAccount.id, newAccount.name);
     } catch (err) {
       setError(err.message || 'Forbindelsesfejl - kan ikke nå backend');
     }
@@ -77,7 +78,7 @@ export default function AccountSelector() {
             {accounts.map((account, index) => (
               <button
                 key={account.idAccount || account.id || `account-${index}`}
-                onClick={() => selectAccount(account.idAccount || account.id)}
+                onClick={() => selectAccount(account.idAccount || account.id, account.name)}
                 className="account-button"
                 data-cy="account-button"
               >

@@ -11,6 +11,18 @@ class TransactionType(str, enum.Enum):
     EXPENSE = "expense"
 
 
+class CategoryType(str, enum.Enum):
+    INCOME = "income"
+    EXPENSE = "expense"
+
+
+@dataclass(frozen=True)
+class Category:
+    id: int
+    name: str
+    type: CategoryType
+
+
 @dataclass(frozen=True)
 class Transaction:
     id: int

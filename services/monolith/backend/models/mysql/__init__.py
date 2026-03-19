@@ -10,6 +10,7 @@ from .category import Category
 from .common import Base, TransactionType, account_group_user_association, budget_category_association
 from .goal import Goal
 from .planned_transactions import PlannedTransactions
+from .processed_event import ProcessedEvent
 from .transaction import Transaction
 
 # Import all models
@@ -28,4 +29,5 @@ __all__ = [
     "Goal",
     "PlannedTransactions",
     "AccountGroups",
+    "ProcessedEvent",
 ]

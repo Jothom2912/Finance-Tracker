@@ -166,6 +166,111 @@ class TestListTransactions:
         assert len(resp.json()) == 1
 
 
+class TestUpdateTransaction:
+    @pytest.mark.asyncio()
+    async def test_success(self, client: AsyncClient, auth_headers: dict) -> None:
+        create_resp = await client.post(
+            "/api/v1/transactions/",
+            json=_tx_payload(),
+            headers=auth_headers,
+        )
+        tx_id = create_resp.json()["id"]
+
+        resp = await client.put(
+            f"/api/v1/transactions/{tx_id}",
+            json={"amount": "75.00", "description": "Updated"},
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert Decimal(data["amount"]) == Decimal("75.00")
+        assert data["description"] == "Updated"
+        assert data["transaction_type"] == "expense"
+
+    @pytest.mark.asyncio()
+    async def test_not_found(self, client: AsyncClient, auth_headers: dict) -> None:
+        resp = await client.put(
+            "/api/v1/transactions/99999",
+            json={"amount": "75.00"},
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio()
+    async def test_wrong_user_returns_404(
+        self, client: AsyncClient, auth_headers: dict, user2_headers: dict,
+    ) -> None:
+        create_resp = await client.post(
+            "/api/v1/transactions/",
+            json=_tx_payload(),
+            headers=auth_headers,
+        )
+        tx_id = create_resp.json()["id"]
+
+        resp = await client.put(
+            f"/api/v1/transactions/{tx_id}",
+            json={"amount": "75.00"},
+            headers=user2_headers,
+        )
+
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio()
+    async def test_empty_body_returns_unchanged(
+        self, client: AsyncClient, auth_headers: dict,
+    ) -> None:
+        create_resp = await client.post(
+            "/api/v1/transactions/",
+            json=_tx_payload(),
+            headers=auth_headers,
+        )
+        tx_id = create_resp.json()["id"]
+
+        resp = await client.put(
+            f"/api/v1/transactions/{tx_id}",
+            json={},
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert Decimal(data["amount"]) == Decimal("49.99")
+
+    @pytest.mark.asyncio()
+    async def test_writes_outbox_event(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+    ) -> None:
+        create_resp = await client.post(
+            "/api/v1/transactions/",
+            json=_tx_payload(),
+            headers=auth_headers,
+        )
+        tx_id = create_resp.json()["id"]
+
+        await client.put(
+            f"/api/v1/transactions/{tx_id}",
+            json={"amount": "75.00"},
+            headers=auth_headers,
+        )
+
+        from app.models import OutboxEventModel
+
+        result = await db_session.execute(
+            select(OutboxEventModel).where(OutboxEventModel.event_type == "transaction.updated")
+        )
+        entries = result.scalars().all()
+
+        assert len(entries) == 1
+        payload = json.loads(entries[0].payload_json)
+        assert payload["amount"] == "75.00"
+        assert payload["previous_amount"] == "49.99"
+
+
 class TestDeleteTransaction:
     @pytest.mark.asyncio()
     async def test_success(self, client: AsyncClient, auth_headers: dict) -> None:

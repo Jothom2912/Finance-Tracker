@@ -100,6 +100,27 @@ class PostgresTransactionRepository(ITransactionRepository):
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
+    async def update(self, transaction_id: int, user_id: int, **fields: object) -> Transaction:
+        stmt = select(TransactionModel).where(
+            TransactionModel.id == transaction_id,
+            TransactionModel.user_id == user_id,
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        if model is None:
+            from app.domain.exceptions import TransactionNotFoundException
+
+            raise TransactionNotFoundException(transaction_id)
+
+        for key, value in fields.items():
+            if key == "transaction_type" and value is not None:
+                value = value.value if isinstance(value, TransactionType) else value
+            setattr(model, key, value)
+
+        await self._session.flush()
+        await self._session.refresh(model)
+        return self._to_entity(model)
+
     async def delete(self, transaction_id: int, user_id: int) -> bool:
         stmt = select(TransactionModel).where(
             TransactionModel.id == transaction_id,

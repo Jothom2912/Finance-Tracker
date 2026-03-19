@@ -12,6 +12,7 @@ from app.application.dto import (
     TransactionFiltersDTO,
     TransactionResponse,
     UpdatePlannedTransactionDTO,
+    UpdateTransactionDTO,
 )
 from app.application.ports.inbound import ITransactionService
 from app.auth import get_current_user_id
@@ -76,6 +77,16 @@ async def get_transaction(
     service: ITransactionService = Depends(get_transaction_service),
 ) -> TransactionResponse:
     return await service.get_transaction(transaction_id, user_id)
+
+
+@transaction_router.put("/{transaction_id}", response_model=TransactionResponse)
+async def update_transaction(
+    transaction_id: int,
+    body: UpdateTransactionDTO,
+    user_id: int = Depends(get_current_user_id),
+    service: ITransactionService = Depends(get_transaction_service),
+) -> TransactionResponse:
+    return await service.update_transaction(transaction_id, user_id, body)
 
 
 @transaction_router.delete(

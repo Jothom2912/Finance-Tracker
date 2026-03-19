@@ -1,6 +1,6 @@
-// frontend/src/components/BudgetComparison/BudgetComparison.js
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import apiClient from '../../../utils/apiClient';
+import { uploadTransactionsCsv } from '../../../api/transactions';
 import MessageDisplay from '../../MessageDisplay';
 import BudgetItem from '../BudgetItem/BudgetItem';
 import './BudgetComparison.css';
@@ -250,29 +250,11 @@ function BudgetComparison({
         setCsvUploadSuccess(null);
         setLocalError(null);
 
-        const formData = new FormData();
-        formData.append('file', csvFile);
-        formData.append('month', selectedMonth);
-        formData.append('year', selectedYear);
-
         try {
-            const response = await apiClient.fetch('/transactions/import-csv', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'CSV upload fejlede');
-            }
-
-            const result = await response.json();
-            setCsvUploadSuccess(`CSV uploadet! ${result.imported_count} transaktioner importeret.`);
-            setSuccessMessage?.(`CSV uploadet! ${result.imported_count} transaktioner importeret.`);
-            
-            // Genindlæs data efter upload
+            const result = await uploadTransactionsCsv(csvFile);
+            setCsvUploadSuccess(result.message);
+            setSuccessMessage?.(result.message);
             await fetchData();
-            
         } catch (err) {
             const errorMessage = err.message || "Der opstod en fejl ved CSV upload.";
             setLocalError(errorMessage);

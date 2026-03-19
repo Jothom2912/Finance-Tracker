@@ -4,6 +4,9 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.outbound.postgres_category_repository import (
+    PostgresCategoryRepository,
+)
 from app.adapters.outbound.postgres_outbox_repository import (
     PostgresOutboxRepository,
 )
@@ -29,6 +32,7 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
         self._session = session
         self.transactions = PostgresTransactionRepository(session)
         self.planned = PostgresPlannedTransactionRepository(session)
+        self.categories = PostgresCategoryRepository(session)
         self.outbox = PostgresOutboxRepository(session)
 
     async def __aenter__(self) -> Self:

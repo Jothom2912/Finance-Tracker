@@ -43,6 +43,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user_id');
     localStorage.removeItem('username');
     localStorage.removeItem('account_id');
+    localStorage.removeItem('account_name');
 
     setUser(null);
     setToken(null);

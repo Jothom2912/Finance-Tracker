@@ -1,6 +1,5 @@
-// src/components/CSVUpload/CSVUpload.js
 import React, { useState } from 'react';
-import apiClient from '../../utils/apiClient';
+import { uploadTransactionsCsv } from '../../api/transactions';
 import './CSVUpload.css';
 
 function CSVUpload({ onUploadSuccess, setError, setSuccessMessage }) {
@@ -16,34 +15,16 @@ function CSVUpload({ onUploadSuccess, setError, setSuccessMessage }) {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-
         setError(null);
         setSuccessMessage(null);
 
         try {
-            // Brug apiClient.fetch - den håndterer nu FormData korrekt
-            const response = await apiClient.fetch('/transactions/upload-csv/', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                const errorMsg = typeof errorData.detail === 'string' 
-                    ? errorData.detail 
-                    : JSON.stringify(errorData.detail || errorData);
-                throw new Error(errorMsg || `HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
+            const result = await uploadTransactionsCsv(selectedFile);
             setSuccessMessage(result.message || 'CSV-fil uploadet succesfuldt!');
-            onUploadSuccess(); // Trigger opdatering af transaktionsliste og dashboard
-            setSelectedFile(null); // Ryd det valgte filnavn
-            document.getElementById('csvFile').value = ''; // Ryd filinputfeltet
+            onUploadSuccess();
+            setSelectedFile(null);
+            document.getElementById('csvFile').value = '';
         } catch (err) {
-            console.error("Fejl ved upload af CSV:", err);
             setError(`Fejl ved upload: ${err.message}`);
         }
     };

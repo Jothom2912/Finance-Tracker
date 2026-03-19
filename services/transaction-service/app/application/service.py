@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from contracts.events.transaction import (
     TransactionCreatedEvent,
     TransactionDeletedEvent,
+    TransactionUpdatedEvent,
 )
 
 from app.application.dto import (
@@ -19,6 +20,7 @@ from app.application.dto import (
     TransactionFiltersDTO,
     TransactionResponse,
     UpdatePlannedTransactionDTO,
+    UpdateTransactionDTO,
 )
 from app.application.ports.inbound import ITransactionService
 from app.application.ports.outbound import IUnitOfWork
@@ -105,6 +107,43 @@ class TransactionService(ITransactionService):
             results = [t for t in results if t.transaction_type == filters.transaction_type]
 
         return [self._to_response(t) for t in results]
+
+    async def update_transaction(
+        self, transaction_id: int, user_id: int, dto: UpdateTransactionDTO,
+    ) -> TransactionResponse:
+        fields = dto.model_dump(exclude_unset=True)
+
+        existing = await self._uow.transactions.find_by_id(transaction_id, user_id)
+        if existing is None:
+            raise TransactionNotFoundException(transaction_id)
+
+        if not fields:
+            return self._to_response(existing)
+
+        previous_amount = existing.amount
+        previous_category = existing.category_name or ""
+
+        async with self._uow:
+            updated = await self._uow.transactions.update(transaction_id, user_id, **fields)
+
+            await self._uow.outbox.add(
+                event=TransactionUpdatedEvent(
+                    transaction_id=updated.id,
+                    account_id=updated.account_id,
+                    user_id=user_id,
+                    amount=str(updated.amount),
+                    previous_amount=str(previous_amount),
+                    category=updated.category_name or "",
+                    previous_category=previous_category,
+                    description=updated.description or "",
+                ),
+                aggregate_type="transaction",
+                aggregate_id=str(updated.id),
+            )
+
+            await self._uow.commit()
+
+        return self._to_response(updated)
 
     async def delete_transaction(self, transaction_id: int, user_id: int) -> None:
         transaction = await self._uow.transactions.find_by_id(transaction_id, user_id)

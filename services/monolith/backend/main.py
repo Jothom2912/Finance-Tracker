@@ -79,7 +79,6 @@ from backend.analytics.adapters.inbound.rest_api import (
     dashboard_router,
 )
 from backend.budget.adapters.inbound.rest_api import router as budget_router
-from backend.category.adapters.inbound.rest_api import router as category_router
 from backend.goal.adapters.inbound.goal_api import router as goal_router
 from backend.monthly_budget.adapters.inbound.rest_api import (
     router as monthly_budget_router,
@@ -134,7 +133,6 @@ v1 = APIRouter(prefix="/api/v1")
 
 v1.include_router(transaction_router)
 v1.include_router(planned_transaction_router)
-v1.include_router(category_router)
 
 # Budget summary MUST be included BEFORE CRUD to avoid
 # /budgets/summary being matched by /budgets/{budget_id}

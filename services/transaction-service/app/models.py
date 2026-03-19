@@ -9,6 +9,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
+class CategoryModel(Base):
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(45), nullable=False, unique=True, index=True)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now())
+
+
 class TransactionModel(Base):
     __tablename__ = "transactions"
 
