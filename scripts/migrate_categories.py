@@ -11,7 +11,7 @@ Usage (from project root)::
 
     # With custom URLs
     python scripts/migrate_categories.py \
-        --mysql "mysql+pymysql://root:root@localhost:3306/finans_tracker" \
+        --mysql "mysql+pymysql://root:root@localhost:3307/finans_tracker" \
         --postgres "postgresql://transaction_service:transaction_service_pass@localhost:5433/transactions"
 """
 
@@ -30,7 +30,7 @@ from sqlalchemy import (
     text,
 )
 
-MYSQL_DEFAULT = "mysql+pymysql://root:root@localhost:3306/finans_tracker"
+MYSQL_DEFAULT = "mysql+pymysql://root:root@localhost:3307/finans_tracker"
 PG_DEFAULT = "postgresql://transaction_service:transaction_service_pass@localhost:5433/transactions"
 
 

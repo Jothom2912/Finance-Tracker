@@ -37,7 +37,7 @@ This starts all services:
 
 | Service | Port | Description |
 |---------|------|-------------|
-| MySQL | 3306 | Monolith database |
+| MySQL | 3307 | Monolith database |
 | PostgreSQL (users) | 5433 | User-service database |
 | PostgreSQL (transactions) | 5434 | Transaction-service database |
 | RabbitMQ | 5672 / 15672 | Event bus + management UI |
@@ -171,7 +171,7 @@ sequenceDiagram
 
 | Service | Port | Database | Role |
 |---------|------|----------|------|
-| **Monolith** | 8000 | MySQL (3306) | Accounts, budgets, goals, analytics, GraphQL gateway |
+| **Monolith** | 8000 | MySQL (3307) | Accounts, budgets, goals, analytics, GraphQL gateway |
 | **User Service** | 8001 | PostgreSQL (5433) | User registration, login, JWT issuing (source of truth) |
 | **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions, categories |
 | **User Outbox Worker** | — | PostgreSQL (5433) | Polls `outbox_events`, publishes user events to RabbitMQ |

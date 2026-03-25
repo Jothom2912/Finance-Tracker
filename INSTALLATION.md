@@ -28,7 +28,7 @@ This starts:
 
 | Service | Port | Description |
 |---------|------|-------------|
-| **MySQL** | 3306 | Monolith database |
+| **MySQL** | 3307 | Monolith database |
 | **PostgreSQL (users)** | 5433 | User-service database |
 | **PostgreSQL (transactions)** | 5434 | Transaction-service database |
 | **RabbitMQ** | 5672 / 15672 | Event bus + management UI |
@@ -259,7 +259,7 @@ All services must share the same JWT secret. In docker-compose, the monolith use
 
 | Port | Service | Alternative |
 |------|---------|-------------|
-| 3306 | MySQL | Change in docker-compose |
+| 3307 | MySQL | Change in docker-compose |
 | 5433 | PostgreSQL (users) | Change in docker-compose |
 | 5434 | PostgreSQL (transactions) | Change in docker-compose |
 | 5672 | RabbitMQ | Change in docker-compose |
