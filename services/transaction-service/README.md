@@ -1,8 +1,8 @@
 # Transaction Service
 
-Standalone microservice for financial transaction management, CSV import, and planned transactions. Uses PostgreSQL with `NUMERIC(12,2)` for exact decimal arithmetic.
+Standalone microservice for financial transaction management, category ownership, CSV import, and planned transactions. Uses PostgreSQL with `NUMERIC(12,2)` for exact decimal arithmetic.
 
-This service **validates** JWT tokens but does **not issue** them — users authenticate via user-service and use that token here.
+This service **validates** JWT tokens but does **not issue** them — users authenticate via user-service and use that token here. Categories are owned by this service and synced to the monolith via RabbitMQ events.
 
 ## Quick Start
 
@@ -16,8 +16,8 @@ This service **validates** JWT tokens but does **not issue** them — users auth
 
 ```bash
 cd services/transaction-service
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8002
+uv sync --dev
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 ```
 
 Or via docker-compose from the project root:
@@ -41,36 +41,43 @@ app/
 ├── config.py            # Pydantic BaseSettings (env vars)
 ├── auth.py              # JWT validation only (no token creation)
 ├── database.py          # Async SQLAlchemy engine + session factory
-├── models.py            # TransactionModel, PlannedTransactionModel
+├── models.py            # TransactionModel, PlannedTransactionModel, CategoryModel, OutboxEventModel
 ├── dependencies.py      # FastAPI DI wiring (shared session for UoW)
 ├── domain/
-│   ├── entities.py      # Transaction, PlannedTransaction (frozen dataclasses)
-│   └── exceptions.py    # TransactionNotFoundException, etc.
+│   ├── entities.py      # Transaction, PlannedTransaction, Category (frozen dataclasses)
+│   └── exceptions.py    # TransactionNotFoundException, CategoryInUseException, etc.
 ├── application/
 │   ├── ports/
-│   │   ├── inbound.py   # ITransactionService interface
+│   │   ├── inbound.py   # ITransactionService, ICategoryService interfaces
 │   │   └── outbound.py  # Repository, UoW, EventPublisher interfaces
 │   ├── dto.py           # DTOs with BVA validation
-│   └── service.py       # TransactionService (UoW pattern, event publish after commit)
+│   ├── service.py       # TransactionService (UoW pattern, transactional outbox)
+│   └── category_service.py  # CategoryService (CRUD + outbox events)
 ├── adapters/
 │   ├── inbound/
-│   │   └── rest_api.py  # FastAPI router (transactions + planned transactions)
+│   │   ├── rest_api.py       # FastAPI router (transactions + planned transactions)
+│   │   └── category_api.py   # FastAPI router (categories)
 │   └── outbound/
 │       ├── postgres_transaction_repository.py
 │       ├── postgres_planned_repository.py
+│       ├── postgres_category_repository.py
+│       ├── postgres_outbox_repository.py
 │       ├── unit_of_work.py
 │       └── rabbitmq_publisher.py
+├── workers/
+│   └── outbox_publisher.py  # Polls outbox, publishes to RabbitMQ
 ├── alembic.ini
 └── migrations/
 ```
 
 ### Key Architecture Decisions
 
-- **Unit of Work pattern**: Repositories use `flush()`, service controls `commit()`/`rollback()` via `IUnitOfWork`. All repositories and UoW share the same `AsyncSession`.
-- **Event publish after commit**: Events are published to RabbitMQ after the database transaction commits. If publish fails, the transaction is still persisted (at-least-once pattern). Transactional outbox is a future improvement.
+- **Unit of Work pattern**: All repositories share the same `AsyncSession` via `SQLAlchemyUnitOfWork`. Domain writes and outbox events are committed atomically, eliminating the dual-write problem.
+- **Transactional outbox**: Events are written to `outbox_events` in the same DB transaction as domain data. A standalone worker polls the table with `SELECT ... FOR UPDATE SKIP LOCKED` and publishes to RabbitMQ. Guarantees at-least-once delivery.
+- **Category ownership**: This service is the source of truth for categories. Changes are published as `category.created/updated/deleted` events, consumed by `CategorySyncConsumer` in the monolith.
 - **Denormalized names**: `account_name` and `category_name` are stored alongside IDs. No cross-service database calls.
-- **No foreign keys**: `user_id`, `account_id`, `category_id` are plain integers — no FK constraints to other services' databases.
-- **Data isolation**: Every query filters by `user_id` for multi-tenant security.
+- **No foreign keys**: `user_id`, `account_id` are plain integers — no FK constraints to other services' databases.
+- **Data isolation**: Every transaction query filters by `user_id` for multi-tenant security.
 
 ## API Endpoints
 
@@ -93,6 +100,16 @@ app/
 | `PATCH` | `/api/v1/planned-transactions/{id}` | Update planned | Yes |
 | `DELETE` | `/api/v1/planned-transactions/{id}` | Deactivate (soft delete) | Yes |
 
+### Categories
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `POST` | `/api/v1/categories/` | Create category | Yes |
+| `GET` | `/api/v1/categories/` | List all categories | Yes |
+| `GET` | `/api/v1/categories/{id}` | Get by ID | Yes |
+| `PUT` | `/api/v1/categories/{id}` | Update category | Yes |
+| `DELETE` | `/api/v1/categories/{id}` | Delete (if no transactions reference it) | Yes |
+
 ### Query Filters
 
 `GET /api/v1/transactions/` supports:
@@ -102,22 +119,27 @@ app/
 - `transaction_type` — `income` or `expense`
 - `skip` / `limit` — pagination (default: 0/50, max limit: 200)
 
-## Event Publishing
+## Event Publishing (Transactional Outbox)
 
-On transaction create/delete, the service publishes events to RabbitMQ:
+On transaction and category mutations, events are written to the `outbox_events` table in the same DB transaction. A standalone outbox worker publishes them to RabbitMQ.
 
-```json
-{
-  "event_type": "transaction.created",
-  "transaction_id": 1,
-  "user_id": 6,
-  "amount": "125.50",
-  "transaction_type": "expense",
-  "account_id": 1
-}
-```
+### Transaction Events
 
-The `amount` field is serialized as a string to preserve decimal precision across JSON serialization.
+| Event | Routing Key | Trigger |
+|-------|-------------|---------|
+| `TransactionCreatedEvent` | `transaction.created` | Create / CSV import |
+| `TransactionUpdatedEvent` | `transaction.updated` | Update |
+| `TransactionDeletedEvent` | `transaction.deleted` | Delete |
+
+### Category Events
+
+| Event | Routing Key | Consumer |
+|-------|-------------|----------|
+| `CategoryCreatedEvent` | `category.created` | CategorySyncConsumer (monolith) |
+| `CategoryUpdatedEvent` | `category.updated` | CategorySyncConsumer (monolith) |
+| `CategoryDeletedEvent` | `category.deleted` | CategorySyncConsumer (monolith) |
+
+The `amount` field in transaction events is serialized as a string to preserve decimal precision across JSON serialization.
 
 ## Configuration
 
@@ -133,13 +155,13 @@ The `amount` field is serialized as a string to preserve decimal precision acros
 ## Testing
 
 ```bash
-# Unit tests (40 tests — service logic + DTO BVA validation)
+# Unit tests (61 tests — service logic, category service, DTO BVA validation)
 uv run pytest tests/unit/ -v
 
-# Integration tests (17 tests — full HTTP flow with SQLite)
+# Integration tests (43 tests — full HTTP flow with SQLite, category API, outbox events)
 uv run pytest tests/integration/ -v
 
-# All tests (57 total)
+# All tests (104 total)
 uv run pytest tests/ -v
 ```
 

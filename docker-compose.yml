@@ -92,14 +92,15 @@ services:
       context: .
       dockerfile: services/user-service/Dockerfile
     command: ["python", "-m", "app.workers.outbox_publisher"]
+    restart: on-failure
     environment:
       DATABASE_URL: postgresql+asyncpg://user_service:user_service_pass@postgres:5432/users
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: dev-secret-key-change-in-production
       ENVIRONMENT: development
     depends_on:
-      postgres:
-        condition: service_healthy
+      user-service:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
 
@@ -173,14 +174,15 @@ services:
       context: .
       dockerfile: services/transaction-service/Dockerfile
     command: ["python", "-m", "app.workers.outbox_publisher"]
+    restart: on-failure
     environment:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: dev-secret-key-change-in-production
       ENVIRONMENT: development
     depends_on:
-      postgres-transactions:
-        condition: service_healthy
+      transaction-service:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
 

@@ -9,7 +9,7 @@ The monolith backend uses hexagonal architecture across all domains with a CQRS 
 
 All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remain at root.
 
-**Note:** The user and transaction domains have been extracted into standalone microservices (`user-service` on port 8001, `transaction-service` on port 8002). The monolith retains local copies of user data via event-driven sync, but `user-service` is the source of truth for authentication. See the root `README.md` for the full microservices architecture.
+**Note:** The user, transaction, and category domains have been extracted into standalone microservices (`user-service` on port 8001, `transaction-service` on port 8002). The monolith retains local copies of user and category data via event-driven sync. `user-service` is the source of truth for authentication, and `transaction-service` is the source of truth for transactions and categories. See the root `README.md` for the full microservices architecture.
 
 ## Runtime Entry Points
 
@@ -22,7 +22,7 @@ All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remai
 ## Active Bounded Contexts (still in monolith)
 
 - `backend/transaction/` — CRUD, CSV import, planned transactions
-- `backend/category/` — CRUD
+- `backend/category/` — CRUD (local cache, transaction-service is source of truth)
 - `backend/budget/` — legacy per-category budgets
 - `backend/monthly_budget/` — aggregate-based monthly budgets with budget lines
 - `backend/analytics/` — dashboard overview, GraphQL read gateway
@@ -49,16 +49,16 @@ Each context follows the same layout:
 
 ## Event Consumers
 
-The monolith includes two independent RabbitMQ consumers that react to `user.created` events from user-service:
+The monolith includes three independent RabbitMQ consumers:
 
-| Consumer | Queue | Responsibility |
-|----------|-------|---------------|
-| `UserSyncConsumer` | `monolith.user_sync` | Sync user data to MySQL User table |
-| `AccountCreationConsumer` | `monolith.account_creation` | Create default account in MySQL |
+| Consumer | Queue | Routing Key | Responsibility |
+|----------|-------|-------------|---------------|
+| `UserSyncConsumer` | `monolith.user_sync` | `user.created` | Sync user data to MySQL User table |
+| `AccountCreationConsumer` | `monolith.account_creation` | `user.created` | Create default account in MySQL |
+| `CategorySyncConsumer` | `monolith.category_sync` | `category.*` | Sync categories from transaction-service to MySQL |
 
-Both consumers:
-- Listen on the same routing key (`user.created`) but use separate queues
-- Inherit from `BaseConsumer` with retry (3 attempts), DLQ, and idempotency
+All consumers:
+- Inherit from `BaseConsumer` with retry (3 attempts), DLQ, and DB-backed idempotency (`processed_events` table with auto-cleanup after 7 days)
 - Run independently — failure in one does not affect the other
 - Can be scaled independently via `--consumer` argument to `worker.py`
 
@@ -66,6 +66,7 @@ Both consumers:
 # Run specific consumer
 python -m backend.consumers.worker --consumer user-sync
 python -m backend.consumers.worker --consumer account-creation
+python -m backend.consumers.worker --consumer category-sync
 
 # Run all consumers
 python -m backend.consumers.worker
@@ -89,7 +90,7 @@ The monolith creates tokens with both `sub` (standard JWT claim) and legacy `use
 |------|--------|----------|
 | `/api/v1/transactions/*` | Transaction | REST |
 | `/api/v1/planned-transactions/*` | Transaction | REST |
-| `/api/v1/categories/*` | Category | REST |
+| `/api/v1/categories/*` | Category (local cache) | REST |
 | `/api/v1/budgets/*` (CRUD) | Budget (legacy) | REST |
 | `/api/v1/budgets/summary` | Analytics | REST |
 | `/api/v1/monthly-budgets/*` (CRUD + copy) | Monthly Budget | REST |

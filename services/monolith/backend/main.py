@@ -96,6 +96,9 @@ from backend.user.adapters.inbound.user_api import router as user_router
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     logger.info("Starting FastAPI application...")
+    from backend.database.mysql import create_db_tables
+
+    create_db_tables()
     yield
     logger.info("Stopping FastAPI application...")
 

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+
+def _utcnow_naive() -> datetime:
+    """UTC now as timezone-naive datetime (matches TIMESTAMP WITHOUT TIME ZONE)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from uuid import uuid4
 
 from contracts.base import BaseEvent
@@ -36,7 +40,7 @@ class PostgresOutboxRepository(IOutboxRepository):
         await self._session.flush()
 
     async def fetch_pending(self, batch_size: int = 10) -> list[OutboxEntry]:
-        now = datetime.now(timezone.utc)
+        now = _utcnow_naive()
         stmt = (
             select(OutboxEventModel)
             .where(
@@ -58,7 +62,7 @@ class PostgresOutboxRepository(IOutboxRepository):
             .where(OutboxEventModel.id == event_id)
             .values(
                 status="published",
-                published_at=datetime.now(timezone.utc),
+                published_at=_utcnow_naive(),
             )
         )
         await self._session.execute(stmt)

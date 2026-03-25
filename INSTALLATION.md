@@ -32,11 +32,12 @@ This starts:
 | **PostgreSQL (users)** | 5433 | User-service database |
 | **PostgreSQL (transactions)** | 5434 | Transaction-service database |
 | **RabbitMQ** | 5672 / 15672 | Event bus + management UI |
-| **Monolith** | 8000 | Accounts, budgets, categories, goals, analytics |
+| **Monolith** | 8000 | Accounts, budgets, goals, analytics |
 | **User Service** | 8001 | Registration, login, JWT issuing |
-| **Transaction Service** | 8002 | Transaction CRUD, CSV import |
+| **Transaction Service** | 8002 | Transaction CRUD, CSV import, categories |
 | **UserSync Consumer** | — | Syncs users from events to MySQL |
 | **AccountCreation Consumer** | — | Creates default accounts from events |
+| **CategorySync Consumer** | — | Syncs categories from transaction-service to MySQL |
 
 **Wait 30-60 seconds** for all health checks to pass.
 
@@ -105,8 +106,8 @@ You need MySQL running locally (or via Docker) with `DATABASE_URL` set in `.env`
 
 ```powershell
 cd services/user-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8001
+uv sync --dev
+uv run uvicorn app.main:app --reload --port 8001
 ```
 
 Needs PostgreSQL on port 5433 and RabbitMQ on port 5672.
@@ -115,8 +116,8 @@ Needs PostgreSQL on port 5433 and RabbitMQ on port 5672.
 
 ```powershell
 cd services/transaction-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8002
+uv sync --dev
+uv run uvicorn app.main:app --reload --port 8002
 ```
 
 Needs PostgreSQL on port 5434 and RabbitMQ on port 5672.
@@ -128,6 +129,7 @@ Needs PostgreSQL on port 5434 and RabbitMQ on port 5672.
 cd services/monolith
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
+uv run python -m backend.consumers.worker --consumer category-sync
 ```
 
 ### Frontend
@@ -208,13 +210,13 @@ curl -X POST http://localhost:8000/api/v1/graphql \
 # All tests via root Makefile
 make test
 
-# Monolith tests (~288 tests)
+# Monolith tests (282 tests)
 cd services/monolith && uv run pytest tests/ -v
 
-# User service tests (33 tests)
+# User service tests (40 tests)
 cd services/user-service && uv run pytest tests/ -v
 
-# Transaction service tests (57 tests)
+# Transaction service tests (104 tests)
 cd services/transaction-service && uv run pytest tests/ -v
 
 # E2E tests (requires docker compose up)

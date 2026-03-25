@@ -14,8 +14,8 @@ Standalone microservice for user registration, authentication, and JWT token iss
 
 ```bash
 cd services/user-service
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8001
+uv sync --dev
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 Or via docker-compose from the project root:
@@ -39,22 +39,26 @@ app/
 ├── config.py            # Pydantic BaseSettings (env vars)
 ├── auth.py              # JWT creation + validation, bcrypt hashing
 ├── database.py          # Async SQLAlchemy engine + session factory
-├── models.py            # PostgreSQL ORM model (UserModel)
+├── models.py            # PostgreSQL ORM models (UserModel, OutboxEventModel)
 ├── domain/
 │   ├── entities.py      # User, UserWithCredentials (frozen dataclasses)
 │   └── exceptions.py    # DuplicateEmailException, InvalidCredentialsException
 ├── application/
 │   ├── ports/
 │   │   ├── inbound.py   # IUserService interface
-│   │   └── outbound.py  # IUserRepository, IEventPublisher interfaces
+│   │   └── outbound.py  # IUserRepository, IOutboxRepository, IUnitOfWork interfaces
 │   ├── dto.py           # RegisterDTO, LoginDTO, TokenResponse
-│   └── service.py       # UserService (register, login, get_by_id)
+│   └── service.py       # UserService (register, login, get_user) with UoW
 ├── adapters/
 │   ├── inbound/
 │   │   └── rest_api.py  # FastAPI router (/api/v1/users/*)
 │   └── outbound/
 │       ├── postgres_user_repository.py
+│       ├── postgres_outbox_repository.py
+│       ├── unit_of_work.py  # SQLAlchemyUnitOfWork (shared session)
 │       └── rabbitmq_publisher.py
+├── workers/
+│   └── outbox_publisher.py  # Polls outbox, publishes to RabbitMQ
 ├── dependencies.py      # FastAPI DI wiring
 ├── alembic.ini          # Database migrations
 └── migrations/          # Alembic migration versions
@@ -81,16 +85,17 @@ curl -X POST http://localhost:8001/api/v1/users/register \
 
 ```bash
 curl -X POST http://localhost:8001/api/v1/users/login \
-  -d "username=alice@example.com&password=SecurePass123!"
+  -H "Content-Type: application/json" \
+  -d '{"username_or_email": "alice@example.com", "password": "SecurePass123!"}'
 ```
 
 Returns `{"access_token": "...", "token_type": "bearer", "user_id": 1, "username": "alice"}`.
 
 The `username_or_email` field accepts either username or email. If it contains `@`, it looks up by email, otherwise by username.
 
-## Event Publishing
+## Event Publishing (Transactional Outbox)
 
-On successful registration, the service publishes a `UserCreatedEvent` to RabbitMQ:
+On successful registration, the service writes a `UserCreatedEvent` to the `outbox_events` table in the same database transaction as the user. A standalone outbox worker polls the table and publishes to RabbitMQ, guaranteeing at-least-once delivery:
 
 ```json
 {
@@ -112,9 +117,12 @@ This event is consumed by:
 
 Tokens contain:
 - `sub`: user ID as string (standard JWT claim)
+- `user_id`: user ID as integer (monolith compatibility)
+- `username`: username string (monolith compatibility)
+- `email`: email string (monolith compatibility)
 - `exp`: expiration timestamp
 
-All services (monolith, transaction-service) validate tokens using the same shared `JWT_SECRET`.
+All services (monolith, transaction-service) validate tokens using the same shared `JWT_SECRET`. The token includes both `sub` (standard) and `user_id`/`username`/`email` (legacy) claims to ensure cross-service compatibility during the migration from monolith to microservices.
 
 ## Configuration
 
@@ -131,13 +139,13 @@ All services (monolith, transaction-service) validate tokens using the same shar
 ## Testing
 
 ```bash
-# Unit tests (22 tests)
+# Unit tests (28 tests — service logic, DTO BVA, outbox publisher)
 uv run pytest tests/unit/ -v
 
-# Integration tests (11 tests)
+# Integration tests (12 tests — full HTTP flow with SQLite, JWT compatibility)
 uv run pytest tests/integration/ -v
 
-# All tests
+# All tests (40 total)
 uv run pytest tests/ -v
 ```
 

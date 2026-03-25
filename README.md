@@ -41,13 +41,14 @@ This starts all services:
 | PostgreSQL (users) | 5433 | User-service database |
 | PostgreSQL (transactions) | 5434 | Transaction-service database |
 | RabbitMQ | 5672 / 15672 | Event bus + management UI |
-| Monolith | 8000 | Accounts, budgets, categories, goals, analytics |
+| Monolith | 8000 | Accounts, budgets, goals, analytics |
 | User Service | 8001 | Registration, login, JWT issuing |
-| Transaction Service | 8002 | Transaction CRUD, CSV import, planned transactions |
+| Transaction Service | 8002 | Transaction CRUD, CSV import, planned transactions, categories |
 | User Outbox Worker | — | Polls outbox table, publishes user events to RabbitMQ |
 | Transaction Outbox Worker | — | Polls outbox table, publishes transaction events to RabbitMQ |
 | UserSync Consumer | — | Syncs users from events to MySQL |
 | AccountCreation Consumer | — | Creates default accounts from events |
+| CategorySync Consumer | — | Syncs categories from transaction-service to MySQL |
 
 **Wait 30-60 seconds** for health checks to pass.
 
@@ -83,7 +84,7 @@ The application is being incrementally extracted from a monolith to microservice
 graph LR
     FE[React Frontend] -->|register/login| US[User Service<br/>:8001]
     FE -->|transactions| TS[Transaction Service<br/>:8002]
-    FE -->|accounts, budgets,<br/>categories, goals| MON[Monolith<br/>:8000]
+    FE -->|accounts, budgets,<br/>goals, analytics| MON[Monolith<br/>:8000]
 
     US -->|"write domain data +<br/>outbox event (same tx)"| PG_U[(PostgreSQL<br/>Users + outbox)]
     TS -->|"write domain data +<br/>outbox event (same tx)"| PG_T[(PostgreSQL<br/>Transactions + outbox)]
@@ -96,9 +97,11 @@ graph LR
 
     RMQ -->|user.created| USC[UserSync<br/>Consumer]
     RMQ -->|user.created| ACC[AccountCreation<br/>Consumer]
+    RMQ -->|category.*| CSC[CategorySync<br/>Consumer]
 
     USC -->|INSERT User| MYSQL[(MySQL)]
     ACC -->|INSERT Account| MYSQL
+    CSC -->|SYNC Category| MYSQL
 
     MON --> MYSQL
 ```
@@ -168,13 +171,14 @@ sequenceDiagram
 
 | Service | Port | Database | Role |
 |---------|------|----------|------|
-| **Monolith** | 8000 | MySQL (3306) | Accounts, categories, budgets, goals, analytics, GraphQL gateway |
+| **Monolith** | 8000 | MySQL (3306) | Accounts, budgets, goals, analytics, GraphQL gateway |
 | **User Service** | 8001 | PostgreSQL (5433) | User registration, login, JWT issuing (source of truth) |
-| **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions |
+| **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions, categories |
 | **User Outbox Worker** | — | PostgreSQL (5433) | Polls `outbox_events`, publishes user events to RabbitMQ |
 | **Transaction Outbox Worker** | — | PostgreSQL (5434) | Polls `outbox_events`, publishes transaction events to RabbitMQ |
 | **UserSync Consumer** | — | MySQL | Sync user data from events to MySQL User table |
 | **AccountCreation Consumer** | — | MySQL | Create default account from user.created events |
+| **CategorySync Consumer** | — | MySQL | Sync categories from transaction-service to MySQL |
 
 ### Future Services (not yet extracted)
 
@@ -277,6 +281,11 @@ finance-tracker/
 | `GET` | `/api/v1/planned-transactions/` | List planned | Yes |
 | `PATCH` | `/api/v1/planned-transactions/{id}` | Update planned | Yes |
 | `DELETE` | `/api/v1/planned-transactions/{id}` | Deactivate | Yes |
+| `POST` | `/api/v1/categories/` | Create category | Yes |
+| `GET` | `/api/v1/categories/` | List categories | Yes |
+| `GET` | `/api/v1/categories/{id}` | Get category | Yes |
+| `PUT` | `/api/v1/categories/{id}` | Update category | Yes |
+| `DELETE` | `/api/v1/categories/{id}` | Delete category | Yes |
 
 ### Monolith (port 8000)
 
@@ -342,7 +351,11 @@ sequenceDiagram
 |-------|----------|---------------|-----------|-------------|
 | `UserCreatedEvent` | user-service | Outbox worker | UserSyncConsumer, AccountCreationConsumer | `user.created` |
 | `TransactionCreatedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.created` |
+| `TransactionUpdatedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.updated` |
 | `TransactionDeletedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.deleted` |
+| `CategoryCreatedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.created` |
+| `CategoryUpdatedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.updated` |
+| `CategoryDeletedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.deleted` |
 | `AccountCreatedEvent` | AccountCreationConsumer | Direct publish | (future consumers) | `account.created` |
 
 ### Transactional Outbox (Event Publishing)
@@ -361,7 +374,7 @@ This guarantees **at-least-once delivery** — no event is lost even if the appl
 All consumers inherit from `BaseConsumer` with:
 - **Retry**: 3 attempts with exponential backoff
 - **Dead-letter queue**: Failed messages routed to `*.dlq`
-- **Idempotency**: Correlation-ID based deduplication (in-memory, planned: Redis/DB-backed)
+- **Idempotency**: DB-backed correlation-ID deduplication via `processed_events` table (survives restarts, auto-cleanup after 7 days)
 - **Independent operation**: Each consumer has its own queue and fails independently
 
 ---
@@ -386,7 +399,7 @@ See `example.env` for the full list with descriptions.
 
 ## Testing
 
-The project has **370+ tests** organized following the testing pyramid:
+The project has **426+ tests** organized following the testing pyramid:
 
 ```
      +----------+
@@ -404,9 +417,9 @@ The project has **370+ tests** organized following the testing pyramid:
 
 | Service | Unit | Integration | E2E | Total |
 |---------|------|-------------|-----|-------|
-| Monolith | ~231 | 45 | — | ~276 |
-| User Service | 27 | 11 | — | 38 |
-| Transaction Service | 41 | 17 | — | 58 |
+| Monolith | ~237 | 45 | — | 282 |
+| User Service | 28 | 12 | — | 40 |
+| Transaction Service | 61 | 43 | — | 104 |
 | Cross-service E2E | — | — | ~15 | ~15 |
 
 ### Running Tests
@@ -472,6 +485,7 @@ cd services/transaction-service && make dev
 # Consumers (in separate terminals from services/monolith/)
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
+uv run python -m backend.consumers.worker --consumer category-sync
 
 # Frontend
 cd services/frontend
@@ -514,7 +528,7 @@ yarn install && yarn dev
 - [x] Monthly budget system with aggregate model
 - [x] Unit of Work pattern for transactional boundaries
 - [x] Architecture fitness tests (import boundary enforcement)
-- [x] 370+ tests (unit, integration, e2e)
+- [x] 426+ tests (unit, integration, e2e)
 - [x] User-service extraction (PostgreSQL, RabbitMQ events)
 - [x] Transaction-service extraction (PostgreSQL, UoW, CSV import)
 - [x] Event-driven sync (UserSync + AccountCreation consumers)
@@ -524,6 +538,8 @@ yarn install && yarn dev
 - [ ] Budget service extraction
 - [ ] Analytics service + Elasticsearch
 - [ ] AI categorization service
-- [ ] Frontend routing to microservices (currently partial)
+- [x] Frontend routing to microservices (categories + transactions via transaction-service, auth via user-service)
 - [x] Transactional outbox pattern (at-least-once delivery, dual-write elimination)
-- [ ] Consumer idempotency store (Redis/DB-backed, replacing in-memory dedup)
+- [x] Consumer idempotency store (DB-backed `processed_events` with auto-cleanup)
+- [x] Category ownership extracted to transaction-service (with event sync to monolith)
+- [x] Cross-service JWT compatibility (unified token format)

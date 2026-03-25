@@ -99,7 +99,7 @@ class OutboxPublisherWorker:
             )
         except Exception:
             backoff = min(2**entry.attempts * 5, MAX_BACKOFF_S)
-            next_at = datetime.now(timezone.utc) + timedelta(seconds=backoff)
+            next_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=backoff)
             await repo.mark_failed(entry.id, next_at)
             logger.warning(
                 "Failed to publish %s (id=%s, attempt=%d, next_retry=%s)",

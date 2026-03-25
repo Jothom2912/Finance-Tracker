@@ -9,13 +9,13 @@ Services depend on this package for event schemas instead of depending on each o
 ### Install
 
 ```bash
-pip install -e services/shared/contracts/
+uv add --editable services/shared/contracts/
 ```
 
 ### Usage
 
 ```python
-from contracts import UserCreatedEvent, TransactionCreatedEvent
+from contracts import UserCreatedEvent, TransactionCreatedEvent, CategoryCreatedEvent
 
 # User events
 event = UserCreatedEvent(user_id=42, email="alice@example.com", username="alice")
@@ -27,8 +27,16 @@ tx_event = TransactionCreatedEvent(
     transaction_id=1,
     user_id=42,
     amount="125.50",
-    transaction_type="expense",
     account_id=1,
+    category="Groceries",
+    description="Weekly shopping",
+)
+
+# Category events
+cat_event = CategoryCreatedEvent(
+    category_id=1,
+    name="Groceries",
+    category_type="expense",
 )
 ```
 
@@ -47,12 +55,21 @@ tx_event = TransactionCreatedEvent(
 | `AccountCreatedEvent` | `account.created` | `account_id`, `user_id`, `account_name` |
 | `AccountCreationFailedEvent` | `account.creation_failed` | `user_id`, `reason` |
 
+### Category Events (`contracts.events.category`)
+
+| Event | Routing Key | Fields |
+|-------|-------------|--------|
+| `CategoryCreatedEvent` | `category.created` | `category_id`, `name`, `category_type` |
+| `CategoryUpdatedEvent` | `category.updated` | `category_id`, `name`, `category_type`, `previous_name`, `previous_type` |
+| `CategoryDeletedEvent` | `category.deleted` | `category_id`, `name`, `category_type` |
+
 ### Transaction Events (`contracts.events.transaction`)
 
 | Event | Routing Key | Fields |
 |-------|-------------|--------|
-| `TransactionCreatedEvent` | `transaction.created` | `transaction_id`, `user_id`, `amount` (str), `transaction_type`, `account_id` |
-| `TransactionDeletedEvent` | `transaction.deleted` | `transaction_id`, `user_id` |
+| `TransactionCreatedEvent` | `transaction.created` | `transaction_id`, `user_id`, `amount` (str), `account_id`, `category`, `description` |
+| `TransactionUpdatedEvent` | `transaction.updated` | `transaction_id`, `user_id`, `amount` (str), `previous_amount`, `account_id`, `category`, `previous_category`, `description` |
+| `TransactionDeletedEvent` | `transaction.deleted` | `transaction_id`, `user_id`, `amount` (str), `account_id` |
 
 ## Adding New Events
 
@@ -83,7 +100,8 @@ contracts/
 └── events/
     ├── user.py        # UserCreatedEvent
     ├── account.py     # AccountCreatedEvent, AccountCreationFailedEvent
-    └── transaction.py # TransactionCreatedEvent, TransactionDeletedEvent
+    ├── category.py    # CategoryCreatedEvent, CategoryUpdatedEvent, CategoryDeletedEvent
+    └── transaction.py # TransactionCreatedEvent, TransactionUpdatedEvent, TransactionDeletedEvent
 ```
 
 Events are **frozen** (immutable value objects) and carry:
@@ -105,6 +123,6 @@ Events are **frozen** (immutable value objects) and carry:
 
 ```bash
 cd services/shared/contracts
-pip install -e ".[dev]"
-pytest
+uv sync --dev
+uv run pytest
 ```

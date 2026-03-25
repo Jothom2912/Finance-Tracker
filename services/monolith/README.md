@@ -2,7 +2,7 @@
 
 FastAPI monolith for personal finance tracking with hexagonal architecture, GraphQL read gateway, event-driven sync, and structured logging.
 
-**This is the monolith component.** User authentication and transaction management have been extracted into standalone microservices. The monolith still handles accounts, categories, budgets, goals, analytics, and CSV import. It receives `user.created` events via RabbitMQ to keep a local user cache synchronized.
+**This is the monolith component.** User authentication, transaction management, and category ownership have been extracted into standalone microservices. The monolith still handles accounts, budgets, goals, and analytics. It receives events via RabbitMQ to keep local user and category caches synchronized.
 
 ## Quick Start
 
@@ -25,6 +25,7 @@ make dev
 # Run consumers (in separate terminals)
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
+uv run python -m backend.consumers.worker --consumer category-sync
 ```
 
 API base URL: `http://localhost:8000/api/v1/`
@@ -60,7 +61,7 @@ See `docs/STRUCTURE.md` for the full structure map.
 - `budget` — legacy per-category budget CRUD + summary analytics
 - `monthly_budget` — aggregate-based monthly budgets with budget lines, summary, and copy
 - `analytics` — dashboard overview, expenses-by-month, budget summary, GraphQL read gateway
-- `category` — CRUD
+- `category` — CRUD (local cache, transaction-service on port 8002 is source of truth)
 - `account` — CRUD + account groups
 - `goal` — CRUD
 - `user` — local user management (user-service on port 8001 is source of truth)
@@ -71,8 +72,9 @@ See `docs/STRUCTURE.md` for the full structure map.
 |----------|-------|---------|--------|
 | `UserSyncConsumer` | `monolith.user_sync` | `user.created` | Insert user into MySQL |
 | `AccountCreationConsumer` | `monolith.account_creation` | `user.created` | Create default account |
+| `CategorySyncConsumer` | `monolith.category_sync` | `category.*` | Sync categories from transaction-service |
 
-Both consumers run independently with retry (3 attempts), DLQ, and correlation-id based idempotency.
+All consumers run independently with retry (3 attempts), DLQ, and DB-backed idempotency (`processed_events` table with auto-cleanup after 7 days).
 
 ### Router map (all under `/api/v1/`)
 
@@ -124,6 +126,7 @@ make check
 # Run specific consumer
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
+uv run python -m backend.consumers.worker --consumer category-sync
 
 # Run all consumers
 uv run python -m backend.consumers.worker
