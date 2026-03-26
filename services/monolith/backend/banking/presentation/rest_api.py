@@ -46,10 +46,24 @@ def _get_client() -> EnableBankingClient:
     global _client
     if _client is None:
         import os
+        from pathlib import Path
+
+        key_path = os.getenv("ENABLE_BANKING_KEY_PATH", "./enablebanking-privat.pem")
+        if not os.path.isabs(key_path):
+            # Walk up from rest_api.py until we find the PEM file or hit root
+            search = Path(__file__).resolve().parent
+            pem_name = key_path.lstrip("./")
+            while search != search.parent:
+                candidate = search / pem_name
+                if candidate.exists():
+                    key_path = str(candidate)
+                    break
+                search = search.parent
+
         config = EnableBankingConfig(
             app_id=os.getenv("ENABLE_BANKING_APP_ID", ""),
-            key_path=os.getenv("ENABLE_BANKING_KEY_PATH", "./enablebanking-sandbox.pem"),
-            redirect_uri=os.getenv("ENABLE_BANKING_REDIRECT_URI", "http://localhost:8000/api/v1/bank/callback"),
+            key_path=key_path,
+            redirect_uri=os.getenv("ENABLE_BANKING_REDIRECT_URI", "https://example.com/callback"),
             environment=os.getenv("ENABLE_BANKING_ENVIRONMENT", "sandbox"),
         )
         _client = EnableBankingClient(config)

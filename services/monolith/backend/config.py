@@ -11,13 +11,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env from project root (parent of backend/)
-_env_path = Path(__file__).parent.parent / ".env"
-if not _env_path.exists():
-    # Fallback: try backend directory
-    _env_path = Path(__file__).parent / ".env"
+# Load .env - search upward: services/monolith/ → project root
+_monolith_root = Path(__file__).parent.parent
+_project_root = _monolith_root.parent.parent
 
-load_dotenv(dotenv_path=_env_path)
+for _candidate in [_monolith_root / ".env", _project_root / ".env"]:
+    if _candidate.exists():
+        load_dotenv(dotenv_path=_candidate)
+        break
 
 
 # =============================================================================
