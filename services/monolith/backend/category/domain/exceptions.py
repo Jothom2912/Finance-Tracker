@@ -32,3 +32,19 @@ class DuplicateCategoryNameOnUpdate(CategoryException):
     def __init__(self, name: str):
         self.name = name
         super().__init__("En anden kategori med dette navn eksisterer allerede.")
+
+
+class SubCategoryNotFound(CategoryException):
+    """Raised when subcategory doesn't exist."""
+
+    def __init__(self, subcategory_id: int):
+        self.subcategory_id = subcategory_id
+        super().__init__(f"SubCategory with ID {subcategory_id} not found")
+
+
+class MerchantNotFound(CategoryException):
+    """Raised when merchant doesn't exist."""
+
+    def __init__(self, merchant_id: int):
+        self.merchant_id = merchant_id
+        super().__init__(f"Merchant with ID {merchant_id} not found")

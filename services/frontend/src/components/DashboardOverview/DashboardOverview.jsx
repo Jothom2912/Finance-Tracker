@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 import CategoryPieChart from '../../Charts/PieChart';
 import SummaryCards from '../SummaryCards/SummaryCards';
@@ -6,22 +6,27 @@ import CategoryExpensesList from '../CategoryExpensesList/CategoryExpensesList';
 import BudgetProgressSection from '../BudgetProgressSection/BudgetProgressSection';
 import GoalProgressSection from '../GoalProgressSection/GoalProgressSection';
 import RecentTransactions from '../RecentTransactions/RecentTransactions';
+import BankConnectionWidget from '../BankConnectionWidget/BankConnectionWidget';
+import MonthlyExpensesTrend from '../MonthlyExpensesTrend/MonthlyExpensesTrend';
 import { useDashboardData } from '../../hooks/useDashboardData/useDashboardData';
 import { getMonthLabel } from '../../lib/formatters';
 import './DashboardOverview.css';
 
 function DashboardOverview() {
+  const [refreshKey, forceRefresh] = useReducer((x) => x + 1, 0);
+
   const {
     overview,
     budgetSummary,
     goals,
     recentTransactions,
+    expensesByMonth,
     loading,
     error,
     processedCategoryData,
     categoryDataWithPercentages,
     formatAmount,
-  } = useDashboardData();
+  } = useDashboardData(refreshKey);
 
   if (loading) return <div className="dashboard-loading">Indlæser dashboard...</div>;
   if (error) return <div className="dashboard-error">Fejl: {error}</div>;
@@ -76,8 +81,14 @@ function DashboardOverview() {
         formatAmount={formatAmount}
       />
 
+      <BankConnectionWidget onSyncComplete={forceRefresh} />
+
       <div className="dashboard-grid">
         <div className="dashboard-col-left">
+          <div className="dashboard-section">
+            <MonthlyExpensesTrend data={expensesByMonth} />
+          </div>
+
           <div className="dashboard-section">
             <BudgetProgressSection budgetSummary={budgetSummary} />
           </div>

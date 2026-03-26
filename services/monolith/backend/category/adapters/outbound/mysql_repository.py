@@ -29,13 +29,14 @@ class MySQLCategoryRepository(ICategoryRepository):
         return self._to_entity(model) if model else None
 
     def get_all(self) -> list[Category]:
-        models = self._db.query(CategoryModel).all()
+        models = self._db.query(CategoryModel).order_by(CategoryModel.display_order).all()
         return [self._to_entity(m) for m in models]
 
     def create(self, category: Category) -> Category:
         model = CategoryModel(
             name=category.name,
             type=(category.type.value if isinstance(category.type, CategoryType) else category.type),
+            display_order=category.display_order,
         )
         self._db.add(model)
         self._db.commit()
@@ -47,6 +48,7 @@ class MySQLCategoryRepository(ICategoryRepository):
 
         model.name = category.name
         model.type = category.type.value if isinstance(category.type, CategoryType) else category.type
+        model.display_order = category.display_order
 
         self._db.commit()
         self._db.refresh(model)
@@ -63,7 +65,6 @@ class MySQLCategoryRepository(ICategoryRepository):
 
     @staticmethod
     def _to_entity(model: CategoryModel) -> Category:
-        # Map DB string to CategoryType enum safely
         try:
             cat_type = CategoryType(model.type)
         except (ValueError, KeyError):
@@ -73,4 +74,5 @@ class MySQLCategoryRepository(ICategoryRepository):
             id=model.idCategory,
             name=model.name,
             type=cat_type,
+            display_order=model.display_order or 0,
         )

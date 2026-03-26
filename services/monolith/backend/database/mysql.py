@@ -137,11 +137,14 @@ def create_db_tables():
             from backend.models.mysql import (  # noqa: F401
                 account,
                 account_groups,
+                bank_connection,
                 budget,
                 category,
                 goal,
+                merchant,
                 monthly_budget,
                 planned_transactions,
+                subcategory,
                 transaction,
                 user,
             )

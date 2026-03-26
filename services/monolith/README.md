@@ -1,8 +1,8 @@
 # Finance Tracker Backend (Monolith)
 
-FastAPI monolith for personal finance tracking with hexagonal architecture, GraphQL read gateway, event-driven sync, and structured logging.
+FastAPI monolith for personal finance tracking with hexagonal architecture, GraphQL read gateway, event-driven sync, structured logging, live bank integration (PSD2 via Enable Banking), and multi-tier auto-categorization.
 
-**This is the monolith component.** User authentication, transaction management, and category ownership have been extracted into standalone microservices. The monolith still handles accounts, budgets, goals, and analytics. It receives events via RabbitMQ to keep local user and category caches synchronized.
+**This is the monolith component.** User authentication, transaction management, and category ownership have been extracted into standalone microservices. The monolith handles accounts, budgets, goals, analytics, **bank connections**, and **transaction categorization**. It receives events via RabbitMQ to keep local user and category caches synchronized.
 
 ## Quick Start
 
@@ -58,10 +58,11 @@ See `docs/STRUCTURE.md` for the full structure map.
 ### Active domains (still in monolith)
 
 - `transaction` — CRUD + CSV import (also available via transaction-service on port 8002)
+- `category` — CRUD + three-level hierarchy (Category / SubCategory / Merchant) + categorization pipeline
+- `banking` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync, deduplication)
 - `budget` — legacy per-category budget CRUD + summary analytics
 - `monthly_budget` — aggregate-based monthly budgets with budget lines, summary, and copy
 - `analytics` — dashboard overview, expenses-by-month, budget summary, GraphQL read gateway
-- `category` — CRUD (local cache, transaction-service on port 8002 is source of truth)
 - `account` — CRUD + account groups
 - `goal` — CRUD
 - `user` — local user management (user-service on port 8001 is source of truth)
@@ -83,6 +84,7 @@ All consumers run independently with retry (3 attempts), DLQ, and DB-backed idem
 | `/api/v1/transactions/*` | Transaction | REST |
 | `/api/v1/planned-transactions/*` | Transaction | REST |
 | `/api/v1/categories/*` | Category | REST |
+| `/api/v1/bank/*` | Banking (PSD2) | REST |
 | `/api/v1/budgets/*` | Budget (legacy) | REST |
 | `/api/v1/monthly-budgets/*` | Monthly Budget | REST |
 | `/api/v1/dashboard/*` | Analytics | REST |
@@ -91,6 +93,28 @@ All consumers run independently with retry (3 attempts), DLQ, and DB-backed idem
 | `/api/v1/goals/*` | Goal | REST |
 | `/api/v1/users/*` | User | REST |
 | `/api/v1/graphql` | Analytics (read gateway) | GraphQL |
+
+### Banking endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/bank/available-banks?country=DK` | List available banks |
+| `POST` | `/api/v1/bank/connect` | Start OAuth authorization flow |
+| `GET` | `/api/v1/bank/callback` | OAuth callback (bank redirects here) |
+| `GET` | `/api/v1/bank/connections?account_id=1` | List connected bank accounts |
+| `POST` | `/api/v1/bank/connections/{id}/sync` | Sync transactions from bank |
+| `DELETE` | `/api/v1/bank/connections/{id}` | Disconnect a bank |
+
+### Categorization pipeline
+
+The `CategorizationService` in `category/application/categorization_service.py` orchestrates a multi-tier pipeline:
+
+1. **Rule Engine** — Keyword-based matching with longest-match-first, sign-dependent overrides
+2. **ML Categorizer** — Port defined (`IMlCategorizer`), adapter not yet implemented
+3. **LLM Categorizer** — Port defined (`ILlmCategorizer`), adapter not yet implemented
+4. **Fallback** — Default "Ovrigt" subcategory when no tier matches
+
+Each transaction stores its `categorization_tier` ("rule", "ml", "llm", "fallback") and `categorization_confidence` for pipeline visibility.
 
 ## Configuration
 
@@ -105,6 +129,10 @@ All config is loaded from `backend/config.py` via environment variables.
 | `ACTIVE_DB` | Global fallback DB | `mysql` |
 | `ENVIRONMENT` | Runtime environment | `development` |
 | `LOG_LEVEL` | Logging level | `INFO` |
+| `ENABLE_BANKING_APP_ID` | Enable Banking application ID | — |
+| `ENABLE_BANKING_KEY_PATH` | Path to PEM private key file | `./enablebanking-sandbox.pem` |
+| `ENABLE_BANKING_REDIRECT_URI` | OAuth redirect URI | `http://localhost:8000/api/v1/bank/callback` |
+| `ENABLE_BANKING_ENVIRONMENT` | `sandbox` or `production` | `sandbox` |
 
 See `example.env` for the full list with descriptions.
 

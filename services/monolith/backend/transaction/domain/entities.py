@@ -26,6 +26,10 @@ class Transaction:
     category_id: int
     account_id: int
     created_at: Optional[datetime] = None
+    subcategory_id: Optional[int] = None
+    merchant_id: Optional[int] = None
+    categorization_tier: Optional[str] = None
+    categorization_confidence: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not self.account_id:

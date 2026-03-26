@@ -15,8 +15,12 @@ Usage in routes:
         return service.list_transactions(account_id=1)
 """
 
+import logging
+
 from fastapi import Depends
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from backend.account.adapters.outbound.mysql_account_group_repository import (
     MySQLAccountGroupRepository as HexMySQLAccountGroupRepository,
@@ -49,12 +53,23 @@ from backend.budget.adapters.outbound.mysql_repository import (
 
 # Hexagonal Budget domain
 from backend.budget.application.service import BudgetService as HexBudgetService
+from backend.category.adapters.outbound.mysql_merchant_repository import (
+    MySQLMerchantRepository,
+)
 from backend.category.adapters.outbound.mysql_repository import (
     MySQLCategoryRepository as HexMySQLCategoryRepository,
+)
+from backend.category.adapters.outbound.mysql_subcategory_repository import (
+    MySQLSubCategoryRepository,
+)
+from backend.category.adapters.outbound.rule_engine import RuleEngine
+from backend.category.application.categorization_service import (
+    CategorizationService,
 )
 
 # Hexagonal Category domain
 from backend.category.application.service import CategoryService
+from backend.category.domain.taxonomy import SEED_MERCHANT_MAPPINGS
 from backend.config import ANALYTICS_DB, DatabaseType
 from backend.database.mysql import get_db
 from backend.goal.adapters.outbound.account_adapter import (
@@ -102,8 +117,59 @@ from backend.user.adapters.outbound.mysql_user_repository import (
 from backend.user.application.service import UserService as HexUserService
 
 
+def get_categorization_service(
+    db: Session = Depends(get_db),
+) -> CategorizationService | None:
+    """Create CategorizationService with rule engine (tier 1 only for now).
+
+    Returns None when subcategories haven't been seeded yet (e.g. test
+    environments). TransactionService handles None gracefully by falling
+    back to the legacy keyword-based categorizer.
+    """
+    try:
+        sub_repo = MySQLSubCategoryRepository(db)
+        all_subs = sub_repo.get_all()
+    except Exception:
+        logger.warning("SubCategory table not available — categorization service disabled.")
+        return None
+
+    cat_repo = HexMySQLCategoryRepository(db)
+    all_cats = cat_repo.get_all()
+    cat_id_lookup = {cat.id: cat.id for cat in all_cats}
+
+    subcategory_lookup: dict[str, tuple[int, int]] = {}
+    for sub in all_subs:
+        if sub.category_id in cat_id_lookup:
+            subcategory_lookup[sub.name] = (sub.id, sub.category_id)
+
+    keyword_mappings = [
+        (kw, mapping["subcategory"])
+        for kw, mapping in SEED_MERCHANT_MAPPINGS.items()
+    ]
+
+    rule_engine = RuleEngine(
+        keyword_mappings=keyword_mappings,
+        subcategory_lookup=subcategory_lookup,
+    )
+
+    fallback_ids = subcategory_lookup.get("Anden")
+    if fallback_ids is None:
+        logger.warning(
+            "Fallback subcategory 'Anden' not found — categorization service disabled. "
+            "Run seed_categories.py to enable."
+        )
+        return None
+
+    return CategorizationService(
+        rule_engine=rule_engine,
+        fallback_subcategory_id=fallback_ids[0],
+        fallback_category_id=fallback_ids[1],
+    )
+
+
 def get_transaction_service(
     db: Session = Depends(get_db),
+    categorization_service: CategorizationService | None = Depends(get_categorization_service),
 ) -> TransactionService:
     """Create TransactionService with hexagonal architecture repositories."""
     return TransactionService(
@@ -111,6 +177,7 @@ def get_transaction_service(
         category_port=TransactionCategoryAdapter(db),
         uow=MySQLUnitOfWork(db),
         planned_transaction_repo=MySQLPlannedTransactionRepository(db),
+        categorization_service=categorization_service,
     )
 
 

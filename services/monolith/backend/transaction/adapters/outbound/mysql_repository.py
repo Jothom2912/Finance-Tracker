@@ -71,6 +71,10 @@ class MySQLTransactionRepository(ITransactionRepository):
             Category_idCategory=transaction.category_id,
             Account_idAccount=transaction.account_id,
             created_at=transaction.created_at or datetime.now(),
+            subcategory_id=transaction.subcategory_id,
+            merchant_id=transaction.merchant_id,
+            categorization_tier=transaction.categorization_tier,
+            categorization_confidence=transaction.categorization_confidence,
         )
         self._db.add(model)
         self._db.flush()
@@ -176,6 +180,10 @@ class MySQLTransactionRepository(ITransactionRepository):
             category_id=model.Category_idCategory,
             account_id=model.Account_idAccount,
             created_at=(model.created_at if hasattr(model, "created_at") else None),
+            subcategory_id=getattr(model, "subcategory_id", None),
+            merchant_id=getattr(model, "merchant_id", None),
+            categorization_tier=getattr(model, "categorization_tier", None),
+            categorization_confidence=getattr(model, "categorization_confidence", None),
         )
 
 

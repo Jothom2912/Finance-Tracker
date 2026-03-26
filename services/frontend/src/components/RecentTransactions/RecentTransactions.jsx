@@ -32,9 +32,16 @@ function RecentTransactions({ transactions }) {
           return (
             <li key={tx.id} className="recent-transaction-item">
               <div className="recent-tx-left">
-                <span className="recent-tx-description">
-                  {tx.description || 'Ingen beskrivelse'}
-                </span>
+                <div className="recent-tx-desc-row">
+                  <span className="recent-tx-description">
+                    {tx.description || 'Ingen beskrivelse'}
+                  </span>
+                  {tx.categorizationTier && (
+                    <span className={`tier-badge tier-${tx.categorizationTier}`}>
+                      {tx.categorizationTier === 'rule' ? 'auto' : tx.categorizationTier}
+                    </span>
+                  )}
+                </div>
                 <span className="recent-tx-date">{formatDate(tx.date)}</span>
               </div>
               <span className={`recent-tx-amount ${isExpense ? 'expense' : 'income'}`}>

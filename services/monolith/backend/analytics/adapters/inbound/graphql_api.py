@@ -108,6 +108,7 @@ class TransactionType:
     type: str
     category_id: int
     account_id: int
+    categorization_tier: Optional[str] = None
 
 
 @strawberry.type(description="Month-over-month trend indicators")
@@ -413,6 +414,7 @@ class Query:
                 type=t.type,
                 category_id=t.category_id,
                 account_id=t.account_id,
+                categorization_tier=getattr(t, "categorization_tier", None),
             )
             for t in results
         ]

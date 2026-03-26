@@ -32,7 +32,7 @@ This starts:
 | **PostgreSQL (users)** | 5433 | User-service database |
 | **PostgreSQL (transactions)** | 5434 | Transaction-service database |
 | **RabbitMQ** | 5672 / 15672 | Event bus + management UI |
-| **Monolith** | 8000 | Accounts, budgets, goals, analytics |
+| **Monolith** | 8000 | Accounts, budgets, goals, analytics, bank sync, categorization |
 | **User Service** | 8001 | Registration, login, JWT issuing |
 | **Transaction Service** | 8002 | Transaction CRUD, CSV import, categories |
 | **UserSync Consumer** | — | Syncs users from events to MySQL |
@@ -62,17 +62,32 @@ App: http://localhost:3001
 
 ### 5. Seed Database (Optional)
 
-Categories are needed before creating transactions or budgets via the monolith:
+Categories (with subcategories and merchants) are needed before creating transactions or budgets via the monolith:
 
 ```bash
-# Seed categories
-docker exec -it $(docker compose ps -q monolith) python -m backend.seed_categories
+# Seed category hierarchy (categories, subcategories, merchants, keyword rules)
+docker exec -it $(docker compose ps -q monolith) python -m backend.scripts.seed_categories
 
 # Generate test data (creates users, accounts, transactions, budgets, goals)
 docker exec -it $(docker compose ps -q monolith) python -m backend.generate_dummy_data
 ```
 
 Test users created by seed: `johan`, `marie`, `testuser` (password: `test123`).
+
+### 6. Connect a Bank (Optional)
+
+To enable live bank transaction sync via PSD2:
+
+1. Register at [Enable Banking](https://enablebanking.com/sign-in/) and create an application
+2. Download the sandbox PEM key and place it in the project root as `enablebanking-sandbox.pem`
+3. Set environment variables in `.env`:
+   - `ENABLE_BANKING_APP_ID` — your application ID
+   - `ENABLE_BANKING_KEY_PATH` — path to PEM key (default: `./enablebanking-sandbox.pem`)
+   - `ENABLE_BANKING_REDIRECT_URI` — must match what you registered (default: `http://localhost:8000/api/v1/bank/callback`)
+   - `ENABLE_BANKING_ENVIRONMENT` — `sandbox` for testing, `production` for live data
+4. Start bank connection via API or frontend dashboard
+5. Authorize at your bank's login page
+6. Sync transactions from the dashboard
 
 ---
 
@@ -210,8 +225,11 @@ curl -X POST http://localhost:8000/api/v1/graphql \
 # All tests via root Makefile
 make test
 
-# Monolith tests (282 tests)
+# Monolith tests (335 tests)
 cd services/monolith && uv run pytest tests/ -v
+
+# Frontend tests (96 tests)
+cd services/frontend && npx vitest run
 
 # User service tests (40 tests)
 cd services/user-service && uv run pytest tests/ -v

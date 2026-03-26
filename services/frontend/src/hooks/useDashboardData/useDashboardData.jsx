@@ -58,11 +58,16 @@ const DASHBOARD_QUERY = gql`
       date
       type
       categoryId
+      categorizationTier
+    }
+    expensesByMonth {
+      month
+      totalExpenses
     }
   }
 `;
 
-export function useDashboardData() {
+export function useDashboardData(refreshKey = 0) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -93,12 +98,13 @@ export function useDashboardData() {
 
     load();
     return () => { cancelled = true; };
-  }, [month, year]);
+  }, [month, year, refreshKey]);
 
   const overview = data?.currentMonthOverview ?? null;
   const budgetSummary = data?.budgetSummary ?? null;
   const goals = data?.goalProgress ?? [];
   const recentTransactions = data?.transactions ?? [];
+  const expensesByMonth = data?.expensesByMonth ?? [];
 
   const processedCategoryData = useMemo(() => {
     if (!overview?.expensesByCategory?.length) return [];
@@ -128,6 +134,7 @@ export function useDashboardData() {
     budgetSummary,
     goals,
     recentTransactions,
+    expensesByMonth,
     loading,
     error,
     processedCategoryData,

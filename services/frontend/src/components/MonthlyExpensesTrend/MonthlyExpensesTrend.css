@@ -1,0 +1,26 @@
+/* ── Monthly Expenses Trend ── */
+
+.monthly-trend-section h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+}
+
+.monthly-trend-header {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.monthly-trend-chart {
+  width: 100%;
+  height: 280px;
+}
+
+.monthly-trend-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: 2rem 1rem;
+  font-size: var(--font-size-sm);
+}

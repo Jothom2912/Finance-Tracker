@@ -1,49 +1,122 @@
-# Getting Started with Create React App
+# Finance Tracker Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React 18 SPA built with Vite 5 for personal finance tracking. Connects to the monolith backend (port 8000) for analytics, bank connections, and transaction management via REST and GraphQL.
 
-## Available Scripts
+## Quick Start
 
-In the project directory, you can run:
+```bash
+# Install dependencies
+yarn install
 
-### `npm start`
+# Start development server
+yarn dev
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+App: http://localhost:3001
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Tech Stack
 
-### `npm test`
+| Technology | Purpose |
+|-----------|---------|
+| React 18 | UI framework |
+| Vite 5 | Build tool and dev server |
+| react-router-dom v7 | Client-side routing |
+| graphql-request | GraphQL client for dashboard reads |
+| Recharts 3 | Charts (pie, bar, area) |
+| Vitest + Testing Library | Unit tests (96 tests) |
+| CSS Variables | Design tokens, no Tailwind |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Project Structure
 
-### `npm run build`
+```
+src/
+├── api/                    # API client modules
+│   ├── graphqlClient.jsx   # GraphQL client (analytics reads)
+│   ├── bank.jsx            # Bank REST API (connections, sync)
+│   ├── transactions.jsx    # Transaction CRUD
+│   ├── categories.jsx      # Category CRUD
+│   ├── accounts.jsx        # Account CRUD
+│   ├── budgets.jsx         # Budget CRUD
+│   ├── goals.jsx           # Goal CRUD
+│   ├── dashboard.jsx       # Dashboard REST API
+│   └── auth.jsx            # Authentication
+├── components/
+│   ├── DashboardOverview/  # Main dashboard layout
+│   ├── BankConnectionWidget/ # Bank status + sync button
+│   ├── MonthlyExpensesTrend/ # Expenses trend area chart
+│   ├── SummaryCards/       # KPI cards (income, expenses, net, balance)
+│   ├── RecentTransactions/ # Last 10 transactions with tier badges
+│   ├── BudgetProgressSection/ # Budget progress bars
+│   ├── GoalProgressSection/ # Goal progress cards
+│   └── CategoryExpensesList/ # Category breakdown
+├── Charts/
+│   ├── PieChart.jsx        # Category expenses pie chart
+│   └── CategoryBarChart.jsx # Category bar chart
+├── hooks/
+│   └── useDashboardData/   # Dashboard data hook (GraphQL)
+├── pages/                  # Route page components
+├── context/                # Auth context provider
+├── lib/
+│   └── formatters.jsx      # Amount/date formatting (da-DK locale)
+└── utils/
+    └── apiClient.jsx       # Base REST client with auth headers
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Dashboard Architecture
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+The dashboard uses a **REST for mutations, GraphQL for reads** pattern:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- **GraphQL** (`useDashboardData` hook) fetches all read-only dashboard data in a single query: financial overview, budget summary, goal progress, recent transactions (with `categorizationTier`), and monthly expenses trend.
+- **REST** (`api/bank.jsx`) handles bank sync mutations which have side effects (fetch from external API, categorize, store).
 
-### `npm run eject`
+After a bank sync, the dashboard auto-refreshes via a `refreshKey` mechanism so new transactions appear immediately.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Key Dashboard Components
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+**BankConnectionWidget** — Shows connected banks with status indicator, IBAN suffix, time since last sync, and a sync button. The sync button disables during sync and shows an inline result toast ("12 nye, 3 duplikater") instead of a browser alert.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+**MonthlyExpensesTrend** — Recharts AreaChart showing the last 6 months of expenses. Months without data render as 0 (no gaps in the graph). Uses a gradient fill and custom tooltip with `da-DK` formatted amounts.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+**RecentTransactions** — Lists the 10 most recent transactions with categorization tier badges:
+- `auto` (green) — matched by rule engine
+- `fallback` (yellow) — no match, used default category
+- `ml` / `llm` (blue) — matched by ML or LLM tier (future)
 
-## Learn More
+## API Clients
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+| Module | Protocol | Base URL |
+|--------|----------|----------|
+| `api/graphqlClient.jsx` | GraphQL | `/api/v1/graphql` |
+| `api/bank.jsx` | REST | `/api/v1/bank/*` |
+| `utils/apiClient.jsx` | REST | `/api/v1/*` (generic) |
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+All clients automatically attach `Authorization: Bearer <token>` and `X-Account-ID` headers from localStorage.
+
+## Commands
+
+```bash
+yarn dev          # Start dev server (port 3001)
+yarn build        # Production build
+yarn preview      # Preview production build
+yarn test         # Run all tests (vitest)
+yarn test:watch   # Run tests in watch mode
+```
+
+## Design Tokens
+
+Styling uses CSS custom properties defined in `src/index.css`. No Tailwind CSS.
+
+| Token | Purpose |
+|-------|---------|
+| `--color-brand-*` | Primary identity colors |
+| `--color-success-*` | Positive amounts, active states |
+| `--color-error-*` | Negative amounts, expenses |
+| `--color-warning-*` | Warnings, fallback badges |
+| `--color-bg-surface` | Card backgrounds |
+| `--color-bg-base` | Page background |
+| `--radius-md/lg` | Border radius scale |
+| `--shadow-sm/md/lg` | Box shadow scale |
+| `--font-size-xs..3xl` | Typography scale |
 
 ## Visual QA Checklist
 
@@ -72,33 +145,3 @@ Use this checklist before merging UI changes to keep the design direction consis
 - Make sure hover and `:focus-visible` states match for key buttons and links.
 - Keep focus rings visible and never remove them.
 - Verify reduced motion: animations should be minimal when `prefers-reduced-motion` is enabled.
-
-### Quick Manual Smoke Test
-
-- Login/Register: form fields, submit buttons, and error states look consistent.
-- Dashboard: KPI cards, empty states, and navigation look aligned with tokens.
-- Transactions/Budget/Goals: cards, tables, CTAs, and modals follow the same visual language.
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

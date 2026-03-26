@@ -1,10 +1,23 @@
 # backend/services/categorization.py
+#
+# DEPRECATED: This module is replaced by the new categorization pipeline:
+#   - Rule engine: backend/category/adapters/outbound/rule_engine.py
+#   - Orchestrator: backend/category/application/categorization_service.py
+#   - Taxonomy: backend/category/domain/taxonomy.py
+#
+# Kept for backward compatibility during transition.
+# Do NOT add new keywords here — add them to SEED_MERCHANT_MAPPINGS in taxonomy.py.
+#
+# Remove this file once all callers have been migrated.
 
-# Denne fil kræver ingen top-level imports fra andre services eller models,
-# hvilket er godt og hjælper med at undgå cirkulære imports.
+import warnings
 
-# category_rules ordbogen indeholder keywords og deres tilhørende kategorinavne.
-# Brug kun lowercase navne i kategorierne, da opslaget fra DB er lowercase.
+warnings.warn(
+    "backend.services.categorization is deprecated. "
+    "Use backend.category.application.categorization_service instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 category_rules = {
     # Madvarer/Dagligvarer - Generelle supermarkeder og kiosker
     "netto": "madvarer/dagligvarer",

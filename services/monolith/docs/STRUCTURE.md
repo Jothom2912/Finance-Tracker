@@ -22,7 +22,8 @@ All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remai
 ## Active Bounded Contexts (still in monolith)
 
 - `backend/transaction/` — CRUD, CSV import, planned transactions
-- `backend/category/` — CRUD (local cache, transaction-service is source of truth)
+- `backend/category/` — CRUD + three-level hierarchy (Category / SubCategory / Merchant) + categorization pipeline (rule engine, ML/LLM ports)
+- `backend/banking/` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync, deduplication, auto-categorization)
 - `backend/budget/` — legacy per-category budgets
 - `backend/monthly_budget/` — aggregate-based monthly budgets with budget lines
 - `backend/analytics/` — dashboard overview, GraphQL read gateway
@@ -36,15 +37,51 @@ Each context follows the same layout:
 <context>/
 ├── adapters/
 │   ├── inbound/       # REST API (+ GraphQL for analytics)
-│   └── outbound/      # Repository implementations
+│   └── outbound/      # Repository implementations, external API clients
 ├── application/
-│   ├── ports/         # Inbound + outbound interfaces
+│   ├── ports/         # Inbound + outbound interfaces (protocols)
 │   ├── service.py     # Application service
 │   └── dto.py         # Data transfer objects
 ├── domain/
-│   ├── entities.py
+│   ├── entities.py    # Domain entities (dataclasses)
+│   ├── value_objects.py # Value objects and enums
 │   └── exceptions.py
+├── presentation/      # (banking only) REST API routes
 └── __init__.py
+```
+
+### Banking context structure
+
+```text
+backend/banking/
+├── adapters/
+│   └── outbound/
+│       └── enable_banking_client.py   # JWT-signed HTTP client for Enable Banking API
+├── application/
+│   ├── ports/
+│   │   └── outbound.py               # IBankConnectionRepository, IBankingApiClient
+│   └── service.py                    # BankingService (orchestrates OAuth + sync)
+└── presentation/
+    └── rest_api.py                   # FastAPI routes (/bank/*)
+```
+
+### Category context structure (with categorization pipeline)
+
+```text
+backend/category/
+├── adapters/
+│   └── outbound/
+│       ├── mysql_repository.py            # Category CRUD
+│       ├── mysql_subcategory_repository.py # SubCategory CRUD
+│       ├── mysql_merchant_repository.py   # Merchant CRUD
+│       └── rule_engine.py                 # Keyword-based categorizer (longest-match-first)
+├── application/
+│   ├── ports/
+│   │   └── outbound.py                   # IRuleEngine, IMlCategorizer, ILlmCategorizer
+│   └── categorization_service.py         # Multi-tier orchestrator
+└── domain/
+    ├── entities.py                       # Category, SubCategory, Merchant
+    └── value_objects.py                  # CategorizationTier, CategorizationResult
 ```
 
 ## Event Consumers
@@ -91,6 +128,7 @@ The monolith creates tokens with both `sub` (standard JWT claim) and legacy `use
 | `/api/v1/transactions/*` | Transaction | REST |
 | `/api/v1/planned-transactions/*` | Transaction | REST |
 | `/api/v1/categories/*` | Category (local cache) | REST |
+| `/api/v1/bank/*` | Banking (PSD2) | REST |
 | `/api/v1/budgets/*` (CRUD) | Budget (legacy) | REST |
 | `/api/v1/budgets/summary` | Analytics | REST |
 | `/api/v1/monthly-budgets/*` (CRUD + copy) | Monthly Budget | REST |
@@ -116,3 +154,15 @@ Settings in `backend/config.py`:
 - `TRANSACTIONS_DB` — transaction domain
 - `ANALYTICS_DB` — analytics domain (supports MySQL, Elasticsearch, Neo4j)
 - `USER_DB` — user domain
+
+## SQLAlchemy Models
+
+| Model | Table | Description |
+|-------|-------|-------------|
+| `Category` | `Category` | Top-level expense/income categories with `display_order` |
+| `SubCategory` | `subcategory` | Second-level categories linked to Category |
+| `Merchant` | `merchant` | Learned merchant entities linked to SubCategory |
+| `Transaction` | `Transaction` | Financial transactions with `subcategory_id`, `merchant_id`, `categorization_tier` |
+| `BankConnection` | `bank_connection` | PSD2 bank connections with `session_id`, `iban`, `bank_name`, `last_synced_at` |
+| `Account` | `Account` | User accounts |
+| `User` | `User` | Local user cache (synced via events) |

@@ -10,6 +10,10 @@ from typing import Optional
 
 import pandas as pd
 
+from backend.category.application.categorization_service import (
+    CategorizationService,
+    TransactionInput,
+)
 from backend.services.categorization import assign_category_automatically
 from backend.shared.ports.unit_of_work import IUnitOfWork
 from backend.transaction.application.dto import (
@@ -48,11 +52,13 @@ class TransactionService(ITransactionService):
         category_port: ICategoryPort,
         uow: IUnitOfWork,
         planned_transaction_repo: Optional[IPlannedTransactionRepository] = None,
+        categorization_service: Optional[CategorizationService] = None,
     ):
         self._transaction_repo = transaction_repo
         self._category_port = category_port
         self._uow = uow
         self._planned_transaction_repo = planned_transaction_repo
+        self._categorization_service = categorization_service
 
     # ------------------------------------------------------------------
     # Query use cases
@@ -286,11 +292,24 @@ class TransactionService(ITransactionService):
                         if not full_description:
                             full_description = "Ukendt beskrivelse"
 
-                        transaction_category_id = assign_category_automatically(
-                            transaction_description=full_description,
-                            amount=amount,
-                            category_name_to_id=category_name_to_id,
-                        )
+                        subcategory_id = None
+                        categorization_tier = None
+                        categorization_confidence = None
+
+                        if self._categorization_service is not None:
+                            cat_output = self._categorization_service.categorize(
+                                TransactionInput(description=full_description, amount=amount)
+                            )
+                            subcategory_id = cat_output.result.subcategory_id
+                            categorization_tier = cat_output.result.tier.value
+                            categorization_confidence = cat_output.result.confidence.value
+                            transaction_category_id = cat_output.result.category_id
+                        else:
+                            transaction_category_id = assign_category_automatically(
+                                transaction_description=full_description,
+                                amount=amount,
+                                category_name_to_id=category_name_to_id,
+                            )
 
                         tx_type = TransactionType.income.value if amount >= 0 else TransactionType.expense.value
 
@@ -303,6 +322,9 @@ class TransactionService(ITransactionService):
                             category_id=transaction_category_id,
                             account_id=account_id,
                             created_at=datetime.now(),
+                            subcategory_id=subcategory_id,
+                            categorization_tier=categorization_tier,
+                            categorization_confidence=categorization_confidence,
                         )
 
                         created = self._transaction_repo.create(entity)

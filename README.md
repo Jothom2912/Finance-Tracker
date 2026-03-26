@@ -1,11 +1,13 @@
 # Finance Tracker — Microservices Personal Finance Application
 
-A personal finance tracking application being incrementally migrated from a **monolith** to **microservices**. The backend uses FastAPI with hexagonal architecture (ports & adapters), CQRS, event-driven communication via RabbitMQ, and polyglot persistence (MySQL + PostgreSQL).
+A personal finance tracking application being incrementally migrated from a **monolith** to **microservices**. The backend uses FastAPI with hexagonal architecture (ports & adapters), CQRS, event-driven communication via RabbitMQ, and polyglot persistence (MySQL + PostgreSQL). Includes **live bank integration** via Enable Banking (PSD2 Open Banking) with automatic transaction categorization through a multi-tier pipeline (rule engine, with ML/LLM tiers prepared).
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
+- [Bank Integration](#bank-integration)
+- [Categorization Pipeline](#categorization-pipeline)
 - [Service Map](#service-map)
 - [Project Structure](#project-structure)
 - [API Reference](#api-reference)
@@ -41,7 +43,7 @@ This starts all services:
 | PostgreSQL (users) | 5433 | User-service database |
 | PostgreSQL (transactions) | 5434 | Transaction-service database |
 | RabbitMQ | 5672 / 15672 | Event bus + management UI |
-| Monolith | 8000 | Accounts, budgets, goals, analytics |
+| Monolith | 8000 | Accounts, budgets, goals, analytics, bank sync, categorization |
 | User Service | 8001 | Registration, login, JWT issuing |
 | Transaction Service | 8002 | Transaction CRUD, CSV import, planned transactions, categories |
 | User Outbox Worker | — | Polls outbox table, publishes user events to RabbitMQ |
@@ -106,6 +108,64 @@ graph LR
     MON --> MYSQL
 ```
 
+### Bank Integration (PSD2 Open Banking)
+
+The monolith connects to real bank accounts via [Enable Banking](https://enablebanking.com/) using the PSD2 Open Banking standard. This provides live transaction data from banks like Nordea, Danske Bank, and others across Europe.
+
+```mermaid
+sequenceDiagram
+    participant User as User / Browser
+    participant API as Monolith API
+    participant EB as Enable Banking
+    participant Bank as Bank (Nordea etc.)
+    participant DB as MySQL
+
+    User->>API: POST /bank/connect
+    API->>EB: Create authorization URL
+    EB-->>API: Authorization URL + state
+    API-->>User: Redirect to bank
+
+    User->>Bank: Authorize via bank login
+    Bank-->>API: GET /bank/callback?code=xxx
+
+    API->>EB: Create session (exchange code)
+    EB-->>API: Session ID + accounts
+    API->>DB: Store BankConnection records
+
+    User->>API: POST /bank/connections/{id}/sync
+    API->>EB: Fetch transactions
+    EB-->>API: Raw transactions
+    API->>API: Deduplicate + categorize
+    API->>DB: Store new transactions
+    API-->>User: "12 new, 3 duplicates"
+```
+
+The bank sync flow:
+1. **Connect** - User authorizes via their bank's OAuth login (PSD2 consent)
+2. **Session** - Enable Banking creates a session with access to account data
+3. **Sync** - Transactions are fetched, deduplicated against existing records, and auto-categorized
+4. **Dashboard** - New transactions appear immediately with categorization tier badges
+
+### Categorization Pipeline
+
+Transactions are categorized through a multi-tier orchestrator that tries increasingly expensive methods until one succeeds:
+
+```mermaid
+flowchart LR
+    TX[Transaction] --> RE[Rule Engine]
+    RE -->|match| Done[Store with tier=rule]
+    RE -->|no match| ML[ML Categorizer]
+    ML -->|match| Done2[Store with tier=ml]
+    ML -->|no match| LLM[LLM Categorizer]
+    LLM -->|match| Done3[Store with tier=llm]
+    LLM -->|no match| FB[Fallback]
+    FB --> Done4[Store with tier=fallback]
+```
+
+The hierarchy is three levels deep: **Category** (e.g., "Mad & Drikke") contains **SubCategories** (e.g., "Supermarked") which map to **Merchants** (e.g., "Netto"). The rule engine uses longest-match-first keyword matching with sign-dependent overrides (e.g., a positive "Netto" transaction is a refund, not a grocery purchase).
+
+ML and LLM tiers are defined as ports but not yet implemented - the architecture is ready for them via the `IMlCategorizer` and `ILlmCategorizer` protocols.
+
 ### Key Architecture Decisions
 
 | Decision | Rationale |
@@ -117,6 +177,9 @@ graph LR
 | **Transactional outbox** | Domain data and event are written in the same DB transaction, eliminating the dual-write problem. A background worker polls the outbox table with `SELECT … FOR UPDATE SKIP LOCKED` and publishes to RabbitMQ. Guarantees at-least-once delivery |
 | **Denormalized data** | Transaction-service stores `account_name` and `category_name` alongside IDs |
 | **Amount as string in events** | Preserves decimal precision across JSON serialization |
+| **REST for mutations, GraphQL for reads** | Bank sync (side effects) uses REST; dashboard data (nested reads) uses GraphQL |
+| **Multi-tier categorization** | Rule engine first (fast, deterministic), then ML/LLM ports (expensive, probabilistic) |
+| **PSD2 via Enable Banking** | Aggregator abstracts bank-specific APIs; JWT-signed requests; OAuth for user consent |
 
 ### Hexagonal Architecture (per service)
 
@@ -205,7 +268,8 @@ finance-tracker/
 │   │   │   ├── dependencies.py      # FastAPI DI wiring
 │   │   │   ├── consumers/           # RabbitMQ event consumers
 │   │   │   ├── transaction/         # Bounded context (hexagonal)
-│   │   │   ├── category/            # Bounded context
+│   │   │   ├── category/            # Bounded context + categorization pipeline
+│   │   │   ├── banking/             # Bank integration (Enable Banking / PSD2)
 │   │   │   ├── budget/              # Legacy budget context
 │   │   │   ├── monthly_budget/      # Aggregate-based monthly budgets
 │   │   │   ├── analytics/           # Dashboard + GraphQL read gateway
@@ -236,11 +300,14 @@ finance-tracker/
 │   │
 │   ├── frontend/                    # React SPA (Vite)
 │   │   ├── src/
-│   │   │   ├── components/          # UI components
+│   │   │   ├── api/                 # REST + GraphQL clients (bank, transactions, etc.)
+│   │   │   ├── components/          # UI components (dashboard, bank widget, charts)
 │   │   │   ├── pages/               # Page components
 │   │   │   ├── context/             # Auth context
-│   │   │   ├── hooks/               # Custom hooks
-│   │   │   └── utils/               # API client
+│   │   │   ├── hooks/               # Custom hooks (useDashboardData, etc.)
+│   │   │   ├── Charts/              # Recharts components (pie, bar, area)
+│   │   │   ├── lib/                 # Formatters and utilities
+│   │   │   └── utils/               # API client wrapper
 │   │   └── package.json
 │   │
 │   └── shared/
@@ -300,6 +367,12 @@ finance-tracker/
 | `*` | `/api/v1/goals/*` | Goal CRUD | Yes |
 | `*` | `/api/v1/users/*` | User management | Partial |
 | `POST` | `/api/v1/graphql` | GraphQL read gateway | Yes |
+| `GET` | `/api/v1/bank/available-banks` | List banks by country | No |
+| `POST` | `/api/v1/bank/connect` | Start bank OAuth flow | No |
+| `GET` | `/api/v1/bank/callback` | OAuth callback from bank | No |
+| `GET` | `/api/v1/bank/connections` | List bank connections | No |
+| `POST` | `/api/v1/bank/connections/{id}/sync` | Sync transactions from bank | No |
+| `DELETE` | `/api/v1/bank/connections/{id}` | Disconnect bank | No |
 
 ### Authentication
 
@@ -390,6 +463,10 @@ All consumers inherit from `BaseConsumer` with:
 | `RABBITMQ_URL` | all | `amqp://guest:guest@rabbitmq:5672/` | RabbitMQ connection |
 | `CORS_ORIGINS` | all | `http://localhost:3000,http://localhost:3001` | Allowed origins |
 | `ENVIRONMENT` | all | `development` | Runtime environment |
+| `ENABLE_BANKING_APP_ID` | monolith | — | Enable Banking application ID |
+| `ENABLE_BANKING_KEY_PATH` | monolith | `./enablebanking-sandbox.pem` | Path to PEM private key |
+| `ENABLE_BANKING_REDIRECT_URI` | monolith | `http://localhost:8000/api/v1/bank/callback` | OAuth redirect URI |
+| `ENABLE_BANKING_ENVIRONMENT` | monolith | `sandbox` | `sandbox` or `production` |
 
 The monolith uses `SECRET_KEY`, microservices use `JWT_SECRET`. Both are set to the same value in docker-compose.
 
@@ -399,7 +476,7 @@ See `example.env` for the full list with descriptions.
 
 ## Testing
 
-The project has **426+ tests** organized following the testing pyramid:
+The project has **530+ tests** (335 backend + 96 frontend + 104 transaction-service) organized following the testing pyramid:
 
 ```
      +----------+
@@ -417,7 +494,8 @@ The project has **426+ tests** organized following the testing pyramid:
 
 | Service | Unit | Integration | E2E | Total |
 |---------|------|-------------|-----|-------|
-| Monolith | ~237 | 45 | — | 282 |
+| Monolith | ~290 | 45 | — | 335 |
+| Frontend | 96 | — | — | 96 |
 | User Service | 28 | 12 | — | 40 |
 | Transaction Service | 61 | 43 | — | 104 |
 | Cross-service E2E | — | — | ~15 | ~15 |
@@ -428,13 +506,16 @@ The project has **426+ tests** organized following the testing pyramid:
 # All tests via root Makefile
 make test
 
-# Monolith tests
+# Monolith tests (335 tests)
 cd services/monolith && uv run pytest tests/ -v
 
-# User service tests
+# Frontend tests (96 tests)
+cd services/frontend && npx vitest run
+
+# User service tests (40 tests)
 cd services/user-service && uv run pytest tests/ -v
 
-# Transaction service tests
+# Transaction service tests (104 tests)
 cd services/transaction-service && uv run pytest tests/ -v
 
 # E2E tests (requires docker compose up)
@@ -505,11 +586,13 @@ yarn install && yarn dev
 
 | Document | Description |
 |----------|-------------|
-| [INSTALLATION.md](INSTALLATION.md) | Full setup guide with Docker and seeding |
-| [services/monolith/README.md](services/monolith/README.md) | Monolith architecture, router map, consumers |
-| [services/monolith/docs/STRUCTURE.md](services/monolith/docs/STRUCTURE.md) | Hexagonal structure map and bounded contexts |
+| [INSTALLATION.md](INSTALLATION.md) | Full setup guide with Docker, seeding, and bank connection |
+| [services/monolith/README.md](services/monolith/README.md) | Monolith architecture, router map, banking, categorization |
+| [services/monolith/docs/STRUCTURE.md](services/monolith/docs/STRUCTURE.md) | Hexagonal structure map, bounded contexts, SQLAlchemy models |
+| [services/frontend/README.md](services/frontend/README.md) | Frontend architecture, dashboard components, design tokens |
 | [services/user-service/README.md](services/user-service/README.md) | User service API, events, JWT format |
 | [services/transaction-service/README.md](services/transaction-service/README.md) | Transaction service API, UoW pattern, CSV import |
+| [services/ai-service/README.md](services/ai-service/README.md) | Categorization pipeline status and planned extraction |
 | [services/shared/contracts/README.md](services/shared/contracts/README.md) | Shared event contracts (Pydantic models) |
 | [docs/microservice-architecture.mermaid](docs/microservice-architecture.mermaid) | Full architecture diagram (current + future) |
 | [services/monolith/DATABASE_COMPARISON.md](services/monolith/DATABASE_COMPARISON.md) | MySQL vs Elasticsearch vs Neo4j comparison |
@@ -528,18 +611,24 @@ yarn install && yarn dev
 - [x] Monthly budget system with aggregate model
 - [x] Unit of Work pattern for transactional boundaries
 - [x] Architecture fitness tests (import boundary enforcement)
-- [x] 426+ tests (unit, integration, e2e)
+- [x] 530+ tests (unit, integration, frontend, e2e)
 - [x] User-service extraction (PostgreSQL, RabbitMQ events)
 - [x] Transaction-service extraction (PostgreSQL, UoW, CSV import)
 - [x] Event-driven sync (UserSync + AccountCreation consumers)
 - [x] Cross-service JWT compatibility
 - [x] No cross-service foreign key constraints
-- [ ] API Gateway (routing, rate limiting)
-- [ ] Budget service extraction
-- [ ] Analytics service + Elasticsearch
-- [ ] AI categorization service
 - [x] Frontend routing to microservices (categories + transactions via transaction-service, auth via user-service)
 - [x] Transactional outbox pattern (at-least-once delivery, dual-write elimination)
 - [x] Consumer idempotency store (DB-backed `processed_events` with auto-cleanup)
 - [x] Category ownership extracted to transaction-service (with event sync to monolith)
 - [x] Cross-service JWT compatibility (unified token format)
+- [x] Enable Banking integration (PSD2 Open Banking, OAuth flow, transaction sync)
+- [x] Three-level categorization hierarchy (Category, SubCategory, Merchant)
+- [x] Multi-tier categorization pipeline (rule engine + ML/LLM ports)
+- [x] Dashboard with bank connection widget, trend chart, and tier badges
+- [x] Transaction deduplication on bank sync
+- [ ] ML categorizer adapter (train on user-confirmed merchants)
+- [ ] LLM categorizer adapter (GPT/Claude for unknown transactions)
+- [ ] API Gateway (routing, rate limiting)
+- [ ] Budget service extraction
+- [ ] Analytics service + Elasticsearch

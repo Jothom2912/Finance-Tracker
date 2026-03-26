@@ -17,6 +17,12 @@
   letter-spacing: var(--letter-spacing-tight);
 }
 
+/* ── Bank widget spacing ── */
+
+.dashboard-overview-container > .bank-widget {
+  margin-top: 1.25rem;
+}
+
 /* ── Two-column grid ── */
 
 .dashboard-grid {

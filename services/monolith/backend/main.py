@@ -89,6 +89,7 @@ from backend.transaction.adapters.inbound.rest_api import (
 from backend.transaction.adapters.inbound.rest_api import (
     router as transaction_router,
 )
+from backend.banking.presentation.rest_api import router as bank_router
 from backend.user.adapters.inbound.user_api import router as user_router
 
 
@@ -149,6 +150,7 @@ v1.include_router(account_group_router)
 v1.include_router(goal_router)
 v1.include_router(user_router)
 
+v1.include_router(bank_router)
 v1.include_router(dashboard_router)
 v1.include_router(create_graphql_router(), prefix="/graphql")
 
