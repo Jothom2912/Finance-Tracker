@@ -21,6 +21,9 @@ dumps/
 *.sql
 !**/migrations/**/*.sql
 
+# Test output / benchmark results
+baseline_results.txt
+
 # Logs
 *.log
 
