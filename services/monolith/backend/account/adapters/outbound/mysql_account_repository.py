@@ -28,6 +28,7 @@ class MySQLAccountRepository(IAccountRepository):
             name=account.name,
             saldo=account.saldo,
             User_idUser=account.user_id,
+            budget_start_day=account.budget_start_day,
         )
         self._db.add(model)
         self._db.commit()
@@ -39,6 +40,7 @@ class MySQLAccountRepository(IAccountRepository):
 
         model.name = account.name
         model.saldo = account.saldo
+        model.budget_start_day = account.budget_start_day
 
         self._db.commit()
         self._db.refresh(model)
@@ -59,4 +61,5 @@ class MySQLAccountRepository(IAccountRepository):
             name=model.name,
             saldo=float(model.saldo) if model.saldo else 0.0,
             user_id=model.User_idUser,
+            budget_start_day=model.budget_start_day or 1,
         )

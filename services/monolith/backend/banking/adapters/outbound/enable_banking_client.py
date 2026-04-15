@@ -239,6 +239,15 @@ class EnableBankingClient:
         return all_transactions
 
     @staticmethod
+    def _is_reference_number(text: str) -> bool:
+        """Check if text looks like a bank reference number rather than a name."""
+        stripped = text.strip()
+        if not stripped:
+            return True
+        digit_count = sum(c.isdigit() for c in stripped)
+        return len(stripped) > 8 and digit_count / len(stripped) > 0.6
+
+    @staticmethod
     def _parse_transaction(raw: dict[str, Any]) -> BankTransaction:
         """Parse Enable Banking transaction response into BankTransaction."""
         amount_data = raw.get("transaction_amount", {})
@@ -249,16 +258,25 @@ class EnableBankingClient:
         if raw.get("credit_debit_indicator") == "DBIT":
             amount = -abs(amount)
 
-        description_candidates = [
+        creditor = raw.get("creditor_name", "") or (raw.get("creditor") or {}).get("name", "")
+        debtor = raw.get("debtor_name", "") or (raw.get("debtor") or {}).get("name", "")
+        human_name = creditor.strip() or debtor.strip()
+
+        remittance_candidates = [
             raw.get("remittance_information_unstructured", ""),
             (raw.get("remittance_information_unstructured_array") or [""])[0],
             " ".join(raw.get("remittance_information") or []),
-            raw.get("creditor_name", ""),
-            raw.get("debtor_name", ""),
-            (raw.get("creditor") or {}).get("name", ""),
-            (raw.get("debtor") or {}).get("name", ""),
         ]
-        description = next((c.strip() for c in description_candidates if c and c.strip()), "Ukendt")
+        remittance = next((c.strip() for c in remittance_candidates if c and c.strip()), "")
+
+        if human_name and (not remittance or EnableBankingClient._is_reference_number(remittance)):
+            description = human_name
+        elif remittance:
+            description = remittance
+        elif human_name:
+            description = human_name
+        else:
+            description = "Ukendt"
 
         booking_date = raw.get("booking_date", raw.get("value_date", ""))
 
@@ -268,8 +286,8 @@ class EnableBankingClient:
             currency=currency,
             description=description,
             date=booking_date,
-            creditor_name=raw.get("creditor_name", ""),
-            debtor_name=raw.get("debtor_name", ""),
+            creditor_name=creditor,
+            debtor_name=debtor,
             status=raw.get("status", ""),
             raw=raw,
         )

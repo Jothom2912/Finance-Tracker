@@ -138,18 +138,35 @@ def test_base_date_past_valid():
     assert txn.date == past_date
 
 
-# Date: Future Date (INVALID)
-def test_base_date_future_invalid():
+# Date: Future Date (INVALID for TransactionCreate, allowed for TransactionBase/read)
+def test_create_date_future_invalid():
     # Arrange
     future_date = date.today() + timedelta(days=1)
 
     # Act & Assert
     with pytest.raises(ValueError, match="Transaction date cannot be in the future"):
-        TransactionBase(
+        TransactionCreate(
             amount=10.00,
             type=TransactionType.income,
             date=future_date,
+            category_id=1,
         )
+
+
+def test_base_date_future_allowed_for_read():
+    """Bank-synced transactions may have future booking dates."""
+    # Arrange
+    future_date = date.today() + timedelta(days=4)
+
+    # Act
+    txn = TransactionBase(
+        amount=10.00,
+        type=TransactionType.income,
+        date=future_date,
+    )
+
+    # Assert
+    assert txn.date == future_date
 
 
 # TransactionBase — Description Validation

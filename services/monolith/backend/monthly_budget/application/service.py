@@ -31,6 +31,7 @@ from backend.monthly_budget.domain.exceptions import (
     MonthlyBudgetNotFound,
     NoBudgetToCopy,
 )
+from backend.shared.budget_period import budget_period
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +57,17 @@ class MonthlyBudgetService(IMonthlyBudgetService):
             return None
         return self._to_response(budget)
 
-    def get_summary(self, account_id: int, month: int, year: int) -> MonthlyBudgetSummary:
+    def get_summary(
+        self, account_id: int, month: int, year: int, budget_start_day: int = 1
+    ) -> MonthlyBudgetSummary:
         if not account_id:
             raise AccountRequiredForMonthlyBudget()
 
         budget = self._budget_repo.get_by_account_and_period(account_id, month, year)
-        expenses = self._transaction_port.get_expenses_by_category(account_id, month, year)
+        start_date, end_date = budget_period(year, month, budget_start_day)
+        expenses = self._transaction_port.get_expenses_by_category(
+            account_id, start_date, end_date
+        )
         category_names = self._category_port.get_all_names()
 
         items: list[MonthlyBudgetSummaryItem] = []

@@ -8,9 +8,12 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
 from backend.auth import get_account_id_from_headers
+from backend.database.mysql import get_db
 from backend.dependencies import get_monthly_budget_service
+from backend.models.mysql.account import Account as AccountModel
 from backend.monthly_budget.application.dto import (
     CopyBudgetRequest,
     MonthlyBudgetCreate,
@@ -53,10 +56,15 @@ async def get_monthly_budget_summary(
     year: int = Query(..., ge=2000, le=9999),
     service: MonthlyBudgetService = Depends(get_monthly_budget_service),
     account_id: Optional[int] = Depends(get_account_id_from_headers),
+    db: Session = Depends(get_db),
 ):
     """Budget vs. actual spending summary for a month."""
     aid = _require_account(account_id)
-    return service.get_summary(aid, month, year)
+    row = db.query(AccountModel.budget_start_day).filter(
+        AccountModel.idAccount == aid
+    ).first()
+    start_day = (row[0] if row and row[0] else 1)
+    return service.get_summary(aid, month, year, budget_start_day=start_day)
 
 
 # ── CRUD ─────────────────────────────────────────────────────────

@@ -15,7 +15,6 @@ preserving each domain's encapsulation.
 from __future__ import annotations
 
 import logging
-from calendar import monthrange
 from datetime import date
 from typing import Any, Optional
 
@@ -37,7 +36,9 @@ from backend.dependencies import (
     get_transaction_service,
 )
 from backend.goal.application.service import GoalService
+from backend.models.mysql.account import Account as AccountModel
 from backend.monthly_budget.application.service import MonthlyBudgetService
+from backend.shared.budget_period import budget_period, determine_budget_month
 from backend.transaction.application.service import TransactionService
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,7 @@ async def get_graphql_context(
         "monthly_budget_service": get_monthly_budget_service(db),
         "transaction_service": get_transaction_service(db),
         "account_id": account_id,
+        "db": db,
     }
 
 
@@ -176,6 +178,15 @@ def _require_account_id(ctx: dict[str, Any]) -> int:
     if not account_id:
         raise ValueError("Account ID required. Send Authorization and/or X-Account-ID header.")
     return account_id
+
+
+def _get_budget_start_day(ctx: dict[str, Any], account_id: int) -> int:
+    """Look up the account's configured budget start day."""
+    db: Session = ctx["db"]
+    row = db.query(AccountModel.budget_start_day).filter(
+        AccountModel.idAccount == account_id
+    ).first()
+    return (row[0] if row and row[0] else 1)
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +227,7 @@ class Query:
             average_monthly_expenses=result.average_monthly_expenses,
         )
 
-    @strawberry.field(description="Monthly expense totals over a period")
+    @strawberry.field(description="Monthly expense totals over a period (respects budget start day)")
     def expenses_by_month(
         self,
         info: Info,
@@ -226,11 +237,13 @@ class Query:
         ctx = info.context
         account_id = _require_account_id(ctx)
         service: AnalyticsService = ctx["analytics_service"]
+        start_day = _get_budget_start_day(ctx, account_id)
 
         results = service.get_expenses_by_month(
             account_id=account_id,
             start_date=start_date,
             end_date=end_date,
+            budget_start_day=start_day,
         )
         return [MonthlyExpensesType(month=r["month"], total_expenses=r["total_expenses"]) for r in results]
 
@@ -244,8 +257,11 @@ class Query:
         ctx = info.context
         account_id = _require_account_id(ctx)
         mb_service: MonthlyBudgetService = ctx["monthly_budget_service"]
+        start_day = _get_budget_start_day(ctx, account_id)
 
-        result = mb_service.get_summary(account_id=account_id, month=month, year=year)
+        result = mb_service.get_summary(
+            account_id=account_id, month=month, year=year, budget_start_day=start_day
+        )
         return BudgetSummaryType(
             month=str(result.month).zfill(2),
             year=str(result.year),
@@ -266,16 +282,16 @@ class Query:
             over_budget_count=result.over_budget_count,
         )
 
-    @strawberry.field(description="Financial overview for the current calendar month with trend vs previous month")
+    @strawberry.field(description="Financial overview for the current budget month with trend vs previous month")
     def current_month_overview(self, info: Info) -> CurrentMonthOverviewType:
         ctx = info.context
         account_id = _require_account_id(ctx)
         service: AnalyticsService = ctx["analytics_service"]
+        start_day = _get_budget_start_day(ctx, account_id)
 
         today = date.today()
-        start = date(today.year, today.month, 1)
-        _, last_day = monthrange(today.year, today.month)
-        end = date(today.year, today.month, last_day)
+        cur_year, cur_month = determine_budget_month(today, start_day)
+        start, end = budget_period(cur_year, cur_month, start_day)
 
         result = service.get_financial_overview(
             account_id=account_id,
@@ -283,11 +299,9 @@ class Query:
             end_date=end,
         )
 
-        prev_year = today.year if today.month > 1 else today.year - 1
-        prev_month = today.month - 1 if today.month > 1 else 12
-        prev_start = date(prev_year, prev_month, 1)
-        _, prev_last_day = monthrange(prev_year, prev_month)
-        prev_end = date(prev_year, prev_month, prev_last_day)
+        prev_month = cur_month - 1 if cur_month > 1 else 12
+        prev_year = cur_year if cur_month > 1 else cur_year - 1
+        prev_start, prev_end = budget_period(prev_year, prev_month, start_day)
 
         prev_result = service.get_financial_overview(
             account_id=account_id,
@@ -356,10 +370,9 @@ class Query:
         ctx = info.context
         account_id = _require_account_id(ctx)
         service: AnalyticsService = ctx["analytics_service"]
+        start_day = _get_budget_start_day(ctx, account_id)
 
-        start = date(year, month, 1)
-        _, last_day = monthrange(year, month)
-        end = date(year, month, last_day)
+        start, end = budget_period(year, month, start_day)
 
         result = service.get_financial_overview(account_id=account_id, start_date=start, end_date=end)
 

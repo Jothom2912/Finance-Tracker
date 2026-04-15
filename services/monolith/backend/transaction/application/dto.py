@@ -71,14 +71,6 @@ class TransactionBase(BaseModel):
                         raise ValueError(f"Invalid date format: {v}")
         return v
 
-    @field_validator("date")
-    @classmethod
-    def validate_date(cls, v: date_type) -> date_type:
-        """BVA: Transaction date cannot be in the future."""
-        if v > date_type.today():
-            raise ValueError(f"Transaction date cannot be in the future. Got: {v}, Today: {date_type.today()}")
-        return v
-
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
@@ -90,6 +82,14 @@ class TransactionCreate(TransactionBase):
 
     category_id: int = Field(..., validation_alias="category_id", serialization_alias="Category_idCategory")
     account_id: Optional[int] = Field(None, validation_alias="account_id", serialization_alias="Account_idAccount")
+
+    @field_validator("date")
+    @classmethod
+    def validate_date_not_future(cls, v: date_type) -> date_type:
+        """BVA: Transaction date cannot be in the future when creating manually."""
+        if v > date_type.today():
+            raise ValueError(f"Transaction date cannot be in the future. Got: {v}, Today: {date_type.today()}")
+        return v
 
 
 class Transaction(TransactionBase):

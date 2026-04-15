@@ -2,7 +2,10 @@
 Outbound ports (driven adapters) for MonthlyBudget bounded context.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from datetime import date
 from typing import Optional
 
 from backend.monthly_budget.domain.entities import MonthlyBudget
@@ -36,8 +39,10 @@ class ITransactionPort(ABC):
     """Anti-corruption port for reading expense data from transactions."""
 
     @abstractmethod
-    def get_expenses_by_category(self, account_id: int, month: int, year: int) -> dict[int, float]:
-        """Return {category_id: total_spent} for the given period."""
+    def get_expenses_by_category(
+        self, account_id: int, start_date: date, end_date: date
+    ) -> dict[int, float]:
+        """Return {category_id: total_spent} for the given date range (inclusive)."""
         pass
 
 

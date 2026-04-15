@@ -113,18 +113,41 @@ class TestParseTransaction:
 
         assert txn.description == "Spotify AB"
 
-    def test_description_priority_order(self) -> None:
-        """remittance_information_unstructured takes priority over array."""
+    def test_readable_remittance_takes_priority_over_creditor(self) -> None:
+        """Human-readable remittance info is preferred when not a reference number."""
         raw = {
             "transaction_amount": {"amount": "50.00", "currency": "DKK"},
-            "remittance_information_unstructured": "Primary description",
-            "remittance_information": ["Fallback description"],
+            "remittance_information_unstructured": "MobilePay Netto",
             "creditor_name": "Creditor fallback",
             "booking_date": "2026-03-20",
         }
         txn = EnableBankingClient._parse_transaction(raw)
 
-        assert txn.description == "Primary description"
+        assert txn.description == "MobilePay Netto"
+
+    def test_creditor_name_preferred_over_reference_number(self) -> None:
+        """When remittance is a bank reference number, use creditor_name instead."""
+        raw = {
+            "transaction_amount": {"amount": "150.00", "currency": "DKK"},
+            "credit_debit_indicator": "DBIT",
+            "remittance_information_unstructured": "74383766092800147159354",
+            "creditor_name": "Netto Koebenhavn",
+            "booking_date": "2026-03-20",
+        }
+        txn = EnableBankingClient._parse_transaction(raw)
+
+        assert txn.description == "Netto Koebenhavn"
+
+    def test_reference_number_used_when_no_creditor_name(self) -> None:
+        """Fall back to reference number if no human-readable name exists."""
+        raw = {
+            "transaction_amount": {"amount": "65.00", "currency": "DKK"},
+            "remittance_information_unstructured": "74383766092800147159354",
+            "booking_date": "2026-03-20",
+        }
+        txn = EnableBankingClient._parse_transaction(raw)
+
+        assert txn.description == "74383766092800147159354"
 
     def test_defaults_to_dkk_currency(self) -> None:
         raw = {

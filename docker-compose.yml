@@ -62,6 +62,12 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
+      ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_APP_ID}
+      ENABLE_BANKING_KEY_PATH: /app/enablebanking-privat.pem
+      ENABLE_BANKING_REDIRECT_URI: ${ENABLE_BANKING_REDIRECT_URI:-http://localhost:8000/api/v1/bank/callback}
+      ENABLE_BANKING_ENVIRONMENT: ${ENABLE_BANKING_ENVIRONMENT:-production}
+    volumes:
+      - ./enablebanking-privat.pem:/app/enablebanking-privat.pem:ro
     depends_on:
       mysql:
         condition: service_healthy

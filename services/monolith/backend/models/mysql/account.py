@@ -13,6 +13,7 @@ class Account(Base):
     name = Column(String(45), nullable=False)
     saldo = Column(DECIMAL(15, 2), default=0.00, nullable=False)
     User_idUser = Column(Integer, nullable=False, index=True)
+    budget_start_day = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Relationships (no FK to User — user_id is a cross-service reference)
     transactions = relationship("Transaction", back_populates="account", cascade="all, delete-orphan")

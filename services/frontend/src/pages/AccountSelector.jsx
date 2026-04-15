@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { fetchAccounts, createAccount } from '../api/accounts';
+import { fetchAccounts, createAccount, updateAccount } from '../api/accounts';
 import '../styles/AccountSelector.css';
+
+const START_DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export default function AccountSelector() {
   const navigate = useNavigate();
@@ -18,6 +20,25 @@ export default function AccountSelector() {
     localStorage.setItem('account_name', accountName || 'Default');
     navigate('/dashboard');
   }, [navigate]);
+
+  const handleStartDayChange = useCallback(async (account, newDay) => {
+    try {
+      await updateAccount(account.idAccount || account.id, {
+        name: account.name,
+        saldo: account.saldo,
+        budget_start_day: newDay,
+      });
+      setAccounts((prev) =>
+        prev.map((a) =>
+          (a.idAccount || a.id) === (account.idAccount || account.id)
+            ? { ...a, budget_start_day: newDay }
+            : a
+        )
+      );
+    } catch (err) {
+      setError(err.message || 'Kunne ikke opdatere budgetperiode.');
+    }
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -76,14 +97,35 @@ export default function AccountSelector() {
           <div className="accounts-list" data-cy="account-list">
             <h2>Dine konti:</h2>
             {accounts.map((account, index) => (
-              <button
+              <div
                 key={account.idAccount || account.id || `account-${index}`}
-                onClick={() => selectAccount(account.idAccount || account.id, account.name)}
-                className="account-button"
-                data-cy="account-button"
+                className="account-card"
               >
-                {account.name}
-              </button>
+                <button
+                  onClick={() => selectAccount(account.idAccount || account.id, account.name)}
+                  className="account-button"
+                  data-cy="account-button"
+                >
+                  {account.name}
+                </button>
+                <div className="account-settings-row">
+                  <label className="start-day-label">
+                    Budgetperiode starter d.
+                    <select
+                      className="start-day-select"
+                      value={account.budget_start_day ?? 1}
+                      onChange={(e) =>
+                        handleStartDayChange(account, parseInt(e.target.value, 10))
+                      }
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {START_DAY_OPTIONS.map((d) => (
+                        <option key={d} value={d}>{d}.</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
             ))}
           </div>
         )}

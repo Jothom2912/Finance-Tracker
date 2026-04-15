@@ -14,12 +14,14 @@ class Account:
     name: str
     saldo: float
     user_id: int
+    budget_start_day: int = 1
 
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("Account name is required")
         if not self.user_id:
             raise ValueError("User ID is required")
+        self.budget_start_day = max(1, min(28, self.budget_start_day))
 
 
 @dataclass

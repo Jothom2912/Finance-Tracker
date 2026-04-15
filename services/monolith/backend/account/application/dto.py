@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from backend.shared.budget_period import MAX_START_DAY, MIN_START_DAY
 from backend.validation_boundaries import ACCOUNT_BVA, ACCOUNT_GROUP_BVA
 
 
@@ -48,6 +49,12 @@ class AccountBase(BaseModel):
         description="Account name (1-30 characters)",
     )
     saldo: float = Field(default=0.00, description="Current account balance (can be negative or positive)")
+    budget_start_day: int = Field(
+        default=1,
+        ge=MIN_START_DAY,
+        le=MAX_START_DAY,
+        description=f"Day of month when budget period starts ({MIN_START_DAY}-{MAX_START_DAY})",
+    )
 
     @field_validator("name")
     @classmethod

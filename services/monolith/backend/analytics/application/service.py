@@ -97,7 +97,10 @@ class AnalyticsService:
         account_id: int,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        budget_start_day: int = 1,
     ) -> list[dict[str, Any]]:
+        from backend.shared.budget_period import determine_budget_month
+
         if not end_date:
             end_date = date.today()
         if not start_date:
@@ -124,7 +127,8 @@ class AnalyticsService:
             if not tx_date:
                 continue
 
-            key = f"{tx_date.year}-{tx_date.month:02d}"
+            b_year, b_month = determine_budget_month(tx_date, budget_start_day)
+            key = f"{b_year}-{b_month:02d}"
             monthly_expenses[key] = monthly_expenses.get(key, 0.0) + abs(amount)
 
         return [

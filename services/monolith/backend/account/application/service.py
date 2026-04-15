@@ -67,6 +67,7 @@ class AccountService(IAccountService):
             name=data.name,
             saldo=data.saldo,
             user_id=data.User_idUser,
+            budget_start_day=data.budget_start_day,
         )
 
         created = self._account_repo.create(account)
@@ -82,6 +83,7 @@ class AccountService(IAccountService):
             name=data.name,
             saldo=data.saldo,
             user_id=existing.user_id,
+            budget_start_day=data.budget_start_day,
         )
 
         result = self._account_repo.update(updated_account)
@@ -153,6 +155,7 @@ class AccountService(IAccountService):
             name=account.name,
             saldo=account.saldo,
             User_idUser=account.user_id,
+            budget_start_day=account.budget_start_day,
         )
 
     def _group_to_dto(self, group: AccountGroup) -> AccountGroupSchema:
