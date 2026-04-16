@@ -56,6 +56,16 @@ class ITransactionRepository(ABC):
     @abstractmethod
     async def bulk_create(self, transactions: list[dict]) -> list[Transaction]: ...
 
+    @abstractmethod
+    async def find_duplicate(
+        self,
+        user_id: int,
+        account_id: int,
+        tx_date: date,
+        amount: Decimal,
+        description: str | None,
+    ) -> Transaction | None: ...
+
 
 class IPlannedTransactionRepository(ABC):
     @abstractmethod

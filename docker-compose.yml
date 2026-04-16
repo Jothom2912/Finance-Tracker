@@ -62,6 +62,7 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
+      TRANSACTION_SERVICE_URL: http://transaction-service:8002
       ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_APP_ID}
       ENABLE_BANKING_KEY_PATH: /app/enablebanking-privat.pem
       ENABLE_BANKING_REDIRECT_URI: ${ENABLE_BANKING_REDIRECT_URI:-http://localhost:8000/api/v1/bank/callback}
@@ -73,6 +74,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      transaction-service:
+        condition: service_started
 
   user-service:
     build:

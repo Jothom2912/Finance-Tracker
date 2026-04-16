@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.application.dto import (
+    BulkCreateTransactionDTO,
+    BulkCreateTransactionItemDTO,
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
     TransactionFiltersDTO,
@@ -349,6 +351,113 @@ class TestImportCSV:
         assert result.skipped == 1
         uow.outbox.add_batch.assert_not_awaited()
         uow.commit.assert_not_awaited()
+
+
+def _bulk_item(**overrides) -> BulkCreateTransactionItemDTO:  # type: ignore[no-untyped-def]
+    defaults = {
+        "account_id": 100,
+        "account_name": "Main Account",
+        "category_id": 5,
+        "category_name": "Food",
+        "amount": Decimal("49.99"),
+        "transaction_type": TransactionType.EXPENSE,
+        "description": "Groceries",
+        "date": date(2026, 3, 1),
+    }
+    defaults.update(overrides)
+    return BulkCreateTransactionItemDTO(**defaults)
+
+
+class TestBulkImport:
+    @pytest.mark.asyncio()
+    async def test_all_new_items_imported(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.find_duplicate.return_value = None
+        uow.transactions.bulk_create.return_value = [
+            _make_transaction(id=1),
+            _make_transaction(id=2),
+        ]
+        dto = BulkCreateTransactionDTO(items=[_bulk_item(), _bulk_item()])
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 2
+        assert result.duplicates_skipped == 0
+        assert result.errors == 0
+        assert result.imported_ids == [1, 2]
+        uow.commit.assert_awaited_once()
+        uow.outbox.add_batch.assert_awaited_once()
+
+    @pytest.mark.asyncio()
+    async def test_duplicates_are_skipped(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.find_duplicate.side_effect = [
+            _make_transaction(id=99),
+            None,
+        ]
+        uow.transactions.bulk_create.return_value = [_make_transaction(id=3)]
+        dto = BulkCreateTransactionDTO(
+            items=[_bulk_item(description="Netto"), _bulk_item(description="Føtex")],
+        )
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 1
+        assert result.duplicates_skipped == 1
+        assert result.errors == 0
+        assert result.imported_ids == [3]
+
+        bulk_arg = uow.transactions.bulk_create.call_args[0][0]
+        assert len(bulk_arg) == 1
+        assert bulk_arg[0]["description"] == "Føtex"
+
+    @pytest.mark.asyncio()
+    async def test_skip_duplicates_false_bypasses_lookup(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.bulk_create.return_value = [_make_transaction()]
+        dto = BulkCreateTransactionDTO(items=[_bulk_item()], skip_duplicates=False)
+
+        await service.bulk_import(user_id=10, dto=dto)
+
+        uow.transactions.find_duplicate.assert_not_awaited()
+        uow.transactions.bulk_create.assert_awaited_once()
+
+    @pytest.mark.asyncio()
+    async def test_all_duplicates_still_commits(self) -> None:
+        """If every item is a duplicate we still close the UoW cleanly
+        without calling ``bulk_create`` or writing outbox events."""
+        service, uow = _build_service()
+        uow.transactions.find_duplicate.return_value = _make_transaction()
+        dto = BulkCreateTransactionDTO(items=[_bulk_item(), _bulk_item()])
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 0
+        assert result.duplicates_skipped == 2
+        uow.transactions.bulk_create.assert_not_awaited()
+        uow.outbox.add_batch.assert_not_awaited()
+        uow.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio()
+    async def test_writes_outbox_events_with_new_fields(self) -> None:
+        """Bulk-import outbox events must include tx_date,
+        transaction_type and category_id — the enriched v1 payload
+        consumed by TransactionSyncConsumer.
+        """
+        service, uow = _build_service()
+        uow.transactions.find_duplicate.return_value = None
+        uow.transactions.bulk_create.return_value = [_make_transaction()]
+        dto = BulkCreateTransactionDTO(items=[_bulk_item()])
+
+        await service.bulk_import(user_id=10, dto=dto)
+
+        batch_arg = uow.outbox.add_batch.call_args[0][0]
+        event, agg_type, agg_id = batch_arg[0]
+        assert event.event_type == "transaction.created"
+        assert event.transaction_type == "expense"
+        assert event.tx_date == date(2026, 3, 1)
+        assert event.category_id == 5
+        assert event.user_id == 10
 
 
 class TestCreatePlanned:

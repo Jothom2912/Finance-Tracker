@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from app.application.dto import (
+    BulkCreateResultDTO,
+    BulkCreateTransactionDTO,
     CategoryResponseDTO,
     CreateCategoryDTO,
     CreatePlannedTransactionDTO,
@@ -56,6 +58,11 @@ class ITransactionService(ABC):
 
     @abstractmethod
     async def import_csv(self, user_id: int, csv_content: str) -> CSVImportResultDTO: ...
+
+    @abstractmethod
+    async def bulk_import(
+        self, user_id: int, dto: BulkCreateTransactionDTO,
+    ) -> BulkCreateResultDTO: ...
 
     @abstractmethod
     async def create_planned(self, user_id: int, dto: CreatePlannedTransactionDTO) -> PlannedTransactionResponse: ...

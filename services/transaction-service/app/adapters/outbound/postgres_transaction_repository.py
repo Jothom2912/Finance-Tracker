@@ -134,6 +134,29 @@ class PostgresTransactionRepository(ITransactionRepository):
         await self._session.flush()
         return True
 
+    async def find_duplicate(
+        self,
+        user_id: int,
+        account_id: int,
+        tx_date: date,
+        amount: Decimal,
+        description: str | None,
+    ) -> Transaction | None:
+        """Look up an existing transaction matching the bank-sync
+        dedup key ``(user_id, account_id, date, amount, description)``.
+        Returns the first match or ``None``.
+        """
+        stmt = select(TransactionModel).where(
+            TransactionModel.user_id == user_id,
+            TransactionModel.account_id == account_id,
+            TransactionModel.date == tx_date,
+            TransactionModel.amount == amount,
+            TransactionModel.description == description,
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalars().first()
+        return self._to_entity(model) if model else None
+
     async def bulk_create(self, transactions: list[dict]) -> list[Transaction]:
         models = []
         for tx in transactions:

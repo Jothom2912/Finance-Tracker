@@ -58,7 +58,7 @@ See `docs/STRUCTURE.md` for the full structure map.
 ### Active domains (still in monolith)
 
 - `category` — three-level hierarchy (Category / SubCategory / Merchant) + categorization pipeline. Category write ownership lives in `transaction-service`; this domain reads the projected MySQL copy
-- `banking` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync, deduplication). Still writes bank transactions directly to the MySQL `Transaction` table — milestone 3 will route these through `transaction-service`
+- `banking` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync). Bank-synced transactions are forwarded to `transaction-service` via HTTP (`POST /api/v1/transactions/bulk`); deduplication and persistence happen there, and the MySQL projection is populated via events
 - `budget` — legacy per-category budget CRUD + summary analytics
 - `monthly_budget` — aggregate-based monthly budgets with budget lines, summary, and copy
 - `analytics` — dashboard overview, expenses-by-month, budget summary, GraphQL read gateway. Reads the MySQL transaction projection populated by `TransactionSyncConsumer`
@@ -136,6 +136,8 @@ All config is loaded from `backend/config.py` via environment variables.
 | `ENABLE_BANKING_KEY_PATH` | Path to PEM private key file | `./enablebanking-sandbox.pem` |
 | `ENABLE_BANKING_REDIRECT_URI` | OAuth redirect URI | `http://localhost:8000/api/v1/bank/callback` |
 | `ENABLE_BANKING_ENVIRONMENT` | `sandbox` or `production` | `sandbox` |
+| `TRANSACTION_SERVICE_URL` | Base URL for transaction-service (used by banking bulk-import) | `http://transaction-service:8002` |
+| `TRANSACTION_SERVICE_TIMEOUT` | HTTP timeout in seconds | `10` |
 
 See `example.env` for the full list with descriptions.
 

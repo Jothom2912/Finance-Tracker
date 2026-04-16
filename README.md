@@ -138,16 +138,21 @@ sequenceDiagram
     User->>API: POST /bank/connections/{id}/sync
     API->>EB: Fetch transactions
     EB-->>API: Raw transactions
-    API->>API: Deduplicate + categorize
-    API->>DB: Store new transactions
+    API->>API: Categorize locally (rule engine)
+    API->>TS: POST /api/v1/transactions/bulk (service JWT)
+    TS->>TS: Dedupe + persist + outbox events
+    TS-->>API: {imported, duplicates_skipped}
+    TS-->>RMQ: transaction.created events
+    RMQ-->>DB: TransactionSyncConsumer projects into MySQL
     API-->>User: "12 new, 3 duplicates"
 ```
 
 The bank sync flow:
 1. **Connect** - User authorizes via their bank's OAuth login (PSD2 consent)
 2. **Session** - Enable Banking creates a session with access to account data
-3. **Sync** - Transactions are fetched, deduplicated against existing records, and auto-categorized
-4. **Dashboard** - New transactions appear immediately with categorization tier badges
+3. **Sync** - Monolith fetches transactions, categorises them locally, then posts the batch to `transaction-service` over HTTP. The service dedupes, persists and publishes events
+4. **Projection** - `TransactionSyncConsumer` picks up the events and materialises the rows in the monolith's MySQL read model
+5. **Dashboard** - New transactions appear immediately with categorization tier badges
 
 ### Categorization Pipeline
 
@@ -647,7 +652,8 @@ yarn install && yarn dev
 - [x] Transaction deduplication on bank sync
 - [x] TransactionSync projection consumer (transaction.* events → MySQL read model)
 - [x] Removed duplicate transaction/planned-transaction bounded context from monolith (single source of truth in transaction-service)
-- [ ] Banking writes via transaction-service instead of direct MySQL (milestone 3)
+- [x] Banking writes via transaction-service HTTP client — no direct MySQL writes from bank sync
+- [x] `POST /api/v1/transactions/bulk` endpoint with server-side dedup on transaction-service
 - [ ] ML categorizer adapter (train on user-confirmed merchants)
 - [ ] LLM categorizer adapter (GPT/Claude for unknown transactions)
 - [ ] API Gateway (routing, rate limiting)

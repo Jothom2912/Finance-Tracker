@@ -90,6 +90,49 @@ class CSVImportResultDTO(BaseModel):
     errors: list[str]
 
 
+class BulkCreateTransactionItemDTO(BaseModel):
+    """Single transaction in a bulk-create request.
+
+    Identical field set to :class:`CreateTransactionDTO`; kept as a
+    separate class so the bulk endpoint can evolve independently
+    (e.g. carry source-system identifiers for idempotent imports).
+    """
+
+    account_id: int = Field(gt=0)
+    account_name: str = Field(max_length=ACCOUNT_NAME_MAX)
+    category_id: int | None = Field(default=None, gt=0)
+    category_name: str | None = Field(default=None, max_length=CATEGORY_NAME_MAX)
+    amount: Decimal = Field(ge=AMOUNT_MIN, le=AMOUNT_MAX, decimal_places=2)
+    transaction_type: TransactionType
+    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX)
+    date: date
+
+
+class BulkCreateTransactionDTO(BaseModel):
+    """Bulk transaction-import request used by trusted internal
+    producers such as the banking module in the monolith.
+    """
+
+    items: list[BulkCreateTransactionItemDTO] = Field(min_length=1, max_length=500)
+    skip_duplicates: bool = Field(
+        default=True,
+        description=(
+            "If true, items matching an existing transaction on "
+            "(account_id, date, amount, description) are skipped "
+            "rather than creating a duplicate."
+        ),
+    )
+
+
+class BulkCreateResultDTO(BaseModel):
+    """Outcome of a bulk-import operation."""
+
+    imported: int
+    duplicates_skipped: int
+    errors: int
+    imported_ids: list[int] = Field(default_factory=list)
+
+
 class CreatePlannedTransactionDTO(BaseModel):
     account_id: int = Field(gt=0)
     account_name: str = Field(max_length=ACCOUNT_NAME_MAX)

@@ -68,6 +68,19 @@ RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 
 
 # =============================================================================
+# Service-to-service URLs
+# =============================================================================
+
+# Base URL for transaction-service.  Used by the banking module to push
+# bank-synced transactions instead of writing directly to MySQL.
+TRANSACTION_SERVICE_URL = os.getenv(
+    "TRANSACTION_SERVICE_URL", "http://transaction-service:8002"
+)
+# Timeout for HTTP calls to transaction-service (seconds).
+TRANSACTION_SERVICE_TIMEOUT = float(os.getenv("TRANSACTION_SERVICE_TIMEOUT", "10"))
+
+
+# =============================================================================
 # Application / Observability
 # =============================================================================
 
