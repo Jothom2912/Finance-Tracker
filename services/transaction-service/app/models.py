@@ -32,6 +32,12 @@ class TransactionModel(Base):
     transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    # Categorization pipeline metadata (nullable; populated by the
+    # banking module's rule engine today, future ML/LLM adapters
+    # tomorrow).  See migration 004_add_categorization_metadata.
+    subcategory_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    categorization_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    categorization_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now())
 

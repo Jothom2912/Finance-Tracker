@@ -70,6 +70,9 @@ class TransactionService(ITransactionService):
                 transaction_type=dto.transaction_type,
                 description=dto.description,
                 tx_date=dto.date,
+                subcategory_id=dto.subcategory_id,
+                categorization_tier=dto.categorization_tier,
+                categorization_confidence=dto.categorization_confidence,
             )
 
             await self._uow.outbox.add(
@@ -84,6 +87,9 @@ class TransactionService(ITransactionService):
                     category=transaction.category_name or "",
                     description=transaction.description or "",
                     account_name=transaction.account_name or "",
+                    subcategory_id=transaction.subcategory_id,
+                    categorization_tier=transaction.categorization_tier,
+                    categorization_confidence=transaction.categorization_confidence,
                 ),
                 aggregate_type="transaction",
                 aggregate_id=str(transaction.id),
@@ -148,6 +154,9 @@ class TransactionService(ITransactionService):
                     previous_category=previous_category,
                     description=updated.description or "",
                     account_name=updated.account_name or "",
+                    subcategory_id=updated.subcategory_id,
+                    categorization_tier=updated.categorization_tier,
+                    categorization_confidence=updated.categorization_confidence,
                 ),
                 aggregate_type="transaction",
                 aggregate_id=str(updated.id),
@@ -241,6 +250,9 @@ class TransactionService(ITransactionService):
                         category=tx.category_name or "",
                         description=tx.description or "",
                         account_name=tx.account_name or "",
+                        subcategory_id=tx.subcategory_id,
+                        categorization_tier=tx.categorization_tier,
+                        categorization_confidence=tx.categorization_confidence,
                     ),
                     "transaction",
                     str(tx.id),
@@ -293,6 +305,9 @@ class TransactionService(ITransactionService):
                             "transaction_type": item.transaction_type,
                             "description": item.description,
                             "tx_date": item.date,
+                            "subcategory_id": item.subcategory_id,
+                            "categorization_tier": item.categorization_tier,
+                            "categorization_confidence": item.categorization_confidence,
                         }
                     )
                 except Exception:
@@ -323,6 +338,9 @@ class TransactionService(ITransactionService):
                         category=tx.category_name or "",
                         description=tx.description or "",
                         account_name=tx.account_name or "",
+                        subcategory_id=tx.subcategory_id,
+                        categorization_tier=tx.categorization_tier,
+                        categorization_confidence=tx.categorization_confidence,
                     ),
                     "transaction",
                     str(tx.id),

@@ -104,6 +104,29 @@ class TestTransactionCreated:
         session.commit.assert_called_once()
 
     @pytest.mark.asyncio()
+    async def test_persists_categorization_metadata(self) -> None:
+        """Tier/confidence/subcategory_id from the event must land on
+        the MySQL row — this is the last link in the tier-badge chain.
+        """
+        session = MagicMock()
+        session.query.return_value.filter.return_value.first.return_value = None
+        factory = MagicMock(return_value=session)
+
+        consumer = _make_consumer(factory)
+        await consumer.handle(
+            _event_data(
+                subcategory_id=77,
+                categorization_tier="rule",
+                categorization_confidence="high",
+            ),
+        )
+
+        model = session.add.call_args[0][0]
+        assert model.subcategory_id == 77
+        assert model.categorization_tier == "rule"
+        assert model.categorization_confidence == "high"
+
+    @pytest.mark.asyncio()
     async def test_parses_tx_date_as_iso(self) -> None:
         session = MagicMock()
         session.query.return_value.filter.return_value.first.return_value = None

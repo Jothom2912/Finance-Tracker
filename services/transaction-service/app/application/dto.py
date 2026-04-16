@@ -13,6 +13,8 @@ AMOUNT_MAX = Decimal("9999999999.99")
 DESCRIPTION_MAX = 500
 ACCOUNT_NAME_MAX = 100
 CATEGORY_NAME_MAX = 100
+CATEGORIZATION_TIER_MAX = 20
+CATEGORIZATION_CONFIDENCE_MAX = 10
 
 # Alias to prevent collision when a Pydantic field is also named ``date``
 DateType = date
@@ -45,6 +47,11 @@ class CreateTransactionDTO(BaseModel):
     transaction_type: TransactionType
     description: str | None = Field(default=None, max_length=DESCRIPTION_MAX)
     date: date
+    subcategory_id: int | None = Field(default=None, gt=0)
+    categorization_tier: str | None = Field(default=None, max_length=CATEGORIZATION_TIER_MAX)
+    categorization_confidence: str | None = Field(
+        default=None, max_length=CATEGORIZATION_CONFIDENCE_MAX,
+    )
 
 
 class TransactionResponse(BaseModel):
@@ -61,6 +68,9 @@ class TransactionResponse(BaseModel):
     description: str | None
     date: date
     created_at: datetime
+    subcategory_id: int | None = None
+    categorization_tier: str | None = None
+    categorization_confidence: str | None = None
 
 
 class UpdateTransactionDTO(BaseModel):
@@ -106,6 +116,11 @@ class BulkCreateTransactionItemDTO(BaseModel):
     transaction_type: TransactionType
     description: str | None = Field(default=None, max_length=DESCRIPTION_MAX)
     date: date
+    subcategory_id: int | None = Field(default=None, gt=0)
+    categorization_tier: str | None = Field(default=None, max_length=CATEGORIZATION_TIER_MAX)
+    categorization_confidence: str | None = Field(
+        default=None, max_length=CATEGORIZATION_CONFIDENCE_MAX,
+    )
 
 
 class BulkCreateTransactionDTO(BaseModel):

@@ -278,11 +278,15 @@ class BankingService:
     ) -> BulkTransactionItem:
         """Translate a raw bank transaction to the shape expected by
         transaction-service, running the local rule-engine
-        categoriser so ``category_id`` is populated before upload.
+        categoriser so ``category_id`` and pipeline metadata are
+        populated before upload.
         """
         tx_type = "income" if bank_txn.amount >= 0 else "expense"
-        category_id = None
+        category_id: int | None = None
         category_name: str | None = None
+        subcategory_id: int | None = None
+        categorization_tier: str | None = None
+        categorization_confidence: str | None = None
 
         if self._categorization is not None:
             output = self._categorization.categorize(
@@ -292,6 +296,9 @@ class BankingService:
                 )
             )
             category_id = output.result.category_id
+            subcategory_id = output.result.subcategory_id
+            categorization_tier = output.result.tier.value
+            categorization_confidence = output.result.confidence.value
 
         if category_id is None:
             fallback = (
@@ -318,6 +325,9 @@ class BankingService:
             category_id=category_id,
             category_name=category_name,
             description=bank_txn.description,
+            subcategory_id=subcategory_id,
+            categorization_tier=categorization_tier,
+            categorization_confidence=categorization_confidence,
         )
 
     def _resolve_user_id(self, account_id: int) -> int:

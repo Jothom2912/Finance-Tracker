@@ -43,6 +43,12 @@ class BulkTransactionItem:
     category_id: int | None = None
     category_name: str | None = None
     description: str | None = None
+    # Categorization-pipeline metadata.  Banking runs the rule engine
+    # locally before sending the batch, then hands the labels through
+    # so they survive into the projection (tier badges on dashboard).
+    subcategory_id: int | None = None
+    categorization_tier: str | None = None
+    categorization_confidence: str | None = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +130,9 @@ class TransactionServiceClient:
                     "category_id": item.category_id,
                     "category_name": item.category_name,
                     "description": item.description,
+                    "subcategory_id": item.subcategory_id,
+                    "categorization_tier": item.categorization_tier,
+                    "categorization_confidence": item.categorization_confidence,
                 }
                 for item in items
             ],

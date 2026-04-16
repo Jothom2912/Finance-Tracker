@@ -30,6 +30,9 @@ class ITransactionRepository(ABC):
         transaction_type: TransactionType,
         description: str | None,
         tx_date: date,
+        subcategory_id: int | None = None,
+        categorization_tier: str | None = None,
+        categorization_confidence: str | None = None,
     ) -> Transaction: ...
 
     @abstractmethod

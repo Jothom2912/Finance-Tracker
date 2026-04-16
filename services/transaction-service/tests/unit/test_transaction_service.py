@@ -124,6 +124,44 @@ class TestCreateTransaction:
         assert call_kwargs["aggregate_id"] == "1"
 
     @pytest.mark.asyncio()
+    async def test_categorization_metadata_forwarded_on_create(self) -> None:
+        """Create-transaction DTOs may carry pipeline metadata from
+        the rule-engine categoriser; both the repository call and
+        the outbox event must carry them through.
+        """
+        service, uow = _build_service()
+        uow.transactions.create.return_value = _make_transaction(
+            subcategory_id=42,
+            categorization_tier="rule",
+            categorization_confidence="high",
+        )
+        dto = CreateTransactionDTO(
+            account_id=100,
+            account_name="Main Account",
+            category_id=5,
+            category_name="Food",
+            amount=Decimal("49.99"),
+            transaction_type=TransactionType.EXPENSE,
+            description="Groceries",
+            date=date(2026, 3, 1),
+            subcategory_id=42,
+            categorization_tier="rule",
+            categorization_confidence="high",
+        )
+
+        await service.create_transaction(user_id=10, dto=dto)
+
+        repo_kwargs = uow.transactions.create.call_args.kwargs
+        assert repo_kwargs["subcategory_id"] == 42
+        assert repo_kwargs["categorization_tier"] == "rule"
+        assert repo_kwargs["categorization_confidence"] == "high"
+
+        event = uow.outbox.add.call_args.kwargs["event"]
+        assert event.subcategory_id == 42
+        assert event.categorization_tier == "rule"
+        assert event.categorization_confidence == "high"
+
+    @pytest.mark.asyncio()
     async def test_outbox_before_commit(self) -> None:
         """Outbox add and commit happen inside same UoW context."""
         service, uow = _build_service()
@@ -458,6 +496,43 @@ class TestBulkImport:
         assert event.tx_date == date(2026, 3, 1)
         assert event.category_id == 5
         assert event.user_id == 10
+
+    @pytest.mark.asyncio()
+    async def test_categorization_metadata_propagates_to_repo_and_event(self) -> None:
+        """Tier/confidence/subcategory_id from the request reach both
+        the persistence layer and the outbox event (tier-badge data
+        round-trip all the way to the MySQL projection).
+        """
+        service, uow = _build_service()
+        uow.transactions.find_duplicate.return_value = None
+        uow.transactions.bulk_create.return_value = [
+            _make_transaction(
+                subcategory_id=77,
+                categorization_tier="rule",
+                categorization_confidence="high",
+            ),
+        ]
+        dto = BulkCreateTransactionDTO(
+            items=[
+                _bulk_item(
+                    subcategory_id=77,
+                    categorization_tier="rule",
+                    categorization_confidence="high",
+                ),
+            ],
+        )
+
+        await service.bulk_import(user_id=10, dto=dto)
+
+        row = uow.transactions.bulk_create.call_args[0][0][0]
+        assert row["subcategory_id"] == 77
+        assert row["categorization_tier"] == "rule"
+        assert row["categorization_confidence"] == "high"
+
+        event, _, _ = uow.outbox.add_batch.call_args[0][0][0]
+        assert event.subcategory_id == 77
+        assert event.categorization_tier == "rule"
+        assert event.categorization_confidence == "high"
 
 
 class TestCreatePlanned:

@@ -36,6 +36,13 @@ class Transaction:
     description: str | None
     date: date
     created_at: datetime
+    # Categorization pipeline metadata.  All optional because
+    # transactions may arrive without being categorized (e.g. direct
+    # manual entry without a category match) and historical rows
+    # predate the pipeline.
+    subcategory_id: int | None = None
+    categorization_tier: str | None = None
+    categorization_confidence: str | None = None
 
 
 @dataclass(frozen=True)

@@ -216,3 +216,52 @@ class TestSyncTransactions:
         items = list(tx_client.bulk_import.call_args.kwargs["items"])
         assert items[0].category_id == 7
         assert items[0].category_name == "Mad"
+
+    def test_pipeline_metadata_reaches_http_client(self) -> None:
+        """Rule-engine tier + confidence + subcategory_id must survive
+        the hand-off to transaction-service so the projection can
+        surface them as dashboard tier-badges.
+        """
+        from backend.category.domain.value_objects import (
+            CategorizationResult,
+            CategorizationTier,
+            Confidence,
+        )
+
+        categorization = MagicMock()
+        categorization.categorize.return_value = MagicMock(
+            result=CategorizationResult(
+                category_id=7,
+                subcategory_id=42,
+                merchant_id=None,
+                tier=CategorizationTier.RULE,
+                confidence=Confidence.HIGH,
+            ),
+        )
+        service, _, tx_client = _make_banking_service(
+            [_bank_tx(description="Netto")],
+            categorization=categorization,
+        )
+
+        service.sync_transactions(connection_id=10)
+
+        item = list(tx_client.bulk_import.call_args.kwargs["items"])[0]
+        assert item.subcategory_id == 42
+        assert item.categorization_tier == "rule"
+        assert item.categorization_confidence == "high"
+
+    def test_no_pipeline_metadata_when_categorizer_absent(self) -> None:
+        """When categorization service isn't wired, the three fields
+        stay None — we don't fabricate tier information.
+        """
+        service, _, tx_client = _make_banking_service(
+            [_bank_tx()],
+            categorization=None,
+        )
+
+        service.sync_transactions(connection_id=10)
+
+        item = list(tx_client.bulk_import.call_args.kwargs["items"])[0]
+        assert item.subcategory_id is None
+        assert item.categorization_tier is None
+        assert item.categorization_confidence is None

@@ -26,6 +26,9 @@ class PostgresTransactionRepository(ITransactionRepository):
         transaction_type: TransactionType,
         description: str | None,
         tx_date: date,
+        subcategory_id: int | None = None,
+        categorization_tier: str | None = None,
+        categorization_confidence: str | None = None,
     ) -> Transaction:
         model = TransactionModel(
             user_id=user_id,
@@ -37,6 +40,9 @@ class PostgresTransactionRepository(ITransactionRepository):
             transaction_type=transaction_type.value,
             description=description,
             date=tx_date,
+            subcategory_id=subcategory_id,
+            categorization_tier=categorization_tier,
+            categorization_confidence=categorization_confidence,
         )
         self._session.add(model)
         await self._session.flush()
@@ -174,6 +180,9 @@ class PostgresTransactionRepository(ITransactionRepository):
                     transaction_type=tx_type,
                     description=tx.get("description"),
                     date=tx["tx_date"],
+                    subcategory_id=tx.get("subcategory_id"),
+                    categorization_tier=tx.get("categorization_tier"),
+                    categorization_confidence=tx.get("categorization_confidence"),
                 )
             )
         self._session.add_all(models)
@@ -196,4 +205,7 @@ class PostgresTransactionRepository(ITransactionRepository):
             description=model.description,
             date=model.date,
             created_at=model.created_at,
+            subcategory_id=model.subcategory_id,
+            categorization_tier=model.categorization_tier,
+            categorization_confidence=model.categorization_confidence,
         )
