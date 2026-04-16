@@ -51,6 +51,7 @@ This starts all services:
 | UserSync Consumer | — | Syncs users from events to MySQL |
 | AccountCreation Consumer | — | Creates default accounts from events |
 | CategorySync Consumer | — | Syncs categories from transaction-service to MySQL |
+| TransactionSync Consumer | — | Projects transaction events into MySQL read model |
 
 **Wait 30-60 seconds** for health checks to pass.
 
@@ -100,10 +101,12 @@ graph LR
     RMQ -->|user.created| USC[UserSync<br/>Consumer]
     RMQ -->|user.created| ACC[AccountCreation<br/>Consumer]
     RMQ -->|category.*| CSC[CategorySync<br/>Consumer]
+    RMQ -->|transaction.*| TSC[TransactionSync<br/>Consumer]
 
     USC -->|INSERT User| MYSQL[(MySQL)]
     ACC -->|INSERT Account| MYSQL
     CSC -->|SYNC Category| MYSQL
+    TSC -->|UPSERT Transaction| MYSQL
 
     MON --> MYSQL
 ```
@@ -242,6 +245,7 @@ sequenceDiagram
 | **UserSync Consumer** | — | MySQL | Sync user data from events to MySQL User table |
 | **AccountCreation Consumer** | — | MySQL | Create default account from user.created events |
 | **CategorySync Consumer** | — | MySQL | Sync categories from transaction-service to MySQL |
+| **TransactionSync Consumer** | — | MySQL | Project transaction events into MySQL so analytics/budget/dashboard see microservice writes |
 
 ### Future Services (not yet extracted)
 
@@ -423,13 +427,26 @@ sequenceDiagram
 | Event | Producer | Published via | Consumers | Routing Key |
 |-------|----------|---------------|-----------|-------------|
 | `UserCreatedEvent` | user-service | Outbox worker | UserSyncConsumer, AccountCreationConsumer | `user.created` |
-| `TransactionCreatedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.created` |
-| `TransactionUpdatedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.updated` |
-| `TransactionDeletedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.deleted` |
+| `TransactionCreatedEvent` | transaction-service | Outbox worker | TransactionSyncConsumer | `transaction.created` |
+| `TransactionUpdatedEvent` | transaction-service | Outbox worker | TransactionSyncConsumer | `transaction.updated` |
+| `TransactionDeletedEvent` | transaction-service | Outbox worker | TransactionSyncConsumer | `transaction.deleted` |
 | `CategoryCreatedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.created` |
 | `CategoryUpdatedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.updated` |
 | `CategoryDeletedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.deleted` |
 | `AccountCreatedEvent` | AccountCreationConsumer | Direct publish | (future consumers) | `account.created` |
+
+### Projecting transactions into MySQL
+
+Historic transactions from `transaction-service` (PostgreSQL) can be replayed into the monolith MySQL read model via a one-off backfill. Run from the repo root with the compose stack running:
+
+```bash
+cd services/transaction-service
+uv run python ../../scripts/backfill_transaction_projection.py \
+    --database-url postgresql+asyncpg://transaction_service:transaction_service_pass@localhost:5434/transactions \
+    --rabbitmq-url amqp://guest:guest@localhost:5672/
+```
+
+The script iterates over every row in transaction-service and publishes synthetic `transaction.created` events. The running `TransactionSyncConsumer` treats them as upserts, so the script is safe to re-run.
 
 ### Transactional Outbox (Event Publishing)
 
@@ -567,6 +584,7 @@ cd services/transaction-service && make dev
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
 uv run python -m backend.consumers.worker --consumer category-sync
+uv run python -m backend.consumers.worker --consumer transaction-sync
 
 # Frontend
 cd services/frontend

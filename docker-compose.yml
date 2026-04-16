@@ -140,6 +140,38 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  category-sync-consumer:
+    build:
+      context: .
+      dockerfile: services/monolith/Dockerfile
+    command: ["python", "-m", "backend.consumers.worker", "--consumer", "category-sync"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
+      SECRET_KEY: dev-secret-key-change-in-production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  transaction-sync-consumer:
+    build:
+      context: .
+      dockerfile: services/monolith/Dockerfile
+    command: ["python", "-m", "backend.consumers.worker", "--consumer", "transaction-sync"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
+      SECRET_KEY: dev-secret-key-change-in-production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   postgres-transactions:
     image: postgres:16
     environment:
