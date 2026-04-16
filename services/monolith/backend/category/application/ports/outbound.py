@@ -26,7 +26,12 @@ from backend.category.domain.value_objects import CategorizationResult, Merchant
 
 
 class ICategoryRepository(ABC):
-    """Port for top-level category persistence."""
+    """Read-only port over the Category projection.
+
+    Writes to the Category projection are the sole responsibility
+    of :class:`backend.consumers.category_sync.CategorySyncConsumer`
+    in response to events from ``transaction-service``.
+    """
 
     @abstractmethod
     def get_by_id(self, category_id: int) -> Optional[Category]:
@@ -38,18 +43,6 @@ class ICategoryRepository(ABC):
 
     @abstractmethod
     def get_all(self) -> list[Category]:
-        pass
-
-    @abstractmethod
-    def create(self, category: Category) -> Category:
-        pass
-
-    @abstractmethod
-    def update(self, category: Category) -> Category:
-        pass
-
-    @abstractmethod
-    def delete(self, category_id: int) -> bool:
         pass
 
 

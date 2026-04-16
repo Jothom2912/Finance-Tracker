@@ -1,20 +1,17 @@
-"""
-Unit tests for CategoryService business logic.
+"""Unit tests for the read-only CategoryService.
 
-Updated for hexagonal architecture (backend.category.*).
+Category write ownership was extracted to transaction-service in
+milestone 2 and confirmed read-only by milestone 4.  Tests for
+``create_category``, ``update_category`` and ``delete_category``
+have been removed — those live in transaction-service.
 """
 
 from unittest.mock import Mock
 
 import pytest
-from backend.category.application.dto import CategoryCreate
 from backend.category.application.ports.outbound import ICategoryRepository
 from backend.category.application.service import CategoryService
 from backend.category.domain.entities import Category as CategoryEntity
-from backend.category.domain.exceptions import (
-    DuplicateCategoryName,
-    DuplicateCategoryNameOnUpdate,
-)
 from backend.category.domain.value_objects import CategoryType
 
 # ============================================================================
@@ -124,110 +121,7 @@ class TestListCategories:
         assert result == []
 
 
-# ============================================================================
-# create_category
-# ============================================================================
-
-
-class TestCreateCategory:
-    def test_creates_category_successfully(self, service, mock_category_repo):
-        mock_category_repo.get_by_name.return_value = None
-        mock_category_repo.create.return_value = _category_entity(1, "Mad")
-        category = CategoryCreate(name="Mad", type="expense")
-
-        result = service.create_category(category)
-
-        assert result.name == "Mad"
-        mock_category_repo.create.assert_called_once()
-
-    def test_raises_when_duplicate_name(self, service, mock_category_repo):
-        mock_category_repo.get_by_name.return_value = _category_entity(1, "Mad")
-        category = CategoryCreate(name="Mad", type="expense")
-
-        with pytest.raises(DuplicateCategoryName):
-            service.create_category(category)
-
-    def test_does_not_call_create_on_duplicate(self, service, mock_category_repo):
-        mock_category_repo.get_by_name.return_value = _category_entity(1, "Mad")
-        category = CategoryCreate(name="Mad", type="expense")
-
-        with pytest.raises(DuplicateCategoryName):
-            service.create_category(category)
-
-        mock_category_repo.create.assert_not_called()
-
-    def test_converts_type_enum_to_string(self, service, mock_category_repo):
-        mock_category_repo.get_by_name.return_value = None
-        mock_category_repo.create.return_value = _category_entity(1, "Løn", CategoryType.INCOME)
-        category = CategoryCreate(name="Løn", type="income")
-
-        service.create_category(category)
-
-        call_data = mock_category_repo.create.call_args[0][0]
-        assert call_data.type == "income"
-
-
-# ============================================================================
-# update_category
-# ============================================================================
-
-
-class TestUpdateCategory:
-    def test_returns_none_when_not_found(self, service, mock_category_repo):
-        mock_category_repo.get_by_id.return_value = None
-        data = CategoryCreate(name="Updated", type="expense")
-
-        result = service.update_category(category_id=999, dto=data)
-
-        assert result is None
-
-    def test_updates_successfully(self, service, mock_category_repo):
-        mock_category_repo.get_by_id.return_value = _category_entity(1, "Mad")
-        mock_category_repo.get_by_name.return_value = None
-        mock_category_repo.update.return_value = _category_entity(1, "Dagligvarer")
-        data = CategoryCreate(name="Dagligvarer", type="expense")
-
-        result = service.update_category(category_id=1, dto=data)
-
-        assert result.name == "Dagligvarer"
-
-    def test_raises_when_name_conflicts_with_other(self, service, mock_category_repo):
-        mock_category_repo.get_by_id.return_value = _category_entity(1, "Mad")
-        mock_category_repo.get_by_name.return_value = _category_entity(2, "Transport")
-        data = CategoryCreate(name="Transport", type="expense")
-
-        with pytest.raises(DuplicateCategoryNameOnUpdate):
-            service.update_category(category_id=1, dto=data)
-
-    def test_allows_keeping_same_name(self, service, mock_category_repo):
-        mock_category_repo.get_by_id.return_value = _category_entity(1, "Mad")
-        mock_category_repo.update.return_value = _category_entity(1, "Mad", CategoryType.INCOME)
-        data = CategoryCreate(name="Mad", type="income")  # Same name, different type
-
-        result = service.update_category(category_id=1, dto=data)
-
-        assert result is not None
-
-
-# ============================================================================
-# delete_category
-# ============================================================================
-
-
-class TestDeleteCategory:
-    def test_delegates_to_repository(self, service, mock_category_repo):
-        mock_category_repo.delete.return_value = True
-
-        service.delete_category(category_id=1)
-
-        mock_category_repo.delete.assert_called_once_with(1)
-
-    def test_returns_true_on_success(self, service, mock_category_repo):
-        mock_category_repo.delete.return_value = True
-
-        assert service.delete_category(category_id=1) is True
-
-    def test_returns_false_when_not_found(self, service, mock_category_repo):
-        mock_category_repo.delete.return_value = False
-
-        assert service.delete_category(category_id=999) is False
+# Write-path tests removed in M4: CategoryService no longer exposes
+# create_category / update_category / delete_category.  See
+# services/transaction-service/tests/unit/test_category_service.py
+# for the owning-service equivalents.

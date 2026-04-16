@@ -5,9 +5,22 @@ from .common import DECIMAL, Base, Column, DateTime, ForeignKey, Integer, String
 
 
 class Transaction(Base):
-    """Transaktion model - Registrerer ind- og udgifter"""
+    """Read-only projection of the Transaction aggregate.
+
+    The source of truth lives in ``transaction-service`` (PostgreSQL).
+    This MySQL row is materialised by ``TransactionSyncConsumer`` in
+    response to ``transaction.*`` events from the bus.
+
+    **Do not construct this model outside
+    ``backend/consumers/transaction_sync.py``.**  Writes from
+    application services would create a split-brain with the owning
+    service; reads via ``session.query(Transaction)`` are fine.  This
+    invariant is enforced by
+    ``tests/architecture/test_read_only_projections.py``.
+    """
 
     __tablename__ = "Transaction"
+    __table_args__ = {"info": {"read_only": True, "owned_by": "transaction-service"}}
 
     idTransaction = Column(Integer, primary_key=True, autoincrement=True)
     amount = Column(DECIMAL(15, 2), nullable=False)
