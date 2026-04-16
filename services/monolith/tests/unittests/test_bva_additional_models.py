@@ -96,69 +96,6 @@ def test_user_email_format():
 
 
 # ============================================================================
-# PLANNED TRANSACTION BVA TESTS (4.5)
-# ============================================================================
-
-
-def test_planned_transaction_amount_boundary():
-    """BVA: Amount må IKKE være 0"""
-    from backend.transaction.application.dto import PlannedTransactionsCreate
-
-    today = date.today()
-
-    # 0 - INVALID
-    with pytest.raises(ValidationError):
-        PlannedTransactionsCreate(amount=0, planned_date=today, name="Test")
-
-    # -0.01 - VALID (negative)
-    valid = PlannedTransactionsCreate(amount=-0.01, planned_date=today, name="Test")
-    assert abs(valid.amount - (-0.01)) < 0.001
-
-    # 0.01 - VALID (positive)
-    valid = PlannedTransactionsCreate(amount=0.01, planned_date=today, name="Test")
-    assert abs(valid.amount - 0.01) < 0.001
-
-
-def test_planned_transaction_date_boundary():
-    """BVA: Planned date skal være i dag eller fremtid (ikke fortid)"""
-    from backend.transaction.application.dto import PlannedTransactionsCreate
-
-    today = date.today()
-    yesterday = today - timedelta(days=1)
-    tomorrow = today + timedelta(days=1)
-
-    # Gårsdagens dato - INVALID
-    with pytest.raises(ValidationError) as exc_info:
-        PlannedTransactionsCreate(amount=100, planned_date=yesterday, name="Test")
-    assert "fortiden" in str(exc_info.value).lower()
-
-    # Dagens dato - VALID (grænse)
-    valid = PlannedTransactionsCreate(amount=100, planned_date=today, name="Test")
-    assert valid.planned_date == today
-
-    # Morgendagens dato - VALID
-    valid = PlannedTransactionsCreate(amount=100, planned_date=tomorrow, name="Test")
-    assert valid.planned_date == tomorrow
-
-
-def test_planned_transaction_repeat_interval():
-    """BVA: Repeat interval må være daily, weekly eller monthly"""
-    from backend.transaction.application.dto import PlannedTransactionsCreate
-
-    today = date.today()
-
-    # Valid intervals
-    for interval in ["daily", "weekly", "monthly"]:
-        valid = PlannedTransactionsCreate(amount=100, planned_date=today, repeat_interval=interval, name="Test")
-        assert valid.repeat_interval == interval
-
-    # Invalid intervals
-    for invalid_interval in ["annually", "yearly", "quarterly", "DAILY", ""]:
-        with pytest.raises(ValidationError):
-            PlannedTransactionsCreate(amount=100, planned_date=today, repeat_interval=invalid_interval, name="Test")
-
-
-# ============================================================================
 # ACCOUNT GROUP BVA TESTS (4.7)
 # ============================================================================
 

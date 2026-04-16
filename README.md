@@ -360,17 +360,17 @@ finance-tracker/
 
 ### Monolith (port 8000)
 
+Transactions, planned-transactions and categories are owned by `transaction-service` (port 8002). The monolith keeps a MySQL read-model projection (materialised by `TransactionSyncConsumer`/`CategorySyncConsumer`) but no write endpoints for these resources.
+
 | Method | Path | Description | Auth |
 |--------|------|-------------|------|
-| `*` | `/api/v1/transactions/*` | Transaction CRUD + CSV | Yes |
-| `*` | `/api/v1/categories/*` | Category CRUD | Partial |
 | `*` | `/api/v1/budgets/*` | Legacy budget CRUD | Yes |
 | `*` | `/api/v1/monthly-budgets/*` | Monthly budget CRUD + copy | Yes |
 | `*` | `/api/v1/dashboard/*` | Analytics | Yes |
 | `*` | `/api/v1/accounts/*` | Account CRUD | Yes |
 | `*` | `/api/v1/goals/*` | Goal CRUD | Yes |
 | `*` | `/api/v1/users/*` | User management | Partial |
-| `POST` | `/api/v1/graphql` | GraphQL read gateway | Yes |
+| `POST` | `/api/v1/graphql` | GraphQL read gateway (reads transactions + categories from projection) | Yes |
 | `GET` | `/api/v1/bank/available-banks` | List banks by country | No |
 | `POST` | `/api/v1/bank/connect` | Start bank OAuth flow | No |
 | `GET` | `/api/v1/bank/callback` | OAuth callback from bank | No |
@@ -645,6 +645,9 @@ yarn install && yarn dev
 - [x] Multi-tier categorization pipeline (rule engine + ML/LLM ports)
 - [x] Dashboard with bank connection widget, trend chart, and tier badges
 - [x] Transaction deduplication on bank sync
+- [x] TransactionSync projection consumer (transaction.* events → MySQL read model)
+- [x] Removed duplicate transaction/planned-transaction bounded context from monolith (single source of truth in transaction-service)
+- [ ] Banking writes via transaction-service instead of direct MySQL (milestone 3)
 - [ ] ML categorizer adapter (train on user-confirmed merchants)
 - [ ] LLM categorizer adapter (GPT/Claude for unknown transactions)
 - [ ] API Gateway (routing, rate limiting)

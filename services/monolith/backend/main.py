@@ -83,23 +83,28 @@ from backend.goal.adapters.inbound.goal_api import router as goal_router
 from backend.monthly_budget.adapters.inbound.rest_api import (
     router as monthly_budget_router,
 )
-from backend.transaction.adapters.inbound.rest_api import (
-    planned_router as planned_transaction_router,
-)
-from backend.transaction.adapters.inbound.rest_api import (
-    router as transaction_router,
-)
 from backend.banking.presentation.rest_api import router as bank_router
 from backend.user.adapters.inbound.user_api import router as user_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup and shutdown events."""
-    logger.info("Starting FastAPI application...")
-    from backend.database.mysql import create_db_tables
+    """Lifespan context manager for startup and shutdown events.
 
-    create_db_tables()
+    Skips the MySQL bootstrap when running under pytest — tests
+    manage their own (in-memory) schema via fixtures, and the real
+    MySQL isn't available.  Controlled by ``SKIP_DB_BOOTSTRAP`` or
+    the presence of ``PYTEST_CURRENT_TEST`` in the environment.
+    """
+    logger.info("Starting FastAPI application...")
+    import os
+
+    if os.environ.get("SKIP_DB_BOOTSTRAP") or os.environ.get("PYTEST_CURRENT_TEST"):
+        logger.info("Skipping DB bootstrap (test mode detected)")
+    else:
+        from backend.database.mysql import create_db_tables
+
+        create_db_tables()
     yield
     logger.info("Stopping FastAPI application...")
 
@@ -135,8 +140,9 @@ def health_check():
 
 v1 = APIRouter(prefix="/api/v1")
 
-v1.include_router(transaction_router)
-v1.include_router(planned_transaction_router)
+# Transaction and planned-transaction CRUD now owned by
+# transaction-service (port 8002).  The monolith reads from the
+# MySQL projection (see TransactionSyncConsumer) but never writes.
 
 # Budget summary MUST be included BEFORE CRUD to avoid
 # /budgets/summary being matched by /budgets/{budget_id}

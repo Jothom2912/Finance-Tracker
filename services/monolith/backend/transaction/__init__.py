@@ -1,1 +1,0 @@
-# Transaction bounded context
