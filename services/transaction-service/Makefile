@@ -1,13 +1,15 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev test test-unit test-integration lint format format-check check migrate migrate-down freeze clean
+.PHONY: help install-deps dev test test-unit test-integration test-migrations test-all lint format format-check check migrate migrate-down freeze clean
 
 help: ## Show available targets
 	@printf 'Available targets:\n'
 	@printf '  install-deps        Install all dependencies\n'
 	@printf '  dev                 Start service with hot-reload on port 8002\n'
-	@printf '  test                Run all tests\n'
+	@printf '  test                Run fast tests (unit + integration, excludes Testcontainers)\n'
 	@printf '  test-unit           Run unit tests only\n'
 	@printf '  test-integration    Run integration tests only\n'
+	@printf '  test-migrations     Run Alembic migration tests against real Postgres (requires Docker)\n'
+	@printf '  test-all            Run every test target including Testcontainers migration suite\n'
 	@printf '  lint                Run ruff linter\n'
 	@printf '  format              Auto-format code with ruff\n'
 	@printf '  format-check        Check code formatting\n'
@@ -23,14 +25,19 @@ install-deps: ## Install all dependencies (prod + dev)
 dev: ## Start service with hot-reload on port 8002
 	uv run uvicorn app.main:app --reload --port 8002
 
-test: ## Run all tests
-	uv run pytest tests/ -v
+test: ## Fast suite — unit + existing SQLite integration tests. Excludes migrations/ (Testcontainers, slow, requires Docker).
+	uv run pytest tests/ -v --ignore=tests/migrations
 
 test-unit: ## Run unit tests only
 	uv run pytest tests/unit/ -v
 
 test-integration: ## Run integration tests only
 	uv run pytest tests/integration/ -v
+
+test-migrations: ## Run Alembic migration tests against a real Postgres via Testcontainers (requires Docker running).
+	uv run pytest tests/migrations/ -v
+
+test-all: test test-migrations ## Run every test target. Use before pushing.
 
 lint: ## Run ruff linter
 	uv run ruff check .

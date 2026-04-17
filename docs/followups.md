@@ -4,6 +4,49 @@ Ongoing list of known issues and improvements deferred from active work.
 Not a replacement for an issue tracker — these are items not yet
 formalized. Reference entries from commit messages and ADRs as needed.
 
+## `display_order` missing on API-created categories (2026-04-17)
+
+After migrating category ownership to transaction-service (see
+`docs/retrospective-transaction-ownership.md`), `CategoryCreatedEvent`
+deliberately does not carry `display_order` because it's a monolith-only
+UI-presentation concern.  `CategorySyncConsumer._sync_created` in
+`services/monolith/backend/consumers/category_sync.py` therefore projects
+new categories with MySQL's column default (`display_order=0`).
+
+For the ten default categories this is fine: `seed_categories.py` sets
+their display_order explicitly from `DEFAULT_TAXONOMY`.  For categories
+created later via transaction-service's `POST /api/v1/categories/` API,
+the projected row sorts to the top of the UI list (0 < seeded values
+1–20) rather than appending at the end like the user would expect.
+
+Not a drift bug — projection is consistent — but a latent UX regression
+introduced by the ownership split.  Two plausible fixes:
+
+* Auto-assign `display_order = MAX(display_order) + 1` in the sync
+  consumer when a new category is projected.
+* Expose `display_order` as an optional field on the category API and
+  add it to the event contract, accepting that this elevates a UI
+  concern into the cross-service model.
+
+No action until a user actually creates a new category and notices the
+sort order; quantify the pain before picking a fix.
+
+## Testcontainers Ryuk on Windows / Docker Desktop (2026-04-17)
+
+`services/transaction-service/tests/migrations/conftest.py` sets
+`TESTCONTAINERS_RYUK_DISABLED=true` because the reaper container fails
+to get its port mapping on Docker Desktop for Windows (observed during
+the session that introduced the migration tests).  The trade-off is
+that test containers aren't auto-reaped on an orphaned test run — the
+session-scoped fixture's explicit `container.stop()` handles cleanup
+on normal paths, but a hard pytest crash may leave containers around.
+
+Linux CI is unaffected; this is a local-dev quirk only.  Revisit when
+either (a) a future Testcontainers release fixes the Windows case, or
+(b) the Windows dev workflow produces enough orphaned containers to
+become annoying in practice.
+
+
 ## Categorization fallback rate (2026-04-17)
 
 Bank sync on 2026-04-17 produced 48 fallback-categorizations out of 206

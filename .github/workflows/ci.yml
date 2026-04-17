@@ -113,5 +113,12 @@ jobs:
       - name: Format check
         run: make -C services/transaction-service format-check
 
-      - name: Run tests
+      - name: Run fast tests
         run: make -C services/transaction-service test
+
+      # Testcontainers boots a real Postgres 16 to validate Alembic
+      # migrations 005 + 006.  Kept as a separate step so the fast
+      # suite's failure mode is visible independently and doesn't get
+      # masked by a Docker/Testcontainers infrastructure issue.
+      - name: Run Alembic migration tests (Testcontainers)
+        run: make -C services/transaction-service test-migrations

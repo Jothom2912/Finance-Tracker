@@ -33,6 +33,7 @@ dev = [
     "pytest-asyncio",
     "pytest-cov",
     "httpx",
+    "psycopg2-binary>=2.9.11",
 ]
 
 [tool.uv.sources]
