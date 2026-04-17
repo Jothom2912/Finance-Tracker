@@ -14,6 +14,7 @@ class TransactionType(str, enum.Enum):
 class CategoryType(str, enum.Enum):
     INCOME = "income"
     EXPENSE = "expense"
+    TRANSFER = "transfer"
 
 
 @dataclass(frozen=True)

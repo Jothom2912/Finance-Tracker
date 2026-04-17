@@ -63,10 +63,10 @@ App: http://localhost:3001
 
 ### 5. Seed Database (Optional)
 
-Categories (with subcategories and merchants) are needed before creating transactions or budgets via the monolith:
+The ten default Categories are seeded automatically in transaction-service via Alembic (migrations 005 + 006) and projected to the monolith MySQL by `category-sync-consumer` at startup — no manual step required. The script below seeds the monolith-owned layer on top (subcategories, merchants, keyword rules) and is still needed before creating transactions or budgets via the monolith:
 
 ```bash
-# Seed category hierarchy (categories, subcategories, merchants, keyword rules)
+# Seed subcategories + merchants (waits for Category projection to land first)
 docker exec -it $(docker compose ps -q monolith) python -m backend.scripts.seed_categories
 
 # Generate test data (creates users, accounts, transactions, budgets, goals)

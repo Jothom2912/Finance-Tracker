@@ -35,7 +35,7 @@ Før du kører tests, skal du sikre dig at:
 
 1. **Backend API kører** på `http://localhost:8000`
 2. **Frontend kører** på `http://localhost:3000`
-3. **Database er sat op** med kategorier (kør `seed_categories.py`)
+3. **Database er sat op**: kategorier seedes automatisk i transaction-service via Alembic (migration 005+006) og projiceres til monolithens MySQL af `category-sync-consumer`; subcategories og merchants seedes ved at køre `python -m backend.scripts.seed_categories` i monolith-containeren
 
 ## Test Struktur
 
