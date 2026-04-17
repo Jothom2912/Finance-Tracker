@@ -42,6 +42,13 @@ other sync failures becomes valuable in logging or metrics. YAGNI for
 now — one line of error counter is enough until a real operational need
 appears.
 
+**Observed on 2026-04-17**: The first post-fix sync against the live
+Enable Banking account skipped 1 of 206 transactions (0.48%). Confirms
+the edge case exists in real bank data but at a low enough rate to
+stay in WARNING-log territory. Worth tracking across multiple syncs;
+a rising rate would indicate a broader data-quality issue upstream
+at Enable Banking or the specific bank ASPSP.
+
 ## HTTP status code mapping for ValueError (2026-04-17)
 
 `rest_api.py:212-213` maps any `ValueError` to HTTP 404. This is
