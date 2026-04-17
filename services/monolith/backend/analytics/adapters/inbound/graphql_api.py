@@ -180,10 +180,8 @@ def _require_account_id(ctx: dict[str, Any]) -> int:
 def _get_budget_start_day(ctx: dict[str, Any], account_id: int) -> int:
     """Look up the account's configured budget start day."""
     db: Session = ctx["db"]
-    row = db.query(AccountModel.budget_start_day).filter(
-        AccountModel.idAccount == account_id
-    ).first()
-    return (row[0] if row and row[0] else 1)
+    row = db.query(AccountModel.budget_start_day).filter(AccountModel.idAccount == account_id).first()
+    return row[0] if row and row[0] else 1
 
 
 # ---------------------------------------------------------------------------
@@ -256,9 +254,7 @@ class Query:
         mb_service: MonthlyBudgetService = ctx["monthly_budget_service"]
         start_day = _get_budget_start_day(ctx, account_id)
 
-        result = mb_service.get_summary(
-            account_id=account_id, month=month, year=year, budget_start_day=start_day
-        )
+        result = mb_service.get_summary(account_id=account_id, month=month, year=year, budget_start_day=start_day)
         return BudgetSummaryType(
             month=str(result.month).zfill(2),
             year=str(result.year),
@@ -393,7 +389,9 @@ class Query:
         results = service.list_categories()
         return [CategoryType(id=c.idCategory, name=c.name, type=c.type) for c in results]
 
-    @strawberry.field(description="List transactions for the active account (read from MySQL projection materialised by TransactionSyncConsumer)")
+    @strawberry.field(
+        description="List transactions for the active account (read from MySQL projection materialised by TransactionSyncConsumer)"
+    )
     def transactions(
         self,
         info: Info,

@@ -123,7 +123,10 @@ class TransactionService(ITransactionService):
         return [self._to_response(t) for t in results]
 
     async def update_transaction(
-        self, transaction_id: int, user_id: int, dto: UpdateTransactionDTO,
+        self,
+        transaction_id: int,
+        user_id: int,
+        dto: UpdateTransactionDTO,
     ) -> TransactionResponse:
         fields = dto.model_dump(exclude_unset=True)
 
@@ -266,7 +269,9 @@ class TransactionService(ITransactionService):
         return CSVImportResultDTO(imported=len(created), skipped=skipped, errors=errors)
 
     async def bulk_import(
-        self, user_id: int, dto: BulkCreateTransactionDTO,
+        self,
+        user_id: int,
+        dto: BulkCreateTransactionDTO,
     ) -> BulkCreateResultDTO:
         """Server-side bulk import used by trusted internal producers
         (e.g. the banking module when syncing bank transactions).

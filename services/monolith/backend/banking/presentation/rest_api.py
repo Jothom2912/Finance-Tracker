@@ -200,9 +200,7 @@ def sync_transactions(
     """Sync transactions from a connected bank account."""
     try:
         date_from = req.date_from if req else None
-        result = service.sync_transactions(
-            connection_id=connection_id, date_from=date_from
-        )
+        result = service.sync_transactions(connection_id=connection_id, date_from=date_from)
         return SyncResponse(
             total_fetched=result.total_fetched,
             new_imported=result.new_imported,

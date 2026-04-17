@@ -200,7 +200,10 @@ class TestUpdateTransaction:
 
     @pytest.mark.asyncio()
     async def test_wrong_user_returns_404(
-        self, client: AsyncClient, auth_headers: dict, user2_headers: dict,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        user2_headers: dict,
     ) -> None:
         create_resp = await client.post(
             "/api/v1/transactions/",
@@ -219,7 +222,9 @@ class TestUpdateTransaction:
 
     @pytest.mark.asyncio()
     async def test_empty_body_returns_unchanged(
-        self, client: AsyncClient, auth_headers: dict,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
     ) -> None:
         create_resp = await client.post(
             "/api/v1/transactions/",

@@ -69,7 +69,9 @@ class CategoryService(ICategoryService):
         return self._to_response(category)
 
     async def update_category(
-        self, category_id: int, dto: UpdateCategoryDTO,
+        self,
+        category_id: int,
+        dto: UpdateCategoryDTO,
     ) -> CategoryResponseDTO:
         fields = dto.model_dump(exclude_unset=True)
 

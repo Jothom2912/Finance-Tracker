@@ -6,7 +6,6 @@ value objects (CategorizationResult, MerchantMapping), and taxonomy data.
 """
 
 import pytest
-
 from backend.category.domain.entities import Category, Merchant, SubCategory
 from backend.category.domain.exceptions import (
     CategoryNotFound,
@@ -23,7 +22,6 @@ from backend.category.domain.value_objects import (
     MappingSource,
     MerchantMapping,
 )
-
 
 # ──────────────────────────────────────────────
 # CategoryType enum
@@ -197,27 +195,19 @@ class TestCategorizationResult:
         assert result.confidence == Confidence.HIGH
 
     def test_was_auto_categorized_for_rule(self) -> None:
-        result = CategorizationResult(
-            category_id=1, subcategory_id=2, tier=CategorizationTier.RULE
-        )
+        result = CategorizationResult(category_id=1, subcategory_id=2, tier=CategorizationTier.RULE)
         assert result.was_auto_categorized is True
 
     def test_was_auto_categorized_for_manual(self) -> None:
-        result = CategorizationResult(
-            category_id=1, subcategory_id=2, tier=CategorizationTier.MANUAL
-        )
+        result = CategorizationResult(category_id=1, subcategory_id=2, tier=CategorizationTier.MANUAL)
         assert result.was_auto_categorized is False
 
     def test_needs_review_when_low_confidence(self) -> None:
-        result = CategorizationResult(
-            category_id=1, subcategory_id=2, confidence=Confidence.LOW
-        )
+        result = CategorizationResult(category_id=1, subcategory_id=2, confidence=Confidence.LOW)
         assert result.needs_review is True
 
     def test_no_review_needed_when_high_confidence(self) -> None:
-        result = CategorizationResult(
-            category_id=1, subcategory_id=2, confidence=Confidence.HIGH
-        )
+        result = CategorizationResult(category_id=1, subcategory_id=2, confidence=Confidence.HIGH)
         assert result.needs_review is False
 
     def test_equality_by_value(self) -> None:
@@ -247,9 +237,7 @@ class TestMerchantMapping:
         assert mapping.source == MappingSource.SEED
 
     def test_manual_source(self) -> None:
-        mapping = MerchantMapping(
-            keyword="custom", merchant_id=1, subcategory_id=2, source=MappingSource.MANUAL
-        )
+        mapping = MerchantMapping(keyword="custom", merchant_id=1, subcategory_id=2, source=MappingSource.MANUAL)
         assert mapping.source == MappingSource.MANUAL
 
 
@@ -289,41 +277,25 @@ class TestDefaultTaxonomy:
 
     def test_all_category_types_are_valid(self) -> None:
         for name, data in DEFAULT_TAXONOMY.items():
-            assert isinstance(data["type"], CategoryType), (
-                f"Category '{name}' has invalid type: {data['type']}"
-            )
+            assert isinstance(data["type"], CategoryType), f"Category '{name}' has invalid type: {data['type']}"
 
     def test_has_expense_categories(self) -> None:
-        expense_cats = [
-            name
-            for name, data in DEFAULT_TAXONOMY.items()
-            if data["type"] == CategoryType.EXPENSE
-        ]
+        expense_cats = [name for name, data in DEFAULT_TAXONOMY.items() if data["type"] == CategoryType.EXPENSE]
         assert len(expense_cats) >= 5
 
     def test_has_income_category(self) -> None:
-        income_cats = [
-            name
-            for name, data in DEFAULT_TAXONOMY.items()
-            if data["type"] == CategoryType.INCOME
-        ]
+        income_cats = [name for name, data in DEFAULT_TAXONOMY.items() if data["type"] == CategoryType.INCOME]
         assert len(income_cats) >= 1
 
     def test_has_transfer_category(self) -> None:
-        transfer_cats = [
-            name
-            for name, data in DEFAULT_TAXONOMY.items()
-            if data["type"] == CategoryType.TRANSFER
-        ]
+        transfer_cats = [name for name, data in DEFAULT_TAXONOMY.items() if data["type"] == CategoryType.TRANSFER]
         assert len(transfer_cats) >= 1
 
     def test_subcategory_names_are_globally_unique(self) -> None:
         all_subcats: list[str] = []
         for name, data in DEFAULT_TAXONOMY.items():
             for sub in data["subcategories"]:
-                assert sub not in all_subcats, (
-                    f"Duplicate subcategory '{sub}' found in '{name}'"
-                )
+                assert sub not in all_subcats, f"Duplicate subcategory '{sub}' found in '{name}'"
                 all_subcats.append(sub)
 
     def test_display_orders_are_unique(self) -> None:
@@ -332,9 +304,7 @@ class TestDefaultTaxonomy:
 
     def test_all_subcategories_are_non_empty(self) -> None:
         for name, data in DEFAULT_TAXONOMY.items():
-            assert len(data["subcategories"]) > 0, (
-                f"Category '{name}' has no subcategories"
-            )
+            assert len(data["subcategories"]) > 0, f"Category '{name}' has no subcategories"
 
     def test_anden_fallback_exists(self) -> None:
         all_subcats = []
@@ -351,9 +321,7 @@ class TestSeedMerchantMappings:
 
     def test_all_keywords_are_lowercase(self) -> None:
         for keyword in SEED_MERCHANT_MAPPINGS:
-            assert keyword == keyword.lower(), (
-                f"Keyword '{keyword}' is not lowercase"
-            )
+            assert keyword == keyword.lower(), f"Keyword '{keyword}' is not lowercase"
 
     def test_all_subcategories_exist_in_taxonomy(self) -> None:
         all_subcats: set[str] = set()
@@ -362,8 +330,7 @@ class TestSeedMerchantMappings:
 
         for keyword, mapping in SEED_MERCHANT_MAPPINGS.items():
             assert mapping["subcategory"] in all_subcats, (
-                f"Mapping '{keyword}' references non-existent subcategory "
-                f"'{mapping['subcategory']}'"
+                f"Mapping '{keyword}' references non-existent subcategory '{mapping['subcategory']}'"
             )
 
     def test_has_mappings_for_core_merchants(self) -> None:

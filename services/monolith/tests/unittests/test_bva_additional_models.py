@@ -3,8 +3,6 @@
 BVA tests for User, PlannedTransactions, og AccountGroups
 """
 
-from datetime import date, timedelta
-
 import pytest
 from pydantic import ValidationError
 

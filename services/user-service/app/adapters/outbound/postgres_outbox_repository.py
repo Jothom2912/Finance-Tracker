@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+
 def _utcnow_naive() -> datetime:
     """UTC now as timezone-naive datetime (matches TIMESTAMP WITHOUT TIME ZONE)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 from uuid import uuid4
 
 from contracts.base import BaseEvent

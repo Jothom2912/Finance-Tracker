@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from typing import Optional
 
+from sqlalchemy.orm import Session
+
 from backend.models.mysql.account import Account as AccountModel
 from backend.shared.ports.auth_ports import IAccountResolver
-from sqlalchemy.orm import Session
 
 
 class MySQLAccountResolver(IAccountResolver):

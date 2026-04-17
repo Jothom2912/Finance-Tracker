@@ -14,13 +14,10 @@ Covers:
 from datetime import date, timedelta
 
 import pytest
-
 from backend.shared.budget_period import (
-    MAX_START_DAY,
     budget_period,
     determine_budget_month,
 )
-
 
 # ──────────────────────────────────────────────────────────────
 # budget_period: start_day=1 (calendar month, backwards compat)
@@ -234,8 +231,7 @@ class TestRoundTrip:
             next_start, _ = budget_period(2026, month + 1, 28)
 
             assert next_start - end == timedelta(days=1), (
-                f"Gap between month {month} and {month + 1}: "
-                f"end={end}, next_start={next_start}"
+                f"Gap between month {month} and {month + 1}: end={end}, next_start={next_start}"
             )
 
     @pytest.mark.parametrize("start_day", [1, 15, 28])

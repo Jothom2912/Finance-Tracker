@@ -10,6 +10,7 @@ TEST_ALGORITHM = "HS256"
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("JWT_SECRET", TEST_SECRET)
 
+import app.config as _cfg
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -19,8 +20,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-
-import app.config as _cfg
 
 _cfg.settings.JWT_SECRET = TEST_SECRET  # type: ignore[misc]
 _cfg.settings.JWT_ALGORITHM = TEST_ALGORITHM  # type: ignore[misc]

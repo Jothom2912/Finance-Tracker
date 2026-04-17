@@ -13,7 +13,6 @@ from __future__ import annotations
 from calendar import monthrange
 from datetime import date
 
-
 MIN_START_DAY = 1
 MAX_START_DAY = 28
 

@@ -7,8 +7,9 @@ Session is injected via constructor.
 
 from __future__ import annotations
 
-from backend.shared.ports.unit_of_work import IUnitOfWork
 from sqlalchemy.orm import Session
+
+from backend.shared.ports.unit_of_work import IUnitOfWork
 
 
 class MySQLUnitOfWork(IUnitOfWork):

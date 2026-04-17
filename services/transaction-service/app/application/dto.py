@@ -50,7 +50,8 @@ class CreateTransactionDTO(BaseModel):
     subcategory_id: int | None = Field(default=None, gt=0)
     categorization_tier: str | None = Field(default=None, max_length=CATEGORIZATION_TIER_MAX)
     categorization_confidence: str | None = Field(
-        default=None, max_length=CATEGORIZATION_CONFIDENCE_MAX,
+        default=None,
+        max_length=CATEGORIZATION_CONFIDENCE_MAX,
     )
 
 
@@ -119,7 +120,8 @@ class BulkCreateTransactionItemDTO(BaseModel):
     subcategory_id: int | None = Field(default=None, gt=0)
     categorization_tier: str | None = Field(default=None, max_length=CATEGORIZATION_TIER_MAX)
     categorization_confidence: str | None = Field(
-        default=None, max_length=CATEGORIZATION_CONFIDENCE_MAX,
+        default=None,
+        max_length=CATEGORIZATION_CONFIDENCE_MAX,
     )
 
 

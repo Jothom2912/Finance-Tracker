@@ -140,7 +140,10 @@ class TransactionServiceClient:
 
         if not payload["items"]:
             return BulkImportResult(
-                imported=0, duplicates_skipped=0, errors=0, imported_ids=[],
+                imported=0,
+                duplicates_skipped=0,
+                errors=0,
+                imported_ids=[],
             )
 
         url = f"{self._base_url}/api/v1/transactions/bulk"
@@ -151,7 +154,8 @@ class TransactionServiceClient:
 
         logger.debug(
             "Calling transaction-service bulk import: %d items for user_id=%d",
-            len(payload["items"]), user_id,
+            len(payload["items"]),
+            user_id,
         )
 
         with httpx.Client(timeout=self._timeout) as client:

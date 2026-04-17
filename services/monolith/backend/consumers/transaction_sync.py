@@ -72,9 +72,7 @@ class TransactionSyncConsumer(BaseConsumer):
         session = self._session_factory()
         try:
             existing = (
-                session.query(TransactionModel)
-                .filter(TransactionModel.idTransaction == event.transaction_id)
-                .first()
+                session.query(TransactionModel).filter(TransactionModel.idTransaction == event.transaction_id).first()
             )
             if existing is not None:
                 logger.info(
@@ -103,9 +101,7 @@ class TransactionSyncConsumer(BaseConsumer):
         session = self._session_factory()
         try:
             model = (
-                session.query(TransactionModel)
-                .filter(TransactionModel.idTransaction == event.transaction_id)
-                .first()
+                session.query(TransactionModel).filter(TransactionModel.idTransaction == event.transaction_id).first()
             )
             if model is None:
                 logger.warning(
@@ -133,9 +129,7 @@ class TransactionSyncConsumer(BaseConsumer):
         session = self._session_factory()
         try:
             model = (
-                session.query(TransactionModel)
-                .filter(TransactionModel.idTransaction == event.transaction_id)
-                .first()
+                session.query(TransactionModel).filter(TransactionModel.idTransaction == event.transaction_id).first()
             )
             if model is None:
                 logger.info(

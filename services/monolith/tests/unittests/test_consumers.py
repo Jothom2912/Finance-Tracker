@@ -4,10 +4,6 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from backend.account.domain.entities import Account
 from backend.consumers.account_creation import AccountCreationConsumer
 from backend.consumers.base import HEADER_RETRY_COUNT, BaseConsumer
@@ -17,6 +13,9 @@ from contracts.events.account import (
     AccountCreatedEvent,
     AccountCreationFailedEvent,
 )
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 def _valid_event_data(

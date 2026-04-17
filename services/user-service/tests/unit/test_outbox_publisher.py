@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.domain.entities import OutboxEntry
 from app.workers.outbox_publisher import MAX_BACKOFF_S, OutboxPublisherWorker
 

@@ -50,10 +50,10 @@ READ_ONLY_MODELS_BY_NAME = {
 READ_ONLY_SOURCE_PREFIX = "backend.models.mysql"
 
 ALLOWED_DIRS = {
-    "consumers",       # projection consumers materialise events
-    "scripts",         # seeds, one-off maintenance (outside live cycle)
-    "migrations",      # alembic / neo4j / elasticsearch schema tooling
-    "repositories",    # legacy sync repos kept for scripts, not API code
+    "consumers",  # projection consumers materialise events
+    "scripts",  # seeds, one-off maintenance (outside live cycle)
+    "migrations",  # alembic / neo4j / elasticsearch schema tooling
+    "repositories",  # legacy sync repos kept for scripts, not API code
     "dumps",
 }
 
@@ -97,7 +97,8 @@ def _read_only_aliases(tree: ast.AST) -> dict[str, str]:
 
 
 def _find_constructor_writes(
-    tree: ast.AST, aliases: dict[str, str],
+    tree: ast.AST,
+    aliases: dict[str, str],
 ) -> list[tuple[int, str]]:
     """Return (lineno, original_name) for every ``Model(...)`` call
     where ``Model`` resolves to a projection import.
@@ -113,7 +114,8 @@ def _find_constructor_writes(
 
 
 def _find_core_writes(
-    tree: ast.AST, aliases: dict[str, str],
+    tree: ast.AST,
+    aliases: dict[str, str],
 ) -> list[tuple[int, str]]:
     """Return (lineno, "insert(Model)") for SQLAlchemy core-level
     write statements against read-only models.
@@ -123,9 +125,8 @@ def _find_core_writes(
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        is_core_write = (
-            (isinstance(func, ast.Name) and func.id in CORE_WRITE_FUNCS)
-            or (isinstance(func, ast.Attribute) and func.attr in CORE_WRITE_FUNCS)
+        is_core_write = (isinstance(func, ast.Name) and func.id in CORE_WRITE_FUNCS) or (
+            isinstance(func, ast.Attribute) and func.attr in CORE_WRITE_FUNCS
         )
         if not is_core_write:
             continue
@@ -164,8 +165,7 @@ def test_no_writes_to_read_only_projections() -> None:
         "Read-only projection models written outside the allowlist "
         "(backend/consumers/, backend/scripts/, backend/migrations/, "
         "backend/repositories/).  If you need to persist a transaction "
-        "or category, call transaction-service via HTTP instead.\n\n"
-        + "\n".join(violations)
+        "or category, call transaction-service via HTTP instead.\n\n" + "\n".join(violations)
     )
 
 

@@ -54,11 +54,7 @@ class CategorySyncConsumer(BaseConsumer):
         event = CategoryCreatedEvent.model_validate(event_data)
         session = self._session_factory()
         try:
-            existing = (
-                session.query(CategoryModel)
-                .filter(CategoryModel.idCategory == event.category_id)
-                .first()
-            )
+            existing = session.query(CategoryModel).filter(CategoryModel.idCategory == event.category_id).first()
             if existing:
                 logger.info(
                     "Category %d already exists, skipping create",
@@ -84,11 +80,7 @@ class CategorySyncConsumer(BaseConsumer):
         event = CategoryUpdatedEvent.model_validate(event_data)
         session = self._session_factory()
         try:
-            model = (
-                session.query(CategoryModel)
-                .filter(CategoryModel.idCategory == event.category_id)
-                .first()
-            )
+            model = session.query(CategoryModel).filter(CategoryModel.idCategory == event.category_id).first()
             if model is None:
                 logger.warning(
                     "Category %d not found for update, creating it",
@@ -116,11 +108,7 @@ class CategorySyncConsumer(BaseConsumer):
         event = CategoryDeletedEvent.model_validate(event_data)
         session = self._session_factory()
         try:
-            model = (
-                session.query(CategoryModel)
-                .filter(CategoryModel.idCategory == event.category_id)
-                .first()
-            )
+            model = session.query(CategoryModel).filter(CategoryModel.idCategory == event.category_id).first()
             if model is None:
                 logger.info(
                     "Category %d already absent, skipping delete",

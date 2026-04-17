@@ -34,7 +34,9 @@ class TestCreateCategory:
 
     @pytest.mark.asyncio()
     async def test_duplicate_name_returns_400(
-        self, client: AsyncClient, auth_headers: dict,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
     ) -> None:
         await client.post(
             "/api/v1/categories/",
@@ -59,7 +61,9 @@ class TestCreateCategory:
 
     @pytest.mark.asyncio()
     async def test_invalid_type_returns_422(
-        self, client: AsyncClient, auth_headers: dict,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
     ) -> None:
         resp = await client.post(
             "/api/v1/categories/",
@@ -71,7 +75,9 @@ class TestCreateCategory:
 
     @pytest.mark.asyncio()
     async def test_empty_name_returns_422(
-        self, client: AsyncClient, auth_headers: dict,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
     ) -> None:
         resp = await client.post(
             "/api/v1/categories/",
@@ -186,7 +192,9 @@ class TestUpdateCategory:
 
     @pytest.mark.asyncio()
     async def test_empty_body_returns_unchanged(
-        self, client: AsyncClient, auth_headers: dict,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
     ) -> None:
         create_resp = await client.post(
             "/api/v1/categories/",
@@ -206,7 +214,9 @@ class TestUpdateCategory:
 
     @pytest.mark.asyncio()
     async def test_duplicate_name_returns_400(
-        self, client: AsyncClient, auth_headers: dict,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
     ) -> None:
         await client.post(
             "/api/v1/categories/",
@@ -241,26 +251,31 @@ class TestDeleteCategory:
         cat_id = create_resp.json()["id"]
 
         del_resp = await client.delete(
-            f"/api/v1/categories/{cat_id}", headers=auth_headers,
+            f"/api/v1/categories/{cat_id}",
+            headers=auth_headers,
         )
         assert del_resp.status_code == 204
 
         get_resp = await client.get(
-            f"/api/v1/categories/{cat_id}", headers=auth_headers,
+            f"/api/v1/categories/{cat_id}",
+            headers=auth_headers,
         )
         assert get_resp.status_code == 404
 
     @pytest.mark.asyncio()
     async def test_not_found(self, client: AsyncClient, auth_headers: dict) -> None:
         resp = await client.delete(
-            "/api/v1/categories/99999", headers=auth_headers,
+            "/api/v1/categories/99999",
+            headers=auth_headers,
         )
 
         assert resp.status_code == 404
 
     @pytest.mark.asyncio()
     async def test_in_use_returns_409(
-        self, client: AsyncClient, auth_headers: dict,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
     ) -> None:
         create_cat = await client.post(
             "/api/v1/categories/",
@@ -284,7 +299,8 @@ class TestDeleteCategory:
         )
 
         resp = await client.delete(
-            f"/api/v1/categories/{cat_id}", headers=auth_headers,
+            f"/api/v1/categories/{cat_id}",
+            headers=auth_headers,
         )
 
         assert resp.status_code == 409
@@ -294,7 +310,10 @@ class TestDeleteCategory:
 class TestCategoryOutboxEvents:
     @pytest.mark.asyncio()
     async def test_create_writes_outbox(
-        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
     ) -> None:
         await client.post(
             "/api/v1/categories/",
@@ -305,9 +324,7 @@ class TestCategoryOutboxEvents:
         from app.models import OutboxEventModel
 
         result = await db_session.execute(
-            select(OutboxEventModel).where(
-                OutboxEventModel.event_type == "category.created"
-            )
+            select(OutboxEventModel).where(OutboxEventModel.event_type == "category.created")
         )
         entries = result.scalars().all()
 
@@ -319,7 +336,10 @@ class TestCategoryOutboxEvents:
 
     @pytest.mark.asyncio()
     async def test_update_writes_outbox_with_previous(
-        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
     ) -> None:
         create_resp = await client.post(
             "/api/v1/categories/",
@@ -337,9 +357,7 @@ class TestCategoryOutboxEvents:
         from app.models import OutboxEventModel
 
         result = await db_session.execute(
-            select(OutboxEventModel).where(
-                OutboxEventModel.event_type == "category.updated"
-            )
+            select(OutboxEventModel).where(OutboxEventModel.event_type == "category.updated")
         )
         entries = result.scalars().all()
 
@@ -350,7 +368,10 @@ class TestCategoryOutboxEvents:
 
     @pytest.mark.asyncio()
     async def test_delete_writes_outbox(
-        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession,
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
     ) -> None:
         create_resp = await client.post(
             "/api/v1/categories/",
@@ -360,15 +381,14 @@ class TestCategoryOutboxEvents:
         cat_id = create_resp.json()["id"]
 
         await client.delete(
-            f"/api/v1/categories/{cat_id}", headers=auth_headers,
+            f"/api/v1/categories/{cat_id}",
+            headers=auth_headers,
         )
 
         from app.models import OutboxEventModel
 
         result = await db_session.execute(
-            select(OutboxEventModel).where(
-                OutboxEventModel.event_type == "category.deleted"
-            )
+            select(OutboxEventModel).where(OutboxEventModel.event_type == "category.deleted")
         )
         entries = result.scalars().all()
 

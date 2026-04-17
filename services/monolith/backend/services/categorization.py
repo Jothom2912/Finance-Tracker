@@ -13,8 +13,7 @@
 import warnings
 
 warnings.warn(
-    "backend.services.categorization is deprecated. "
-    "Use backend.category.application.categorization_service instead.",
+    "backend.services.categorization is deprecated. Use backend.category.application.categorization_service instead.",
     DeprecationWarning,
     stacklevel=2,
 )

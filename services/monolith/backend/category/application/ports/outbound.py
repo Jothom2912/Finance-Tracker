@@ -19,7 +19,6 @@ from typing import Optional, Protocol
 from backend.category.domain.entities import Category, Merchant, SubCategory
 from backend.category.domain.value_objects import CategorizationResult, MerchantMapping
 
-
 # ──────────────────────────────────────────────
 # Repository ports (ABC — explicit implementation)
 # ──────────────────────────────────────────────
@@ -123,9 +122,7 @@ class IMerchantMappingRepository(ABC):
 class IRuleEngine(Protocol):
     """Tier 1: deterministic keyword matching."""
 
-    def match(
-        self, description: str, amount: float
-    ) -> CategorizationResult | None:
+    def match(self, description: str, amount: float) -> CategorizationResult | None:
         """Return None if no keyword matches."""
         ...
 
@@ -146,15 +143,11 @@ class ILlmCategorizer(Protocol):
     This port is narrow: predict single + predict batch.
     """
 
-    def predict(
-        self, description: str, amount: float
-    ) -> CategorizationResult:
+    def predict(self, description: str, amount: float) -> CategorizationResult:
         """Always returns a result (fallback to 'Anden')."""
         ...
 
-    def predict_batch(
-        self, transactions: list[tuple[str, float]]
-    ) -> list[CategorizationResult]:
+    def predict_batch(self, transactions: list[tuple[str, float]]) -> list[CategorizationResult]:
         """Batch prediction — more efficient for CSV import."""
         ...
 

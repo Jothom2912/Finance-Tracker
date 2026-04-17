@@ -40,9 +40,7 @@ class IBankingApiClient(ABC):
         pass
 
     @abstractmethod
-    def start_authorization(
-        self, bank_name: str, country: str, valid_days: int
-    ) -> dict[str, str]:
+    def start_authorization(self, bank_name: str, country: str, valid_days: int) -> dict[str, str]:
         pass
 
     @abstractmethod

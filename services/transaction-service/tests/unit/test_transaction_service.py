@@ -5,7 +5,6 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.application.dto import (
     BulkCreateTransactionDTO,
     BulkCreateTransactionItemDTO,
@@ -260,10 +259,12 @@ class TestUpdateTransaction:
     async def test_writes_outbox_event_with_previous_values(self) -> None:
         service, uow = _build_service()
         existing = _make_transaction(
-            amount=Decimal("49.99"), category_name="Food",
+            amount=Decimal("49.99"),
+            category_name="Food",
         )
         updated = _make_transaction(
-            amount=Decimal("75.00"), category_name="Transport",
+            amount=Decimal("75.00"),
+            category_name="Transport",
         )
         uow.transactions.find_by_id.return_value = existing
         uow.transactions.update.return_value = updated

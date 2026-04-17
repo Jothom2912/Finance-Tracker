@@ -77,10 +77,7 @@ try:
         if sub.category_id in cat_id_lookup:
             subcategory_lookup[sub.name] = (sub.id, sub.category_id)
 
-    keyword_mappings = [
-        (kw, mapping["subcategory"])
-        for kw, mapping in SEED_MERCHANT_MAPPINGS.items()
-    ]
+    keyword_mappings = [(kw, mapping["subcategory"]) for kw, mapping in SEED_MERCHANT_MAPPINGS.items()]
 
     rule_engine = RuleEngine(
         keyword_mappings=keyword_mappings,
@@ -111,11 +108,7 @@ try:
 
     connections_created = 0
     for uid in account_uids:
-        existing = (
-            db.query(BankConnection)
-            .filter(BankConnection.bank_account_uid == uid)
-            .first()
-        )
+        existing = db.query(BankConnection).filter(BankConnection.bank_account_uid == uid).first()
         if existing:
             existing.session_id = SESSION_ID
             existing.status = "active"
@@ -170,8 +163,7 @@ try:
         total_dupes += result.duplicates_skipped
         total_errors += result.errors
 
-    print(f"\n  TOTALS: {total_fetched} fetched, {total_imported} imported, "
-          f"{total_dupes} dupes, {total_errors} errors")
+    print(f"\n  TOTALS: {total_fetched} fetched, {total_imported} imported, {total_dupes} dupes, {total_errors} errors")
 
     print("\n--- Step 5: Analyze categorization results ---")
     synced_txns = (
@@ -200,16 +192,18 @@ try:
     hit_rate = (rule_hits / total_txns * 100) if total_txns > 0 else 0
 
     print(f"\n  Total transactions in DB: {total_txns}")
-    print(f"\n  Categorization tiers:")
+    print("\n  Categorization tiers:")
     for tier, count in sorted(tier_counts.items(), key=lambda x: -x[1]):
         pct = count / total_txns * 100 if total_txns > 0 else 0
         print(f"    {tier:12s}: {count:4d}  ({pct:.1f}%)")
 
     print(f"\n  RULE ENGINE HIT RATE: {rule_hits}/{total_txns} = {hit_rate:.1f}%")
-    print(f"  FALLBACK RATE:        {fallback_hits}/{total_txns} = {(fallback_hits/total_txns*100) if total_txns else 0:.1f}%")
+    print(
+        f"  FALLBACK RATE:        {fallback_hits}/{total_txns} = {(fallback_hits / total_txns * 100) if total_txns else 0:.1f}%"
+    )
 
     if subcategory_counts:
-        print(f"\n  Top subcategories (rule engine hits):")
+        print("\n  Top subcategories (rule engine hits):")
         for sub_name, count in subcategory_counts.most_common(15):
             print(f"    {sub_name:25s}: {count:4d}")
 
@@ -226,6 +220,7 @@ try:
 except Exception as e:
     print(f"\nERROR: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 finally:

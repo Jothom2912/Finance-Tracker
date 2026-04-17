@@ -20,27 +20,15 @@ class MySQLSubCategoryRepository(ISubCategoryRepository):
         self._db = db
 
     def get_by_id(self, subcategory_id: int) -> Optional[SubCategory]:
-        model = (
-            self._db.query(SubCategoryModel)
-            .filter(SubCategoryModel.id == subcategory_id)
-            .first()
-        )
+        model = self._db.query(SubCategoryModel).filter(SubCategoryModel.id == subcategory_id).first()
         return self._to_entity(model) if model else None
 
     def get_by_name(self, name: str) -> Optional[SubCategory]:
-        model = (
-            self._db.query(SubCategoryModel)
-            .filter(SubCategoryModel.name == name)
-            .first()
-        )
+        model = self._db.query(SubCategoryModel).filter(SubCategoryModel.name == name).first()
         return self._to_entity(model) if model else None
 
     def get_by_category_id(self, category_id: int) -> list[SubCategory]:
-        models = (
-            self._db.query(SubCategoryModel)
-            .filter(SubCategoryModel.category_id == category_id)
-            .all()
-        )
+        models = self._db.query(SubCategoryModel).filter(SubCategoryModel.category_id == category_id).all()
         return [self._to_entity(m) for m in models]
 
     def get_all(self) -> list[SubCategory]:
@@ -59,11 +47,7 @@ class MySQLSubCategoryRepository(ISubCategoryRepository):
         return self._to_entity(model)
 
     def delete(self, subcategory_id: int) -> bool:
-        model = (
-            self._db.query(SubCategoryModel)
-            .filter(SubCategoryModel.id == subcategory_id)
-            .first()
-        )
+        model = self._db.query(SubCategoryModel).filter(SubCategoryModel.id == subcategory_id).first()
         if not model:
             return False
 

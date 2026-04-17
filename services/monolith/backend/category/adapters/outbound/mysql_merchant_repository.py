@@ -20,34 +20,20 @@ class MySQLMerchantRepository(IMerchantRepository):
         self._db = db
 
     def find_by_normalized_name(self, name: str) -> Optional[Merchant]:
-        model = (
-            self._db.query(MerchantModel)
-            .filter(MerchantModel.normalized_name == name)
-            .first()
-        )
+        model = self._db.query(MerchantModel).filter(MerchantModel.normalized_name == name).first()
         return self._to_entity(model) if model else None
 
     def get_by_id(self, merchant_id: int) -> Optional[Merchant]:
-        model = (
-            self._db.query(MerchantModel)
-            .filter(MerchantModel.id == merchant_id)
-            .first()
-        )
+        model = self._db.query(MerchantModel).filter(MerchantModel.id == merchant_id).first()
         return self._to_entity(model) if model else None
 
     def get_by_subcategory_id(self, subcategory_id: int) -> list[Merchant]:
-        models = (
-            self._db.query(MerchantModel)
-            .filter(MerchantModel.subcategory_id == subcategory_id)
-            .all()
-        )
+        models = self._db.query(MerchantModel).filter(MerchantModel.subcategory_id == subcategory_id).all()
         return [self._to_entity(m) for m in models]
 
     def save(self, merchant: Merchant) -> Merchant:
         existing = (
-            self._db.query(MerchantModel)
-            .filter(MerchantModel.normalized_name == merchant.normalized_name)
-            .first()
+            self._db.query(MerchantModel).filter(MerchantModel.normalized_name == merchant.normalized_name).first()
         )
         if existing:
             existing.display_name = merchant.display_name

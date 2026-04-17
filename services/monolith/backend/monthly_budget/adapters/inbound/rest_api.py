@@ -60,10 +60,8 @@ async def get_monthly_budget_summary(
 ):
     """Budget vs. actual spending summary for a month."""
     aid = _require_account(account_id)
-    row = db.query(AccountModel.budget_start_day).filter(
-        AccountModel.idAccount == aid
-    ).first()
-    start_day = (row[0] if row and row[0] else 1)
+    row = db.query(AccountModel.budget_start_day).filter(AccountModel.idAccount == aid).first()
+    start_day = row[0] if row and row[0] else 1
     return service.get_summary(aid, month, year, budget_start_day=start_day)
 
 

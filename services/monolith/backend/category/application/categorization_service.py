@@ -58,9 +58,7 @@ class CategorizationOutput:
     reference_id: int | None = None
 
     @staticmethod
-    def from_result(
-        result: CategorizationResult, reference_id: int | None = None
-    ) -> CategorizationOutput:
+    def from_result(result: CategorizationResult, reference_id: int | None = None) -> CategorizationOutput:
         return CategorizationOutput(
             result=result,
             needs_review=result.confidence == Confidence.LOW,
@@ -109,7 +107,8 @@ class CategorizationService:
         desc_short = txn.description[:40]
 
         result = self._try_tier(
-            "rules", desc_short,
+            "rules",
+            desc_short,
             lambda: self._rule_engine.match(txn.description, txn.amount),
         )
         if result is not None:
@@ -117,7 +116,8 @@ class CategorizationService:
 
         if self._ml is not None:
             result = self._try_tier(
-                "ml", desc_short,
+                "ml",
+                desc_short,
                 lambda: self._ml.predict(txn.description),
             )
             if result is not None:
@@ -125,22 +125,20 @@ class CategorizationService:
 
         if self._llm is not None:
             result = self._try_tier(
-                "llm", desc_short,
+                "llm",
+                desc_short,
                 lambda: self._llm.predict(txn.description, txn.amount),
             )
             if result is not None:
                 return CategorizationOutput.from_result(result, txn.reference_id)
 
         logger.warning(
-            "All tiers exhausted for '%s'. Using fallback.", desc_short,
+            "All tiers exhausted for '%s'. Using fallback.",
+            desc_short,
         )
-        return CategorizationOutput.from_result(
-            self._absolute_fallback(), txn.reference_id
-        )
+        return CategorizationOutput.from_result(self._absolute_fallback(), txn.reference_id)
 
-    def categorize_batch(
-        self, transactions: list[TransactionInput]
-    ) -> list[CategorizationOutput]:
+    def categorize_batch(self, transactions: list[TransactionInput]) -> list[CategorizationOutput]:
         """
         Batch categorization — optimized for CSV import.
 
@@ -161,20 +159,21 @@ class CategorizationService:
         for idx in remaining_indices:
             txn = transactions[idx]
             result = self._try_tier(
-                "rules", txn.description[:40],
+                "rules",
+                txn.description[:40],
                 lambda t=txn: self._rule_engine.match(t.description, t.amount),
             )
             if result is not None:
-                results[idx] = CategorizationOutput.from_result(
-                    result, txn.reference_id
-                )
+                results[idx] = CategorizationOutput.from_result(result, txn.reference_id)
             else:
                 still_remaining.append(idx)
         remaining_indices = still_remaining
 
         logger.info(
             "Batch tier 1 (rules): %d/%d resolved, %d remaining",
-            count - len(remaining_indices), count, len(remaining_indices),
+            count - len(remaining_indices),
+            count,
+            len(remaining_indices),
         )
 
         if not remaining_indices:
@@ -186,20 +185,21 @@ class CategorizationService:
             for idx in remaining_indices:
                 txn = transactions[idx]
                 result = self._try_tier(
-                    "ml", txn.description[:40],
+                    "ml",
+                    txn.description[:40],
                     lambda t=txn: self._ml.predict(t.description),
                 )
                 if result is not None:
-                    results[idx] = CategorizationOutput.from_result(
-                        result, txn.reference_id
-                    )
+                    results[idx] = CategorizationOutput.from_result(result, txn.reference_id)
                 else:
                     still_remaining.append(idx)
             remaining_indices = still_remaining
 
             logger.info(
                 "Batch tier 2 (ML): %d/%d total resolved, %d remaining",
-                count - len(remaining_indices), count, len(remaining_indices),
+                count - len(remaining_indices),
+                count,
+                len(remaining_indices),
             )
 
         if not remaining_indices:
@@ -207,28 +207,23 @@ class CategorizationService:
 
         # Tier 3: LLM batch (remaining)
         if self._llm is not None and remaining_indices:
-            llm_inputs = [
-                (transactions[idx].description, transactions[idx].amount)
-                for idx in remaining_indices
-            ]
+            llm_inputs = [(transactions[idx].description, transactions[idx].amount) for idx in remaining_indices]
             try:
                 llm_results = self._llm.predict_batch(llm_inputs)
                 for idx, llm_result in zip(remaining_indices, llm_results):
-                    results[idx] = CategorizationOutput.from_result(
-                        llm_result, transactions[idx].reference_id
-                    )
+                    results[idx] = CategorizationOutput.from_result(llm_result, transactions[idx].reference_id)
                 remaining_indices = []
                 logger.info(
-                    "Batch tier 3 (LLM): %d/%d total resolved", count, count,
+                    "Batch tier 3 (LLM): %d/%d total resolved",
+                    count,
+                    count,
                 )
             except Exception:
                 logger.exception("LLM batch prediction failed")
 
         # Fallback for anything still unresolved
         for idx in remaining_indices:
-            results[idx] = CategorizationOutput.from_result(
-                self._absolute_fallback(), transactions[idx].reference_id
-            )
+            results[idx] = CategorizationOutput.from_result(self._absolute_fallback(), transactions[idx].reference_id)
 
         return results  # type: ignore[return-value]
 
@@ -256,7 +251,9 @@ class CategorizationService:
             return result
         except Exception:
             logger.exception(
-                "Tier '%s' failed for '%s'", tier_name, context,
+                "Tier '%s' failed for '%s'",
+                tier_name,
+                context,
             )
             return None
 

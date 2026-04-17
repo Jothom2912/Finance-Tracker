@@ -53,9 +53,6 @@ from backend.budget.adapters.outbound.mysql_repository import (
 
 # Hexagonal Budget domain
 from backend.budget.application.service import BudgetService as HexBudgetService
-from backend.category.adapters.outbound.mysql_merchant_repository import (
-    MySQLMerchantRepository,
-)
 from backend.category.adapters.outbound.mysql_repository import (
     MySQLCategoryRepository as HexMySQLCategoryRepository,
 )
@@ -95,7 +92,6 @@ from backend.monthly_budget.adapters.outbound.transaction_adapter import (
 from backend.monthly_budget.application.service import (
     MonthlyBudgetService,
 )
-from backend.shared.adapters.mysql_unit_of_work import MySQLUnitOfWork
 from backend.user.adapters.outbound.account_adapter import (
     MySQLAccountAdapter as UserAccountAdapter,
 )
@@ -132,10 +128,7 @@ def get_categorization_service(
         if sub.category_id in cat_id_lookup:
             subcategory_lookup[sub.name] = (sub.id, sub.category_id)
 
-    keyword_mappings = [
-        (kw, mapping["subcategory"])
-        for kw, mapping in SEED_MERCHANT_MAPPINGS.items()
-    ]
+    keyword_mappings = [(kw, mapping["subcategory"]) for kw, mapping in SEED_MERCHANT_MAPPINGS.items()]
 
     rule_engine = RuleEngine(
         keyword_mappings=keyword_mappings,

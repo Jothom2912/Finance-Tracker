@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
+from sqlalchemy.orm import Session
+
 from backend.banking.adapters.outbound.enable_banking_client import (
     BankTransaction,
     EnableBankingClient,
@@ -28,7 +30,6 @@ from backend.category.application.categorization_service import (
 from backend.models.mysql.account import Account as AccountModel
 from backend.models.mysql.bank_connection import BankConnection
 from backend.models.mysql.category import Category as CategoryModel
-from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SyncResult:
     """Result of a transaction sync operation."""
+
     total_fetched: int
     new_imported: int
     duplicates_skipped: int
@@ -77,17 +79,11 @@ class BankingService:
     # Authorization flow
     # ──────────────────────────────────────────
 
-    def start_connect(
-        self, bank_name: str, country: str = "DK"
-    ) -> dict[str, str]:
+    def start_connect(self, bank_name: str, country: str = "DK") -> dict[str, str]:
         """Start bank connection. Returns URL to redirect user to."""
-        return self._client.start_authorization(
-            bank_name=bank_name, country=country
-        )
+        return self._client.start_authorization(bank_name=bank_name, country=country)
 
-    def complete_connect(
-        self, auth_code: str, account_id: int
-    ) -> list[dict[str, Any]]:
+    def complete_connect(self, auth_code: str, account_id: int) -> list[dict[str, Any]]:
         """
         Complete bank connection after user authorization.
 
@@ -103,21 +99,19 @@ class BankingService:
             uid = bank_account.get("uid", "")
             iban = bank_account.get("account_id", {}).get("iban", "")
 
-            existing = (
-                self._db.query(BankConnection)
-                .filter(BankConnection.bank_account_uid == uid)
-                .first()
-            )
+            existing = self._db.query(BankConnection).filter(BankConnection.bank_account_uid == uid).first()
             if existing:
                 existing.session_id = session_id
                 existing.status = "active"
                 self._db.flush()
-                created_connections.append({
-                    "id": existing.id,
-                    "bank_account_uid": uid,
-                    "iban": iban,
-                    "status": "reconnected",
-                })
+                created_connections.append(
+                    {
+                        "id": existing.id,
+                        "bank_account_uid": uid,
+                        "iban": iban,
+                        "status": "reconnected",
+                    }
+                )
                 continue
 
             conn = BankConnection(
@@ -131,17 +125,20 @@ class BankingService:
             )
             self._db.add(conn)
             self._db.flush()
-            created_connections.append({
-                "id": conn.id,
-                "bank_account_uid": uid,
-                "iban": iban,
-                "status": "new",
-            })
+            created_connections.append(
+                {
+                    "id": conn.id,
+                    "bank_account_uid": uid,
+                    "iban": iban,
+                    "status": "new",
+                }
+            )
 
         self._db.commit()
         logger.info(
             "Connected %d bank accounts (session=%s)",
-            len(created_connections), session_id,
+            len(created_connections),
+            session_id,
         )
         return created_connections
 
@@ -151,11 +148,7 @@ class BankingService:
 
     def list_connections(self, account_id: int) -> list[dict[str, Any]]:
         """List all bank connections for an account."""
-        connections = (
-            self._db.query(BankConnection)
-            .filter(BankConnection.account_id == account_id)
-            .all()
-        )
+        connections = self._db.query(BankConnection).filter(BankConnection.account_id == account_id).all()
         return [
             {
                 "id": c.id,
@@ -171,11 +164,7 @@ class BankingService:
 
     def disconnect(self, connection_id: int) -> bool:
         """Disconnect a bank connection."""
-        conn = (
-            self._db.query(BankConnection)
-            .filter(BankConnection.id == connection_id)
-            .first()
-        )
+        conn = self._db.query(BankConnection).filter(BankConnection.id == connection_id).first()
         if not conn:
             return False
 
@@ -205,11 +194,7 @@ class BankingService:
         persistence happen server-side; the result lands back in the
         monolith MySQL projection via ``TransactionSyncConsumer``.
         """
-        conn = (
-            self._db.query(BankConnection)
-            .filter(BankConnection.id == connection_id)
-            .first()
-        )
+        conn = self._db.query(BankConnection).filter(BankConnection.id == connection_id).first()
         if not conn:
             raise ValueError(f"Bank connection {connection_id} not found")
         if conn.status != "active":
@@ -265,8 +250,11 @@ class BankingService:
 
         logger.info(
             "Sync complete for connection %d: %d fetched, %d new, %d dupes, %d errors",
-            connection_id, result.total_fetched, result.new_imported,
-            result.duplicates_skipped, result.errors,
+            connection_id,
+            result.total_fetched,
+            result.new_imported,
+            result.duplicates_skipped,
+            result.errors,
         )
         return result
 
@@ -301,19 +289,11 @@ class BankingService:
             categorization_confidence = output.result.confidence.value
 
         if category_id is None:
-            fallback = (
-                self._db.query(CategoryModel)
-                .filter(CategoryModel.name == "Anden")
-                .first()
-            )
+            fallback = self._db.query(CategoryModel).filter(CategoryModel.name == "Anden").first()
             category_id = fallback.idCategory if fallback else None
 
         if category_id is not None:
-            category_row = (
-                self._db.query(CategoryModel)
-                .filter(CategoryModel.idCategory == category_id)
-                .first()
-            )
+            category_row = self._db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
             category_name = category_row.name if category_row else None
 
         return BulkTransactionItem(
@@ -331,19 +311,11 @@ class BankingService:
         )
 
     def _resolve_user_id(self, account_id: int) -> int:
-        account = (
-            self._db.query(AccountModel)
-            .filter(AccountModel.idAccount == account_id)
-            .first()
-        )
+        account = self._db.query(AccountModel).filter(AccountModel.idAccount == account_id).first()
         if account is None:
             raise ValueError(f"Account {account_id} not found in monolith MySQL")
         return int(account.User_idUser)
 
     def _resolve_account_name(self, account_id: int) -> str:
-        account = (
-            self._db.query(AccountModel)
-            .filter(AccountModel.idAccount == account_id)
-            .first()
-        )
+        account = self._db.query(AccountModel).filter(AccountModel.idAccount == account_id).first()
         return str(account.name) if account and account.name else "Bank Account"

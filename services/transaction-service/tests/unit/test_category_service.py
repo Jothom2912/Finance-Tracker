@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.application.category_service import CategoryService
 from app.application.dto import CreateCategoryDTO, UpdateCategoryDTO
 from app.domain.entities import Category, CategoryType

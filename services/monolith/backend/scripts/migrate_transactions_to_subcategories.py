@@ -51,10 +51,7 @@ def migrate() -> None:
             logger.error("Fallback subcategory 'Anden' not found.")
             sys.exit(1)
 
-        keyword_mappings = [
-            (kw, mapping["subcategory"])
-            for kw, mapping in SEED_MERCHANT_MAPPINGS.items()
-        ]
+        keyword_mappings = [(kw, mapping["subcategory"]) for kw, mapping in SEED_MERCHANT_MAPPINGS.items()]
 
         rule_engine = RuleEngine(
             keyword_mappings=keyword_mappings,
@@ -68,11 +65,7 @@ def migrate() -> None:
         )
 
         # Find transactions needing migration
-        unmigrated = (
-            db.query(Transaction)
-            .filter(Transaction.subcategory_id.is_(None))
-            .all()
-        )
+        unmigrated = db.query(Transaction).filter(Transaction.subcategory_id.is_(None)).all()
 
         total = len(unmigrated)
         if total == 0:
@@ -90,9 +83,7 @@ def migrate() -> None:
             if txn.type == "expense":
                 amount_float = -abs(amount_float)
 
-            output = categorization_service.categorize(
-                TransactionInput(description=desc, amount=amount_float)
-            )
+            output = categorization_service.categorize(TransactionInput(description=desc, amount=amount_float))
 
             txn.subcategory_id = output.result.subcategory_id
             txn.categorization_tier = output.result.tier.value

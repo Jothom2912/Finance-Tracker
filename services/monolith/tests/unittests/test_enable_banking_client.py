@@ -9,13 +9,11 @@ import logging
 from datetime import date
 
 import pytest
-
 from backend.banking.adapters.outbound import enable_banking_client
 from backend.banking.adapters.outbound.enable_banking_client import (
     BankTransaction,
     EnableBankingClient,
 )
-
 
 # ──────────────────────────────────────────────
 # Transaction parsing
@@ -221,9 +219,7 @@ class TestParseTransaction:
 
 
 class TestParseBatch:
-    def test_parse_batch_skips_unparseable_items_with_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_parse_batch_skips_unparseable_items_with_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         """Per-transaction parse errors must not abort the batch.
 
         A single malformed transaction (e.g. missing all date fields)
@@ -255,7 +251,8 @@ class TestParseBatch:
         }
 
         with caplog.at_level(
-            logging.WARNING, logger=enable_banking_client.logger.name,
+            logging.WARNING,
+            logger=enable_banking_client.logger.name,
         ):
             parsed, skipped = EnableBankingClient._parse_batch(
                 [good_a, bad, good_b],
@@ -310,6 +307,7 @@ class TestEnableBankingConfig:
         from backend.banking.adapters.outbound.enable_banking_client import (
             EnableBankingConfig,
         )
+
         with pytest.raises(ValueError, match="ENABLE_BANKING_APP_ID"):
             EnableBankingConfig(
                 app_id="",
@@ -321,6 +319,7 @@ class TestEnableBankingConfig:
         from backend.banking.adapters.outbound.enable_banking_client import (
             EnableBankingConfig,
         )
+
         with pytest.raises(FileNotFoundError):
             EnableBankingConfig(
                 app_id="test-id",

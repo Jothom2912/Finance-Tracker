@@ -162,10 +162,7 @@ class BaseConsumer(ABC):
         session = self._db_session_factory()
         try:
             result = session.execute(
-                text(
-                    "DELETE FROM processed_events "
-                    "WHERE processed_at < NOW() - INTERVAL :days DAY"
-                ),
+                text("DELETE FROM processed_events WHERE processed_at < NOW() - INTERVAL :days DAY"),
                 {"days": _CLEANUP_DAYS},
             )
             session.commit()
@@ -197,7 +194,8 @@ class BaseConsumer(ABC):
 
             if correlation_id:
                 already = await asyncio.to_thread(
-                    self._is_already_processed, correlation_id,
+                    self._is_already_processed,
+                    correlation_id,
                 )
                 if already:
                     logger.info(
@@ -211,7 +209,9 @@ class BaseConsumer(ABC):
 
             if correlation_id:
                 await asyncio.to_thread(
-                    self._record_processed, correlation_id, event_type,
+                    self._record_processed,
+                    correlation_id,
+                    event_type,
                 )
             await message.ack()
 

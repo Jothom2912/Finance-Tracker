@@ -146,11 +146,7 @@ def _seed_bank_connection(db, account_id: int) -> None:
 
 
 def _seed_transactions(db, account_id: int, categories: dict, subcategories: dict) -> None:
-    existing_count = (
-        db.query(Transaction)
-        .filter(Transaction.Account_idAccount == account_id)
-        .count()
-    )
+    existing_count = db.query(Transaction).filter(Transaction.Account_idAccount == account_id).count()
     if existing_count > 50:
         print(f"  [~] Already {existing_count} transactions for account, skipping seed")
         return
@@ -324,11 +320,7 @@ def _seed_goals(db, account_id: int) -> None:
 
 
 def _print_summary(db, account_id: int) -> None:
-    tx_count = (
-        db.query(Transaction)
-        .filter(Transaction.Account_idAccount == account_id)
-        .count()
-    )
+    tx_count = db.query(Transaction).filter(Transaction.Account_idAccount == account_id).count()
     rule_count = (
         db.query(Transaction)
         .filter(
@@ -345,11 +337,7 @@ def _print_summary(db, account_id: int) -> None:
         )
         .count()
     )
-    bank_count = (
-        db.query(BankConnection)
-        .filter(BankConnection.account_id == account_id)
-        .count()
-    )
+    bank_count = db.query(BankConnection).filter(BankConnection.account_id == account_id).count()
     goal_count = db.query(Goal).filter(Goal.Account_idAccount == account_id).count()
 
     print("\n" + "=" * 50)

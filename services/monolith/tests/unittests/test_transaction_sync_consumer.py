@@ -7,7 +7,6 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest
-
 from backend.consumers.transaction_sync import TransactionSyncConsumer
 
 

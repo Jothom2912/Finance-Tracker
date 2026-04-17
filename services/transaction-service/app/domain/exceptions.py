@@ -38,7 +38,4 @@ class CategoryInUseException(Exception):
 
     def __init__(self, category_id: int) -> None:
         self.category_id = category_id
-        super().__init__(
-            f"Category {category_id} cannot be deleted because it is "
-            "referenced by existing transactions"
-        )
+        super().__init__(f"Category {category_id} cannot be deleted because it is referenced by existing transactions")

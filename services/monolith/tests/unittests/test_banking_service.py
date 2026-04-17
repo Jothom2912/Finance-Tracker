@@ -10,7 +10,6 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest
-
 from backend.banking.adapters.outbound.enable_banking_client import BankTransaction
 from backend.banking.adapters.outbound.transaction_service_client import (
     BulkImportResult,

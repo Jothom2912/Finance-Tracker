@@ -4,14 +4,13 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from pydantic import ValidationError
-
 from app.application.dto import (
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
     TransactionFiltersDTO,
 )
 from app.domain.entities import TransactionType
+from pydantic import ValidationError
 
 
 def _valid_tx(**overrides) -> dict:  # type: ignore[no-untyped-def]

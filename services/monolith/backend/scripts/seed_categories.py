@@ -93,11 +93,7 @@ def _seed_merchants(db) -> None:
             continue
 
         normalized = keyword.lower()
-        existing = (
-            db.query(Merchant)
-            .filter(Merchant.normalized_name == normalized)
-            .first()
-        )
+        existing = db.query(Merchant).filter(Merchant.normalized_name == normalized).first()
         if existing is None:
             merchant = Merchant(
                 normalized_name=normalized,

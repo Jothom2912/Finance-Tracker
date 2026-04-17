@@ -113,9 +113,7 @@ class EnableBankingClient:
 
     def get_available_banks(self, country: str = "DK") -> list[dict[str, Any]]:
         """List available banks (ASPSPs) for a country."""
-        resp = self._http.get(
-            "/aspsps", params={"country": country}, headers=self._headers()
-        )
+        resp = self._http.get("/aspsps", params={"country": country}, headers=self._headers())
         resp.raise_for_status()
         return resp.json().get("aspsps", [])
 
@@ -132,11 +130,7 @@ class EnableBankingClient:
         """
         state = str(uuid.uuid4())
         body = {
-            "access": {
-                "valid_until": (
-                    datetime.now(timezone.utc) + timedelta(days=valid_days)
-                ).isoformat()
-            },
+            "access": {"valid_until": (datetime.now(timezone.utc) + timedelta(days=valid_days)).isoformat()},
             "aspsp": {"name": bank_name, "country": country},
             "state": state,
             "redirect_url": self._config.redirect_uri,
@@ -154,9 +148,7 @@ class EnableBankingClient:
 
         Returns session data with session_id and list of accounts.
         """
-        resp = self._http.post(
-            "/sessions", json={"code": auth_code}, headers=self._headers()
-        )
+        resp = self._http.post("/sessions", json={"code": auth_code}, headers=self._headers())
         resp.raise_for_status()
         session = resp.json()
         logger.info(
@@ -168,17 +160,13 @@ class EnableBankingClient:
 
     def get_session(self, session_id: str) -> dict[str, Any]:
         """Get details for an existing session."""
-        resp = self._http.get(
-            f"/sessions/{session_id}", headers=self._headers()
-        )
+        resp = self._http.get(f"/sessions/{session_id}", headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 
     def delete_session(self, session_id: str) -> None:
         """Revoke a session (disconnect bank)."""
-        resp = self._http.delete(
-            f"/sessions/{session_id}", headers=self._headers()
-        )
+        resp = self._http.delete(f"/sessions/{session_id}", headers=self._headers())
         resp.raise_for_status()
         logger.info("Session %s deleted", session_id)
 
@@ -188,9 +176,7 @@ class EnableBankingClient:
 
     def get_balances(self, account_uid: str) -> list[dict[str, Any]]:
         """Get balances for an account."""
-        resp = self._http.get(
-            f"/accounts/{account_uid}/balances", headers=self._headers()
-        )
+        resp = self._http.get(f"/accounts/{account_uid}/balances", headers=self._headers())
         resp.raise_for_status()
         return resp.json().get("balances", [])
 
@@ -207,9 +193,7 @@ class EnableBankingClient:
         Defaults to last 90 days if date_from not specified.
         """
         if date_from is None:
-            date_from = (
-                datetime.now(timezone.utc) - timedelta(days=90)
-            ).date().isoformat()
+            date_from = (datetime.now(timezone.utc) - timedelta(days=90)).date().isoformat()
 
         params: dict[str, str] = {"date_from": date_from}
         if date_to:
@@ -239,13 +223,13 @@ class EnableBankingClient:
             if not continuation_key:
                 break
 
-            logger.debug(
-                "Fetching more transactions (continuation_key=%s)", continuation_key
-            )
+            logger.debug("Fetching more transactions (continuation_key=%s)", continuation_key)
 
         logger.info(
             "Fetched %d transactions for account %s (skipped %d unparseable)",
-            len(all_transactions), account_uid, total_skipped,
+            len(all_transactions),
+            account_uid,
+            total_skipped,
         )
         return all_transactions
 
@@ -320,8 +304,7 @@ class EnableBankingClient:
         booking_date_raw = raw.get("booking_date") or raw.get("value_date")
         if not booking_date_raw:
             raise ValueError(
-                "Bank transaction has neither booking_date nor value_date; "
-                "cannot determine transaction date",
+                "Bank transaction has neither booking_date nor value_date; cannot determine transaction date",
             )
         booking_date = date.fromisoformat(booking_date_raw)
 

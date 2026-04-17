@@ -78,12 +78,12 @@ from backend.analytics.adapters.inbound.rest_api import (
     budget_summary_router,
     dashboard_router,
 )
+from backend.banking.presentation.rest_api import router as bank_router
 from backend.budget.adapters.inbound.rest_api import router as budget_router
 from backend.goal.adapters.inbound.goal_api import router as goal_router
 from backend.monthly_budget.adapters.inbound.rest_api import (
     router as monthly_budget_router,
 )
-from backend.banking.presentation.rest_api import router as bank_router
 from backend.user.adapters.inbound.user_api import router as user_router
 
 

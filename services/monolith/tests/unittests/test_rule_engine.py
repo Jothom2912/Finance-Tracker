@@ -10,7 +10,6 @@ Tests:
 """
 
 import pytest
-
 from backend.category.adapters.outbound.rule_engine import RuleEngine
 from backend.category.domain.value_objects import (
     CategorizationTier,

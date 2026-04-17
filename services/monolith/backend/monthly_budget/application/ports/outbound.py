@@ -39,9 +39,7 @@ class ITransactionPort(ABC):
     """Anti-corruption port for reading expense data from transactions."""
 
     @abstractmethod
-    def get_expenses_by_category(
-        self, account_id: int, start_date: date, end_date: date
-    ) -> dict[int, float]:
+    def get_expenses_by_category(self, account_id: int, start_date: date, end_date: date) -> dict[int, float]:
         """Return {category_id: total_spent} for the given date range (inclusive)."""
         pass
 

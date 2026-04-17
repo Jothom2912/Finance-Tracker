@@ -31,7 +31,9 @@ class ICategoryService(ABC):
 
     @abstractmethod
     async def update_category(
-        self, category_id: int, dto: UpdateCategoryDTO,
+        self,
+        category_id: int,
+        dto: UpdateCategoryDTO,
     ) -> CategoryResponseDTO: ...
 
     @abstractmethod
@@ -50,7 +52,10 @@ class ITransactionService(ABC):
 
     @abstractmethod
     async def update_transaction(
-        self, transaction_id: int, user_id: int, dto: UpdateTransactionDTO,
+        self,
+        transaction_id: int,
+        user_id: int,
+        dto: UpdateTransactionDTO,
     ) -> TransactionResponse: ...
 
     @abstractmethod
@@ -61,7 +66,9 @@ class ITransactionService(ABC):
 
     @abstractmethod
     async def bulk_import(
-        self, user_id: int, dto: BulkCreateTransactionDTO,
+        self,
+        user_id: int,
+        dto: BulkCreateTransactionDTO,
     ) -> BulkCreateResultDTO: ...
 
     @abstractmethod

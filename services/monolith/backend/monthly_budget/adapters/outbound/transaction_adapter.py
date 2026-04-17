@@ -20,9 +20,7 @@ class MySQLTransactionAdapter(ITransactionPort):
     def __init__(self, db: Session):
         self._db = db
 
-    def get_expenses_by_category(
-        self, account_id: int, start_date: date, end_date: date
-    ) -> dict[int, float]:
+    def get_expenses_by_category(self, account_id: int, start_date: date, end_date: date) -> dict[int, float]:
         rows = (
             self._db.query(
                 TransactionModel.Category_idCategory,

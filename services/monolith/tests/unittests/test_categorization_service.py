@@ -5,8 +5,6 @@ Tests all tier combinations: rule-only, rule+ML, rule+ML+LLM,
 tier failures, batch processing, and fallback behavior.
 """
 
-import pytest
-
 from backend.category.application.categorization_service import (
     CategorizationOutput,
     CategorizationService,
@@ -22,13 +20,22 @@ FALLBACK_CAT_ID = 99
 FALLBACK_SUBCAT_ID = 88
 
 RULE_RESULT = CategorizationResult(
-    category_id=1, subcategory_id=10, tier=CategorizationTier.RULE, confidence=Confidence.HIGH,
+    category_id=1,
+    subcategory_id=10,
+    tier=CategorizationTier.RULE,
+    confidence=Confidence.HIGH,
 )
 ML_RESULT = CategorizationResult(
-    category_id=2, subcategory_id=20, tier=CategorizationTier.ML, confidence=Confidence.MEDIUM,
+    category_id=2,
+    subcategory_id=20,
+    tier=CategorizationTier.ML,
+    confidence=Confidence.MEDIUM,
 )
 LLM_RESULT = CategorizationResult(
-    category_id=3, subcategory_id=30, tier=CategorizationTier.LLM, confidence=Confidence.LOW,
+    category_id=3,
+    subcategory_id=30,
+    tier=CategorizationTier.LLM,
+    confidence=Confidence.LOW,
 )
 
 
@@ -77,9 +84,7 @@ class FakeLlmCategorizer:
             confidence=Confidence.LOW,
         )
 
-    def predict_batch(
-        self, transactions: list[tuple[str, float]]
-    ) -> list[CategorizationResult]:
+    def predict_batch(self, transactions: list[tuple[str, float]]) -> list[CategorizationResult]:
         self.batch_call_count += 1
         if self._batch_results is not None:
             return self._batch_results
@@ -100,9 +105,7 @@ class FailingLlmCategorizer:
     def predict(self, description: str, amount: float) -> CategorizationResult:
         raise RuntimeError("LLM crashed")
 
-    def predict_batch(
-        self, transactions: list[tuple[str, float]]
-    ) -> list[CategorizationResult]:
+    def predict_batch(self, transactions: list[tuple[str, float]]) -> list[CategorizationResult]:
         raise RuntimeError("LLM batch crashed")
 
 
@@ -242,10 +245,7 @@ class TestCategorizeSingle:
 
 class TestCategorizeBatch:
     def _make_txns(self, count: int) -> list[TransactionInput]:
-        return [
-            TransactionInput(description=f"txn-{i}", amount=-10.0 * (i + 1))
-            for i in range(count)
-        ]
+        return [TransactionInput(description=f"txn-{i}", amount=-10.0 * (i + 1)) for i in range(count)]
 
     def test_all_resolved_by_rules(self) -> None:
         svc = CategorizationService(

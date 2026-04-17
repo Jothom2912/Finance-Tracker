@@ -49,28 +49,23 @@ class RuleEngine:
         keyword_mappings: list[tuple[str, str]],
         subcategory_lookup: dict[str, tuple[int, int]],
     ):
-        self._sorted_keywords = sorted(
-            keyword_mappings, key=lambda kv: len(kv[0]), reverse=True
-        )
+        self._sorted_keywords = sorted(keyword_mappings, key=lambda kv: len(kv[0]), reverse=True)
         self._lookup = subcategory_lookup
 
-    def match(
-        self, description: str, amount: float
-    ) -> Optional[CategorizationResult]:
+    def match(self, description: str, amount: float) -> Optional[CategorizationResult]:
         desc_lower = description.lower()
 
         for keyword, subcategory_name in self._sorted_keywords:
             if keyword not in desc_lower:
                 continue
 
-            final_name = self._apply_sign_override(
-                keyword, subcategory_name, amount
-            )
+            final_name = self._apply_sign_override(keyword, subcategory_name, amount)
             ids = self._lookup.get(final_name)
             if ids is None:
                 logger.warning(
                     "Keyword '%s' mapped to unknown subcategory '%s'",
-                    keyword, final_name,
+                    keyword,
+                    final_name,
                 )
                 continue
 
@@ -85,9 +80,7 @@ class RuleEngine:
         return None
 
     @staticmethod
-    def _apply_sign_override(
-        keyword: str, default_subcategory: str, amount: float
-    ) -> str:
+    def _apply_sign_override(keyword: str, default_subcategory: str, amount: float) -> str:
         override = SIGN_OVERRIDES.get(keyword)
         if override is None:
             return default_subcategory
