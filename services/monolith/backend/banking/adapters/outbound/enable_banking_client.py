@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -49,12 +49,21 @@ class BankAccount:
 
 @dataclass
 class BankTransaction:
-    """Raw transaction from Enable Banking API."""
+    """Transaction parsed from the Enable Banking API.
+
+    ``date`` is a domain ``date`` object; the adapter parses the bank's
+    ISO-date string with ``date.fromisoformat`` before constructing this
+    dataclass. Raising at the boundary keeps malformed dates local to the
+    adapter instead of surfacing as obscure ``isoformat`` errors deep in
+    downstream ports. See ADR-0001 on hexagonal boundaries; see
+    docs/followups.md for the related date-edge-case note.
+    """
+
     transaction_id: str
     amount: float
     currency: str
     description: str
-    date: str
+    date: date
     creditor_name: str = ""
     debtor_name: str = ""
     status: str = ""
@@ -278,7 +287,13 @@ class EnableBankingClient:
         else:
             description = "Ukendt"
 
-        booking_date = raw.get("booking_date", raw.get("value_date", ""))
+        booking_date_raw = raw.get("booking_date") or raw.get("value_date")
+        if not booking_date_raw:
+            raise ValueError(
+                "Bank transaction has neither booking_date nor value_date; "
+                "cannot determine transaction date",
+            )
+        booking_date = date.fromisoformat(booking_date_raw)
 
         return BankTransaction(
             transaction_id=raw.get("entry_reference", raw.get("transaction_id", "")),

@@ -34,7 +34,7 @@ class TestParseTransaction:
         assert txn.amount == -150.0
         assert txn.currency == "DKK"
         assert txn.description == "Netto Koebenhavn"
-        assert txn.date == "2026-03-20"
+        assert txn.date == date(2026, 3, 20)
         assert txn.transaction_id == "txn-001"
 
     def test_credit_transaction_is_positive(self) -> None:
@@ -78,7 +78,7 @@ class TestParseTransaction:
         }
         txn = EnableBankingClient._parse_transaction(raw)
 
-        assert txn.date == "2026-03-12"
+        assert txn.date == date(2026, 3, 12)
 
     def test_uses_unstructured_array(self) -> None:
         raw = {
@@ -194,6 +194,24 @@ class TestParseTransaction:
         assert txn.amount == -150.00
         assert txn.currency == "DKK"
 
+    def test_parse_raises_when_both_dates_missing(self) -> None:
+        """Empty or missing booking_date AND value_date should fail fast.
+
+        Previously the adapter returned BankTransaction(date="") silently,
+        which only surfaced downstream as an obscure isoformat() error.
+        Parsing at the boundary makes the failure explicit and local; the
+        existing try/except in BankingService.sync_transactions catches it
+        and skips the offending transaction with a logged error.
+        """
+        raw = {
+            "transaction_amount": {"amount": "150.00", "currency": "DKK"},
+            "credit_debit_indicator": "DBIT",
+            "remittance_information_unstructured": "Netto",
+            "entry_reference": "txn-missing-date",
+        }
+        with pytest.raises(ValueError):
+            EnableBankingClient._parse_transaction(raw)
+
 
 # ──────────────────────────────────────────────
 # BankTransaction dataclass
@@ -207,7 +225,7 @@ class TestBankTransaction:
             amount=-100.0,
             currency="DKK",
             description="Test",
-            date="2026-03-20",
+            date=date(2026, 3, 20),
         )
         assert txn.transaction_id == "t1"
         assert txn.amount == -100.0
@@ -218,7 +236,7 @@ class TestBankTransaction:
             amount=50.0,
             currency="DKK",
             description="Test",
-            date="2026-03-20",
+            date=date(2026, 3, 20),
         )
         assert txn.creditor_name == ""
         assert txn.debtor_name == ""
