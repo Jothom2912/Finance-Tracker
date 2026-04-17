@@ -8,7 +8,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-from backend.analytics.application.dto import FinancialOverview
+from backend.analytics.application.dto import FinancialOverview, TransactionProjection
 from backend.analytics.application.ports.outbound import IAnalyticsReadRepository
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,57 @@ class AnalyticsService:
             current_account_balance=round(current_account_balance, 2),
             average_monthly_expenses=round(average_monthly_expenses, 2),
         )
+
+    def list_transaction_projections(
+        self,
+        account_id: int,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        category_id: Optional[int] = None,
+        tx_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[TransactionProjection]:
+        """Read-only list of transactions from the MySQL projection.
+
+        The monolith only owns the read model.  Writes happen in
+        ``transaction-service`` and land here via
+        ``TransactionSyncConsumer``.
+        """
+        if not account_id:
+            raise ValueError("Account ID er påkrævet for at hente transaktioner.")
+
+        raw = self._read_repo.get_transactions(
+            account_id=account_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
+
+        projections: list[TransactionProjection] = []
+        for row in raw:
+            if category_id is not None and row.get("Category_idCategory") != category_id:
+                continue
+            row_type = self._normalize_tx_type(row.get("type"))
+            if tx_type is not None and row_type != tx_type.strip().lower():
+                continue
+
+            row_date = self._normalize_date(row.get("date"))
+            if row_date is None:
+                continue
+
+            projections.append(
+                TransactionProjection(
+                    id=row.get("idTransaction"),
+                    amount=float(row.get("amount", 0)),
+                    description=row.get("description"),
+                    date=row_date,
+                    type=row_type,
+                    category_id=row.get("Category_idCategory"),
+                    account_id=row.get("Account_idAccount"),
+                    categorization_tier=row.get("categorization_tier"),
+                )
+            )
+        return projections
 
     def get_expenses_by_month(
         self,

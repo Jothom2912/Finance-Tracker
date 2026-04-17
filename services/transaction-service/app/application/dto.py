@@ -13,6 +13,8 @@ AMOUNT_MAX = Decimal("9999999999.99")
 DESCRIPTION_MAX = 500
 ACCOUNT_NAME_MAX = 100
 CATEGORY_NAME_MAX = 100
+CATEGORIZATION_TIER_MAX = 20
+CATEGORIZATION_CONFIDENCE_MAX = 10
 
 # Alias to prevent collision when a Pydantic field is also named ``date``
 DateType = date
@@ -45,6 +47,11 @@ class CreateTransactionDTO(BaseModel):
     transaction_type: TransactionType
     description: str | None = Field(default=None, max_length=DESCRIPTION_MAX)
     date: date
+    subcategory_id: int | None = Field(default=None, gt=0)
+    categorization_tier: str | None = Field(default=None, max_length=CATEGORIZATION_TIER_MAX)
+    categorization_confidence: str | None = Field(
+        default=None, max_length=CATEGORIZATION_CONFIDENCE_MAX,
+    )
 
 
 class TransactionResponse(BaseModel):
@@ -61,6 +68,9 @@ class TransactionResponse(BaseModel):
     description: str | None
     date: date
     created_at: datetime
+    subcategory_id: int | None = None
+    categorization_tier: str | None = None
+    categorization_confidence: str | None = None
 
 
 class UpdateTransactionDTO(BaseModel):
@@ -88,6 +98,54 @@ class CSVImportResultDTO(BaseModel):
     imported: int
     skipped: int
     errors: list[str]
+
+
+class BulkCreateTransactionItemDTO(BaseModel):
+    """Single transaction in a bulk-create request.
+
+    Identical field set to :class:`CreateTransactionDTO`; kept as a
+    separate class so the bulk endpoint can evolve independently
+    (e.g. carry source-system identifiers for idempotent imports).
+    """
+
+    account_id: int = Field(gt=0)
+    account_name: str = Field(max_length=ACCOUNT_NAME_MAX)
+    category_id: int | None = Field(default=None, gt=0)
+    category_name: str | None = Field(default=None, max_length=CATEGORY_NAME_MAX)
+    amount: Decimal = Field(ge=AMOUNT_MIN, le=AMOUNT_MAX, decimal_places=2)
+    transaction_type: TransactionType
+    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX)
+    date: date
+    subcategory_id: int | None = Field(default=None, gt=0)
+    categorization_tier: str | None = Field(default=None, max_length=CATEGORIZATION_TIER_MAX)
+    categorization_confidence: str | None = Field(
+        default=None, max_length=CATEGORIZATION_CONFIDENCE_MAX,
+    )
+
+
+class BulkCreateTransactionDTO(BaseModel):
+    """Bulk transaction-import request used by trusted internal
+    producers such as the banking module in the monolith.
+    """
+
+    items: list[BulkCreateTransactionItemDTO] = Field(min_length=1, max_length=500)
+    skip_duplicates: bool = Field(
+        default=True,
+        description=(
+            "If true, items matching an existing transaction on "
+            "(account_id, date, amount, description) are skipped "
+            "rather than creating a duplicate."
+        ),
+    )
+
+
+class BulkCreateResultDTO(BaseModel):
+    """Outcome of a bulk-import operation."""
+
+    imported: int
+    duplicates_skipped: int
+    errors: int
+    imported_ids: list[int] = Field(default_factory=list)
 
 
 class CreatePlannedTransactionDTO(BaseModel):

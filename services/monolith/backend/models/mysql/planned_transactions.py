@@ -5,9 +5,22 @@ from .common import DECIMAL, Base, Column, ForeignKey, Integer, String, relation
 
 
 class PlannedTransactions(Base):
-    """Planlagte transaktioner - Bruges til at planlægge kommende transaktioner"""
+    """Read-only projection of the PlannedTransaction aggregate.
+
+    The source of truth lives in ``transaction-service`` (PostgreSQL).
+    Planned-transaction events aren't routed to a projection consumer
+    yet (they were extracted with the transaction bounded context in
+    milestone 2), so this table currently contains only historical
+    rows.
+
+    **Do not construct this model in application code.**  Writes to
+    planned transactions belong in ``transaction-service`` via
+    ``POST /api/v1/planned-transactions/``.  Enforced by
+    ``tests/architecture/test_read_only_projections.py``.
+    """
 
     __tablename__ = "PlannedTransactions"
+    __table_args__ = {"info": {"read_only": True, "owned_by": "transaction-service"}}
 
     idPlannedTransactions = Column(Integer, primary_key=True, autoincrement=True)
     Transaction_idTransaction = Column(

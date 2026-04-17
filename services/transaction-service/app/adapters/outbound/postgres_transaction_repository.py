@@ -26,6 +26,9 @@ class PostgresTransactionRepository(ITransactionRepository):
         transaction_type: TransactionType,
         description: str | None,
         tx_date: date,
+        subcategory_id: int | None = None,
+        categorization_tier: str | None = None,
+        categorization_confidence: str | None = None,
     ) -> Transaction:
         model = TransactionModel(
             user_id=user_id,
@@ -37,6 +40,9 @@ class PostgresTransactionRepository(ITransactionRepository):
             transaction_type=transaction_type.value,
             description=description,
             date=tx_date,
+            subcategory_id=subcategory_id,
+            categorization_tier=categorization_tier,
+            categorization_confidence=categorization_confidence,
         )
         self._session.add(model)
         await self._session.flush()
@@ -134,6 +140,29 @@ class PostgresTransactionRepository(ITransactionRepository):
         await self._session.flush()
         return True
 
+    async def find_duplicate(
+        self,
+        user_id: int,
+        account_id: int,
+        tx_date: date,
+        amount: Decimal,
+        description: str | None,
+    ) -> Transaction | None:
+        """Look up an existing transaction matching the bank-sync
+        dedup key ``(user_id, account_id, date, amount, description)``.
+        Returns the first match or ``None``.
+        """
+        stmt = select(TransactionModel).where(
+            TransactionModel.user_id == user_id,
+            TransactionModel.account_id == account_id,
+            TransactionModel.date == tx_date,
+            TransactionModel.amount == amount,
+            TransactionModel.description == description,
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalars().first()
+        return self._to_entity(model) if model else None
+
     async def bulk_create(self, transactions: list[dict]) -> list[Transaction]:
         models = []
         for tx in transactions:
@@ -151,6 +180,9 @@ class PostgresTransactionRepository(ITransactionRepository):
                     transaction_type=tx_type,
                     description=tx.get("description"),
                     date=tx["tx_date"],
+                    subcategory_id=tx.get("subcategory_id"),
+                    categorization_tier=tx.get("categorization_tier"),
+                    categorization_confidence=tx.get("categorization_confidence"),
                 )
             )
         self._session.add_all(models)
@@ -173,4 +205,7 @@ class PostgresTransactionRepository(ITransactionRepository):
             description=model.description,
             date=model.date,
             created_at=model.created_at,
+            subcategory_id=model.subcategory_id,
+            categorization_tier=model.categorization_tier,
+            categorization_confidence=model.categorization_confidence,
         )

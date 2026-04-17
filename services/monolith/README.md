@@ -2,7 +2,7 @@
 
 FastAPI monolith for personal finance tracking with hexagonal architecture, GraphQL read gateway, event-driven sync, structured logging, live bank integration (PSD2 via Enable Banking), and multi-tier auto-categorization.
 
-**This is the monolith component.** User authentication, transaction management, and category ownership have been extracted into standalone microservices. The monolith handles accounts, budgets, goals, analytics, **bank connections**, and **transaction categorization**. It receives events via RabbitMQ to keep local user and category caches synchronized.
+**This is the monolith component.** User authentication, transaction management, planned transactions and category ownership have been extracted into standalone microservices. The monolith handles accounts, budgets, goals, analytics, **bank connections**, and **transaction categorization**. It receives events via RabbitMQ to keep local user, category and transaction projections synchronized.
 
 ## Quick Start
 
@@ -57,15 +57,18 @@ See `docs/STRUCTURE.md` for the full structure map.
 
 ### Active domains (still in monolith)
 
-- `transaction` — CRUD + CSV import (also available via transaction-service on port 8002)
-- `category` — CRUD + three-level hierarchy (Category / SubCategory / Merchant) + categorization pipeline
-- `banking` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync, deduplication)
+- `category` — three-level hierarchy (Category / SubCategory / Merchant) + categorization pipeline. Category write ownership lives in `transaction-service`; this domain reads the projected MySQL copy
+- `banking` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync). Bank-synced transactions are forwarded to `transaction-service` via HTTP (`POST /api/v1/transactions/bulk`); deduplication and persistence happen there, and the MySQL projection is populated via events
 - `budget` — legacy per-category budget CRUD + summary analytics
 - `monthly_budget` — aggregate-based monthly budgets with budget lines, summary, and copy
-- `analytics` — dashboard overview, expenses-by-month, budget summary, GraphQL read gateway
+- `analytics` — dashboard overview, expenses-by-month, budget summary, GraphQL read gateway. Reads the MySQL transaction projection populated by `TransactionSyncConsumer`
 - `account` — CRUD + account groups
 - `goal` — CRUD
 - `user` — local user management (user-service on port 8001 is source of truth)
+
+### Extracted domains (no longer in the monolith)
+
+- `transaction` + `planned_transaction` — now fully owned by `transaction-service` (port 8002). The monolith keeps a read-only MySQL projection materialised from `transaction.*` events (see `TransactionSyncConsumer`)
 
 ### Event consumers
 
@@ -74,6 +77,7 @@ See `docs/STRUCTURE.md` for the full structure map.
 | `UserSyncConsumer` | `monolith.user_sync` | `user.created` | Insert user into MySQL |
 | `AccountCreationConsumer` | `monolith.account_creation` | `user.created` | Create default account |
 | `CategorySyncConsumer` | `monolith.category_sync` | `category.*` | Sync categories from transaction-service |
+| `TransactionSyncConsumer` | `monolith.transaction_sync` | `transaction.*` | Project transaction writes into MySQL read model |
 
 All consumers run independently with retry (3 attempts), DLQ, and DB-backed idempotency (`processed_events` table with auto-cleanup after 7 days).
 
@@ -81,9 +85,6 @@ All consumers run independently with retry (3 attempts), DLQ, and DB-backed idem
 
 | Path | Domain | Protocol |
 |------|--------|----------|
-| `/api/v1/transactions/*` | Transaction | REST |
-| `/api/v1/planned-transactions/*` | Transaction | REST |
-| `/api/v1/categories/*` | Category | REST |
 | `/api/v1/bank/*` | Banking (PSD2) | REST |
 | `/api/v1/budgets/*` | Budget (legacy) | REST |
 | `/api/v1/monthly-budgets/*` | Monthly Budget | REST |
@@ -92,7 +93,9 @@ All consumers run independently with retry (3 attempts), DLQ, and DB-backed idem
 | `/api/v1/account-groups/*` | Account | REST |
 | `/api/v1/goals/*` | Goal | REST |
 | `/api/v1/users/*` | User | REST |
-| `/api/v1/graphql` | Analytics (read gateway) | GraphQL |
+| `/api/v1/graphql` | Analytics (read gateway — exposes `transactions` and `categories` queries against the MySQL projection) | GraphQL |
+
+Transactions, planned-transactions and categories are owned by `transaction-service` on port 8002. REST writes go there; the monolith only reads the projected copy.
 
 ### Banking endpoints
 
@@ -133,6 +136,8 @@ All config is loaded from `backend/config.py` via environment variables.
 | `ENABLE_BANKING_KEY_PATH` | Path to PEM private key file | `./enablebanking-sandbox.pem` |
 | `ENABLE_BANKING_REDIRECT_URI` | OAuth redirect URI | `http://localhost:8000/api/v1/bank/callback` |
 | `ENABLE_BANKING_ENVIRONMENT` | `sandbox` or `production` | `sandbox` |
+| `TRANSACTION_SERVICE_URL` | Base URL for transaction-service (used by banking bulk-import) | `http://transaction-service:8002` |
+| `TRANSACTION_SERVICE_TIMEOUT` | HTTP timeout in seconds | `10` |
 
 See `example.env` for the full list with descriptions.
 

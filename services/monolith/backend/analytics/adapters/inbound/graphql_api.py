@@ -33,13 +33,11 @@ from backend.dependencies import (
     get_category_service,
     get_goal_service,
     get_monthly_budget_service,
-    get_transaction_service,
 )
 from backend.goal.application.service import GoalService
 from backend.models.mysql.account import Account as AccountModel
 from backend.monthly_budget.application.service import MonthlyBudgetService
 from backend.shared.budget_period import budget_period, determine_budget_month
-from backend.transaction.application.service import TransactionService
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +165,6 @@ async def get_graphql_context(
         "category_service": get_category_service(db),
         "goal_service": get_goal_service(db),
         "monthly_budget_service": get_monthly_budget_service(db),
-        "transaction_service": get_transaction_service(db),
         "account_id": account_id,
         "db": db,
     }
@@ -396,7 +393,7 @@ class Query:
         results = service.list_categories()
         return [CategoryType(id=c.idCategory, name=c.name, type=c.type) for c in results]
 
-    @strawberry.field(description="List transactions for the active account")
+    @strawberry.field(description="List transactions for the active account (read from MySQL projection materialised by TransactionSyncConsumer)")
     def transactions(
         self,
         info: Info,
@@ -408,9 +405,9 @@ class Query:
     ) -> list[TransactionType]:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        service: TransactionService = ctx["transaction_service"]
+        service: AnalyticsService = ctx["analytics_service"]
 
-        results = service.list_transactions(
+        results = service.list_transaction_projections(
             account_id=account_id,
             start_date=start_date,
             end_date=end_date,
@@ -425,9 +422,9 @@ class Query:
                 description=t.description,
                 date=t.date,
                 type=t.type,
-                category_id=t.category_id,
+                category_id=t.category_id or 0,
                 account_id=t.account_id,
-                categorization_tier=getattr(t, "categorization_tier", None),
+                categorization_tier=t.categorization_tier,
             )
             for t in results
         ]

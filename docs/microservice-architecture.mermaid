@@ -1,8 +1,18 @@
 graph TD
     %% Finans Tracker - Target State Microservice Architecture
-    %% Last updated: 2026-03-18
+    %% Last updated: 2026-04-16 (post M1-M3.5)
     %%
     %% Target-state after full monolith extraction (strangler fig pattern).
+    %% See README.md "Architecture" section for the CURRENT state diagram.
+    %%
+    %% M1-M3.5 progress baked into this diagram:
+    %%   - Monolith Transaction table is now a READ-ONLY projection
+    %%     populated by TransactionSyncConsumer (monolith.transaction_sync)
+    %%   - Category table is a READ-ONLY projection populated by
+    %%     CategorySyncConsumer (monolith.category_sync)
+    %%   - Banking bulk-posts bank-synced transactions to
+    %%     transaction-service over HTTP (/api/v1/transactions/bulk),
+    %%     never writes to MySQL directly
     %%
     %% Color legend:
     %%   Blue    = Currently deployed services
@@ -104,7 +114,11 @@ graph TD
     %% ──────────────────────────────────────────────
     %% External integrations
     %% ──────────────────────────────────────────────
-    TINK -.->|"bank transactions"| TS
+    %% Bank sync today (M3): Enable Banking PSD2 is called by the
+    %% monolith's banking module, which posts the batch to
+    %% transaction-service via HTTP (/api/v1/transactions/bulk).
+    %% The target state below routes bank data straight to TS.
+    TINK -.->|"bank transactions (target)"| TS
     LLM -.->|"categorization"| CAT
     OAUTH -.->|"auth tokens"| US
 

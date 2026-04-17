@@ -51,6 +51,7 @@ This starts all services:
 | UserSync Consumer | — | Syncs users from events to MySQL |
 | AccountCreation Consumer | — | Creates default accounts from events |
 | CategorySync Consumer | — | Syncs categories from transaction-service to MySQL |
+| TransactionSync Consumer | — | Projects transaction events into MySQL read model |
 
 **Wait 30-60 seconds** for health checks to pass.
 
@@ -58,8 +59,8 @@ This starts all services:
 
 ```bash
 cd services/frontend
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 App: http://localhost:3001
@@ -100,10 +101,12 @@ graph LR
     RMQ -->|user.created| USC[UserSync<br/>Consumer]
     RMQ -->|user.created| ACC[AccountCreation<br/>Consumer]
     RMQ -->|category.*| CSC[CategorySync<br/>Consumer]
+    RMQ -->|transaction.*| TSC[TransactionSync<br/>Consumer]
 
     USC -->|INSERT User| MYSQL[(MySQL)]
     ACC -->|INSERT Account| MYSQL
     CSC -->|SYNC Category| MYSQL
+    TSC -->|UPSERT Transaction| MYSQL
 
     MON --> MYSQL
 ```
@@ -135,16 +138,21 @@ sequenceDiagram
     User->>API: POST /bank/connections/{id}/sync
     API->>EB: Fetch transactions
     EB-->>API: Raw transactions
-    API->>API: Deduplicate + categorize
-    API->>DB: Store new transactions
+    API->>API: Categorize locally (rule engine)
+    API->>TS: POST /api/v1/transactions/bulk (service JWT)
+    TS->>TS: Dedupe + persist + outbox events
+    TS-->>API: {imported, duplicates_skipped}
+    TS-->>RMQ: transaction.created events
+    RMQ-->>DB: TransactionSyncConsumer projects into MySQL
     API-->>User: "12 new, 3 duplicates"
 ```
 
 The bank sync flow:
 1. **Connect** - User authorizes via their bank's OAuth login (PSD2 consent)
 2. **Session** - Enable Banking creates a session with access to account data
-3. **Sync** - Transactions are fetched, deduplicated against existing records, and auto-categorized
-4. **Dashboard** - New transactions appear immediately with categorization tier badges
+3. **Sync** - Monolith fetches transactions, categorises them locally, then posts the batch to `transaction-service` over HTTP. The service dedupes, persists and publishes events
+4. **Projection** - `TransactionSyncConsumer` picks up the events and materialises the rows in the monolith's MySQL read model
+5. **Dashboard** - New transactions appear immediately with categorization tier badges
 
 ### Categorization Pipeline
 
@@ -242,6 +250,7 @@ sequenceDiagram
 | **UserSync Consumer** | — | MySQL | Sync user data from events to MySQL User table |
 | **AccountCreation Consumer** | — | MySQL | Create default account from user.created events |
 | **CategorySync Consumer** | — | MySQL | Sync categories from transaction-service to MySQL |
+| **TransactionSync Consumer** | — | MySQL | Project transaction events into MySQL so analytics/budget/dashboard see microservice writes |
 
 ### Future Services (not yet extracted)
 
@@ -356,17 +365,17 @@ finance-tracker/
 
 ### Monolith (port 8000)
 
+Transactions, planned-transactions and categories are owned by `transaction-service` (port 8002). The monolith keeps a MySQL read-model projection (materialised by `TransactionSyncConsumer`/`CategorySyncConsumer`) but no write endpoints for these resources.
+
 | Method | Path | Description | Auth |
 |--------|------|-------------|------|
-| `*` | `/api/v1/transactions/*` | Transaction CRUD + CSV | Yes |
-| `*` | `/api/v1/categories/*` | Category CRUD | Partial |
 | `*` | `/api/v1/budgets/*` | Legacy budget CRUD | Yes |
 | `*` | `/api/v1/monthly-budgets/*` | Monthly budget CRUD + copy | Yes |
 | `*` | `/api/v1/dashboard/*` | Analytics | Yes |
 | `*` | `/api/v1/accounts/*` | Account CRUD | Yes |
 | `*` | `/api/v1/goals/*` | Goal CRUD | Yes |
 | `*` | `/api/v1/users/*` | User management | Partial |
-| `POST` | `/api/v1/graphql` | GraphQL read gateway | Yes |
+| `POST` | `/api/v1/graphql` | GraphQL read gateway (reads transactions + categories from projection) | Yes |
 | `GET` | `/api/v1/bank/available-banks` | List banks by country | No |
 | `POST` | `/api/v1/bank/connect` | Start bank OAuth flow | No |
 | `GET` | `/api/v1/bank/callback` | OAuth callback from bank | No |
@@ -423,13 +432,26 @@ sequenceDiagram
 | Event | Producer | Published via | Consumers | Routing Key |
 |-------|----------|---------------|-----------|-------------|
 | `UserCreatedEvent` | user-service | Outbox worker | UserSyncConsumer, AccountCreationConsumer | `user.created` |
-| `TransactionCreatedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.created` |
-| `TransactionUpdatedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.updated` |
-| `TransactionDeletedEvent` | transaction-service | Outbox worker | (future consumers) | `transaction.deleted` |
+| `TransactionCreatedEvent` | transaction-service | Outbox worker | TransactionSyncConsumer | `transaction.created` |
+| `TransactionUpdatedEvent` | transaction-service | Outbox worker | TransactionSyncConsumer | `transaction.updated` |
+| `TransactionDeletedEvent` | transaction-service | Outbox worker | TransactionSyncConsumer | `transaction.deleted` |
 | `CategoryCreatedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.created` |
 | `CategoryUpdatedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.updated` |
 | `CategoryDeletedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.deleted` |
 | `AccountCreatedEvent` | AccountCreationConsumer | Direct publish | (future consumers) | `account.created` |
+
+### Projecting transactions into MySQL
+
+Historic transactions from `transaction-service` (PostgreSQL) can be replayed into the monolith MySQL read model via a one-off backfill. Run from the repo root with the compose stack running:
+
+```bash
+cd services/transaction-service
+uv run python ../../scripts/backfill_transaction_projection.py \
+    --database-url postgresql+asyncpg://transaction_service:transaction_service_pass@localhost:5434/transactions \
+    --rabbitmq-url amqp://guest:guest@localhost:5672/
+```
+
+The script iterates over every row in transaction-service and publishes synthetic `transaction.created` events. The running `TransactionSyncConsumer` treats them as upserts, so the script is safe to re-run.
 
 ### Transactional Outbox (Event Publishing)
 
@@ -567,10 +589,11 @@ cd services/transaction-service && make dev
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
 uv run python -m backend.consumers.worker --consumer category-sync
+uv run python -m backend.consumers.worker --consumer transaction-sync
 
 # Frontend
 cd services/frontend
-yarn install && yarn dev
+npm install && npm run dev
 ```
 
 ### Default Credentials (development)
@@ -627,6 +650,10 @@ yarn install && yarn dev
 - [x] Multi-tier categorization pipeline (rule engine + ML/LLM ports)
 - [x] Dashboard with bank connection widget, trend chart, and tier badges
 - [x] Transaction deduplication on bank sync
+- [x] TransactionSync projection consumer (transaction.* events → MySQL read model)
+- [x] Removed duplicate transaction/planned-transaction bounded context from monolith (single source of truth in transaction-service)
+- [x] Banking writes via transaction-service HTTP client — no direct MySQL writes from bank sync
+- [x] `POST /api/v1/transactions/bulk` endpoint with server-side dedup on transaction-service
 - [ ] ML categorizer adapter (train on user-confirmed merchants)
 - [ ] LLM categorizer adapter (GPT/Claude for unknown transactions)
 - [ ] API Gateway (routing, rate limiting)

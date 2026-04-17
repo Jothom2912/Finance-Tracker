@@ -201,25 +201,8 @@ def test_goal_deadline_boundary_values():
 # ============================================================================
 # TRANSACTION BVA TESTS (4.4)
 # ============================================================================
-
-
-def test_transaction_amount_cannot_be_zero():
-    """BVA: Amount må IKKE være 0"""
-    from backend.transaction.application.dto import TransactionCreate
-
-    today = date.today()
-
-    # 0 - INVALID
-    with pytest.raises(ValidationError):
-        TransactionCreate(amount=0, date=today, type="expense", category_id=1, account_id=1)
-
-    # -0.01 - VALID (negative/expense)
-    valid = TransactionCreate(amount=-0.01, date=today, type="expense", category_id=1, account_id=1)
-    assert abs(valid.amount - (-0.01)) < 0.001
-
-    # 0.01 - VALID (positive/income)
-    valid = TransactionCreate(amount=0.01, date=today, type="income", category_id=1, account_id=1)
-    assert abs(valid.amount - 0.01) < 0.001
+# Transaction DTOs are now owned by transaction-service and tested there
+# (see services/transaction-service/tests/unit/test_dto_validation.py).
 
 
 # ============================================================================

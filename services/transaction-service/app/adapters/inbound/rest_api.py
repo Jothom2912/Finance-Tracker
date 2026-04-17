@@ -5,6 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, UploadFile, status
 
 from app.application.dto import (
+    BulkCreateResultDTO,
+    BulkCreateTransactionDTO,
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
     CSVImportResultDTO,
@@ -110,6 +112,26 @@ async def import_csv(
 ) -> CSVImportResultDTO:
     content = (await file.read()).decode("utf-8")
     return await service.import_csv(user_id, content)
+
+
+@transaction_router.post(
+    "/bulk",
+    response_model=BulkCreateResultDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+async def bulk_create_transactions(
+    body: BulkCreateTransactionDTO,
+    user_id: int = Depends(get_current_user_id),
+    service: ITransactionService = Depends(get_transaction_service),
+) -> BulkCreateResultDTO:
+    """Import a batch of transactions for the authenticated user.
+
+    Used by trusted internal producers (e.g. the banking module's
+    bank-sync flow) to hand over pre-categorised transactions.
+    Server-side deduplication prevents re-importing the same bank
+    transaction when callers retry or the sync is triggered twice.
+    """
+    return await service.bulk_import(user_id, body)
 
 
 # ── Planned Transactions ────────────────────────────────────────────

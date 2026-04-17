@@ -16,12 +16,18 @@ from backend.banking.adapters.outbound.enable_banking_client import (
     BankTransaction,
     EnableBankingClient,
 )
+from backend.banking.adapters.outbound.transaction_service_client import (
+    BulkTransactionItem,
+    TransactionServiceClient,
+    TransactionServiceError,
+)
 from backend.category.application.categorization_service import (
     CategorizationService,
     TransactionInput,
 )
+from backend.models.mysql.account import Account as AccountModel
 from backend.models.mysql.bank_connection import BankConnection
-from backend.models.mysql.transaction import Transaction as TransactionModel
+from backend.models.mysql.category import Category as CategoryModel
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -52,10 +58,12 @@ class BankingService:
         db: Session,
         banking_client: EnableBankingClient,
         categorization_service: Optional[CategorizationService] = None,
+        transaction_service_client: Optional[TransactionServiceClient] = None,
     ):
         self._db = db
         self._client = banking_client
         self._categorization = categorization_service
+        self._tx_service = transaction_service_client or TransactionServiceClient()
 
     # ──────────────────────────────────────────
     # Bank discovery
@@ -189,10 +197,13 @@ class BankingService:
         connection_id: int,
         date_from: Optional[str] = None,
     ) -> SyncResult:
-        """
-        Sync transactions from a connected bank account.
+        """Sync transactions from a connected bank account.
 
-        Fetches transactions, deduplicates, auto-categorizes, and stores.
+        Fetches transactions from Enable Banking, runs local
+        auto-categorisation, then hands the batch off to
+        ``transaction-service`` over HTTP.  Deduplication and
+        persistence happen server-side; the result lands back in the
+        monolith MySQL projection via ``TransactionSyncConsumer``.
         """
         conn = (
             self._db.query(BankConnection)
@@ -204,35 +215,53 @@ class BankingService:
         if conn.status != "active":
             raise ValueError(f"Bank connection {connection_id} is {conn.status}")
 
+        user_id = self._resolve_user_id(conn.account_id)
+        account_name = self._resolve_account_name(conn.account_id)
+
         bank_transactions = self._client.get_transactions(
             account_uid=conn.bank_account_uid,
             date_from=date_from,
         )
 
-        result = SyncResult(
-            total_fetched=len(bank_transactions),
-            new_imported=0,
-            duplicates_skipped=0,
-            errors=0,
-        )
-
+        items: list[BulkTransactionItem] = []
+        errors = 0
         for bank_txn in bank_transactions:
             try:
-                if self._is_duplicate(bank_txn, conn.account_id):
-                    result.duplicates_skipped += 1
-                    continue
-
-                self._import_transaction(bank_txn, conn.account_id)
-                result.new_imported += 1
-
+                items.append(
+                    self._to_bulk_item(bank_txn, conn.account_id, account_name),
+                )
             except Exception:
                 logger.exception(
-                    "Error importing transaction %s", bank_txn.transaction_id
+                    "Error preparing transaction %s for bulk import",
+                    bank_txn.transaction_id,
                 )
-                result.errors += 1
+                errors += 1
+
+        try:
+            remote = self._tx_service.bulk_import(user_id=user_id, items=items)
+        except TransactionServiceError:
+            logger.exception(
+                "transaction-service rejected bulk import (connection=%d)",
+                connection_id,
+            )
+            conn.last_synced_at = datetime.now()
+            self._db.commit()
+            return SyncResult(
+                total_fetched=len(bank_transactions),
+                new_imported=0,
+                duplicates_skipped=0,
+                errors=len(bank_transactions) + errors,
+            )
 
         conn.last_synced_at = datetime.now()
         self._db.commit()
+
+        result = SyncResult(
+            total_fetched=len(bank_transactions),
+            new_imported=remote.imported,
+            duplicates_skipped=remote.duplicates_skipped,
+            errors=errors + remote.errors,
+        )
 
         logger.info(
             "Sync complete for connection %d: %d fetched, %d new, %d dupes, %d errors",
@@ -241,34 +270,23 @@ class BankingService:
         )
         return result
 
-    def _is_duplicate(self, bank_txn: BankTransaction, account_id: int) -> bool:
-        """Check if transaction already exists based on description + date + amount."""
-        from sqlalchemy import and_
-
-        existing = (
-            self._db.query(TransactionModel)
-            .filter(
-                and_(
-                    TransactionModel.Account_idAccount == account_id,
-                    TransactionModel.description == bank_txn.description,
-                    TransactionModel.amount == abs(bank_txn.amount),
-                    TransactionModel.date == bank_txn.date,
-                )
-            )
-            .first()
-        )
-        return existing is not None
-
-    def _import_transaction(
-        self, bank_txn: BankTransaction, account_id: int
-    ) -> None:
-        """Import a single bank transaction with auto-categorization."""
+    def _to_bulk_item(
+        self,
+        bank_txn: BankTransaction,
+        account_id: int,
+        account_name: str,
+    ) -> BulkTransactionItem:
+        """Translate a raw bank transaction to the shape expected by
+        transaction-service, running the local rule-engine
+        categoriser so ``category_id`` and pipeline metadata are
+        populated before upload.
+        """
         tx_type = "income" if bank_txn.amount >= 0 else "expense"
-
-        subcategory_id = None
-        categorization_tier = None
-        categorization_confidence = None
-        category_id = None
+        category_id: int | None = None
+        category_name: str | None = None
+        subcategory_id: int | None = None
+        categorization_tier: str | None = None
+        categorization_confidence: str | None = None
 
         if self._categorization is not None:
             output = self._categorization.categorize(
@@ -283,25 +301,49 @@ class BankingService:
             categorization_confidence = output.result.confidence.value
 
         if category_id is None:
-            from backend.models.mysql.category import Category as CategoryModel
             fallback = (
                 self._db.query(CategoryModel)
                 .filter(CategoryModel.name == "Anden")
                 .first()
             )
-            category_id = fallback.idCategory if fallback else 1
+            category_id = fallback.idCategory if fallback else None
 
-        model = TransactionModel(
+        if category_id is not None:
+            category_row = (
+                self._db.query(CategoryModel)
+                .filter(CategoryModel.idCategory == category_id)
+                .first()
+            )
+            category_name = category_row.name if category_row else None
+
+        return BulkTransactionItem(
+            account_id=account_id,
+            account_name=account_name,
             amount=abs(bank_txn.amount),
-            description=bank_txn.description,
+            transaction_type=tx_type,
             date=bank_txn.date,
-            type=tx_type,
-            Category_idCategory=category_id,
-            Account_idAccount=account_id,
-            created_at=datetime.now(),
+            category_id=category_id,
+            category_name=category_name,
+            description=bank_txn.description,
             subcategory_id=subcategory_id,
             categorization_tier=categorization_tier,
             categorization_confidence=categorization_confidence,
         )
-        self._db.add(model)
-        self._db.flush()
+
+    def _resolve_user_id(self, account_id: int) -> int:
+        account = (
+            self._db.query(AccountModel)
+            .filter(AccountModel.idAccount == account_id)
+            .first()
+        )
+        if account is None:
+            raise ValueError(f"Account {account_id} not found in monolith MySQL")
+        return int(account.User_idUser)
+
+    def _resolve_account_name(self, account_id: int) -> str:
+        account = (
+            self._db.query(AccountModel)
+            .filter(AccountModel.idAccount == account_id)
+            .first()
+        )
+        return str(account.name) if account and account.name else "Bank Account"

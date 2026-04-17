@@ -8,11 +8,11 @@ dependencies for FastAPI's Depends().
 All active domains use hexagonal architecture, including analytics.
 
 Usage in routes:
-    from backend.dependencies import get_transaction_service
+    from backend.dependencies import get_account_service
 
     @router.get("/")
-    def list_items(service: TransactionService = Depends(get_transaction_service)):
-        return service.list_transactions(account_id=1)
+    def list_items(service: AccountService = Depends(get_account_service)):
+        return service.list_accounts(user_id=1)
 """
 
 import logging
@@ -96,16 +96,6 @@ from backend.monthly_budget.application.service import (
     MonthlyBudgetService,
 )
 from backend.shared.adapters.mysql_unit_of_work import MySQLUnitOfWork
-from backend.transaction.adapters.outbound.mysql_category_adapter import (
-    MySQLCategoryAdapter as TransactionCategoryAdapter,
-)
-from backend.transaction.adapters.outbound.mysql_repository import (
-    MySQLPlannedTransactionRepository,
-    MySQLTransactionRepository,
-)
-
-# Hexagonal Transaction domain
-from backend.transaction.application.service import TransactionService
 from backend.user.adapters.outbound.account_adapter import (
     MySQLAccountAdapter as UserAccountAdapter,
 )
@@ -164,20 +154,6 @@ def get_categorization_service(
         rule_engine=rule_engine,
         fallback_subcategory_id=fallback_ids[0],
         fallback_category_id=fallback_ids[1],
-    )
-
-
-def get_transaction_service(
-    db: Session = Depends(get_db),
-    categorization_service: CategorizationService | None = Depends(get_categorization_service),
-) -> TransactionService:
-    """Create TransactionService with hexagonal architecture repositories."""
-    return TransactionService(
-        transaction_repo=MySQLTransactionRepository(db),
-        category_port=TransactionCategoryAdapter(db),
-        uow=MySQLUnitOfWork(db),
-        planned_transaction_repo=MySQLPlannedTransactionRepository(db),
-        categorization_service=categorization_service,
     )
 
 

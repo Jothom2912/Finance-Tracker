@@ -76,6 +76,7 @@ class MySQLAnalyticsReadRepository(IAnalyticsReadRepository):
             "type": model.type,
             "Category_idCategory": model.Category_idCategory,
             "Account_idAccount": model.Account_idAccount,
+            "categorization_tier": getattr(model, "categorization_tier", None),
             "created_at": (model.created_at.isoformat() if hasattr(model, "created_at") and model.created_at else None),
         }
 

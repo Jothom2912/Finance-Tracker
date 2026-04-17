@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -121,6 +121,9 @@ class TestTransactionCreatedEvent:
             account_id=1,
             user_id=7,
             amount="123.45",
+            transaction_type="expense",
+            tx_date=date(2026, 1, 15),
+            category_id=3,
             category="Food",
             description="Groceries",
         )
@@ -131,6 +134,9 @@ class TestTransactionCreatedEvent:
         assert restored.account_id == 1
         assert restored.user_id == 7
         assert restored.amount == "123.45"
+        assert restored.transaction_type == "expense"
+        assert restored.tx_date == date(2026, 1, 15)
+        assert restored.category_id == 3
         assert restored.category == "Food"
         assert restored.description == "Groceries"
         assert restored.correlation_id == event.correlation_id
@@ -141,6 +147,8 @@ class TestTransactionCreatedEvent:
             account_id=1,
             user_id=1,
             amount="0.01",
+            transaction_type="expense",
+            tx_date=date(2026, 1, 1),
             category="Test",
             description="x",
         )
@@ -155,6 +163,8 @@ class TestTransactionCreatedEvent:
             account_id=1,
             user_id=1,
             amount="99999.99",
+            transaction_type="income",
+            tx_date=date(2026, 1, 1),
             category="Transfer",
             description="Large transfer",
         )
@@ -170,12 +180,30 @@ class TestTransactionCreatedEvent:
             account_id=1,
             user_id=1,
             amount="10.00",
+            transaction_type="expense",
+            tx_date=date(2026, 1, 1),
             category="Test",
             description="x",
         )
 
         with pytest.raises(ValidationError):
             event.amount = "20.00"  # type: ignore[misc]
+
+    def test_optional_fields_default_to_none_or_empty(self) -> None:
+        event = TransactionCreatedEvent(
+            transaction_id=1,
+            account_id=1,
+            user_id=1,
+            amount="10.00",
+            transaction_type="expense",
+            tx_date=date(2026, 1, 1),
+        )
+
+        assert event.category_id is None
+        assert event.category == ""
+        assert event.description == ""
+        assert event.subcategory_id is None
+        assert event.categorization_tier is None
 
 
 class TestTransactionDeletedEvent:

@@ -30,6 +30,9 @@ class ITransactionRepository(ABC):
         transaction_type: TransactionType,
         description: str | None,
         tx_date: date,
+        subcategory_id: int | None = None,
+        categorization_tier: str | None = None,
+        categorization_confidence: str | None = None,
     ) -> Transaction: ...
 
     @abstractmethod
@@ -55,6 +58,16 @@ class ITransactionRepository(ABC):
 
     @abstractmethod
     async def bulk_create(self, transactions: list[dict]) -> list[Transaction]: ...
+
+    @abstractmethod
+    async def find_duplicate(
+        self,
+        user_id: int,
+        account_id: int,
+        tx_date: date,
+        amount: Decimal,
+        description: str | None,
+    ) -> Transaction | None: ...
 
 
 class IPlannedTransactionRepository(ABC):

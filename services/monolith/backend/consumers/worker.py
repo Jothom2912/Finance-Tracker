@@ -4,9 +4,11 @@ Supports running individual consumers or all of them.
 
 Usage::
 
-    python -m backend.consumers.worker                    # all consumers
+    python -m backend.consumers.worker                         # all consumers
     python -m backend.consumers.worker --consumer user-sync
     python -m backend.consumers.worker --consumer account-creation
+    python -m backend.consumers.worker --consumer category-sync
+    python -m backend.consumers.worker --consumer transaction-sync
 
 Or via uv::
 
@@ -26,6 +28,7 @@ from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
 from backend.config import DATABASE_URL, RABBITMQ_URL
 from backend.consumers.account_creation import AccountCreationConsumer
 from backend.consumers.category_sync import CategorySyncConsumer
+from backend.consumers.transaction_sync import TransactionSyncConsumer
 from backend.consumers.user_sync import UserSyncConsumer
 
 logging.basicConfig(
@@ -114,6 +117,15 @@ async def _run_category_sync(session_factory: object) -> None:
     await consumer.run()
 
 
+async def _run_transaction_sync(session_factory: object) -> None:
+    """Run only the transaction-sync consumer."""
+    consumer = TransactionSyncConsumer(
+        rabbitmq_url=RABBITMQ_URL,
+        db_session_factory=session_factory,
+    )
+    await consumer.run()
+
+
 async def main(consumer_name: str | None = None) -> None:
     logger.info("Starting consumer worker …")
 
@@ -132,12 +144,16 @@ async def main(consumer_name: str | None = None) -> None:
         elif consumer_name == "category-sync":
             logger.info("Running category-sync consumer only")
             await _run_category_sync(session_factory)
+        elif consumer_name == "transaction-sync":
+            logger.info("Running transaction-sync consumer only")
+            await _run_transaction_sync(session_factory)
         else:
             logger.info("Running all consumers")
             await asyncio.gather(
                 _run_user_sync(session_factory),
                 _run_account_creation(session_factory, publisher),
                 _run_category_sync(session_factory),
+                _run_transaction_sync(session_factory),
             )
     finally:
         await publisher.close()
@@ -147,7 +163,12 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="RabbitMQ consumer worker")
     parser.add_argument(
         "--consumer",
-        choices=["user-sync", "account-creation", "category-sync"],
+        choices=[
+            "user-sync",
+            "account-creation",
+            "category-sync",
+            "transaction-sync",
+        ],
         default=None,
         help="Run a specific consumer (default: all)",
     )

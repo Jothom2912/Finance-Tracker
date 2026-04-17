@@ -1,5 +1,9 @@
-"""
-MySQL adapter for Category repository.
+"""Read-only MySQL adapter for the Category projection.
+
+Writes to ``Category`` belong in
+:class:`backend.consumers.category_sync.CategorySyncConsumer` —
+this adapter deliberately exposes no ``create``/``update``/``delete``
+so no one can accidentally split the state from transaction-service.
 """
 
 from typing import Optional
@@ -13,7 +17,7 @@ from backend.models.mysql.category import Category as CategoryModel
 
 
 class MySQLCategoryRepository(ICategoryRepository):
-    """MySQL implementation of category repository."""
+    """Read-only MySQL implementation of the Category port."""
 
     def __init__(self, db: Session):
         if db is None:
@@ -31,37 +35,6 @@ class MySQLCategoryRepository(ICategoryRepository):
     def get_all(self) -> list[Category]:
         models = self._db.query(CategoryModel).order_by(CategoryModel.display_order).all()
         return [self._to_entity(m) for m in models]
-
-    def create(self, category: Category) -> Category:
-        model = CategoryModel(
-            name=category.name,
-            type=(category.type.value if isinstance(category.type, CategoryType) else category.type),
-            display_order=category.display_order,
-        )
-        self._db.add(model)
-        self._db.commit()
-        self._db.refresh(model)
-        return self._to_entity(model)
-
-    def update(self, category: Category) -> Category:
-        model = self._db.query(CategoryModel).filter(CategoryModel.idCategory == category.id).first()
-
-        model.name = category.name
-        model.type = category.type.value if isinstance(category.type, CategoryType) else category.type
-        model.display_order = category.display_order
-
-        self._db.commit()
-        self._db.refresh(model)
-        return self._to_entity(model)
-
-    def delete(self, category_id: int) -> bool:
-        model = self._db.query(CategoryModel).filter(CategoryModel.idCategory == category_id).first()
-        if not model:
-            return False
-
-        self._db.delete(model)
-        self._db.commit()
-        return True
 
     @staticmethod
     def _to_entity(model: CategoryModel) -> Category:

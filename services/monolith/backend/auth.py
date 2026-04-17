@@ -3,6 +3,7 @@
 Authentication module - Password hashing og JWT token generation + FastAPI integration
 """
 
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -24,6 +25,17 @@ if not SECRET_KEY:
     )
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _bcrypt_rounds() -> int:
+    """Bcrypt cost factor, read per call so tests can override via
+    ``BCRYPT_ROUNDS=4``.  Default 12 is safe for production.  Minimum
+    allowed by bcrypt spec is 4.  Each +1 doubles the hashing time.
+    """
+    try:
+        return max(4, int(os.environ.get("BCRYPT_ROUNDS", "12")))
+    except (TypeError, ValueError):
+        return 12
 
 # ============================================================================
 # MODELS FOR AUTH
@@ -54,10 +66,13 @@ class Token(BaseModel):
 
 
 def hash_password(password: str) -> str:
-    """Hash password using bcrypt. Bcrypt has a 72-byte limit."""
+    """Hash password using bcrypt. Bcrypt has a 72-byte limit.
+
+    Cost factor is read from ``BCRYPT_ROUNDS`` (default 12).
+    """
     password = password[:72]
     password_bytes = password.encode("utf-8")
-    hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt(rounds=12))
+    hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt(rounds=_bcrypt_rounds()))
     return hashed.decode("utf-8")
 
 

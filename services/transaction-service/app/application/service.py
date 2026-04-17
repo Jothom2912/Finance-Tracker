@@ -13,6 +13,8 @@ from contracts.events.transaction import (
 )
 
 from app.application.dto import (
+    BulkCreateResultDTO,
+    BulkCreateTransactionDTO,
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
     CSVImportResultDTO,
@@ -68,6 +70,9 @@ class TransactionService(ITransactionService):
                 transaction_type=dto.transaction_type,
                 description=dto.description,
                 tx_date=dto.date,
+                subcategory_id=dto.subcategory_id,
+                categorization_tier=dto.categorization_tier,
+                categorization_confidence=dto.categorization_confidence,
             )
 
             await self._uow.outbox.add(
@@ -76,8 +81,15 @@ class TransactionService(ITransactionService):
                     account_id=transaction.account_id,
                     user_id=user_id,
                     amount=str(transaction.amount),
+                    transaction_type=transaction.transaction_type.value,
+                    tx_date=transaction.date,
+                    category_id=transaction.category_id,
                     category=transaction.category_name or "",
                     description=transaction.description or "",
+                    account_name=transaction.account_name or "",
+                    subcategory_id=transaction.subcategory_id,
+                    categorization_tier=transaction.categorization_tier,
+                    categorization_confidence=transaction.categorization_confidence,
                 ),
                 aggregate_type="transaction",
                 aggregate_id=str(transaction.id),
@@ -135,9 +147,16 @@ class TransactionService(ITransactionService):
                     user_id=user_id,
                     amount=str(updated.amount),
                     previous_amount=str(previous_amount),
+                    transaction_type=updated.transaction_type.value,
+                    tx_date=updated.date,
+                    category_id=updated.category_id,
                     category=updated.category_name or "",
                     previous_category=previous_category,
                     description=updated.description or "",
+                    account_name=updated.account_name or "",
+                    subcategory_id=updated.subcategory_id,
+                    categorization_tier=updated.categorization_tier,
+                    categorization_confidence=updated.categorization_confidence,
                 ),
                 aggregate_type="transaction",
                 aggregate_id=str(updated.id),
@@ -225,8 +244,15 @@ class TransactionService(ITransactionService):
                         account_id=tx.account_id,
                         user_id=user_id,
                         amount=str(tx.amount),
+                        transaction_type=tx.transaction_type.value,
+                        tx_date=tx.date,
+                        category_id=tx.category_id,
                         category=tx.category_name or "",
                         description=tx.description or "",
+                        account_name=tx.account_name or "",
+                        subcategory_id=tx.subcategory_id,
+                        categorization_tier=tx.categorization_tier,
+                        categorization_confidence=tx.categorization_confidence,
                     ),
                     "transaction",
                     str(tx.id),
@@ -238,6 +264,99 @@ class TransactionService(ITransactionService):
             await self._uow.commit()
 
         return CSVImportResultDTO(imported=len(created), skipped=skipped, errors=errors)
+
+    async def bulk_import(
+        self, user_id: int, dto: BulkCreateTransactionDTO,
+    ) -> BulkCreateResultDTO:
+        """Server-side bulk import used by trusted internal producers
+        (e.g. the banking module when syncing bank transactions).
+
+        Performs deduplication on ``(user_id, account_id, date, amount,
+        description)`` and publishes one ``TransactionCreatedEvent``
+        per newly inserted row via the outbox.
+        """
+        duplicates_skipped = 0
+        errors = 0
+        rows_to_create: list[dict] = []
+
+        async with self._uow:
+            for item in dto.items:
+                try:
+                    if dto.skip_duplicates:
+                        duplicate = await self._uow.transactions.find_duplicate(
+                            user_id=user_id,
+                            account_id=item.account_id,
+                            tx_date=item.date,
+                            amount=item.amount,
+                            description=item.description,
+                        )
+                        if duplicate is not None:
+                            duplicates_skipped += 1
+                            continue
+
+                    rows_to_create.append(
+                        {
+                            "user_id": user_id,
+                            "account_id": item.account_id,
+                            "account_name": item.account_name,
+                            "category_id": item.category_id,
+                            "category_name": item.category_name,
+                            "amount": item.amount,
+                            "transaction_type": item.transaction_type,
+                            "description": item.description,
+                            "tx_date": item.date,
+                            "subcategory_id": item.subcategory_id,
+                            "categorization_tier": item.categorization_tier,
+                            "categorization_confidence": item.categorization_confidence,
+                        }
+                    )
+                except Exception:
+                    logger.exception("Bulk-import validation failed for item")
+                    errors += 1
+
+            if not rows_to_create:
+                await self._uow.commit()
+                return BulkCreateResultDTO(
+                    imported=0,
+                    duplicates_skipped=duplicates_skipped,
+                    errors=errors,
+                    imported_ids=[],
+                )
+
+            created = await self._uow.transactions.bulk_create(rows_to_create)
+
+            outbox_entries = [
+                (
+                    TransactionCreatedEvent(
+                        transaction_id=tx.id,
+                        account_id=tx.account_id,
+                        user_id=user_id,
+                        amount=str(tx.amount),
+                        transaction_type=tx.transaction_type.value,
+                        tx_date=tx.date,
+                        category_id=tx.category_id,
+                        category=tx.category_name or "",
+                        description=tx.description or "",
+                        account_name=tx.account_name or "",
+                        subcategory_id=tx.subcategory_id,
+                        categorization_tier=tx.categorization_tier,
+                        categorization_confidence=tx.categorization_confidence,
+                    ),
+                    "transaction",
+                    str(tx.id),
+                )
+                for tx in created
+            ]
+            await self._uow.outbox.add_batch(outbox_entries)
+
+            await self._uow.commit()
+
+        return BulkCreateResultDTO(
+            imported=len(created),
+            duplicates_skipped=duplicates_skipped,
+            errors=errors,
+            imported_ids=[tx.id for tx in created],
+        )
 
     # ── Planned transactions ────────────────────────────────────────
 

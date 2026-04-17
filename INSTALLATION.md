@@ -54,8 +54,8 @@ curl http://localhost:8002/health   # Transaction Service
 
 ```bash
 cd services/frontend
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 #fuck yarn!
 
@@ -152,8 +152,8 @@ uv run python -m backend.consumers.worker --consumer category-sync
 
 ```powershell
 cd services/frontend
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 - API docs: http://localhost:8000/docs

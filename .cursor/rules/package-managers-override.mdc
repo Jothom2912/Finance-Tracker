@@ -1,0 +1,41 @@
+---
+description: Project-scope override of the global package-managers rule. The frontend uses npm, not yarn. See docs/adr/0001-frontend-uses-npm.md.
+alwaysApply: true
+---
+
+# Package Manager Override for finans-tracker
+
+This project **overrides** the global `package-managers.mdc` rule for the frontend.
+
+## Rule
+
+The frontend at `services/frontend/` uses **npm**, not yarn.
+
+| Signal | Value |
+|--------|-------|
+| Lockfile | `services/frontend/package-lock.json` (committed, source of truth) |
+| `yarn.lock` | Does not exist, must not be created |
+| Install command | `npm install` (or `make install-deps` from `services/frontend/`) |
+| Script runner | `npm run <script>` (or the Makefile wrapper) |
+
+Python services in this repo still follow the global rule and use `uv`. The override applies to the frontend only.
+
+## Forbidden actions for AI agents
+
+- **Never** change `npm install` to `yarn install` in `services/frontend/Makefile`, `README.md`, `INSTALLATION.md`, or any doc that references the frontend workflow.
+- **Never** suggest running `yarn <anything>` against this frontend.
+- **Never** create a `yarn.lock`.
+- **Never** add `packageManager: "yarn@..."` to `services/frontend/package.json`.
+- **Never** delete `package-lock.json` in favour of a yarn migration without an explicit ADR that supersedes `docs/adr/0001-frontend-uses-npm.md`.
+
+## If a yarn-only feature is genuinely needed
+
+Stop. Do not migrate silently. Open a new ADR that supersedes ADR-0001 with:
+
+1. The concrete capability that requires yarn.
+2. Why npm cannot provide it.
+3. The migration plan (lockfile regeneration, CI updates, doc updates).
+
+## Why this override exists
+
+The global `package-managers.mdc` is a template default aimed at new projects. This repository was bootstrapped with npm, `package-lock.json` is the committed lockfile, and migrating provides no concrete benefit. Full reasoning: `docs/adr/0001-frontend-uses-npm.md`.
