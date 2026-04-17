@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 import httpx
 import jwt as pyjwt
@@ -216,6 +216,7 @@ class EnableBankingClient:
             params["date_to"] = date_to
 
         all_transactions: list[BankTransaction] = []
+        total_skipped = 0
         continuation_key: str | None = None
 
         while True:
@@ -230,8 +231,9 @@ class EnableBankingClient:
             resp.raise_for_status()
             data = resp.json()
 
-            for raw_txn in data.get("transactions", []):
-                all_transactions.append(self._parse_transaction(raw_txn))
+            batch, skipped = self._parse_batch(data.get("transactions", []))
+            all_transactions.extend(batch)
+            total_skipped += skipped
 
             continuation_key = data.get("continuation_key")
             if not continuation_key:
@@ -242,10 +244,38 @@ class EnableBankingClient:
             )
 
         logger.info(
-            "Fetched %d transactions for account %s",
-            len(all_transactions), account_uid,
+            "Fetched %d transactions for account %s (skipped %d unparseable)",
+            len(all_transactions), account_uid, total_skipped,
         )
         return all_transactions
+
+    @staticmethod
+    def _parse_batch(
+        raw_transactions: Iterable[dict[str, Any]],
+    ) -> tuple[list[BankTransaction], int]:
+        """Parse a list of raw bank transactions, skipping unparseable ones.
+
+        Isolates per-transaction parse failures so a single malformed
+        payload from the bank does not abort the whole paginated batch.
+        Each skip is logged at WARNING level with the transaction's
+        entry_reference for operational traceability; callers log the
+        aggregate skip count once pagination is complete.
+
+        Returns a tuple of (successfully_parsed, skipped_count).
+        """
+        parsed: list[BankTransaction] = []
+        skipped = 0
+        for raw in raw_transactions:
+            try:
+                parsed.append(EnableBankingClient._parse_transaction(raw))
+            except ValueError as exc:
+                skipped += 1
+                logger.warning(
+                    "Skipping unparseable bank transaction %s: %s",
+                    raw.get("entry_reference", "<unknown>"),
+                    exc,
+                )
+        return parsed, skipped
 
     @staticmethod
     def _is_reference_number(text: str) -> bool:

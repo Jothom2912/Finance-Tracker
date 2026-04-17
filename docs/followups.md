@@ -41,3 +41,19 @@ domain-specific exception) if and when distinguishing parse errors from
 other sync failures becomes valuable in logging or metrics. YAGNI for
 now — one line of error counter is enough until a real operational need
 appears.
+
+## HTTP status code mapping for ValueError (2026-04-17)
+
+`rest_api.py:212-213` maps any `ValueError` to HTTP 404. This is
+semantically wrong — 404 means "resource not found", but `ValueError`
+from downstream services typically means "resource found but input
+invalid". Correct status codes would be 422 (Unprocessable Entity) or
+400 (Bad Request).
+
+Surfaced during bank sync debugging: a per-transaction parse error in
+the adapter bubbled up as a 404 response to the API client, making the
+root cause invisible without reading service logs.
+
+Action: audit all `ValueError` → `HTTPException` mappings in
+`rest_api.py`. Consider introducing domain-specific exception types
+(`ParseError`, `ValidationError`) that map to appropriate status codes.

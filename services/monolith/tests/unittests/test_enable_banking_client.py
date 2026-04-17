@@ -5,10 +5,12 @@ Tests JWT generation, transaction parsing, deduplication, and sync flow.
 Uses fakes instead of mocking the HTTP client.
 """
 
+import logging
 from datetime import date
 
 import pytest
 
+from backend.banking.adapters.outbound import enable_banking_client
 from backend.banking.adapters.outbound.enable_banking_client import (
     BankTransaction,
     EnableBankingClient,
@@ -211,6 +213,60 @@ class TestParseTransaction:
         }
         with pytest.raises(ValueError):
             EnableBankingClient._parse_transaction(raw)
+
+
+# ──────────────────────────────────────────────
+# Batch parsing with fail-isolation
+# ──────────────────────────────────────────────
+
+
+class TestParseBatch:
+    def test_parse_batch_skips_unparseable_items_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Per-transaction parse errors must not abort the batch.
+
+        A single malformed transaction (e.g. missing all date fields)
+        should be skipped with a logged WARNING, not take down the whole
+        paginated sync. Verifies three things so a future refactor cannot
+        silently swallow exceptions:
+
+        1. The bad transaction is absent from the parsed list.
+        2. The good transactions are present (no collateral damage).
+        3. A WARNING is emitted referencing the skipped transaction id.
+        """
+        good_a = {
+            "transaction_amount": {"amount": "100.00", "currency": "DKK"},
+            "remittance_information_unstructured": "Good A",
+            "booking_date": "2026-03-20",
+            "entry_reference": "good-a",
+        }
+        bad = {
+            "transaction_amount": {"amount": "50.00", "currency": "DKK"},
+            "remittance_information_unstructured": "Bad txn",
+            "entry_reference": "bad-001",
+            # No booking_date and no value_date -> ValueError during parse.
+        }
+        good_b = {
+            "transaction_amount": {"amount": "25.00", "currency": "DKK"},
+            "remittance_information_unstructured": "Good B",
+            "booking_date": "2026-03-21",
+            "entry_reference": "good-b",
+        }
+
+        with caplog.at_level(
+            logging.WARNING, logger=enable_banking_client.logger.name,
+        ):
+            parsed, skipped = EnableBankingClient._parse_batch(
+                [good_a, bad, good_b],
+            )
+
+        assert skipped == 1
+        assert [t.transaction_id for t in parsed] == ["good-a", "good-b"]
+
+        warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warning_records) == 1
+        assert "bad-001" in warning_records[0].getMessage()
 
 
 # ──────────────────────────────────────────────
