@@ -57,6 +57,7 @@ cd services/frontend
 yarn install
 yarn dev
 ```
+#fuck yarn!
 
 App: http://localhost:3001
 
