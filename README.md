@@ -59,8 +59,8 @@ This starts all services:
 
 ```bash
 cd services/frontend
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 App: http://localhost:3001
@@ -593,7 +593,7 @@ uv run python -m backend.consumers.worker --consumer transaction-sync
 
 # Frontend
 cd services/frontend
-yarn install && yarn dev
+npm install && npm run dev
 ```
 
 ### Default Credentials (development)

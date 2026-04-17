@@ -6,10 +6,10 @@ React 18 SPA built with Vite 5 for personal finance tracking. Connects to the mo
 
 ```bash
 # Install dependencies
-yarn install
+npm install
 
 # Start development server
-yarn dev
+npm run dev
 ```
 
 App: http://localhost:3001
@@ -95,11 +95,11 @@ All clients automatically attach `Authorization: Bearer <token>` and `X-Account-
 ## Commands
 
 ```bash
-yarn dev          # Start dev server (port 3001)
-yarn build        # Production build
-yarn preview      # Preview production build
-yarn test         # Run all tests (vitest)
-yarn test:watch   # Run tests in watch mode
+npm run dev          # Start dev server (port 3001)
+npm run build        # Production build
+npm run preview      # Preview production build
+npm test             # Run all tests (vitest run)
+npm run test:watch   # Run tests in watch mode
 ```
 
 ## Design Tokens
