@@ -12,16 +12,16 @@ help: ## Show available targets
 	@printf '  clean               Remove generated artifacts\n'
 
 install-deps: ## Install all dependencies
-	yarn install
+	npm install
 
 dev: ## Start dev server with hot-reload
-	yarn dev
+	npm run dev
 
 build: ## Build for production
-	yarn build
+	npm run build
 
 test: ## Run all tests
-	yarn test
+	npm test
 
 lint: ## Run linter
 	@printf 'TODO: add eslint - skipping for now\n'
