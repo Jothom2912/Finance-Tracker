@@ -5,6 +5,8 @@ Tests JWT generation, transaction parsing, deduplication, and sync flow.
 Uses fakes instead of mocking the HTTP client.
 """
 
+from datetime import date
+
 import pytest
 
 from backend.banking.adapters.outbound.enable_banking_client import (
@@ -170,6 +172,27 @@ class TestParseTransaction:
 
         assert txn.raw == raw
         assert txn.raw["custom_field"] == "custom_value"
+
+    def test_parsed_transaction_date_is_date_object(self) -> None:
+        """Bank JSON date strings must be parsed to date objects at the adapter boundary.
+
+        Regression test for the case where BankTransaction.date was typed as str
+        but downstream consumers (e.g. BulkTransactionItem) expect a date, causing
+        'str' object has no attribute 'isoformat' during bulk sync.
+        """
+        raw = {
+            "transaction_amount": {"amount": "150.00", "currency": "DKK"},
+            "credit_debit_indicator": "DBIT",
+            "remittance_information_unstructured": "Netto",
+            "booking_date": "2026-03-20",
+            "entry_reference": "txn-001",
+        }
+        txn = EnableBankingClient._parse_transaction(raw)
+
+        assert isinstance(txn.date, date)
+        assert txn.date == date(2026, 3, 20)
+        assert txn.amount == -150.00
+        assert txn.currency == "DKK"
 
 
 # ──────────────────────────────────────────────
