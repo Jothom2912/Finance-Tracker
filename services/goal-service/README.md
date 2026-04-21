@@ -167,3 +167,32 @@ All external dependencies injected via constructors for testability.
 
 - Account validation currently mocked - connects to user-service in production
 - Goal projections not yet implemented - for analytics service integration
+
+
+# Core struktur
+app/config.py - Settings med miljøvariabler
+app/main.py - FastAPI-app med exception handlers og health-endpoint
+
+Domain lag (Rein forretningslogikk)
+app/domain/entities.py - Goal-entitet med validering
+app/domain/exceptions.py - GoalException, GoalNotFound, AccountNotFoundForGoal
+
+Application lag (Use cases)
+app/application/service.py - GoalService med full CRUD-funksjonalitet
+app/application/dto.py - Pydantic-skjemaer med validering (BVA)
+app/application/ports/inbound.py - IGoalService interface
+app/application/ports/outbound.py - IGoalRepository, IAccountPort
+
+Adapter lag (Integrasjon)
+app/adapters/inbound/goal_api.py - FastAPI REST-endepunkter
+app/adapters/outbound/postgres_goal_repository.py - PostgreSQL-implementasjon
+app/adapters/outbound/account_adapter.py - Anti-corruption layer for kontoaccess
+
+Infrastruktur
+pyproject.toml - Avhengigheter (FastAPI, SQLAlchemy, Pydantic, etc.)
+Dockerfile - Container-setup med Python 3.11
+Makefile - Dev-commands (dev, test, lint, migrate)
+alembic.ini - Database migrering-config
+migrations/env.py - Alembic-setup
+migrations/versions/001_create_goals_table.py - Initial migrasjoner
+README.md - Dokumentasjon
