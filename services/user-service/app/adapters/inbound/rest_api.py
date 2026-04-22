@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, status
 
-from app.application.dto import LoginDTO, RegisterDTO, TokenResponse, UserResponse
+from app.application.dto import ExistsResponse, LoginDTO, RegisterDTO, TokenResponse, UserResponse
 from app.application.ports.inbound import IUserService
 from app.auth import get_current_user_id
 from app.dependencies import get_user_service
@@ -44,3 +44,16 @@ async def get_me(
     service: IUserService = Depends(get_user_service),
 ) -> UserResponse:
     return await service.get_user(user_id)
+
+
+@router.get(
+    "/{user_id}/exists",
+    response_model=ExistsResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def user_exists(
+    user_id: int,
+    service: IUserService = Depends(get_user_service),
+) -> ExistsResponse:
+    exists = await service.user_exists(user_id)
+    return ExistsResponse(exists=exists)

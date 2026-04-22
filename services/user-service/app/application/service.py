@@ -116,3 +116,8 @@ class UserService(IUserService):
             email=user.email,
             created_at=user.created_at or datetime.now(timezone.utc),
         )
+
+    async def user_exists(self, user_id: int) -> bool:
+        async with self._uow:
+            user = await self._uow.users.find_by_id(user_id)
+        return user is not None

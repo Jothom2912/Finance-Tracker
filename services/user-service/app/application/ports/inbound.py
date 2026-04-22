@@ -16,3 +16,6 @@ class IUserService(ABC):
 
     @abstractmethod
     async def get_user(self, user_id: int) -> UserResponse: ...
+
+    @abstractmethod
+    async def user_exists(self, user_id: int) -> bool: ...

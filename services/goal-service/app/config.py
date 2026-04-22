@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
+    USER_SERVICE_URL: str = "http://localhost:8001"
+    USER_SERVICE_TIMEOUT: float = 5.0
 
 
 settings = Settings()
