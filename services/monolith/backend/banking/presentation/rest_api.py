@@ -23,7 +23,15 @@ from backend.banking.adapters.outbound.enable_banking_client import (
     EnableBankingClient,
     EnableBankingConfig,
 )
+from backend.banking.adapters.outbound.transaction_service_client import (
+    TransactionServiceError,
+)
 from backend.banking.application.service import BankingService
+from backend.banking.domain.exceptions import (
+    BankAccountReferenceInvalid,
+    BankConnectionInactive,
+    BankConnectionNotFound,
+)
 from backend.category.application.categorization_service import CategorizationService
 from backend.database.mysql import get_db
 from backend.dependencies import get_categorization_service
@@ -106,6 +114,7 @@ class SyncResponse(BaseModel):
     new_imported: int
     duplicates_skipped: int
     errors: int
+    parse_skipped: int = 0
 
 
 # ──────────────────────────────────────────
@@ -197,21 +206,57 @@ def sync_transactions(
     req: SyncRequest = None,
     service: BankingService = Depends(_get_banking_service),
 ):
-    """Sync transactions from a connected bank account."""
+    """Sync transactions from a connected bank account.
+
+    Exception mapping is deliberately restricted to known domain
+    failures.  Anything else — including unexpected ``ValueError`` or
+    other uncaught exceptions — propagates to Starlette's default
+    server-error handler and surfaces as an HTTP 500.
+
+    Why no ``except Exception`` as a safety net: a catch-all absorbs
+    bugs into a plausible-looking status code, which pushes the real
+    diagnosis into log-archaeology after the fact.  A 500 with a
+    stacktrace tells the operator *this is ours and it is unexpected*
+    in one hop; a laundered 502 tells them nothing and hides the
+    class of error.  ``tests/integration/test_bank_sync_routes.py``
+    contains a positive-control test (``RuntimeError`` → 500) that
+    goes red the moment a reviewer reintroduces a catch-all here —
+    that is the operational guarantee that this principle stays in
+    force.
+    """
+    date_from = req.date_from if req else None
     try:
-        date_from = req.date_from if req else None
         result = service.sync_transactions(connection_id=connection_id, date_from=date_from)
-        return SyncResponse(
-            total_fetched=result.total_fetched,
-            new_imported=result.new_imported,
-            duplicates_skipped=result.duplicates_skipped,
-            errors=result.errors,
+    except BankConnectionNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except BankConnectionInactive as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except BankAccountReferenceInvalid as exc:
+        logger.exception(
+            "Referential integrity error on bank sync (connection=%d)",
+            connection_id,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.exception("Failed to sync transactions")
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal account-reference error: {exc}",
+        )
+    except TransactionServiceError as exc:
+        logger.exception(
+            "transaction-service unavailable during bank sync (connection=%d)",
+            connection_id,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream transaction-service error: {exc}",
+        )
+
+    return SyncResponse(
+        total_fetched=result.total_fetched,
+        new_imported=result.new_imported,
+        duplicates_skipped=result.duplicates_skipped,
+        errors=result.errors,
+        parse_skipped=result.parse_skipped,
+    )
 
 
 @router.delete("/connections/{connection_id}")

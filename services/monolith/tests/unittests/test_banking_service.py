@@ -16,6 +16,11 @@ from backend.banking.adapters.outbound.transaction_service_client import (
     TransactionServiceError,
 )
 from backend.banking.application.service import BankingService
+from backend.banking.domain.exceptions import (
+    BankAccountReferenceInvalid,
+    BankConnectionInactive,
+    BankConnectionNotFound,
+)
 
 
 class _StubAccount:
@@ -82,6 +87,7 @@ def _make_banking_service(
     account: _StubAccount | None = None,
     category: _StubCategory | None = None,
     categorization: MagicMock | None = None,
+    parse_skipped: int = 0,
 ) -> tuple[BankingService, MagicMock, MagicMock]:
     connection = connection or _StubConnection()
     account = account or _StubAccount()
@@ -89,7 +95,7 @@ def _make_banking_service(
     db = _make_db(connection, account, category)
 
     client = MagicMock()
-    client.get_transactions.return_value = bank_txns
+    client.get_transactions.return_value = (bank_txns, parse_skipped)
 
     tx_service = tx_client or MagicMock()
     if tx_client is None:
@@ -172,21 +178,86 @@ class TestSyncTransactions:
         assert result.new_imported == 0
         assert result.errors == 2
 
-    def test_raises_when_connection_missing(self) -> None:
+    def test_raises_bank_connection_not_found_when_connection_missing(self) -> None:
+        """Missing connection must raise the specific domain exception,
+        not a generic ``ValueError`` — the route layer relies on the
+        type (not the message) to pick the right HTTP status code.
+        """
         service, db, _ = _make_banking_service([])
         db.query.side_effect = lambda model: MagicMock(
             filter=MagicMock(return_value=MagicMock(first=MagicMock(return_value=None))),
         )
 
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(BankConnectionNotFound) as exc_info:
             service.sync_transactions(connection_id=99)
+        assert exc_info.value.connection_id == 99
 
-    def test_raises_when_connection_inactive(self) -> None:
+    def test_raises_bank_connection_inactive_when_connection_disconnected(self) -> None:
+        """Inactive connection must raise a distinct type from 'not
+        found' so the frontend can react differently (e.g. show a
+        "reconnect bank" CTA instead of a 404 page).
+        """
         conn = _StubConnection(status="disconnected")
         service, _, _ = _make_banking_service([], connection=conn)
 
-        with pytest.raises(ValueError, match="disconnected"):
+        with pytest.raises(BankConnectionInactive) as exc_info:
             service.sync_transactions(connection_id=10)
+        assert exc_info.value.connection_id == 10
+        assert exc_info.value.status == "disconnected"
+
+    def test_raises_account_reference_invalid_when_account_missing(self) -> None:
+        """A ``BankConnection`` whose ``account_id`` points nowhere is
+        an internal invariant breach — must surface as a dedicated
+        exception so monitoring can alert on integrity failures
+        separately from "connection not found".
+        """
+        from backend.models.mysql.account import Account as AccountModel
+        from backend.models.mysql.bank_connection import BankConnection
+
+        conn = _StubConnection(account_id=777)
+
+        def query_side_effect(model):
+            q = MagicMock()
+            if model is BankConnection:
+                q.filter.return_value.first.return_value = conn
+            elif model is AccountModel:
+                q.filter.return_value.first.return_value = None
+            else:
+                q.filter.return_value.first.return_value = None
+            return q
+
+        db = MagicMock()
+        db.query.side_effect = query_side_effect
+
+        client = MagicMock()
+        client.get_transactions.return_value = ([], 0)
+
+        service = BankingService(
+            db=db,
+            banking_client=client,
+            categorization_service=None,
+            transaction_service_client=MagicMock(),
+        )
+
+        with pytest.raises(BankAccountReferenceInvalid) as exc_info:
+            service.sync_transactions(connection_id=10)
+        assert exc_info.value.account_id == 777
+
+    def test_parse_skipped_surfaces_in_sync_result(self) -> None:
+        """Parse-skip count from the adapter must propagate to
+        ``SyncResult.parse_skipped`` so the API response can tell the
+        user that N bank transactions were silently dropped — a sync
+        that skipped half its batch shouldn't look successful.
+        """
+        service, _, _ = _make_banking_service(
+            [_bank_tx(), _bank_tx()],
+            parse_skipped=5,
+        )
+
+        result = service.sync_transactions(connection_id=10)
+
+        assert result.parse_skipped == 5
+        assert result.total_fetched == 2
 
     def test_categorization_drives_category_id(self) -> None:
         from backend.category.domain.value_objects import (

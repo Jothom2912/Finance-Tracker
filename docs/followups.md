@@ -92,18 +92,36 @@ stay in WARNING-log territory. Worth tracking across multiple syncs;
 a rising rate would indicate a broader data-quality issue upstream
 at Enable Banking or the specific bank ASPSP.
 
-## HTTP status code mapping for ValueError (2026-04-17)
+## `start_bank_connection` + `bank_callback` still use catch-all → 502 (2026-04-22)
 
-`rest_api.py:212-213` maps any `ValueError` to HTTP 404. This is
-semantically wrong — 404 means "resource not found", but `ValueError`
-from downstream services typically means "resource found but input
-invalid". Correct status codes would be 422 (Unprocessable Entity) or
-400 (Bad Request).
+`sync_transactions` was rewritten in the same commit that introduced
+`backend/banking/domain/exceptions.py`: domain exceptions now map to
+404/409/500 explicitly, `TransactionServiceError` maps to 502, and
+unclassified errors propagate to Starlette's default 500 handler.
+The catch-all `except Exception → 502` was removed from that route.
 
-Surfaced during bank sync debugging: a per-transaction parse error in
-the adapter bubbled up as a 404 response to the API client, making the
-root cause invisible without reading service logs.
+The other two banking routes — `POST /bank/connect` and
+`GET /bank/callback` — still swallow every exception into a 502, for
+the same reason as before: they both call into
+`EnableBankingClient`, which currently has no typed error hierarchy.
+`httpx.HTTPStatusError`, JWT-signing failures, and anything else
+come out looking identical.  Mapping them properly requires first
+introducing an `EnableBankingError` (or a small family:
+`BankAuthorizationError`, `BankApiUnavailable`, `BankConfigError`)
+so the route layer has something concrete to pattern-match on.
 
-Action: audit all `ValueError` → `HTTPException` mappings in
-`rest_api.py`. Consider introducing domain-specific exception types
-(`ParseError`, `ValidationError`) that map to appropriate status codes.
+Deferred deliberately rather than retrofitted under the current
+commit — cleaning up the route without a typed adapter error would
+just move the catch-all one layer down, not eliminate it.
+
+Action (future commit):
+1. Introduce `EnableBankingError` hierarchy in
+   `backend/banking/adapters/outbound/enable_banking_client.py`, used
+   by `create_session`, `start_authorization`, and the PEM / JWT
+   handling in `__init__` / `_get_jwt`.
+2. Rewrite the `except Exception` blocks in
+   `start_bank_connection` and `bank_callback` to map the new types
+   explicitly, following the `sync_transactions` pattern.
+3. Add route-integration tests mirroring
+   `tests/integration/test_bank_sync_routes.py` — including a
+   positive control that unclassified errors reach the 500 handler.

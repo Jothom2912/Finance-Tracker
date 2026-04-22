@@ -185,12 +185,20 @@ class EnableBankingClient:
         account_uid: str,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
-    ) -> list[BankTransaction]:
+    ) -> tuple[list[BankTransaction], int]:
         """
         Fetch all transactions for an account, handling pagination.
 
         date_from/date_to: ISO date strings (YYYY-MM-DD).
         Defaults to last 90 days if date_from not specified.
+
+        Returns ``(transactions, parse_skipped)``.  ``parse_skipped`` is
+        the aggregate count of transactions the adapter dropped because
+        their payload could not be parsed (see ``_parse_batch``).
+        Surfacing the count lets the sync endpoint report it to the
+        caller instead of burying it in a WARNING log — a silent sync
+        that skipped 40 of 200 transactions is a failure the user
+        deserves to see.
         """
         if date_from is None:
             date_from = (datetime.now(timezone.utc) - timedelta(days=90)).date().isoformat()
@@ -231,7 +239,7 @@ class EnableBankingClient:
             account_uid,
             total_skipped,
         )
-        return all_transactions
+        return all_transactions, total_skipped
 
     @staticmethod
     def _parse_batch(

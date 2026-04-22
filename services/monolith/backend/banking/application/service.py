@@ -23,6 +23,11 @@ from backend.banking.adapters.outbound.transaction_service_client import (
     TransactionServiceClient,
     TransactionServiceError,
 )
+from backend.banking.domain.exceptions import (
+    BankAccountReferenceInvalid,
+    BankConnectionInactive,
+    BankConnectionNotFound,
+)
 from backend.category.application.categorization_service import (
     CategorizationService,
     TransactionInput,
@@ -36,12 +41,21 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SyncResult:
-    """Result of a transaction sync operation."""
+    """Result of a transaction sync operation.
+
+    ``parse_skipped`` counts bank transactions the adapter dropped
+    because their payload could not be parsed (e.g. missing date
+    fields).  Kept separate from ``errors`` because the two happen at
+    different layers — parse-skip is upstream data quality, ``errors``
+    is our own bulk-import failure — and conflating them hides where
+    a sync actually went wrong.
+    """
 
     total_fetched: int
     new_imported: int
     duplicates_skipped: int
     errors: int
+    parse_skipped: int = 0
 
 
 class BankingService:
@@ -196,14 +210,14 @@ class BankingService:
         """
         conn = self._db.query(BankConnection).filter(BankConnection.id == connection_id).first()
         if not conn:
-            raise ValueError(f"Bank connection {connection_id} not found")
+            raise BankConnectionNotFound(connection_id)
         if conn.status != "active":
-            raise ValueError(f"Bank connection {connection_id} is {conn.status}")
+            raise BankConnectionInactive(connection_id, conn.status)
 
         user_id = self._resolve_user_id(conn.account_id)
         account_name = self._resolve_account_name(conn.account_id)
 
-        bank_transactions = self._client.get_transactions(
+        bank_transactions, parse_skipped = self._client.get_transactions(
             account_uid=conn.bank_account_uid,
             date_from=date_from,
         )
@@ -236,6 +250,7 @@ class BankingService:
                 new_imported=0,
                 duplicates_skipped=0,
                 errors=len(bank_transactions) + errors,
+                parse_skipped=parse_skipped,
             )
 
         conn.last_synced_at = datetime.now()
@@ -246,15 +261,17 @@ class BankingService:
             new_imported=remote.imported,
             duplicates_skipped=remote.duplicates_skipped,
             errors=errors + remote.errors,
+            parse_skipped=parse_skipped,
         )
 
         logger.info(
-            "Sync complete for connection %d: %d fetched, %d new, %d dupes, %d errors",
+            "Sync complete for connection %d: %d fetched, %d new, %d dupes, %d errors, %d parse-skipped",
             connection_id,
             result.total_fetched,
             result.new_imported,
             result.duplicates_skipped,
             result.errors,
+            result.parse_skipped,
         )
         return result
 
@@ -313,7 +330,7 @@ class BankingService:
     def _resolve_user_id(self, account_id: int) -> int:
         account = self._db.query(AccountModel).filter(AccountModel.idAccount == account_id).first()
         if account is None:
-            raise ValueError(f"Account {account_id} not found in monolith MySQL")
+            raise BankAccountReferenceInvalid(account_id)
         return int(account.User_idUser)
 
     def _resolve_account_name(self, account_id: int) -> str:
