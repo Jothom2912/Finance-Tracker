@@ -4,6 +4,8 @@ from logging.config import fileConfig
 
 from alembic import context
 from app.config import settings
+from app.database import Base
+from app.models import GoalModel  # noqa: F401
 from sqlalchemy import engine_from_config, pool
 
 config = context.config
@@ -14,11 +16,7 @@ if config.config_file_name is not None:
 sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 config.set_main_option("sqlalchemy.url", sync_url)
 
-# TODO: Import Goal model once ORM models are created
-# from app.models import GoalModel
-# target_metadata = Base.metadata
-
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

@@ -43,25 +43,25 @@ class GoalService(IGoalService):
     # Query use cases
     # ------------------------------------------------------------------
 
-    def get_goal(self, goal_id: int) -> Optional[GoalSchema]:
+    async def get_goal(self, goal_id: int) -> Optional[GoalSchema]:
         """Get a single goal by ID."""
-        goal = self._goal_repo.get_by_id(goal_id)
+        goal = await self._goal_repo.get_by_id(goal_id)
         if not goal:
             return None
         return self._to_dto(goal)
 
-    def list_goals(self, account_id: int) -> list[GoalSchema]:
+    async def list_goals(self, account_id: int) -> list[GoalSchema]:
         """List all goals for a given account."""
-        goals = self._goal_repo.get_all(account_id=account_id)
+        goals = await self._goal_repo.get_all(account_id=account_id)
         return [self._to_dto(g) for g in goals]
 
     # ------------------------------------------------------------------
     # Command use cases
     # ------------------------------------------------------------------
 
-    def create_goal(self, data: GoalCreate) -> GoalSchema:
+    async def create_goal(self, data: GoalCreate) -> GoalSchema:
         """Create a new goal. Validates that account exists."""
-        if not self._account_port.exists(data.Account_idAccount):
+        if not await self._account_port.exists(data.Account_idAccount):
             raise AccountNotFoundForGoal(data.Account_idAccount)
 
         goal = Goal(
@@ -74,12 +74,12 @@ class GoalService(IGoalService):
             account_id=data.Account_idAccount,
         )
 
-        created = self._goal_repo.create(goal)
+        created = await self._goal_repo.create(goal)
         return self._to_dto(created)
 
-    def update_goal(self, goal_id: int, data: GoalBase) -> Optional[GoalSchema]:
+    async def update_goal(self, goal_id: int, data: GoalBase) -> Optional[GoalSchema]:
         """Update an existing goal."""
-        existing = self._goal_repo.get_by_id(goal_id)
+        existing = await self._goal_repo.get_by_id(goal_id)
         if not existing:
             return None
 
@@ -93,12 +93,12 @@ class GoalService(IGoalService):
             account_id=existing.account_id,
         )
 
-        result = self._goal_repo.update(updated_goal)
+        result = await self._goal_repo.update(updated_goal)
         return self._to_dto(result)
 
-    def delete_goal(self, goal_id: int) -> bool:
+    async def delete_goal(self, goal_id: int) -> bool:
         """Delete a goal."""
-        return self._goal_repo.delete(goal_id)
+        return await self._goal_repo.delete(goal_id)
 
     # ------------------------------------------------------------------
     # Mapping helpers

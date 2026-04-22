@@ -1,8 +1,6 @@
-"""
-REST API adapter for Goal bounded context.
-"""
+"""REST API adapter for Goal bounded context."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 
@@ -13,29 +11,18 @@ from app.application.dto import (
     GoalBase,
     GoalCreate,
 )
-from app.application.service import GoalService
+from app.application.ports.inbound import IGoalService
+from app.dependencies import get_goal_service
 from app.domain.exceptions import AccountNotFoundForGoal
 
 router = APIRouter(
     prefix="/goals",
     tags=["Goals"],
 )
-
-
-def get_goal_service() -> GoalService:
-    """Dependency injection for GoalService.
-    
-    This is a placeholder. In a real implementation, this would be injected
-    from the FastAPI dependency system with proper database and port initialization.
-    """
-    # This will be properly implemented in main.py
-    raise NotImplementedError("GoalService not configured")
-
-
 @router.post("/", response_model=GoalSchema, status_code=status.HTTP_201_CREATED)
-def create_goal(
-    goal_data: Dict[str, Any] = Body(...),
-    service: GoalService = Depends(get_goal_service),
+async def create_goal(
+    goal_data: dict[str, Any] = Body(...),
+    service: IGoalService = Depends(get_goal_service),
     account_id: Optional[int] = Depends(lambda: None),  # TODO: Implement with real auth
 ) -> GoalSchema:
     """Opretter et nyt sparemål."""
@@ -49,7 +36,7 @@ def create_goal(
 
     try:
         goal = GoalCreate(**goal_data)
-        return service.create_goal(goal)
+        return await service.create_goal(goal)
     except AccountNotFoundForGoal as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
@@ -57,8 +44,8 @@ def create_goal(
 
 
 @router.get("/", response_model=list[GoalSchema])
-def list_goals(
-    service: GoalService = Depends(get_goal_service),
+async def list_goals(
+    service: IGoalService = Depends(get_goal_service),
     account_id: Optional[int] = Query(None),
     account_id_from_header: Optional[int] = Depends(lambda: None),  # TODO: Implement with real auth
 ) -> list[GoalSchema]:
@@ -69,16 +56,16 @@ def list_goals(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler.",
         )
-    return service.list_goals(final_account_id)
+    return await service.list_goals(final_account_id)
 
 
 @router.get("/{goal_id}", response_model=GoalSchema)
-def get_goal(
+async def get_goal(
     goal_id: int,
-    service: GoalService = Depends(get_goal_service),
+    service: IGoalService = Depends(get_goal_service),
 ) -> GoalSchema:
     """Henter et specifikt mål baseret på ID."""
-    goal = service.get_goal(goal_id)
+    goal = await service.get_goal(goal_id)
     if not goal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -88,13 +75,13 @@ def get_goal(
 
 
 @router.put("/{goal_id}", response_model=GoalSchema)
-def update_goal(
+async def update_goal(
     goal_id: int,
     goal_data: GoalBase,
-    service: GoalService = Depends(get_goal_service),
+    service: IGoalService = Depends(get_goal_service),
 ) -> GoalSchema:
     """Opdaterer et eksisterende mål."""
-    updated = service.update_goal(goal_id, goal_data)
+    updated = await service.update_goal(goal_id, goal_data)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -104,12 +91,12 @@ def update_goal(
 
 
 @router.delete("/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_goal(
+async def delete_goal(
     goal_id: int,
-    service: GoalService = Depends(get_goal_service),
+    service: IGoalService = Depends(get_goal_service),
 ) -> None:
     """Sletter et mål."""
-    if not service.delete_goal(goal_id):
+    if not await service.delete_goal(goal_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Mål ikke fundet.",

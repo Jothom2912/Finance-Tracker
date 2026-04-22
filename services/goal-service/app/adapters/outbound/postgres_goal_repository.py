@@ -1,6 +1,6 @@
-"""
-MySQL implementation of Goal repository port.
-"""
+"""PostgreSQL implementation of Goal repository port."""
+
+from __future__ import annotations
 
 from typing import Optional
 
@@ -9,20 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ports.outbound import IGoalRepository
 from app.domain.entities import Goal
-
-
-# This is a placeholder for the Goal model from the database
-# The actual model needs to be created as part of the migration setup
-class GoalModel:
-    """Placeholder for Goal SQLAlchemy model."""
-
-    idGoal: int
-    name: Optional[str]
-    target_amount: float
-    current_amount: float
-    target_date: Optional[object]
-    status: Optional[str]
-    Account_idAccount: int
+from app.models import GoalModel
 
 
 class AsyncPostgresGoalRepository(IGoalRepository):
@@ -32,38 +19,65 @@ class AsyncPostgresGoalRepository(IGoalRepository):
         self._db = db
 
     async def get_by_id(self, goal_id: int) -> Optional[Goal]:
-        """Get goal by ID."""
-        # Implementation will depend on the actual SQLAlchemy model
-        # This is a placeholder for now
-        return None
+        result = await self._db.execute(select(GoalModel).where(GoalModel.idGoal == goal_id))
+        model = result.scalar_one_or_none()
+        return self._to_entity(model) if model else None
 
     async def get_all(self, account_id: Optional[int] = None) -> list[Goal]:
-        """Get all goals, optionally filtered by account_id."""
-        # Implementation will depend on the actual SQLAlchemy model
-        return []
+        query = select(GoalModel)
+        if account_id is not None:
+            query = query.where(GoalModel.Account_idAccount == account_id)
+
+        result = await self._db.execute(query.order_by(GoalModel.idGoal.desc()))
+        models = result.scalars().all()
+        return [self._to_entity(m) for m in models]
 
     async def create(self, goal: Goal) -> Goal:
-        """Create a new goal."""
-        # Implementation will depend on the actual SQLAlchemy model
-        return goal
+        model = GoalModel(
+            name=goal.name,
+            target_amount=goal.target_amount,
+            current_amount=goal.current_amount,
+            target_date=goal.target_date,
+            status=goal.status,
+            Account_idAccount=goal.account_id,
+        )
+        self._db.add(model)
+        await self._db.commit()
+        await self._db.refresh(model)
+        return self._to_entity(model)
 
     async def update(self, goal: Goal) -> Goal:
-        """Update an existing goal."""
-        # Implementation will depend on the actual SQLAlchemy model
-        return goal
+        result = await self._db.execute(select(GoalModel).where(GoalModel.idGoal == goal.id))
+        model = result.scalar_one_or_none()
+        if model is None:
+            raise ValueError(f"Goal with id {goal.id} not found")
+
+        model.name = goal.name
+        model.target_amount = goal.target_amount
+        model.current_amount = goal.current_amount
+        model.target_date = goal.target_date
+        model.status = goal.status
+
+        await self._db.commit()
+        await self._db.refresh(model)
+        return self._to_entity(model)
 
     async def delete(self, goal_id: int) -> bool:
-        """Delete a goal by ID."""
-        # Implementation will depend on the actual SQLAlchemy model
+        result = await self._db.execute(select(GoalModel).where(GoalModel.idGoal == goal_id))
+        model = result.scalar_one_or_none()
+        if model is None:
+            return False
+
+        await self._db.delete(model)
+        await self._db.commit()
         return True
 
     def _to_entity(self, model: GoalModel) -> Goal:
-        """Convert SQLAlchemy model to domain entity."""
         return Goal(
             id=model.idGoal,
             name=model.name,
-            target_amount=float(model.target_amount) if model.target_amount else 0.0,
-            current_amount=float(model.current_amount) if model.current_amount else 0.0,
+            target_amount=float(model.target_amount) if model.target_amount is not None else 0.0,
+            current_amount=float(model.current_amount) if model.current_amount is not None else 0.0,
             target_date=model.target_date,
             status=model.status,
             account_id=model.Account_idAccount,
