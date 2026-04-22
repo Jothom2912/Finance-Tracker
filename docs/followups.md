@@ -91,39 +91,73 @@ stay in WARNING-log territory. Worth tracking across multiple syncs;
 a rising rate would indicate a broader data-quality issue upstream
 at Enable Banking or the specific bank ASPSP.
 
-## `start_bank_connection` + `bank_callback` still use catch-all → 502 (2026-04-22)
+## `start_bank_connection` + `bank_callback` still use catch-all → 502 (2026-04-22, closed 2026-04-22)
 
-`sync_transactions` was rewritten in the same commit that introduced
-`backend/banking/domain/exceptions.py`: domain exceptions now map to
-404/409/500 explicitly, `TransactionServiceError` maps to 502, and
-unclassified errors propagate to Starlette's default 500 handler.
-The catch-all `except Exception → 502` was removed from that route.
+Closed by the same-day follow-on commit that introduced
+`EnableBankingError` / `BankConfigError` / `BankApiUnavailable` /
+`BankAuthorizationError` in
+`backend/banking/adapters/outbound/enable_banking_client.py`.  All
+three banking routes now map typed adapter errors explicitly:
 
-The other two banking routes — `POST /bank/connect` and
-`GET /bank/callback` — still swallow every exception into a 502, for
-the same reason as before: they both call into
-`EnableBankingClient`, which currently has no typed error hierarchy.
-`httpx.HTTPStatusError`, JWT-signing failures, and anything else
-come out looking identical.  Mapping them properly requires first
-introducing an `EnableBankingError` (or a small family:
-`BankAuthorizationError`, `BankApiUnavailable`, `BankConfigError`)
-so the route layer has something concrete to pattern-match on.
+* `BankConfigError`       → 500  (our deploy is misconfigured)
+* `BankApiUnavailable`    → 502  (upstream unreachable or 5xx)
+* `BankAuthorizationError` → 400  (callback's `auth_code` rejected,
+  raised only from `create_session`)
 
-Deferred deliberately rather than retrofitted under the current
-commit — cleaning up the route without a typed adapter error would
-just move the catch-all one layer down, not eliminate it.
+Every `except Exception` catch-all on the banking routes was removed.
+Each route has a positive-control test asserting an uncaught
+`RuntimeError` reaches Starlette's default 500 handler, so a future
+reviewer who reintroduces a catch-all breaks CI.
 
-Action (future commit):
-1. Introduce `EnableBankingError` hierarchy in
-   `backend/banking/adapters/outbound/enable_banking_client.py`, used
-   by `create_session`, `start_authorization`, and the PEM / JWT
-   handling in `__init__` / `_get_jwt`.
-2. Rewrite the `except Exception` blocks in
-   `start_bank_connection` and `bank_callback` to map the new types
-   explicitly, following the `sync_transactions` pattern.
-3. Add route-integration tests mirroring
-   `tests/integration/test_bank_sync_routes.py` — including a
-   positive control that unclassified errors reach the 500 handler.
+## Enable Banking config not validated at startup (2026-04-22)
+
+`_get_client()` in
+`backend/banking/presentation/rest_api.py` instantiates
+`EnableBankingConfig` + `EnableBankingClient` lazily on the first
+request that touches a banking route.  Both constructors now raise
+`BankConfigError` on misconfiguration (missing `ENABLE_BANKING_APP_ID`,
+unreadable PEM), and the route maps that to HTTP 500 — so the user
+who clicks "Connect bank" first gets the 500.
+
+The honest failure mode would be a fail-fast check at app startup so
+misconfiguration surfaces at deploy time, not at first user traffic.
+Two plausible shapes:
+
+1. Call `_get_client()` from a FastAPI `startup` event (or
+   `lifespan` context) and let `BankConfigError` crash the process.
+2. Add a `validate()` method on `EnableBankingConfig` that the DI
+   wiring calls during container build.
+
+Deferred because the current deployment flow (local Docker Compose
+for development, no prod yet) doesn't make first-user-500s visible in
+a painful way.  Revisit before any real-user deploy.
+
+## Bank-callback redirects render raw JSON in the browser (2026-04-22)
+
+`GET /api/v1/bank/callback` is the redirect target after the user
+completes the Enable Banking OAuth flow.  It is called by the user's
+browser, not by the frontend SPA — there is no frontend handler for
+this path (confirmed by grep across `services/frontend/src`).
+Current behaviour on *any* outcome (success or failure) is:
+
+```
+{ "detail": "Bank authorization rejected: ..." }
+```
+
+rendered as raw JSON in a browser tab.  The HTTP status is now
+correctly typed (400 / 500 / 502 per the adapter error) but the UX is
+still "user sees raw JSON and has no idea what to do".
+
+The proper fix is one of:
+
+1. Redirect to a frontend error page with the status as a query
+   parameter (e.g. `http://localhost:3000/bank/connected?error=rejected`).
+2. Render a minimal HTML error template from the monolith for the
+   callback path specifically.
+
+Out of scope for the typed-errors commit — picking a pattern is a
+frontend/UX conversation.  Current typed JSON responses at least give
+a frontend error page something to branch on once it exists.
 
 ## Duplicate transactions in MySQL projection (2026-04-22)
 

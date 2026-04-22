@@ -5,6 +5,40 @@ Handles JWT generation, OAuth authorization flow, and data retrieval.
 Uses httpx for HTTP requests with proper lifecycle management.
 
 API docs: https://enablebanking.com/docs/api/reference/
+
+Error contract
+--------------
+Every public method on :class:`EnableBankingClient` either returns
+normally or raises one of the typed exceptions defined at the top of
+this module.  The route layer (``backend/banking/presentation/rest_api``)
+maps those types to HTTP status codes explicitly; anything that
+escapes the typed hierarchy is a bug and propagates to FastAPI's
+default 500 handler, matching the principle established for
+``sync_transactions`` (see commit a6dea11 and
+``docs/followups.md``).
+
+Three adapter-level error types cover the outcomes we can classify:
+
+* :class:`BankConfigError` — our side is misconfigured (missing
+  ``app_id``, unreadable PEM, JWT signing failure).  Maps to 500.
+* :class:`BankApiUnavailable` — Enable Banking is unreachable or
+  returned an unexpected HTTP status.  Maps to 502.
+* :class:`BankAuthorizationError` — raised *only* by
+  :meth:`create_session` when Enable Banking rejects a user-supplied
+  authorization code.  Maps to 400.
+
+Call-site-based classification
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``BankAuthorizationError`` is reserved for the one code path where
+the user's input (``auth_code``) is the only thing that changed
+between a working call and a failing one.  A rotated API key could
+in principle produce an upstream 401 on ``create_session`` too, and
+we would mis-classify it as a 400.  That trade-off is accepted
+deliberately: a rotated key would fail ``start_authorization`` as
+well (no user input involved), so the symptom is broader than
+callback-only 400s.  The alternative — routing every 4xx through
+``BankApiUnavailable`` — would collapse the only signal the browser
+redirect loop currently has.
 """
 
 from __future__ import annotations
@@ -24,6 +58,58 @@ logger = logging.getLogger(__name__)
 API_ORIGIN = "https://api.enablebanking.com"
 
 
+# ──────────────────────────────────────────────
+# Typed error hierarchy
+# ──────────────────────────────────────────────
+
+
+class EnableBankingError(Exception):
+    """Base class for typed errors originating in this adapter.
+
+    Route handlers should pattern-match on the concrete subclasses
+    (``BankConfigError``, ``BankApiUnavailable``,
+    ``BankAuthorizationError``); catching ``EnableBankingError``
+    directly defeats the HTTP-mapping design.  The base class exists
+    only to group them for documentation and test assertions.
+    """
+
+
+class BankConfigError(EnableBankingError):
+    """Adapter misconfiguration — missing app id, unreadable PEM, or
+    a JWT that cannot be signed with the current key.
+
+    Maps to HTTP 500.  Never the caller's fault; always an
+    operational problem on our side.
+    """
+
+
+class BankApiUnavailable(EnableBankingError):
+    """Enable Banking did not return a usable response.
+
+    Covers network errors (``httpx.ConnectError``,
+    ``httpx.TimeoutException``, any ``httpx.RequestError``) and
+    unexpected HTTP statuses from upstream (``HTTPStatusError``)
+    outside the authorization flow.
+
+    Maps to HTTP 502.  The correct response to this from a caller is
+    typically retry with backoff, not "check your input".
+    """
+
+
+class BankAuthorizationError(EnableBankingError):
+    """User-supplied authorization data was rejected by Enable Banking.
+
+    Raised exclusively from :meth:`EnableBankingClient.create_session`
+    when Enable Banking returns a 4xx for the ``auth_code`` we just
+    received from the browser redirect.  The typical remedy is that
+    the user restarts the bank-connect flow.
+
+    Maps to HTTP 400.  See the module docstring for the rationale
+    around accepting the "rotated API key masquerading as 400" edge
+    case.
+    """
+
+
 @dataclass(frozen=True)
 class EnableBankingConfig:
     app_id: str
@@ -33,10 +119,10 @@ class EnableBankingConfig:
 
     def __post_init__(self) -> None:
         if not self.app_id:
-            raise ValueError("ENABLE_BANKING_APP_ID is required")
+            raise BankConfigError("ENABLE_BANKING_APP_ID is required")
         path = Path(self.key_path)
         if not path.exists():
-            raise FileNotFoundError(f"PEM key not found at {path.resolve()}")
+            raise BankConfigError(f"PEM key not found at {path.resolve()}")
 
 
 @dataclass
@@ -80,7 +166,10 @@ class EnableBankingClient:
 
     def __init__(self, config: EnableBankingConfig):
         self._config = config
-        self._private_key = Path(config.key_path).read_bytes()
+        try:
+            self._private_key = Path(config.key_path).read_bytes()
+        except OSError as exc:
+            raise BankConfigError(f"Cannot read PEM at {config.key_path}: {exc!r}") from exc
         self._http = httpx.Client(
             base_url=API_ORIGIN,
             timeout=30.0,
@@ -97,15 +186,41 @@ class EnableBankingClient:
             "iat": iat,
             "exp": iat + 3600,
         }
-        return pyjwt.encode(
-            payload,
-            self._private_key,
-            algorithm="RS256",
-            headers={"kid": self._config.app_id},
-        )
+        try:
+            return pyjwt.encode(
+                payload,
+                self._private_key,
+                algorithm="RS256",
+                headers={"kid": self._config.app_id},
+            )
+        except (pyjwt.PyJWTError, ValueError) as exc:
+            raise BankConfigError(f"Failed to sign Enable Banking JWT: {exc!r}") from exc
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._generate_jwt()}"}
+
+    @staticmethod
+    def _wrap_upstream_error(exc: httpx.HTTPError, context: str) -> BankApiUnavailable:
+        """Translate an ``httpx`` error into ``BankApiUnavailable``.
+
+        Handles both arms of ``httpx.HTTPError``:
+          * ``HTTPStatusError`` — upstream returned a non-2xx we did not
+            expect (wrapped body truncated for log hygiene).
+          * ``RequestError`` — transport-level failure (connect, timeout,
+            DNS, TLS).  ``httpx.ConnectError`` and
+            ``httpx.TimeoutException`` are distinct subclasses that both
+            land here.
+
+        Callers that need a different mapping (e.g. ``create_session``
+        treating 4xx as caller-error) must catch ``HTTPStatusError``
+        first and do their own translation.
+        """
+        if isinstance(exc, httpx.HTTPStatusError):
+            body_preview = exc.response.text[:200] if exc.response.text else ""
+            return BankApiUnavailable(
+                f"Enable Banking {context} returned HTTP {exc.response.status_code}: {body_preview}"
+            )
+        return BankApiUnavailable(f"Enable Banking {context} unreachable: {exc!r}")
 
     # ──────────────────────────────────────────
     # Authorization flow
@@ -113,9 +228,12 @@ class EnableBankingClient:
 
     def get_available_banks(self, country: str = "DK") -> list[dict[str, Any]]:
         """List available banks (ASPSPs) for a country."""
-        resp = self._http.get("/aspsps", params={"country": country}, headers=self._headers())
-        resp.raise_for_status()
-        return resp.json().get("aspsps", [])
+        try:
+            resp = self._http.get("/aspsps", params={"country": country}, headers=self._headers())
+            resp.raise_for_status()
+            return resp.json().get("aspsps", [])
+        except httpx.HTTPError as exc:
+            raise self._wrap_upstream_error(exc, "get_available_banks") from exc
 
     def start_authorization(
         self,
@@ -136,9 +254,12 @@ class EnableBankingClient:
             "redirect_url": self._config.redirect_uri,
             "psu_type": "personal",
         }
-        resp = self._http.post("/auth", json=body, headers=self._headers())
-        resp.raise_for_status()
-        data = resp.json()
+        try:
+            resp = self._http.post("/auth", json=body, headers=self._headers())
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            raise self._wrap_upstream_error(exc, "start_authorization") from exc
         logger.info("Authorization started for %s (%s), state=%s", bank_name, country, state)
         return {"url": data["url"], "state": state}
 
@@ -147,10 +268,26 @@ class EnableBankingClient:
         Exchange authorization code for a session.
 
         Returns session data with session_id and list of accounts.
+
+        Error contract: this is the only method that maps upstream 4xx
+        responses to ``BankAuthorizationError`` (HTTP 400) rather than
+        ``BankApiUnavailable`` (HTTP 502).  The ``auth_code`` is supplied
+        by the caller after a browser redirect from the bank and is
+        almost always the variable being rejected — expired,
+        already-used, or tampered.  Rotated-API-key edge cases are
+        documented in the module docstring.
         """
-        resp = self._http.post("/sessions", json={"code": auth_code}, headers=self._headers())
-        resp.raise_for_status()
-        session = resp.json()
+        try:
+            resp = self._http.post("/sessions", json={"code": auth_code}, headers=self._headers())
+            resp.raise_for_status()
+            session = resp.json()
+        except httpx.HTTPStatusError as exc:
+            raise BankAuthorizationError(
+                f"Enable Banking rejected authorization code with HTTP "
+                f"{exc.response.status_code}: the code may have expired or already been used"
+            ) from exc
+        except httpx.RequestError as exc:
+            raise BankApiUnavailable(f"Enable Banking create_session unreachable: {exc!r}") from exc
         logger.info(
             "Session created: %s with %d accounts",
             session.get("session_id", "?"),
@@ -160,14 +297,20 @@ class EnableBankingClient:
 
     def get_session(self, session_id: str) -> dict[str, Any]:
         """Get details for an existing session."""
-        resp = self._http.get(f"/sessions/{session_id}", headers=self._headers())
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = self._http.get(f"/sessions/{session_id}", headers=self._headers())
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPError as exc:
+            raise self._wrap_upstream_error(exc, "get_session") from exc
 
     def delete_session(self, session_id: str) -> None:
         """Revoke a session (disconnect bank)."""
-        resp = self._http.delete(f"/sessions/{session_id}", headers=self._headers())
-        resp.raise_for_status()
+        try:
+            resp = self._http.delete(f"/sessions/{session_id}", headers=self._headers())
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise self._wrap_upstream_error(exc, "delete_session") from exc
         logger.info("Session %s deleted", session_id)
 
     # ──────────────────────────────────────────
@@ -176,9 +319,12 @@ class EnableBankingClient:
 
     def get_balances(self, account_uid: str) -> list[dict[str, Any]]:
         """Get balances for an account."""
-        resp = self._http.get(f"/accounts/{account_uid}/balances", headers=self._headers())
-        resp.raise_for_status()
-        return resp.json().get("balances", [])
+        try:
+            resp = self._http.get(f"/accounts/{account_uid}/balances", headers=self._headers())
+            resp.raise_for_status()
+            return resp.json().get("balances", [])
+        except httpx.HTTPError as exc:
+            raise self._wrap_upstream_error(exc, "get_balances") from exc
 
     def get_transactions(
         self,
@@ -215,13 +361,16 @@ class EnableBankingClient:
             if continuation_key:
                 params["continuation_key"] = continuation_key
 
-            resp = self._http.get(
-                f"/accounts/{account_uid}/transactions",
-                params=params,
-                headers=self._headers(),
-            )
-            resp.raise_for_status()
-            data = resp.json()
+            try:
+                resp = self._http.get(
+                    f"/accounts/{account_uid}/transactions",
+                    params=params,
+                    headers=self._headers(),
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            except httpx.HTTPError as exc:
+                raise self._wrap_upstream_error(exc, "get_transactions") from exc
 
             batch, skipped = self._parse_batch(data.get("transactions", []))
             all_transactions.extend(batch)

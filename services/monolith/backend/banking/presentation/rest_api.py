@@ -20,6 +20,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.banking.adapters.outbound.enable_banking_client import (
+    BankApiUnavailable,
+    BankAuthorizationError,
+    BankConfigError,
     EnableBankingClient,
     EnableBankingConfig,
 )
@@ -122,6 +125,27 @@ class SyncResponse(BaseModel):
 # ──────────────────────────────────────────
 
 
+# ──────────────────────────────────────────
+# Adapter error → HTTP mapping
+# ──────────────────────────────────────────
+#
+# Three typed exceptions from ``enable_banking_client`` map to three
+# HTTP status codes with distinct operational meanings.  The mapping
+# is deliberately shared across every route that talks to the
+# adapter so a reviewer can read the contract in one place instead of
+# tracing each ``except`` clause:
+#
+#   BankConfigError       → 500  our deploy is wrong (missing key, bad JWT)
+#   BankAuthorizationError → 400  caller's auth_code is rejected
+#   BankApiUnavailable    → 502  Enable Banking is unreachable / 5xx
+#
+# Anything else propagates.  A ``RuntimeError`` surfacing here is a
+# bug by definition — it lands as an uncatalogued 500 with a
+# stacktrace in logs, which is what we want operationally.  The
+# positive-control test in ``tests/integration/test_bank_sync_routes``
+# locks this behaviour in for every route.
+
+
 @router.get("/available-banks")
 def list_available_banks(
     country: str = Query(default="DK", description="ISO country code"),
@@ -130,9 +154,12 @@ def list_available_banks(
     """List available banks for a country."""
     try:
         return service.list_banks(country)
-    except Exception as e:
-        logger.exception("Failed to list banks")
-        raise HTTPException(status_code=502, detail=f"Enable Banking API error: {e}")
+    except BankConfigError as exc:
+        logger.exception("Enable Banking misconfigured while listing banks")
+        raise HTTPException(status_code=500, detail=f"Bank adapter misconfigured: {exc}")
+    except BankApiUnavailable as exc:
+        logger.exception("Enable Banking upstream error while listing banks")
+        raise HTTPException(status_code=502, detail=f"Enable Banking API unavailable: {exc}")
 
 
 @router.post("/connect", response_model=ConnectResponse)
@@ -140,14 +167,25 @@ def start_bank_connection(
     req: ConnectRequest,
     service: BankingService = Depends(_get_banking_service),
 ):
-    """Start bank authorization flow. Returns URL to redirect user to."""
+    """Start bank authorization flow. Returns URL to redirect user to.
+
+    Exception mapping follows the same principle as ``sync_transactions``:
+    only known typed errors are mapped; anything uncatalogued propagates
+    to FastAPI's 500 handler.  ``BankAuthorizationError`` cannot be
+    raised here (no user-supplied ``auth_code`` is involved yet) so only
+    the config/upstream pair is handled.
+    """
     try:
         result = service.start_connect(bank_name=req.bank_name, country=req.country)
-        _pending_authorizations[result["state"]] = req.account_id
-        return ConnectResponse(authorization_url=result["url"], state=result["state"])
-    except Exception as e:
-        logger.exception("Failed to start bank connection")
-        raise HTTPException(status_code=502, detail=str(e))
+    except BankConfigError as exc:
+        logger.exception("Enable Banking misconfigured while starting connect flow")
+        raise HTTPException(status_code=500, detail=f"Bank adapter misconfigured: {exc}")
+    except BankApiUnavailable as exc:
+        logger.exception("Enable Banking upstream error while starting connect flow")
+        raise HTTPException(status_code=502, detail=f"Enable Banking API unavailable: {exc}")
+
+    _pending_authorizations[result["state"]] = req.account_id
+    return ConnectResponse(authorization_url=result["url"], state=result["state"])
 
 
 @router.get("/callback")
@@ -162,6 +200,14 @@ def bank_callback(
 
     The 'code' and 'state' parameters come from Enable Banking.
     Account ID is resolved via the state mapping stored at /connect time.
+
+    UX note: this endpoint is the browser redirect target from the bank,
+    not an API call the frontend initiates.  A failure here renders as
+    raw JSON in the user's browser tab, which is a pre-existing UX
+    weakness tracked in ``docs/followups.md``.  This handler's
+    responsibility is limited to producing the correct HTTP status code
+    and a machine-readable body; the redirect-to-frontend-error-page
+    pattern is a separate commit.
     """
     if error:
         logger.error("Bank authorization failed: error=%s, state=%s", error, state)
@@ -182,13 +228,20 @@ def bank_callback(
 
     try:
         connections = service.complete_connect(auth_code=code, account_id=account_id)
-        return {
-            "message": f"Connected {len(connections)} bank account(s)",
-            "connections": connections,
-        }
-    except Exception as e:
-        logger.exception("Failed to complete bank connection")
-        raise HTTPException(status_code=502, detail=str(e))
+    except BankAuthorizationError as exc:
+        logger.warning("Enable Banking rejected authorization code for state=%s: %s", state, exc)
+        raise HTTPException(status_code=400, detail=f"Bank authorization rejected: {exc}")
+    except BankConfigError as exc:
+        logger.exception("Enable Banking misconfigured during callback")
+        raise HTTPException(status_code=500, detail=f"Bank adapter misconfigured: {exc}")
+    except BankApiUnavailable as exc:
+        logger.exception("Enable Banking upstream error during callback")
+        raise HTTPException(status_code=502, detail=f"Enable Banking API unavailable: {exc}")
+
+    return {
+        "message": f"Connected {len(connections)} bank account(s)",
+        "connections": connections,
+    }
 
 
 @router.get("/connections")
