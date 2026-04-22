@@ -1,0 +1,182 @@
+# Categorization Baseline
+
+Observability for the categorization pipeline — a cheap, repeatable
+way to answer *"is the rule engine actually doing its job?"* before
+investing in ML/LLM tiers.
+
+## Why this document exists
+
+The monolith currently wires only the rule-engine tier of the
+`CategorizationService` pipeline.  Every transaction lands with a
+`categorization_tier` label (one of `rule`, `ml`, `llm`, `fallback`),
+already persisted in `transaction-service`'s `transactions` table via
+the projection pipeline.
+
+That label is free telemetry.  Before we consider investing in an ML
+tier, broader keyword catalogs, or description normalization, we run
+three SQL queries against the existing data and let the numbers
+point at the right next step.  This keeps us from building a model
+for a problem that turns out to be "three kiosks and a restaurant
+we could have hardcoded in fifteen minutes".
+
+---
+
+## Running the baseline
+
+Prerequisite: `postgres-transactions` is up (port `5434` on host,
+credentials in `docker-compose.yml`).
+
+```bash
+psql "postgresql://transaction_service:transaction_service_pass@localhost:5434/transactions"
+```
+
+Or from a running container:
+
+```bash
+docker exec -it postgres-transactions \
+  psql -U transaction_service -d transactions
+```
+
+The three queries below are read-only and safe to run against
+production data as well as local dev.
+
+### Q1 — per-tier distribution
+
+```sql
+SELECT
+    COALESCE(categorization_tier, 'null') AS tier,
+    COUNT(*)                              AS n,
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct
+FROM transactions
+GROUP BY categorization_tier
+ORDER BY n DESC;
+```
+
+Answers: *how much of the traffic actually falls back?*  The
+single headline number the decision gate below depends on.
+
+### Q2 — per-category fallback rate
+
+```sql
+SELECT
+    category_name,
+    COUNT(*) FILTER (WHERE categorization_tier = 'fallback') AS fallback,
+    COUNT(*)                                                 AS total,
+    ROUND(
+        100.0 * COUNT(*) FILTER (WHERE categorization_tier = 'fallback')
+            / NULLIF(COUNT(*), 0),
+        1
+    ) AS fallback_pct
+FROM transactions
+GROUP BY category_name
+ORDER BY fallback DESC;
+```
+
+Answers: *is the problem concentrated or spread?*  If 80 % of
+fallbacks land in 3 categories, keyword expansion is the right fix.
+If they're spread across 15+ categories, that points at either a
+description-noise problem (normalization) or a structural
+rule-engine limit (ML tier).
+
+### Q3 — raw descriptions for every fallback
+
+```sql
+SELECT
+    description,
+    COUNT(*)            AS n,
+    SUM(ABS(amount))    AS total_abs
+FROM transactions
+WHERE categorization_tier = 'fallback'
+GROUP BY description
+ORDER BY n DESC
+LIMIT 100;
+```
+
+Answers: *what do the uncategorised transactions actually look
+like?*  The top of this list is the shortest-path fix — either
+they're the same merchant under three spellings (normalization
+problem) or they're merchants the catalog genuinely does not know
+about (keyword-catalog problem).
+
+---
+
+## Decision thresholds
+
+**Calibration note**: every threshold below is a hypothesis until
+the first baseline run.  They are deliberately written down so
+interpretation is not subjective, but they are not dogma.  If the
+first run shows 8 % fallback and that feels acceptable for our use
+case, edit threshold 1 before the next measurement cycle — record
+the change here so the shifted threshold is traceable, not a
+silent goal-move.
+
+### Threshold 1 — is fallback rate actually a problem?
+
+| Q1 fallback %       | Interpretation               | Next action                          |
+|---------------------|------------------------------|--------------------------------------|
+| `< 10 %`            | Acceptable for v1            | No action.  Re-measure next quarter. |
+| `10 – 25 %`         | Rule-engine gap              | Proceed to threshold 2 / 3.          |
+| `> 25 %`            | Rule-engine structurally insufficient | Plan ML tier on the roadmap. |
+
+### Threshold 2 — is the fallback concentrated?
+
+Only evaluated when threshold 1 lands in the middle band.
+
+| Q2 shape                                           | Interpretation                | Next action                               |
+|----------------------------------------------------|-------------------------------|-------------------------------------------|
+| Top-3 categories hold `>= 80 %` of fallback volume | Concentrated                  | Keyword expansion for those 3 categories. |
+| Top-10 categories hold `< 50 %` of fallback volume | Broadly distributed           | Threshold 3 decides next step.            |
+| Anything in between                                | Mixed — treat as concentrated | Keyword expansion for the heaviest 3.     |
+
+### Threshold 3 — description noise?
+
+Only evaluated when threshold 2 lands "broadly distributed".
+
+Manually scan the top-30 rows of Q3.  If the same real-world
+merchant appears under 3+ surface forms (e.g. `DK-NOK SEOUL BBQ`,
+`VISA/DANKORT SEOUL BBQ COPENHAGEN`, `SEOUL BBQ KBH`), the bottle
+neck is description normalization, not keyword coverage.  Add a
+normalization step in the rule-engine adapter before considering
+an ML tier.
+
+### Decision gate
+
+```mermaid
+flowchart TD
+    Q1[Q1: fallback %] --> Gate1{< 10%?}
+    Gate1 -->|yes| Stop[No action; re-measure next quarter]
+    Gate1 -->|no| Gate1b{> 25%?}
+    Gate1b -->|yes| ML[Plan ML tier]
+    Gate1b -->|no| Q2[Q2: concentration]
+    Q2 --> Gate2{Top-3 >= 80%?}
+    Gate2 -->|yes| Kw[Keyword expansion for top-3]
+    Gate2 -->|no| Gate2b{Top-10 < 50%?}
+    Gate2b -->|no| Kw
+    Gate2b -->|yes| Q3[Q3: description noise?]
+    Q3 --> Gate3{Same merchant under 3+ forms?}
+    Gate3 -->|yes| Norm[Add description normalization]
+    Gate3 -->|no| ML
+```
+
+---
+
+## Baseline results
+
+The table below is filled after each baseline run so history is
+visible.  Each row is a commit — bumping the baseline is a
+deliberate, reviewable action, not an ambient side-effect.
+
+| Date | Fallback % (Q1) | Top category (Q2) | Top description (Q3) | Threshold verdict | Action taken |
+|------|-----------------|-------------------|----------------------|-------------------|--------------|
+| *pending first run* | — | — | — | — | — |
+
+### How to record a run
+
+1. Run Q1/Q2/Q3 against the live database.
+2. Append a row to the table above with the top-line numbers.
+3. Note which threshold band the result landed in.
+4. If an action is taken (keyword expansion, normalization, ML
+   planning), link the commit or issue in the "Action taken" column.
+5. Commit the updated `docs/categorization-baseline.md` as part of
+   the same change — the baseline and the action must be traceable
+   to each other, not drift apart.

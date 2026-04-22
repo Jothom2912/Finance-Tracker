@@ -47,22 +47,30 @@ either (a) a future Testcontainers release fixes the Windows case, or
 become annoying in practice.
 
 
-## Categorization fallback rate (2026-04-17)
+## Categorization fallback rate (2026-04-17, updated 2026-04-22)
 
 Bank sync on 2026-04-17 produced 48 fallback-categorizations out of 206
-transactions (~23%). Examples from the logs: `Seoul Koreansk BBQ`,
+transactions (~23 %).  Examples from the logs: `Seoul Koreansk BBQ`,
 `KEBABBRO`, `ROSA KIOSK`, `OFF SITE MULTI OSTERBROGA`.
 
 Either the rule-engine keyword catalog is incomplete for real-world
-merchant names (restaurants, kiosks, location-prefixed strings), or the
-ML/LLM tier described in the architecture is not yet wired up and the
-fallback category is hit directly.
+merchant names (restaurants, kiosks, location-prefixed strings), or
+the ML/LLM tier described in the architecture is not yet wired up and
+the fallback category is hit directly.
 
-Action: audit the rule-catalog coverage against a sample of real bank
-descriptions before investing in an ML/LLM tier. A 23% fallback rate
-implies the rule tier alone is not sufficient as the primary
-categorizer; quantify which categories the fallbacks are routed to
-before deciding where to spend engineering time.
+The baseline methodology — SQL queries against
+`transaction-service`'s `transactions.categorization_tier`, paired
+with three pre-defined decision thresholds — now lives in
+`docs/categorization-baseline.md`.  That document replaces this
+open-ended followup: any future "is fallback too high?" discussion
+should start with a run of Q1/Q2/Q3 and land in one of the threshold
+bands, not a new ad-hoc analysis.
+
+Action: run the baseline queries against live data once the stack is
+up, append the result row to the baseline table, and let the
+threshold band dictate the next step (keyword expansion, normalization,
+or planning an ML tier).  This followup stays open only until the
+first baseline row is recorded.
 
 ## Bank date edge case (2026-04-17)
 
