@@ -10,7 +10,10 @@ Tests:
 """
 
 import pytest
-from backend.category.adapters.outbound.rule_engine import RuleEngine
+from backend.category.adapters.outbound.rule_engine import (
+    RuleEngine,
+    _normalize_for_matching,
+)
 from backend.category.domain.value_objects import (
     CategorizationTier,
     Confidence,
@@ -402,3 +405,92 @@ class TestDanishCharacterNormalisation:
         assert engine.match("Fællesbo Supermarked", amount=-50.0) is not None
         assert engine.match("Aarhus Købmand", amount=-50.0) is not None
         assert engine.match("Århus Købmand", amount=-50.0) is not None
+
+    def test_catalogue_matches_saffi_koebmand_raw_description(self) -> None:
+        """
+        End-to-end regression: the SEED_MERCHANT_MAPPINGS catalogue
+        must classify a raw "SAFFI KØBMAND" bank description as
+        Dagligvarer.  Earlier the catalogue entry was "saffi kobmand"
+        (single-letter strip), which was statically ASCII but silently
+        unreachable after normalisation — same class of bug as
+        lonoverfoersel / boligstoette before commit 86b3489.
+
+        Uses the real catalogue rather than a local keyword list so
+        the test fails if the entry is ever reverted to the wrong
+        transliteration convention.
+        """
+        from backend.category.domain.taxonomy import SEED_MERCHANT_MAPPINGS
+
+        keyword_mappings = [(kw, m["subcategory"]) for kw, m in SEED_MERCHANT_MAPPINGS.items()]
+        engine = RuleEngine(keyword_mappings=keyword_mappings, subcategory_lookup=LOOKUP)
+
+        result = engine.match("SAFFI KØBMAND 2200", amount=-187.50)
+
+        assert result is not None, "Catalogue must match raw Danish 'SAFFI KØBMAND' description"
+        assert result.subcategory_id == LOOKUP["Dagligvarer"][0]
+
+
+# ──────────────────────────────────────────────
+# Catalogue convention guard
+# ──────────────────────────────────────────────
+
+
+class TestTaxonomyConventionGuard:
+    """
+    Static tripwire over the full SEED_MERCHANT_MAPPINGS catalogue.
+
+    What the guard catches
+    ----------------------
+    Keywords that are not yet in the form ``_normalize_for_matching``
+    would produce at match time.  In practice this means:
+
+      * raw Danish characters (ø, æ, å — any case)
+      * uppercase letters anywhere in the keyword
+      * leading or trailing whitespace
+
+    Any of those make a keyword *statically unreachable*: the
+    normalised description is compared as a substring to the
+    normalised keyword, so an un-normalised keyword never matches.
+
+    What the guard does NOT catch
+    -----------------------------
+    Keywords that are syntactically normalised but were transliterated
+    with the wrong convention, e.g. ``"saffi kobmand"`` (single-letter
+    strip, ø→o) instead of the project's ø→oe.  Both forms look
+    identical to a static lowercase/ASCII check; only a dictionary
+    would reveal that ``kobmand`` was meant as ``købmand``.
+
+    This class of bug surfaced three times during baseline work
+    (loenoverfoersel, boligstoette, saffi koebmand) and is left to
+    code review plus the baseline-rerun fallback-rate signal —
+    a keyword that should match but doesn't will show up as a Q3
+    fallback in ``docs/categorization-baseline.md`` eventually.
+    """
+
+    def test_every_keyword_is_pre_normalised(self) -> None:
+        """Each catalogue keyword must equal its own normalised form."""
+        from backend.category.domain.taxonomy import SEED_MERCHANT_MAPPINGS
+
+        offenders = [kw for kw in SEED_MERCHANT_MAPPINGS if kw != _normalize_for_matching(kw)]
+
+        assert not offenders, (
+            "The following keywords are not in normalised form (expected "
+            "lowercase with ø→oe, æ→ae, å→aa).  They are statically "
+            f"unreachable at match time: {offenders}"
+        )
+
+    def test_no_keyword_has_whitespace_boundary(self) -> None:
+        """Leading/trailing whitespace would silently prevent substring match."""
+        from backend.category.domain.taxonomy import SEED_MERCHANT_MAPPINGS
+
+        offenders = [kw for kw in SEED_MERCHANT_MAPPINGS if kw != kw.strip()]
+
+        assert not offenders, f"Keywords with whitespace boundary: {offenders}"
+
+    def test_no_keyword_is_empty(self) -> None:
+        """An empty keyword would substring-match every description."""
+        from backend.category.domain.taxonomy import SEED_MERCHANT_MAPPINGS
+
+        offenders = [kw for kw in SEED_MERCHANT_MAPPINGS if not kw]
+
+        assert not offenders, "Empty keyword detected — would match every description."

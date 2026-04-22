@@ -142,7 +142,7 @@ SEED_MERCHANT_MAPPINGS: dict[str, dict[str, str]] = {
     "rema1000": {"subcategory": "Dagligvarer", "display": "Rema 1000"},
     "coop365": {"subcategory": "Dagligvarer", "display": "Coop 365"},
     "coop kvickly": {"subcategory": "Dagligvarer", "display": "Kvickly"},
-    "saffi kobmand": {"subcategory": "Dagligvarer", "display": "Saffi Kobmand"},
+    "saffi koebmand": {"subcategory": "Dagligvarer", "display": "Saffi Koebmand"},
     "stopn shop": {"subcategory": "Dagligvarer", "display": "Stop'n'Shop"},
     "superbrugsen": {"subcategory": "Dagligvarer", "display": "SuperBrugsen"},
     "irma": {"subcategory": "Dagligvarer", "display": "Irma"},
