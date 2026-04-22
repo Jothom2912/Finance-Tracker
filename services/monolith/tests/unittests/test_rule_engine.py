@@ -34,6 +34,8 @@ LOOKUP = {
     "Abonnementer": (43, 4),
     "Gebyrer": (72, 7),
     "Anden": (80, 8),
+    "Lon": (110, 11),
+    "Offentlig stotte": (111, 11),
 }
 
 # Keyword mappings matching a subset of SEED_MERCHANT_MAPPINGS
@@ -280,3 +282,123 @@ class TestMissingLookup:
 
         result = engine.match("phantom transaction", amount=-50.0)
         assert result is None
+
+
+# ──────────────────────────────────────────────
+# Danish character normalisation (ø/æ/å → oe/ae/aa)
+# ──────────────────────────────────────────────
+
+
+class TestDanishCharacterNormalisation:
+    """
+    The rule engine transliterates ø→oe, æ→ae, å→aa on both the
+    keyword catalogue and the transaction description before
+    substring matching.  These tests cover the three shapes that
+    surfaced in the 2026-04-22 baseline (commit 3aad8b0):
+
+      * Positive: raw Danish description matches an ASCII keyword.
+      * Negative: a description that shares a substring with the
+        normalised keyword but is not the intended match.
+      * Sanity: keywords that were already ASCII keep working.
+    """
+
+    # ── Indkomst -> Lon ──────────────────────────────────────
+    def test_loenoverfoersel_matches_raw_danish_description(self) -> None:
+        """LØNOVERFØRSEL (raw) should resolve to Lon subcategory."""
+        keywords = [("loenoverfoersel", "Lon")]
+        engine = RuleEngine(keyword_mappings=keywords, subcategory_lookup=LOOKUP)
+
+        result = engine.match("LØNOVERFØRSEL 32154.00 KR", amount=32154.0)
+
+        assert result is not None
+        assert result.subcategory_id == LOOKUP["Lon"][0]
+        assert result.category_id == LOOKUP["Lon"][1]
+
+    def test_single_strip_description_does_not_match_oe_keyword(self) -> None:
+        """
+        Convention guard: the keyword catalogue uses ø→oe (Danish
+        traditional).  A description that was pre-transliterated with
+        the alternative single-letter strip (ø→o) will NOT match —
+        that form is outside the contract.  Real bank descriptions
+        come with raw Danish characters, so this asymmetry is
+        acceptable; this test exists so a future reader understands
+        the convention is one-way.
+        """
+        keywords = [("loenoverfoersel", "Lon")]
+        engine = RuleEngine(keyword_mappings=keywords, subcategory_lookup=LOOKUP)
+
+        result = engine.match("Lonoverfoersel", amount=32154.0)
+
+        assert result is None
+
+    def test_loen_substring_does_not_match_loenoverfoersel(self) -> None:
+        """
+        Negative control: a description containing 'LØN' as a short
+        substring (e.g. a company name that happens to start with it)
+        must not be categorised as Lon.  Only the full compound word
+        'loenoverfoersel' is a keyword — there is intentionally no
+        bare 'loen' keyword because it would over-match on unrelated
+        Danish text.
+        """
+        keywords = [("loenoverfoersel", "Lon")]
+        engine = RuleEngine(keyword_mappings=keywords, subcategory_lookup=LOOKUP)
+
+        result = engine.match("LØN-ASTRO PRODUCTS APS", amount=-499.0)
+
+        assert result is None
+
+    def test_london_does_not_match_removed_lon_keyword(self) -> None:
+        """
+        Regression guard: an earlier version of the catalogue held a
+        bare 'lon' keyword that matched 'LONDON', 'KOLONIAL',
+        'DANNELON' etc. as Lon/salary.  The keyword was removed when
+        normalisation landed — this test fails if someone reintroduces
+        it.
+        """
+        from backend.category.domain.taxonomy import SEED_MERCHANT_MAPPINGS
+
+        assert "lon" not in SEED_MERCHANT_MAPPINGS, (
+            "Bare 'lon' keyword removed because it produced false positives "
+            "on descriptions like LONDON/KOLONIAL/DANNELON. Use the full "
+            "compound 'loenoverfoersel' instead."
+        )
+
+    # ── Indkomst -> Offentlig stotte ─────────────────────────
+    def test_boligstoette_matches_raw_danish_description(self) -> None:
+        """Boligstøtte (raw) should resolve to Offentlig stotte."""
+        keywords = [("boligstoette", "Offentlig stotte")]
+        engine = RuleEngine(keyword_mappings=keywords, subcategory_lookup=LOOKUP)
+
+        result = engine.match("Boligstøtte", amount=820.0)
+
+        assert result is not None
+        assert result.subcategory_id == LOOKUP["Offentlig stotte"][0]
+
+    def test_boligstoette_matches_ascii_description(self) -> None:
+        keywords = [("boligstoette", "Offentlig stotte")]
+        engine = RuleEngine(keyword_mappings=keywords, subcategory_lookup=LOOKUP)
+
+        result = engine.match("BOLIGSTOETTE udbetaling", amount=820.0)
+
+        assert result is not None
+        assert result.subcategory_id == LOOKUP["Offentlig stotte"][0]
+
+    # ── Cross-keyword normalisation invariants ───────────────
+    def test_foetex_keyword_matches_raw_danish_description(self) -> None:
+        """Existing foetex keyword must keep matching Føtex descriptions."""
+        keywords = [("foetex", "Dagligvarer")]
+        engine = RuleEngine(keyword_mappings=keywords, subcategory_lookup=LOOKUP)
+
+        result = engine.match("Føtex Noerrebro 2200", amount=-187.50)
+
+        assert result is not None
+        assert result.subcategory_id == LOOKUP["Dagligvarer"][0]
+
+    def test_ae_and_aa_characters_normalise(self) -> None:
+        """Coverage for æ→ae and å→aa on the description side."""
+        keywords = [("faellesbo", "Dagligvarer"), ("aarhus", "Dagligvarer")]
+        engine = RuleEngine(keyword_mappings=keywords, subcategory_lookup=LOOKUP)
+
+        assert engine.match("Fællesbo Supermarked", amount=-50.0) is not None
+        assert engine.match("Aarhus Købmand", amount=-50.0) is not None
+        assert engine.match("Århus Købmand", amount=-50.0) is not None

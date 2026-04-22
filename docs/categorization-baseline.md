@@ -168,14 +168,23 @@ deliberate, reviewable action, not an ambient side-effect.
 
 | Date       | N   | Source                                               | Fallback % (Q1) | Q2 landing category   | Top-3 descriptions (Q3)                                                     | Threshold verdict                           | Action taken |
 |------------|-----|------------------------------------------------------|-----------------|-----------------------|-----------------------------------------------------------------------------|---------------------------------------------|--------------|
-| 2026-04-22 | 205 | Single Enable Banking sync 2026-04-17, live prod DB. Date range 2026-01-19 → 2026-04-16 (~3 months of own account activity). | 23.4 %          | `Diverse` (48/48 fallbacks, 100 %) — see "Q2 design caveat" below. | `OFF SITE MULTI OSTERBROGA` (6), `KEA V/ SIMPLY COOKING A/S` (5), `KEBABBRO` (4).  Top-10 descriptions cover ~65 % of fallback volume. | Threshold 1 → middle band (10–25 %): rule-engine gap.  Threshold 2 → concentrated *by description cluster*: restaurants / kiosks / cash-processed payments dominate, plus two high-value salary/benefit strings (`LØNOVERFØRSEL` 3×14 091 DKK, `Boligstøtte` 3×2 460 DKK) that should never have fallen back. | *pending* |
+| 2026-04-22 | 205 | Single Enable Banking sync 2026-04-17, live prod DB. Date range 2026-01-19 → 2026-04-16 (~3 months of own account activity). | 23.4 %          | `Diverse` (48/48 fallbacks, 100 %) — see "Q2 design caveat" below. | `OFF SITE MULTI OSTERBROGA` (6), `KEA V/ SIMPLY COOKING A/S` (5), `KEBABBRO` (4).  Top-10 descriptions cover ~65 % of fallback volume. | Threshold 1 → middle band (10–25 %): rule-engine gap.  Threshold 2 → concentrated *by description cluster*: restaurants / kiosks / cash-processed payments dominate, plus two high-value salary/benefit strings (`LØNOVERFØRSEL` 3×14 091 DKK, `Boligstøtte` 3×2 460 DKK) that should never have fallen back. | Danish-character normalisation fix + Indkomst keyword corrections (next commit). |
+
+### Next planned re-run
+
+**2026-05-20**.  Anchored to roughly one monthly banking cycle after
+the 2026-04-22 baseline so the next row covers a second, non-
+overlapping sync cohort.  If the date passes without a new row, it
+is on whoever owns categorisation that week — not on the queries.
+This cadence holds until the baseline table has three data points;
+thereafter revisit based on observed drift.
 
 ### How to record a run
 
 1. Run Q1/Q2/Q3 against the live database.
 2. Append a row to the table above with the top-line numbers.
 3. Note which threshold band the result landed in.
-4. If an action is taken (keyword expansion, normalization, ML
+4. If an action is taken (keyword expansion, normalisation, ML
    planning), link the commit or issue in the "Action taken" column.
 5. Commit the updated `docs/categorization-baseline.md` as part of
    the same change — the baseline and the action must be traceable
@@ -208,13 +217,39 @@ should prefer interventions with obvious a-priori value
 statistically-driven keyword expansions that might be correcting
 noise.
 
-### How to record a run
+### Dual-write status (verified 2026-04-22)
 
-1. Run Q1/Q2/Q3 against the live database.
-2. Append a row to the table above with the top-line numbers.
-3. Note which threshold band the result landed in.
-4. If an action is taken (keyword expansion, normalization, ML
-   planning), link the commit or issue in the "Action taken" column.
-5. Commit the updated `docs/categorization-baseline.md` as part of
-   the same change — the baseline and the action must be traceable
-   to each other, not drift apart.
+Baseline numbers are quoted against `transaction-service`'s
+PostgreSQL (source of truth for categorisation) rather than the
+monolith's MySQL.  This is correct for the measurement, but the two
+databases are not row-for-row identical and the gap is worth
+understanding before the next baseline row is read.
+
+* **`categorization_tier` has a single writer.**  The monolith's
+  banking service runs the rule engine in-memory at sync time and
+  sends the result via HTTP to `transaction-service`, which
+  persists to PostgreSQL and then emits an outbox event that the
+  `transaction_sync_consumer` projects to MySQL.  Each row's
+  tier is consistent between the two DBs; there is no race.
+
+* **Row counts diverge anyway.**  On 2026-04-22 PostgreSQL held
+  205 rows (the 2026-04-17 Enable Banking sync) while MySQL held
+  431 — 226 extra rows from two earlier syncs (2026-03-26 and
+  2026-04-03) that predate `transaction-service` and were never
+  replayed.  MySQL also has 172 duplicate `(description, date,
+  amount)` triplets because those earlier syncs overlap in date
+  range and the monolith's bank sync had no dedup at the time.
+  Tracked as a separate followup in `docs/followups.md`; not a
+  categorisation-accuracy concern, but it skews any analytics
+  run directly against MySQL.
+
+* **What this means for the baseline.**  The 23.4 % fallback
+  reading is a valid measurement of *what the current rule engine
+  produces on new bank data flowing through the new pipeline*.
+  It is **not** the historical fallback rate across all
+  transactions the user has ever recorded — MySQL's older cohorts
+  show 26.1 % (2026-03-26) and 31.3 % (2026-04-03) fallback, but
+  those numbers reflect an earlier state of the rule engine and
+  are not directly comparable.  Use PostgreSQL as the baseline
+  reference; treat MySQL's historical cohorts as context, not as
+  drift evidence.

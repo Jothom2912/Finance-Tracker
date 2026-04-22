@@ -12,6 +12,16 @@ through, Merchant entities are created/confirmed automatically.
 
 Sign-dependent keywords (renter, mobilepay, opsparing) have a default mapping here.
 The rule engine overrides based on transaction amount sign in the categorization pipeline.
+
+Normalisation convention for keywords:
+    Danish characters are transliterated as ø→oe, æ→ae, å→aa.  The
+    rule engine applies the same transliteration to transaction
+    descriptions at match time, so a keyword stored as "foetex"
+    will match a raw description "Føtex Noerrebro".  Entries that
+    use the single-letter strip (ø→o etc.) will NOT match raw
+    descriptions and should be harmonised when encountered — see
+    backend/category/adapters/outbound/rule_engine.py for the
+    normalisation function.
 """
 
 from backend.category.domain.value_objects import CategoryType
@@ -268,11 +278,13 @@ SEED_MERCHANT_MAPPINGS: dict[str, dict[str, str]] = {
     "ukendt": {"subcategory": "Anden", "display": "Ukendt"},
     "div. overfoersel": {"subcategory": "Anden", "display": "Div. Overfoersel"},
     # ── Indkomst -> Lon ──────────────────────────────────────
-    "lonoverfoersel": {"subcategory": "Lon", "display": "Lonoverfoersel"},
-    "lon": {"subcategory": "Lon", "display": "Lon"},
+    # Note: "loen" (4 chars) is intentionally NOT a standalone keyword because
+    # as a substring it would match unrelated descriptions (e.g. "LONDON ...").
+    # Only the full compound word "loenoverfoersel" is used.
+    "loenoverfoersel": {"subcategory": "Lon", "display": "Lonoverfoersel"},
     # ── Indkomst -> Offentlig stotte ─────────────────────────
     "su": {"subcategory": "Offentlig stotte", "display": "SU"},
-    "boligstotte": {"subcategory": "Offentlig stotte", "display": "Boligstotte"},
+    "boligstoette": {"subcategory": "Offentlig stotte", "display": "Boligstotte"},
     "fk-feriepenge": {"subcategory": "Offentlig stotte", "display": "Feriepenge"},
     # ── Indkomst -> Overforsel fra andre ─────────────────────
     "betaling fra kk": {"subcategory": "Overforsel fra andre", "display": "Betaling fra KK"},

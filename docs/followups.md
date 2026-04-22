@@ -47,30 +47,21 @@ either (a) a future Testcontainers release fixes the Windows case, or
 become annoying in practice.
 
 
-## Categorization fallback rate (2026-04-17, updated 2026-04-22)
+## Categorization fallback rate (2026-04-17, closed 2026-04-22)
 
-Bank sync on 2026-04-17 produced 48 fallback-categorizations out of 206
-transactions (~23 %).  Examples from the logs: `Seoul Koreansk BBQ`,
-`KEBABBRO`, `ROSA KIOSK`, `OFF SITE MULTI OSTERBROGA`.
+Bank sync on 2026-04-17 produced 48 fallback-categorisations out of
+206 transactions (~23 %).  The baseline methodology — Q1/Q2/Q3
+against `transaction-service`'s `transactions.categorization_tier`
+with three pre-defined decision thresholds — lives in
+`docs/categorization-baseline.md`.  The first baseline row was
+recorded on 2026-04-22 (N=205, 23.4 % fallback).
 
-Either the rule-engine keyword catalog is incomplete for real-world
-merchant names (restaurants, kiosks, location-prefixed strings), or
-the ML/LLM tier described in the architecture is not yet wired up and
-the fallback category is hit directly.
-
-The baseline methodology — SQL queries against
-`transaction-service`'s `transactions.categorization_tier`, paired
-with three pre-defined decision thresholds — now lives in
-`docs/categorization-baseline.md`.  That document replaces this
-open-ended followup: any future "is fallback too high?" discussion
-should start with a run of Q1/Q2/Q3 and land in one of the threshold
-bands, not a new ad-hoc analysis.
-
-Action: run the baseline queries against live data once the stack is
-up, append the result row to the baseline table, and let the
-threshold band dictate the next step (keyword expansion, normalization,
-or planning an ML tier).  This followup stays open only until the
-first baseline row is recorded.
+This item is closed because the baseline table is now the active
+record; future "is fallback too high?" questions start with a Q1/Q2/Q3
+run and land in one of the threshold bands, not a new ad-hoc analysis.
+Concrete action items produced by that baseline (keyword expansion,
+normalisation, ML tier) are tracked as their own commits or
+followups.
 
 ## Bank date edge case (2026-04-17)
 
@@ -133,3 +124,56 @@ Action (future commit):
 3. Add route-integration tests mirroring
    `tests/integration/test_bank_sync_routes.py` — including a
    positive control that unclassified errors reach the 500 handler.
+
+## Duplicate transactions in MySQL projection (2026-04-22)
+
+Surfaced while verifying dual-write status for the categorisation
+baseline (see `docs/categorization-baseline.md`).  The MySQL
+`Transaction` table holds **431 rows** while PostgreSQL
+(`transaction-service`, source-of-truth) holds only **205**.  The
+delta is 226 rows distributed across two pre-`transaction-service`
+sync batches:
+
+| Import day | N   | Earliest tx | Latest tx   |
+|------------|-----|-------------|-------------|
+| 2026-03-26 |  92 | 2025-12-29  | 2026-03-26  |
+| 2026-04-03 | 134 | 2026-01-05  | 2026-04-07  |
+| 2026-04-17 | 205 | 2026-01-19  | 2026-04-16  |
+
+The date ranges overlap heavily, and a `GROUP BY (description, date,
+amount) HAVING COUNT(*) > 1` returns **172 duplicate triplets** —
+the same real-world transaction imported two or three times because
+the monolith's bank sync had no dedup before `transaction-service`
+took over transaction ownership.
+
+Scope and impact:
+
+* `categorization_tier` itself is **not** divergent — it has a
+  single writer (monolith's rule engine at write-time, sent to
+  `transaction-service`, projected back via
+  `transaction_sync_consumer`).  Each individual row's tier is
+  consistent between DBs.
+* The duplicated rows do skew **analytics against MySQL**: any
+  aggregation over the overlapping date ranges (Overview totals,
+  per-category rollups in the monolith's GraphQL API) double- or
+  triple-counts transactions.  Dashboards rendered from
+  `transaction-service` are unaffected.
+
+Not acting now because the fix is a scope-conversation, not a
+one-line change:
+
+1. **Delete duplicates in MySQL.**  Keep the most recent import per
+   `(description, date, amount)` or reconcile against the 205
+   `transaction-service` rows and keep only the matching ones.
+   Cheapest; loses the pre-`transaction-service` history in MySQL.
+2. **Backfill `transaction-service`** with the 226 older rows so the
+   two DBs converge forward.  Requires replaying those rows through
+   the current categorisation pipeline (tiers may now classify them
+   differently than the original sync did).
+3. **Leave as-is** and document that any analytic query against the
+   monolith's MySQL must de-duplicate before aggregating.  Pragmatic
+   stop-gap — but the "any query" scope makes it brittle.
+
+Pick one when either (a) someone hits a wrong number in the UI, or
+(b) the wider microservice extraction reaches a point where MySQL
+is being decommissioned and this has to be decided anyway.
