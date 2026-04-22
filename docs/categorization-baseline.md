@@ -166,9 +166,47 @@ The table below is filled after each baseline run so history is
 visible.  Each row is a commit — bumping the baseline is a
 deliberate, reviewable action, not an ambient side-effect.
 
-| Date | Fallback % (Q1) | Top category (Q2) | Top description (Q3) | Threshold verdict | Action taken |
-|------|-----------------|-------------------|----------------------|-------------------|--------------|
-| *pending first run* | — | — | — | — | — |
+| Date       | N   | Source                                               | Fallback % (Q1) | Q2 landing category   | Top-3 descriptions (Q3)                                                     | Threshold verdict                           | Action taken |
+|------------|-----|------------------------------------------------------|-----------------|-----------------------|-----------------------------------------------------------------------------|---------------------------------------------|--------------|
+| 2026-04-22 | 205 | Single Enable Banking sync 2026-04-17, live prod DB. Date range 2026-01-19 → 2026-04-16 (~3 months of own account activity). | 23.4 %          | `Diverse` (48/48 fallbacks, 100 %) — see "Q2 design caveat" below. | `OFF SITE MULTI OSTERBROGA` (6), `KEA V/ SIMPLY COOKING A/S` (5), `KEBABBRO` (4).  Top-10 descriptions cover ~65 % of fallback volume. | Threshold 1 → middle band (10–25 %): rule-engine gap.  Threshold 2 → concentrated *by description cluster*: restaurants / kiosks / cash-processed payments dominate, plus two high-value salary/benefit strings (`LØNOVERFØRSEL` 3×14 091 DKK, `Boligstøtte` 3×2 460 DKK) that should never have fallen back. | *pending* |
+
+### How to record a run
+
+1. Run Q1/Q2/Q3 against the live database.
+2. Append a row to the table above with the top-line numbers.
+3. Note which threshold band the result landed in.
+4. If an action is taken (keyword expansion, normalization, ML
+   planning), link the commit or issue in the "Action taken" column.
+5. Commit the updated `docs/categorization-baseline.md` as part of
+   the same change — the baseline and the action must be traceable
+   to each other, not drift apart.
+
+### Q2 design caveat (surfaced by 2026-04-22 baseline)
+
+The decision framework assumes Q2's "concentration" signal tells us
+whether fallbacks cluster in a few real categories.  In practice the
+fallback tier emits a *constant* prediction (currently the category
+named `Diverse`), so 100 % of fallbacks trivially land in one row and
+threshold 2's "top-3 ≥ 80 %" check is always satisfied regardless of
+the underlying distribution.
+
+Q3 is the load-bearing query when the fallback tier is a constant
+predictor — descriptions are where the real clustering lives.  Left
+here as a note rather than a query rewrite because the constant-
+predictor contract may change when the ML tier is wired (a
+probabilistic tier would land in multiple categories and restore
+Q2's intended signal).  Re-evaluate when that happens.
+
+### Sample-size caveat (2026-04-22 baseline)
+
+N=205 sits right at the "minimum useful" boundary (~200) and comes
+from a single sync batch rather than several weeks of organic use.
+Trend-questions ("is fallback getting worse over time?") cannot be
+answered from one row.  Action decisions driven off this baseline
+should prefer interventions with obvious a-priori value
+(`LØNOVERFØRSEL` → Indkomst is a bug, not a statistical claim) over
+statistically-driven keyword expansions that might be correcting
+noise.
 
 ### How to record a run
 
