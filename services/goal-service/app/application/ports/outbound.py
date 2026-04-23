@@ -37,5 +37,5 @@ class IAccountPort(ABC):
     """Anti-corruption port for account domain."""
 
     @abstractmethod
-    async def exists(self, account_id: int) -> bool:
+    async def exists(self, user_id: int) -> bool:
         pass

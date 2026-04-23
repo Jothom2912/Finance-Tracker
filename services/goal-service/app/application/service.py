@@ -61,8 +61,9 @@ class GoalService(IGoalService):
 
     async def create_goal(self, data: GoalCreate) -> GoalSchema:
         """Create a new goal. Validates that account exists."""
-        if not await self._account_port.exists(data.Account_idAccount):
-            raise AccountNotFoundForGoal(data.Account_idAccount)
+        user_id = data.Account_idAccount
+        if not await self._account_port.exists(user_id):
+            raise AccountNotFoundForGoal(user_id)
 
         goal = Goal(
             id=None,
@@ -71,7 +72,7 @@ class GoalService(IGoalService):
             current_amount=data.current_amount or 0.0,
             target_date=data.target_date,
             status=data.status or "active",
-            account_id=data.Account_idAccount,
+            account_id=user_id,
         )
 
         created = await self._goal_repo.create(goal)

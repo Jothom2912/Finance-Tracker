@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     USER_SERVICE_URL: str = "http://localhost:8001"
     USER_SERVICE_TIMEOUT: float = 5.0
+    INTERNAL_API_KEY: str = "dev-internal-api-key-change-in-production"
 
 
 settings = Settings()

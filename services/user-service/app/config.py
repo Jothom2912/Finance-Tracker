@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
+    INTERNAL_API_KEY: str = "dev-internal-api-key-change-in-production"
 
 
 settings = Settings()

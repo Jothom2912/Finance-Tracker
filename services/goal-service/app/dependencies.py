@@ -17,6 +17,7 @@ async def get_goal_service(
     goal_repo = AsyncPostgresGoalRepository(db)
     account_port = UserServiceAccountAdapter(
         base_url=settings.USER_SERVICE_URL,
+        api_key=settings.INTERNAL_API_KEY,
         timeout=settings.USER_SERVICE_TIMEOUT,
     )
     return GoalService(goal_repository=goal_repo, account_port=account_port)

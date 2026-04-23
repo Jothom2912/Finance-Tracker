@@ -23,9 +23,12 @@ router = APIRouter(
 async def create_goal(
     goal_data: dict[str, Any] = Body(...),
     service: IGoalService = Depends(get_goal_service),
-    account_id: Optional[int] = Depends(lambda: None),  # TODO: Implement with real auth
+    account_id: Optional[int] = Depends(lambda: None),  # TODO: Replace with JWT-based user resolution
 ) -> GoalSchema:
     """Opretter et nyt sparemål."""
+    if "user_id" in goal_data and "Account_idAccount" not in goal_data:
+        goal_data["Account_idAccount"] = goal_data["user_id"]
+
     if "Account_idAccount" not in goal_data or goal_data.get("Account_idAccount") is None:
         if not account_id:
             raise HTTPException(
@@ -47,10 +50,11 @@ async def create_goal(
 async def list_goals(
     service: IGoalService = Depends(get_goal_service),
     account_id: Optional[int] = Query(None),
+    user_id: Optional[int] = Query(None),
     account_id_from_header: Optional[int] = Depends(lambda: None),  # TODO: Implement with real auth
 ) -> list[GoalSchema]:
     """Henter alle mål for en given konto."""
-    final_account_id = account_id or account_id_from_header
+    final_account_id = user_id or account_id or account_id_from_header
     if not final_account_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

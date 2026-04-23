@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 REGISTER_URL = "/api/v1/users/register"
 LOGIN_URL = "/api/v1/users/login"
 ME_URL = "/api/v1/users/me"
+EXISTS_URL = "/api/v1/users/{user_id}/exists"
 
 VALID_USER = {
     "username": "alice",
@@ -165,6 +166,58 @@ class TestGetMe:
         resp = await client.get(ME_URL, headers={"Authorization": "Bearer garbage.token.here"})
 
         assert resp.status_code == 401
+
+
+class TestUserExists:
+    @pytest.mark.asyncio()
+    async def test_user_exists_requires_internal_api_key(self, client: AsyncClient) -> None:
+        resp = await client.get(EXISTS_URL.format(user_id=1))
+
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio()
+    async def test_user_exists_returns_true_for_existing_user(self, client: AsyncClient) -> None:
+        from app.dependencies import get_user_service
+        from app.main import app
+
+        class _StubService:
+            async def user_exists(self, _user_id: int) -> bool:
+                return True
+
+        app.dependency_overrides[get_user_service] = lambda: _StubService()
+
+        try:
+            resp = await client.get(
+                EXISTS_URL.format(user_id=1),
+                headers={"x-internal-api-key": "dev-internal-api-key-change-in-production"},
+            )
+        finally:
+            app.dependency_overrides.pop(get_user_service, None)
+
+        assert resp.status_code == 200
+        assert resp.json() == {"exists": True}
+
+    @pytest.mark.asyncio()
+    async def test_user_exists_returns_false_for_missing_user(self, client: AsyncClient) -> None:
+        from app.dependencies import get_user_service
+        from app.main import app
+
+        class _StubService:
+            async def user_exists(self, _user_id: int) -> bool:
+                return False
+
+        app.dependency_overrides[get_user_service] = lambda: _StubService()
+
+        try:
+            resp = await client.get(
+                EXISTS_URL.format(user_id=9999),
+                headers={"x-internal-api-key": "dev-internal-api-key-change-in-production"},
+            )
+        finally:
+            app.dependency_overrides.pop(get_user_service, None)
+
+        assert resp.status_code == 200
+        assert resp.json() == {"exists": False}
 
 
 # ── Cross-service JWT compatibility ──────────────────────────────
