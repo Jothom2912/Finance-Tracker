@@ -42,7 +42,7 @@ class AsyncPostgresGoalRepository(IGoalRepository):
             Account_idAccount=goal.account_id,
         )
         self._db.add(model)
-        await self._db.commit()
+        await self._db.flush()
         await self._db.refresh(model)
         return self._to_entity(model)
 
@@ -58,7 +58,7 @@ class AsyncPostgresGoalRepository(IGoalRepository):
         model.target_date = goal.target_date
         model.status = goal.status
 
-        await self._db.commit()
+        await self._db.flush()
         await self._db.refresh(model)
         return self._to_entity(model)
 
@@ -69,7 +69,7 @@ class AsyncPostgresGoalRepository(IGoalRepository):
             return False
 
         await self._db.delete(model)
-        await self._db.commit()
+        await self._db.flush()
         return True
 
     def _to_entity(self, model: GoalModel) -> Goal:

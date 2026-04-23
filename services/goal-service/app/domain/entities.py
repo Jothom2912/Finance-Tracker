@@ -4,7 +4,7 @@ Pure domain objects with no infrastructure dependencies.
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 
@@ -39,3 +39,17 @@ class Goal:
     def is_completed(self) -> bool:
         """Check if goal has been reached."""
         return self.current_amount >= self.target_amount
+
+
+@dataclass
+class OutboxEntry:
+    id: str
+    aggregate_type: str
+    aggregate_id: str
+    event_type: str
+    payload_json: str
+    correlation_id: str | None
+    status: str
+    attempts: int
+    next_attempt_at: datetime
+    created_at: datetime

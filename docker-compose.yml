@@ -267,6 +267,25 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  goal-outbox-worker:
+    build:
+      context: .
+      dockerfile: services/goal-service/Dockerfile
+    command: ["python", "-m", "app.workers.outbox_publisher"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      USER_SERVICE_URL: http://user-service:8001
+      ENVIRONMENT: development
+    depends_on:
+      goal-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
   # === Placeholder services (uncomment as services are ready) ===
 
   # budget-service:

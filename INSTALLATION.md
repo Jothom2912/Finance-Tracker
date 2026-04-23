@@ -37,6 +37,7 @@ This starts:
 | **User Service** | 8001 | Registration, login, JWT issuing |
 | **Transaction Service** | 8002 | Transaction CRUD, CSV import, categories |
 | **Goal Service** | 8003 | Goal CRUD and user-validation bridge |
+| **Goal Outbox Worker** | — | Publishes goal events from outbox to RabbitMQ |
 | **UserSync Consumer** | — | Syncs users from events to MySQL |
 | **AccountCreation Consumer** | — | Creates default accounts from events |
 | **CategorySync Consumer** | — | Syncs categories from transaction-service to MySQL |
