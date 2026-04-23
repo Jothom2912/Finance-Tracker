@@ -87,6 +87,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://user_service:user_service_pass@postgres:5432/users
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
       JWT_EXPIRE_MINUTES: "60"
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
@@ -192,6 +193,23 @@ services:
       retries: 10
       start_period: 10s
 
+  postgres-goals:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: goal_service
+      POSTGRES_PASSWORD: goal_service_pass
+      POSTGRES_DB: goals
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_goals_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goal_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
   transaction-service:
     build:
       context: .
@@ -223,6 +241,28 @@ services:
       ENVIRONMENT: development
     depends_on:
       transaction-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  goal-service:
+    build:
+      context: .
+      dockerfile: services/goal-service/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      USER_SERVICE_URL: http://user-service:8001
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+      ENVIRONMENT: development
+    depends_on:
+      postgres-goals:
+        condition: service_healthy
+      user-service:
         condition: service_started
       rabbitmq:
         condition: service_healthy
@@ -265,4 +305,5 @@ volumes:
   mysql_data:
   postgres_data:
   postgres_transactions_data:
+  postgres_goals_data:
   rabbitmq_data:

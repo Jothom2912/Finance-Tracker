@@ -31,10 +31,12 @@ This starts:
 | **MySQL** | 3307 | Monolith database |
 | **PostgreSQL (users)** | 5433 | User-service database |
 | **PostgreSQL (transactions)** | 5434 | Transaction-service database |
+| **PostgreSQL (goals)** | 5435 | Goal-service database |
 | **RabbitMQ** | 5672 / 15672 | Event bus + management UI |
 | **Monolith** | 8000 | Accounts, budgets, goals, analytics, bank sync, categorization |
 | **User Service** | 8001 | Registration, login, JWT issuing |
 | **Transaction Service** | 8002 | Transaction CRUD, CSV import, categories |
+| **Goal Service** | 8003 | Goal CRUD and user-validation bridge |
 | **UserSync Consumer** | — | Syncs users from events to MySQL |
 | **AccountCreation Consumer** | — | Creates default accounts from events |
 | **CategorySync Consumer** | — | Syncs categories from transaction-service to MySQL |
@@ -48,6 +50,7 @@ docker compose ps
 curl http://localhost:8000/health   # Monolith
 curl http://localhost:8001/health   # User Service
 curl http://localhost:8002/health   # Transaction Service
+curl http://localhost:8003/health   # Goal Service
 ```
 
 ### 4. Start Frontend
@@ -138,6 +141,16 @@ uv run uvicorn app.main:app --reload --port 8002
 
 Needs PostgreSQL on port 5434 and RabbitMQ on port 5672.
 
+### Goal Service
+
+```powershell
+cd services/goal-service
+uv sync --dev
+uv run uvicorn app.main:app --reload --port 8003
+```
+
+Needs PostgreSQL on port 5435, user-service on port 8001, and RabbitMQ on port 5672.
+
 ### Consumers
 
 ```powershell
@@ -157,7 +170,7 @@ npm run dev
 ```
 
 - API docs: http://localhost:8000/docs
-- Health: http://localhost:8000/health, http://localhost:8001/health, http://localhost:8002/health
+- Health: http://localhost:8000/health, http://localhost:8001/health, http://localhost:8002/health, http://localhost:8003/health
 - GraphQL playground: http://localhost:8000/api/v1/graphql
 - RabbitMQ Management: http://localhost:15672 (guest/guest)
 
@@ -281,10 +294,12 @@ All services must share the same JWT secret. In docker-compose, the monolith use
 | 3307 | MySQL | Change in docker-compose |
 | 5433 | PostgreSQL (users) | Change in docker-compose |
 | 5434 | PostgreSQL (transactions) | Change in docker-compose |
+| 5435 | PostgreSQL (goals) | Change in docker-compose |
 | 5672 | RabbitMQ | Change in docker-compose |
 | 8000 | Monolith | Change in docker-compose |
 | 8001 | User Service | Change in docker-compose |
 | 8002 | Transaction Service | Change in docker-compose |
+| 8003 | Goal Service | Change in docker-compose |
 
 ---
 
