@@ -28,10 +28,7 @@ from contracts.events.category import CategoryCreatedEvent
 # imported via ``from migrations.versions import ...``.  Load by file
 # path instead.
 _MIGRATION_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "migrations"
-    / "versions"
-    / "006_emit_default_category_events.py"
+    Path(__file__).resolve().parents[2] / "migrations" / "versions" / "006_emit_default_category_events.py"
 )
 _spec = importlib.util.spec_from_file_location("migration_006", _MIGRATION_PATH)
 assert _spec is not None and _spec.loader is not None
