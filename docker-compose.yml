@@ -63,6 +63,7 @@ services:
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_APP_ID}
       ENABLE_BANKING_KEY_PATH: /app/enablebanking-privat.pem
       ENABLE_BANKING_REDIRECT_URI: ${ENABLE_BANKING_REDIRECT_URI:-http://localhost:8000/api/v1/bank/callback}

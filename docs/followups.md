@@ -4,47 +4,22 @@ Ongoing list of known issues and improvements deferred from active work.
 Not a replacement for an issue tracker — these are items not yet
 formalized. Reference entries from commit messages and ADRs as needed.
 
-## `display_order` missing on API-created categories (2026-04-17)
+## `display_order` missing on API-created categories (2026-04-17, closed 2026-04-23)
 
-After migrating category ownership to transaction-service (see
-`docs/retrospective-transaction-ownership.md`), `CategoryCreatedEvent`
-deliberately does not carry `display_order` because it's a monolith-only
-UI-presentation concern.  `CategorySyncConsumer._sync_created` in
-`services/monolith/backend/consumers/category_sync.py` therefore projects
-new categories with MySQL's column default (`display_order=0`).
+Closed by the commit that added `COALESCE(MAX(display_order), 0) + 1`
+in `CategorySyncConsumer._sync_created`.  New categories now append at
+the end of the UI list.  The fix is a single-statement read + ORM
+insert (not INSERT...SELECT), with a comment acknowledging the
+theoretical race condition — acceptable because the consumer is the
+sole writer to this table, enforced by `test_read_only_projections.py`.
 
-For the ten default categories this is fine: `seed_categories.py` sets
-their display_order explicitly from `DEFAULT_TAXONOMY`.  For categories
-created later via transaction-service's `POST /api/v1/categories/` API,
-the projected row sorts to the top of the UI list (0 < seeded values
-1–20) rather than appending at the end like the user would expect.
+## Testcontainers Ryuk on Windows / Docker Desktop (2026-04-17, mitigated 2026-04-23)
 
-Not a drift bug — projection is consistent — but a latent UX regression
-introduced by the ownership split.  Two plausible fixes:
-
-* Auto-assign `display_order = MAX(display_order) + 1` in the sync
-  consumer when a new category is projected.
-* Expose `display_order` as an optional field on the category API and
-  add it to the event contract, accepting that this elevates a UI
-  concern into the cross-service model.
-
-No action until a user actually creates a new category and notices the
-sort order; quantify the pain before picking a fix.
-
-## Testcontainers Ryuk on Windows / Docker Desktop (2026-04-17)
-
-`services/transaction-service/tests/migrations/conftest.py` sets
-`TESTCONTAINERS_RYUK_DISABLED=true` because the reaper container fails
-to get its port mapping on Docker Desktop for Windows (observed during
-the session that introduced the migration tests).  The trade-off is
-that test containers aren't auto-reaped on an orphaned test run — the
-session-scoped fixture's explicit `container.stop()` handles cleanup
-on normal paths, but a hard pytest crash may leave containers around.
-
-Linux CI is unaffected; this is a local-dev quirk only.  Revisit when
-either (a) a future Testcontainers release fixes the Windows case, or
-(b) the Windows dev workflow produces enough orphaned containers to
-become annoying in practice.
+Still present — Ryuk remains disabled on Windows.  Mitigation:
+`make clean-test-containers` target added to the root Makefile to
+remove orphaned containers by the `org.testcontainers=true` label.
+The conftest comment already explains the trade-off.  Revisit when
+a future Testcontainers release fixes the Windows case.
 
 
 ## Categorization fallback rate (2026-04-17, closed 2026-04-22)
@@ -109,105 +84,49 @@ Each route has a positive-control test asserting an uncaught
 `RuntimeError` reaches Starlette's default 500 handler, so a future
 reviewer who reintroduces a catch-all breaks CI.
 
-## Enable Banking config not validated at startup (2026-04-22)
+## Enable Banking config not validated at startup (2026-04-22, closed 2026-04-23)
 
-`_get_client()` in
-`backend/banking/presentation/rest_api.py` instantiates
-`EnableBankingConfig` + `EnableBankingClient` lazily on the first
-request that touches a banking route.  Both constructors now raise
-`BankConfigError` on misconfiguration (missing `ENABLE_BANKING_APP_ID`,
-unreadable PEM), and the route maps that to HTTP 500 — so the user
-who clicks "Connect bank" first gets the 500.
+Closed by adding `validate_banking_config()` in
+`backend/banking/presentation/rest_api.py`, called from the monolith
+`lifespan`.  Three config states are handled:
 
-The honest failure mode would be a fail-fast check at app startup so
-misconfiguration surfaces at deploy time, not at first user traffic.
-Two plausible shapes:
+* All `ENABLE_BANKING_*` vars absent → info log, banking disabled
+* Partial config (some vars set, others missing) → `BankConfigError`
+  logged as error (half-finished deploy)
+* Full config → PEM readability checked, IO errors wrapped in
+  `BankConfigError`
 
-1. Call `_get_client()` from a FastAPI `startup` event (or
-   `lifespan` context) and let `BankConfigError` crash the process.
-2. Add a `validate()` method on `EnableBankingConfig` that the DI
-   wiring calls during container build.
+The lifespan catches `BankConfigError` and logs but does not crash,
+so the rest of the app stays available.
 
-Deferred because the current deployment flow (local Docker Compose
-for development, no prod yet) doesn't make first-user-500s visible in
-a painful way.  Revisit before any real-user deploy.
+## Bank-callback redirects render raw JSON in the browser (2026-04-22, closed 2026-04-23)
 
-## Bank-callback redirects render raw JSON in the browser (2026-04-22)
+Closed by replacing JSON responses with `RedirectResponse` (HTTP 303)
+to a new frontend page at `/bank/callback`.  Error codes (not raw
+exception text) are forwarded as query params; a server-side
+correlation ref is included for support lookups.
 
-`GET /api/v1/bank/callback` is the redirect target after the user
-completes the Enable Banking OAuth flow.  It is called by the user's
-browser, not by the frontend SPA — there is no frontend handler for
-this path (confirmed by grep across `services/frontend/src`).
-Current behaviour on *any* outcome (success or failure) is:
+The frontend `BankCallbackPage` maps short codes to user-friendly
+Danish messages via a local lookup table and never renders URL params
+directly as HTML, avoiding both information leakage and XSS surface.
 
-```
-{ "detail": "Bank authorization rejected: ..." }
-```
+## Duplicate transactions in MySQL projection (2026-04-22, cleanup script ready 2026-04-23)
 
-rendered as raw JSON in a browser tab.  The HTTP status is now
-correctly typed (400 / 500 / 502 per the adapter error) but the UX is
-still "user sees raw JSON and has no idea what to do".
+A reconciliation script was added at `scripts/cleanup_mysql_duplicates.py`
+with the following safety rails:
 
-The proper fix is one of:
+* `--dry-run` is the default (shows counts and sample rows)
+* `--execute` triggers mysqldump backup before deletion
+* Every deleted row is logged as full JSON to `scripts/backups/`
+* Idempotent — second run finds 0 orphans
 
-1. Redirect to a frontend error page with the status as a query
-   parameter (e.g. `http://localhost:3000/bank/connected?error=rejected`).
-2. Render a minimal HTML error template from the monolith for the
-   callback path specifically.
+**Root cause:** the old monolith bank sync wrote directly to MySQL
+without deduplication.  The current path goes through
+`transaction-service`'s `POST /bulk` with `skip_duplicates=True`.
+The old direct-write path was removed and architecture test
+`test_read_only_projections.py` blocks any non-consumer writes to
+the Transaction model, preventing recurrence.
 
-Out of scope for the typed-errors commit — picking a pattern is a
-frontend/UX conversation.  Current typed JSON responses at least give
-a frontend error page something to branch on once it exists.
-
-## Duplicate transactions in MySQL projection (2026-04-22)
-
-Surfaced while verifying dual-write status for the categorisation
-baseline (see `docs/categorization-baseline.md`).  The MySQL
-`Transaction` table holds **431 rows** while PostgreSQL
-(`transaction-service`, source-of-truth) holds only **205**.  The
-delta is 226 rows distributed across two pre-`transaction-service`
-sync batches:
-
-| Import day | N   | Earliest tx | Latest tx   |
-|------------|-----|-------------|-------------|
-| 2026-03-26 |  92 | 2025-12-29  | 2026-03-26  |
-| 2026-04-03 | 134 | 2026-01-05  | 2026-04-07  |
-| 2026-04-17 | 205 | 2026-01-19  | 2026-04-16  |
-
-The date ranges overlap heavily, and a `GROUP BY (description, date,
-amount) HAVING COUNT(*) > 1` returns **172 duplicate triplets** —
-the same real-world transaction imported two or three times because
-the monolith's bank sync had no dedup before `transaction-service`
-took over transaction ownership.
-
-Scope and impact:
-
-* `categorization_tier` itself is **not** divergent — it has a
-  single writer (monolith's rule engine at write-time, sent to
-  `transaction-service`, projected back via
-  `transaction_sync_consumer`).  Each individual row's tier is
-  consistent between DBs.
-* The duplicated rows do skew **analytics against MySQL**: any
-  aggregation over the overlapping date ranges (Overview totals,
-  per-category rollups in the monolith's GraphQL API) double- or
-  triple-counts transactions.  Dashboards rendered from
-  `transaction-service` are unaffected.
-
-Not acting now because the fix is a scope-conversation, not a
-one-line change:
-
-1. **Delete duplicates in MySQL.**  Keep the most recent import per
-   `(description, date, amount)` or reconcile against the 205
-   `transaction-service` rows and keep only the matching ones.
-   Cheapest; loses the pre-`transaction-service` history in MySQL.
-2. **Backfill `transaction-service`** with the 226 older rows so the
-   two DBs converge forward.  Requires replaying those rows through
-   the current categorisation pipeline (tiers may now classify them
-   differently than the original sync did).
-3. **Leave as-is** and document that any analytic query against the
-   monolith's MySQL must de-duplicate before aggregating.  Pragmatic
-   stop-gap — but the "any query" scope makes it brittle.
-
-Pick one when either (a) someone hits a wrong number in the UI, or
-(b) the wider microservice extraction reaches a point where MySQL
-is being decommissioned and this has to be decided anyway.
+**Run with** `make cleanup-mysql-duplicates-once` (dry-run) or
+`make cleanup-mysql-duplicates-once EXECUTE=1` (delete).
+**Remove the script and Makefile target after running.**

@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev dev-docker dev-backend dev-user-service dev-transaction-service dev-frontend down logs build test test-e2e lint format format-check check clean
+.PHONY: help install-deps dev dev-docker dev-backend dev-user-service dev-transaction-service dev-frontend down logs build test test-e2e lint format format-check check clean clean-test-containers cleanup-mysql-duplicates-once
 
 INFRA_SERVICES = mysql postgres postgres-transactions rabbitmq
 BACKEND_DIR = services/monolith
@@ -28,7 +28,8 @@ help: ## Show available targets
 	@printf '    format                    Auto-format all Python services\n'
 	@printf '    format-check              Check formatting without changes\n'
 	@printf '    check                     Run all quality checks\n'
-	@printf '    clean                     Remove generated artifacts\n\n'
+	@printf '    clean                     Remove generated artifacts\n'
+	@printf '    clean-test-containers     Remove orphaned Testcontainers\n\n'
 
 # === Setup ===
 
@@ -105,6 +106,19 @@ check: ## Run all quality checks (lint + format + tests)
 	$(MAKE) -C $(FRONTEND_DIR) check
 
 # === Cleanup ===
+
+# ONE-OFF: Remove this target after running successfully.
+cleanup-mysql-duplicates-once: ## Reconcile MySQL Transaction duplicates against PostgreSQL
+	@echo "Running in dry-run mode by default. Pass EXECUTE=1 for actual deletion."
+	@if [ "$(EXECUTE)" = "1" ]; then \
+		uv run python scripts/cleanup_mysql_duplicates.py --execute; \
+	else \
+		uv run python scripts/cleanup_mysql_duplicates.py; \
+	fi
+
+clean-test-containers: ## Remove orphaned Testcontainers (Windows/Docker Desktop workaround)
+	@echo "Removing containers with org.testcontainers=true label..."
+	docker rm -f $$(docker ps -aq --filter "label=org.testcontainers=true") 2>/dev/null || echo "No orphaned test containers found."
 
 clean: ## Remove all generated artifacts
 	$(MAKE) -C $(BACKEND_DIR) clean

@@ -268,10 +268,10 @@ class TestCallbackRouteExceptionMapping:
     def _params(self) -> dict[str, str]:
         return {"state": self._STATE, "code": self._CODE}
 
-    def test_bank_authorization_error_maps_to_400(self) -> None:
-        """The one place where a 4xx-from-upstream means caller-error.
-        Raised by ``create_session`` when the auth_code is expired or
-        already used — the user's remedy is to restart the flow.
+    def test_bank_authorization_error_redirects_with_auth_rejected(self) -> None:
+        """Raised by ``create_session`` when the auth_code is expired or
+        already used — callback redirects to the frontend with
+        ``code=auth_rejected``.
         """
         client = _override_service_method(
             "complete_connect",
@@ -281,33 +281,35 @@ class TestCallbackRouteExceptionMapping:
             ),
         )
 
-        response = client.get(CALLBACK_URL, params=self._params())
+        response = client.get(CALLBACK_URL, params=self._params(), follow_redirects=False)
 
-        assert response.status_code == 400
-        assert "rejected" in response.json()["detail"].lower()
+        assert response.status_code == 303
+        assert "code=auth_rejected" in response.headers["location"]
+        assert "ref=" in response.headers["location"]
 
-    def test_bank_config_error_maps_to_500(self) -> None:
-        """Same as sync route: config is ours, not caller's."""
+    def test_bank_config_error_redirects_with_config_error(self) -> None:
+        """Config error redirects to frontend with ``code=config_error``."""
         client = _override_service_method(
             "complete_connect",
             BankConfigError("Failed to sign Enable Banking JWT"),
         )
 
-        response = client.get(CALLBACK_URL, params=self._params())
+        response = client.get(CALLBACK_URL, params=self._params(), follow_redirects=False)
 
-        assert response.status_code == 500
-        assert "misconfigured" in response.json()["detail"].lower()
+        assert response.status_code == 303
+        assert "code=config_error" in response.headers["location"]
 
-    def test_bank_api_unavailable_maps_to_502(self) -> None:
-        """Upstream 5xx or transport error — not caller's auth_code."""
+    def test_bank_api_unavailable_redirects_with_upstream_unavailable(self) -> None:
+        """Upstream 5xx or transport error redirects with ``code=upstream_unavailable``."""
         client = _override_service_method(
             "complete_connect",
             BankApiUnavailable("Enable Banking create_session unreachable"),
         )
 
-        response = client.get(CALLBACK_URL, params=self._params())
+        response = client.get(CALLBACK_URL, params=self._params(), follow_redirects=False)
 
-        assert response.status_code == 502
+        assert response.status_code == 303
+        assert "code=upstream_unavailable" in response.headers["location"]
 
     def test_unclassified_runtime_error_bubbles_to_500(self) -> None:
         """Positive control across the third and final banking route."""
@@ -321,13 +323,10 @@ class TestCallbackRouteExceptionMapping:
 
         assert response.status_code == 500
 
-    def test_bank_level_error_query_param_maps_to_400(self) -> None:
-        """Sanity check for the pre-existing early-exit path: when
-        Enable Banking itself reports an error in the redirect
+    def test_bank_level_error_query_param_redirects_with_auth_rejected(self) -> None:
+        """When Enable Banking itself reports an error in the redirect
         (``?error=access_denied``), no service call happens and we
-        return 400 directly.  Left in place to document that the
-        user-rejected path does *not* regress under the new typed-error
-        mapping.
+        redirect to the frontend with ``code=auth_rejected``.
         """
         app.dependency_overrides[_get_banking_service] = lambda: MagicMock(spec=BankingService)
         client = TestClient(app)
@@ -335,7 +334,8 @@ class TestCallbackRouteExceptionMapping:
         response = client.get(
             CALLBACK_URL,
             params={"state": self._STATE, "error": "access_denied"},
+            follow_redirects=False,
         )
 
-        assert response.status_code == 400
-        assert "access_denied" in response.json()["detail"]
+        assert response.status_code == 303
+        assert "code=auth_rejected" in response.headers["location"]

@@ -15,6 +15,7 @@ import TransactionsPage from './pages/TransactionsPage';
 import CategoriesPage from './pages/CategoriesPage';
 import BudgetPage from './pages/BudgetPage/BudgetPage';
 import GoalPage from './pages/GoalPage/GoalPage';
+import BankCallbackPage from './pages/BankCallbackPage';
 
 function AppContent() {
   return (
@@ -47,6 +48,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/bank/callback" element={<BankCallbackPage />} />
       <Route
         path="/account-selector"
         element={isAuthenticated() ? <AccountSelector /> : <Navigate to="/login" replace />}

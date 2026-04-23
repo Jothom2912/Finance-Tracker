@@ -13,9 +13,13 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import os
+import uuid
 from typing import Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -50,27 +54,78 @@ _pending_authorizations: dict[str, int] = {}
 # Singleton client (created on first use)
 # ──────────────────────────────────────────
 
+_BANKING_ENV_VARS = (
+    "ENABLE_BANKING_APP_ID",
+    "ENABLE_BANKING_KEY_PATH",
+    "ENABLE_BANKING_REDIRECT_URI",
+)
+
 _client: EnableBankingClient | None = None
+
+
+def _resolve_key_path(raw: str) -> str:
+    """Resolve a potentially relative PEM path by walking up from this file."""
+    from pathlib import Path as _Path
+
+    if os.path.isabs(raw):
+        return raw
+    search = _Path(__file__).resolve().parent
+    pem_name = raw.lstrip("./")
+    while search != search.parent:
+        candidate = search / pem_name
+        if candidate.exists():
+            return str(candidate)
+        search = search.parent
+    return raw
+
+
+def validate_banking_config() -> None:
+    """Check Enable Banking configuration at startup.
+
+    Three possible states:
+
+    * **All absent** — no ``ENABLE_BANKING_*`` vars set.  Banking is
+      disabled; log info and return.  Legitimate for devs who don't
+      use the bank integration.
+    * **Partial** — some vars set, others missing.  Almost certainly a
+      half-finished deploy.  Raise ``BankConfigError`` so the caller
+      can log an error.
+    * **Fully configured** — validate PEM readability.  Wraps any IO
+      error into ``BankConfigError`` so the caller only catches domain
+      exceptions.
+    """
+    configured = {
+        var: bool(os.getenv(var, "").strip())
+        for var in _BANKING_ENV_VARS
+    }
+
+    if not any(configured.values()):
+        logger.info("Banking not configured (no ENABLE_BANKING_* vars), bank routes disabled")
+        return
+
+    missing = [var for var, present in configured.items() if not present]
+    if missing:
+        raise BankConfigError(
+            f"Partial banking config — set all or none. Missing: {', '.join(missing)}"
+        )
+
+    key_path = os.getenv("ENABLE_BANKING_KEY_PATH", "")
+    resolved = _resolve_key_path(key_path)
+    try:
+        with open(resolved, "rb") as f:
+            f.read(1)
+    except (OSError, FileNotFoundError) as exc:
+        raise BankConfigError(f"PEM file unreadable at {resolved}: {exc}") from exc
+
+    logger.info("Banking configured OK (app_id set, PEM readable)")
 
 
 def _get_client() -> EnableBankingClient:
     global _client
     if _client is None:
-        import os
-        from pathlib import Path
-
-        key_path = os.getenv("ENABLE_BANKING_KEY_PATH", "./enablebanking-privat.pem")
-        if not os.path.isabs(key_path):
-            # Walk up from rest_api.py until we find the PEM file or hit root
-            search = Path(__file__).resolve().parent
-            pem_name = key_path.lstrip("./")
-            while search != search.parent:
-                candidate = search / pem_name
-                if candidate.exists():
-                    key_path = str(candidate)
-                    break
-                search = search.parent
-
+        key_path = _resolve_key_path(
+            os.getenv("ENABLE_BANKING_KEY_PATH", "./enablebanking-privat.pem")
+        )
         config = EnableBankingConfig(
             app_id=os.getenv("ENABLE_BANKING_APP_ID", ""),
             key_path=key_path,
@@ -188,10 +243,38 @@ def start_bank_connection(
     return ConnectResponse(authorization_url=result["url"], state=result["state"])
 
 
+def _get_frontend_url() -> str:
+    return os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+
+def _callback_redirect(
+    status: str,
+    *,
+    code: str | None = None,
+    connections: int | None = None,
+    ref: str | None = None,
+) -> RedirectResponse:
+    """Build a redirect to the frontend bank callback page.
+
+    Only short, fixed error codes are forwarded — never raw exception
+    text, which could leak internals or create an XSS surface if the
+    frontend renders it carelessly.
+    """
+    params: dict[str, str] = {"status": status}
+    if code is not None:
+        params["code"] = code
+    if connections is not None:
+        params["connections"] = str(connections)
+    if ref is not None:
+        params["ref"] = ref
+    url = f"{_get_frontend_url()}/bank/callback?{urlencode(params)}"
+    return RedirectResponse(url=url, status_code=303)
+
+
 @router.get("/callback")
 def bank_callback(
     state: str = Query(..., description="State parameter from authorization"),
-    code: Optional[str] = Query(default=None, description="Authorization code from bank"),
+    auth_code: Optional[str] = Query(default=None, alias="code", description="Authorization code from bank"),
     error: Optional[str] = Query(default=None, description="Error from bank"),
     service: BankingService = Depends(_get_banking_service),
 ):
@@ -201,47 +284,43 @@ def bank_callback(
     The 'code' and 'state' parameters come from Enable Banking.
     Account ID is resolved via the state mapping stored at /connect time.
 
-    UX note: this endpoint is the browser redirect target from the bank,
-    not an API call the frontend initiates.  A failure here renders as
-    raw JSON in the user's browser tab, which is a pre-existing UX
-    weakness tracked in ``docs/followups.md``.  This handler's
-    responsibility is limited to producing the correct HTTP status code
-    and a machine-readable body; the redirect-to-frontend-error-page
-    pattern is a separate commit.
+    On any outcome (success or failure) this endpoint redirects to the
+    frontend ``/bank/callback`` page with a short error code rather than
+    rendering raw JSON.  Full exception detail is logged server-side
+    with a correlation ref the frontend can display for support.
     """
     if error:
-        logger.error("Bank authorization failed: error=%s, state=%s", error, state)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Bank authorization failed: {error}",
-        )
+        ref = str(uuid.uuid4())[:8]
+        logger.error("Bank authorization failed [%s]: error=%s, state=%s", ref, error, state)
+        return _callback_redirect("error", code="auth_rejected", ref=ref)
 
-    if not code:
-        raise HTTPException(status_code=400, detail="Missing authorization code")
+    if not auth_code:
+        ref = str(uuid.uuid4())[:8]
+        logger.warning("Bank callback missing authorization code [%s]: state=%s", ref, state)
+        return _callback_redirect("error", code="missing_code", ref=ref)
 
     account_id = _pending_authorizations.pop(state, None)
     if account_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Unknown state parameter. Authorization may have expired — please retry.",
-        )
+        ref = str(uuid.uuid4())[:8]
+        logger.warning("Unknown state parameter in bank callback [%s]: state=%s", ref, state)
+        return _callback_redirect("error", code="unknown_state", ref=ref)
 
     try:
-        connections = service.complete_connect(auth_code=code, account_id=account_id)
+        connections = service.complete_connect(auth_code=auth_code, account_id=account_id)
     except BankAuthorizationError as exc:
-        logger.warning("Enable Banking rejected authorization code for state=%s: %s", state, exc)
-        raise HTTPException(status_code=400, detail=f"Bank authorization rejected: {exc}")
+        ref = str(uuid.uuid4())[:8]
+        logger.warning("Enable Banking rejected authorization code [%s]: %s", ref, exc)
+        return _callback_redirect("error", code="auth_rejected", ref=ref)
     except BankConfigError as exc:
-        logger.exception("Enable Banking misconfigured during callback")
-        raise HTTPException(status_code=500, detail=f"Bank adapter misconfigured: {exc}")
+        ref = str(uuid.uuid4())[:8]
+        logger.exception("Enable Banking misconfigured during callback [%s]", ref)
+        return _callback_redirect("error", code="config_error", ref=ref)
     except BankApiUnavailable as exc:
-        logger.exception("Enable Banking upstream error during callback")
-        raise HTTPException(status_code=502, detail=f"Enable Banking API unavailable: {exc}")
+        ref = str(uuid.uuid4())[:8]
+        logger.exception("Enable Banking upstream error during callback [%s]", ref)
+        return _callback_redirect("error", code="upstream_unavailable", ref=ref)
 
-    return {
-        "message": f"Connected {len(connections)} bank account(s)",
-        "connections": connections,
-    }
+    return _callback_redirect("success", connections=len(connections))
 
 
 @router.get("/connections")
