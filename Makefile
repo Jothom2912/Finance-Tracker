@@ -1,10 +1,11 @@
 SHELL := /bin/bash
 .PHONY: help install-deps dev dev-docker dev-backend dev-user-service dev-transaction-service dev-frontend down logs build test test-e2e lint format format-check check clean clean-test-containers cleanup-mysql-duplicates-once
 
-INFRA_SERVICES = mysql postgres postgres-transactions rabbitmq
+INFRA_SERVICES = mysql postgres postgres-transactions postgres-categorization rabbitmq
 BACKEND_DIR = services/monolith
 USER_SERVICE_DIR = services/user-service
 TX_SERVICE_DIR = services/transaction-service
+CAT_SERVICE_DIR = services/categorization-service
 FRONTEND_DIR = services/frontend
 
 help: ## Show available targets
@@ -17,6 +18,7 @@ help: ## Show available targets
 	@printf '    dev-backend               Start backend locally (port 8000)\n'
 	@printf '    dev-user-service          Start user-service locally (port 8001)\n'
 	@printf '    dev-transaction-service   Start transaction-service locally (port 8002)\n'
+	@printf '    dev-categorization-service Start categorization-service locally (port 8005)\n'
 	@printf '    dev-frontend              Start frontend locally (port 5173)\n'
 	@printf '    down                      Stop all Docker containers\n'
 	@printf '    logs                      Tail Docker container logs\n'
@@ -37,6 +39,7 @@ install-deps: ## Install dependencies for all services
 	$(MAKE) -C $(BACKEND_DIR) install-deps
 	$(MAKE) -C $(USER_SERVICE_DIR) install-deps
 	$(MAKE) -C $(TX_SERVICE_DIR) install-deps
+	$(MAKE) -C $(CAT_SERVICE_DIR) install-deps
 	$(MAKE) -C $(FRONTEND_DIR) install-deps
 
 # === Development ===
@@ -47,6 +50,7 @@ dev: ## Start infrastructure and print service start instructions
 	@printf '  make dev-backend                (port 8000)\n'
 	@printf '  make dev-user-service           (port 8001)\n'
 	@printf '  make dev-transaction-service    (port 8002)\n'
+	@printf '  make dev-categorization-service (port 8005)\n'
 	@printf '  make dev-frontend               (port 5173)\n\n'
 
 dev-docker: ## Start everything in Docker (infra + all services)
@@ -60,6 +64,9 @@ dev-user-service: ## Start user-service locally with hot-reload
 
 dev-transaction-service: ## Start transaction-service locally with hot-reload
 	$(MAKE) -C $(TX_SERVICE_DIR) dev
+
+dev-categorization-service: ## Start categorization-service locally with hot-reload
+	$(MAKE) -C $(CAT_SERVICE_DIR) dev
 
 dev-frontend: ## Start frontend locally with hot-reload
 	$(MAKE) -C $(FRONTEND_DIR) dev
@@ -79,6 +86,7 @@ test: ## Run tests for all services
 	$(MAKE) -C $(BACKEND_DIR) test
 	$(MAKE) -C $(USER_SERVICE_DIR) test
 	$(MAKE) -C $(TX_SERVICE_DIR) test
+	$(MAKE) -C $(CAT_SERVICE_DIR) test
 	$(MAKE) -C $(FRONTEND_DIR) test
 
 test-e2e: ## Run E2E tests (requires Docker services running)
@@ -88,21 +96,25 @@ lint: ## Run ruff linter on all Python services
 	$(MAKE) -C $(BACKEND_DIR) lint
 	$(MAKE) -C $(USER_SERVICE_DIR) lint
 	$(MAKE) -C $(TX_SERVICE_DIR) lint
+	$(MAKE) -C $(CAT_SERVICE_DIR) lint
 
 format: ## Auto-format all Python services
 	$(MAKE) -C $(BACKEND_DIR) format
 	$(MAKE) -C $(USER_SERVICE_DIR) format
 	$(MAKE) -C $(TX_SERVICE_DIR) format
+	$(MAKE) -C $(CAT_SERVICE_DIR) format
 
 format-check: ## Check code formatting without changes
 	$(MAKE) -C $(BACKEND_DIR) format-check
 	$(MAKE) -C $(USER_SERVICE_DIR) format-check
 	$(MAKE) -C $(TX_SERVICE_DIR) format-check
+	$(MAKE) -C $(CAT_SERVICE_DIR) format-check
 
 check: ## Run all quality checks (lint + format + tests)
 	$(MAKE) -C $(BACKEND_DIR) check
 	$(MAKE) -C $(USER_SERVICE_DIR) check
 	$(MAKE) -C $(TX_SERVICE_DIR) check
+	$(MAKE) -C $(CAT_SERVICE_DIR) check
 	$(MAKE) -C $(FRONTEND_DIR) check
 
 # === Cleanup ===
@@ -124,4 +136,5 @@ clean: ## Remove all generated artifacts
 	$(MAKE) -C $(BACKEND_DIR) clean
 	$(MAKE) -C $(USER_SERVICE_DIR) clean
 	$(MAKE) -C $(TX_SERVICE_DIR) clean
+	$(MAKE) -C $(CAT_SERVICE_DIR) clean
 	$(MAKE) -C $(FRONTEND_DIR) clean
