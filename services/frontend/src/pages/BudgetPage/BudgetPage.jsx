@@ -10,6 +10,7 @@ import {
 } from '../../api/monthlyBudgets';
 import { useCategories } from '../../hooks/useCategories';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useConfirm } from '../../components/ConfirmDialog/ConfirmDialog';
 import { getMonthName, MONTH_OPTIONS } from '../../lib/formatters';
 import './BudgetPage.css';
 
@@ -20,6 +21,7 @@ function BudgetPage() {
 
   const { categories, loading: catsLoading } = useCategories();
   const { showError, showSuccess } = useNotifications();
+  const confirm = useConfirm();
 
   const [budget, setBudget] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -107,7 +109,13 @@ function BudgetPage() {
 
   const handleDelete = async () => {
     if (!budget?.id) return;
-    if (!window.confirm('Er du sikker på at du vil slette hele budgettet for denne måned?')) return;
+    const ok = await confirm({
+      title: 'Slet månedens budget?',
+      message: 'Hele månedens budget slettes permanent.',
+      confirmLabel: 'Slet',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setSaving(true);
     try {
       await deleteMonthlyBudget(budget.id);

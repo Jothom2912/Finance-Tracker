@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import MessageDisplay from '../../MessageDisplay';
 import apiClient from '../../../utils/apiClient';
+import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
 import './BudgetSetup.css';
 
 function BudgetSetup({
@@ -13,6 +14,8 @@ function BudgetSetup({
     onCloseModal,
     initialBudget
 }) {
+    const confirm = useConfirm();
+
     // Transform initialBudget hvis den kommer fra parent
     const transformBudget = useCallback((budget) => {
         if (!budget) return null;
@@ -321,7 +324,13 @@ function BudgetSetup({
     };
 
     const handleDeleteBudget = async (budgetId) => {
-        if (!window.confirm("Er du sikker på, at du vil slette dette budget?")) return;
+        const ok = await confirm({
+            title: 'Slet budget?',
+            message: 'Budgetposten slettes permanent.',
+            confirmLabel: 'Slet',
+            variant: 'danger',
+        });
+        if (!ok) return;
 
         setIsSubmitting(true);
         try {

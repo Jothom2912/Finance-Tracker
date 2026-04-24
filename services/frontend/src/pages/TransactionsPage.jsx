@@ -7,6 +7,7 @@ import Modal from '../components/Modal/Modal';
 import { useCategories } from '../hooks/useCategories';
 import { useTransactions } from '../hooks/useTransactions';
 import { useNotifications } from '../hooks/useNotifications';
+import { useConfirm } from '../components/ConfirmDialog/ConfirmDialog';
 import { formatLocalISODate } from '../lib/formatters';
 
 import '../components/FilterComponent/FilterComponent.css';
@@ -16,6 +17,7 @@ function TransactionsPage() {
   const { categories } = useCategories();
   const { transactions, loading: txLoading, error: txError, fetch: fetchTx, remove: removeTx, uploadCsv } = useTransactions();
   const { showError, showSuccess, clearMessages } = useNotifications();
+  const confirm = useConfirm();
 
   const [transactionToEdit, setTransactionToEdit] = useState(null);
   const [showFormModal, setShowFormModal] = useState(false);
@@ -61,7 +63,13 @@ function TransactionsPage() {
   }, [clearMessages]);
 
   const handleDeleteTransaction = useCallback(async (transactionId) => {
-    if (!window.confirm('Er du sikker på, du vil slette denne transaktion?')) return;
+    const ok = await confirm({
+      title: 'Slet transaktion?',
+      message: 'Transaktionen slettes permanent og kan ikke gendannes.',
+      confirmLabel: 'Slet',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await removeTx(transactionId);
       loadTransactions();
@@ -69,7 +77,7 @@ function TransactionsPage() {
     } catch (err) {
       showError(`Fejl ved sletning: ${err.message}`);
     }
-  }, [removeTx, loadTransactions, showSuccess, showError]);
+  }, [confirm, removeTx, loadTransactions, showSuccess, showError]);
 
   const handleCsvUpload = useCallback(async (e) => {
     e.preventDefault();

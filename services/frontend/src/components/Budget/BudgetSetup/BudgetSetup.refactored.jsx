@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import MessageDisplay from '../../MessageDisplay';
 import { useBudgetService } from '../adapters/inbound/useBudgetService';
 import { Budget } from '../domain/Budget';
+import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
 import './BudgetSetup.css';
 
 function BudgetSetup({
@@ -19,6 +20,8 @@ function BudgetSetup({
     onCloseModal,
     initialBudget
 }) {
+    const confirm = useConfirm();
+
     // Use the hexagonal architecture hook
     const {
         budgets,
@@ -202,9 +205,13 @@ function BudgetSetup({
     };
 
     const handleDeleteBudget = async (budgetId) => {
-        if (!window.confirm("Er du sikker på, at du vil slette dette budget?")) {
-            return;
-        }
+        const ok = await confirm({
+            title: 'Slet budget?',
+            message: 'Budgetposten slettes permanent.',
+            confirmLabel: 'Slet',
+            variant: 'danger',
+        });
+        if (!ok) return;
 
         setIsSubmitting(true);
 

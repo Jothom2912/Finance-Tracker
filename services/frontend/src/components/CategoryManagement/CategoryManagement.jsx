@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import MessageDisplay from '../MessageDisplay';
 import { createCategory, updateCategory, deleteCategory as apiDeleteCategory } from '../../api/categories';
+import { useConfirm } from '../ConfirmDialog/ConfirmDialog';
 import './CategoryManagement.css';
 
 // Ændret props: Fjernet 'fetchCategories', 'error', 'successMessage'
@@ -14,6 +15,7 @@ function CategoryManagement({
     setSuccessMessage,  // Bruger stadig disse til at sætte fejl/succes i App.js
     onCloseModal        // Til at lukke modalen
 }) {
+    const confirm = useConfirm();
     const [editingCategory, setEditingCategory] = useState(null);
     const [categoryNameInput, setCategoryNameInput] = useState('');
     const [categoryTypeInput, setCategoryTypeInput] = useState('expense');
@@ -87,25 +89,31 @@ function CategoryManagement({
     };
 
     const handleDeleteCategory = async (categoryId) => {
-        if (window.confirm("Er du sikker på, at du vil slette denne kategori? Transaktioner tilknyttet vil miste deres kategori.")) {
-            try {
-                await apiDeleteCategory(categoryId);
+        const ok = await confirm({
+            title: 'Slet kategori?',
+            message: 'Transaktioner tilknyttet kategorien mister deres kategori. Handlingen kan ikke fortrydes.',
+            confirmLabel: 'Slet',
+            variant: 'danger',
+        });
+        if (!ok) return;
 
-                setLocalSuccessMessage('Kategori slettet!');
-                setSuccessMessage('Kategori slettet!'); // Send besked til App.js
-                setLocalError(null);
-                setError(null);
+        try {
+            await apiDeleteCategory(categoryId);
 
-                // Nøgleændring her: Kald den relevante prop fra App.js
-                onCategoryDeleted(); // Kalder handleCategoryChange i App.js
+            setLocalSuccessMessage('Kategori slettet!');
+            setSuccessMessage('Kategori slettet!'); // Send besked til App.js
+            setLocalError(null);
+            setError(null);
 
-            } catch (err) {
-                console.error("Fejl ved sletning af kategori:", err);
-                setLocalError(err.message || "Der opstod en uventet fejl ved sletning.");
-                setError(err.message || "Der opstod en uventet fejl ved sletning."); // Send fejl til App.js
-                setLocalSuccessMessage(null);
-                setSuccessMessage(null);
-            }
+            // Nøgleændring her: Kald den relevante prop fra App.js
+            onCategoryDeleted(); // Kalder handleCategoryChange i App.js
+
+        } catch (err) {
+            console.error("Fejl ved sletning af kategori:", err);
+            setLocalError(err.message || "Der opstod en uventet fejl ved sletning.");
+            setError(err.message || "Der opstod en uventet fejl ved sletning."); // Send fejl til App.js
+            setLocalSuccessMessage(null);
+            setSuccessMessage(null);
         }
     };
 
