@@ -188,7 +188,7 @@ function BudgetPage() {
           <div className="no-account-icon">&#128179;</div>
           <h2>Ingen konto valgt</h2>
           <p>Vælg en konto for at se og administrere dine budgetter.</p>
-          <Link to="/" className="btn-primary">Gå til kontoer</Link>
+          <Link to="/account-selector" className="btn-primary">Gå til kontoer</Link>
         </div>
       </div>
     );
