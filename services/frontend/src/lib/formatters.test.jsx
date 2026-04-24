@@ -4,6 +4,7 @@ import {
   MONTH_OPTIONS,
   getYearOptions,
   getMonthLabel,
+  formatLocalISODate,
 } from './formatters';
 
 describe('formatAmount', () => {
@@ -119,5 +120,31 @@ describe('getMonthLabel', () => {
   it('returns the input value when no match is found', () => {
     expect(getMonthLabel('13')).toBe('13');
     expect(getMonthLabel('unknown')).toBe('unknown');
+  });
+});
+
+describe('formatLocalISODate', () => {
+  it('formats a date as YYYY-MM-DD', () => {
+    expect(formatLocalISODate(new Date(2025, 5, 15))).toBe('2025-06-15');
+  });
+
+  it('zero-pads single-digit months and days', () => {
+    expect(formatLocalISODate(new Date(2025, 0, 1))).toBe('2025-01-01');
+    expect(formatLocalISODate(new Date(2025, 8, 9))).toBe('2025-09-09');
+  });
+
+  it('uses local calendar day, not UTC', () => {
+    // A Date constructed at local midnight on the 1st must serialize as that
+    // 1st, even when the ambient offset pushes the UTC instant into the
+    // previous day. toISOString() would regress here; formatLocalISODate
+    // must not.
+    const localMidnight = new Date(2025, 2, 1, 0, 0, 0);
+
+    expect(formatLocalISODate(localMidnight)).toBe('2025-03-01');
+  });
+
+  it('formats the last day of a month correctly', () => {
+    expect(formatLocalISODate(new Date(2025, 1, 0))).toBe('2025-01-31');
+    expect(formatLocalISODate(new Date(2024, 2, 0))).toBe('2024-02-29');
   });
 });

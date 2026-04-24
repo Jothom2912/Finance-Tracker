@@ -60,3 +60,15 @@ export function getMonthName(monthNumber) {
   const idx = Number(monthNumber) - 1;
   return MONTH_OPTIONS[idx]?.label || String(monthNumber);
 }
+
+// Formats a Date as YYYY-MM-DD using the caller's local calendar day.
+// Date.prototype.toISOString() would convert to UTC first, which can flip
+// the day near midnight for users in offsets like UTC+1 (DK). This helper
+// is safe for <input type="date"> values, which are always interpreted
+// as a local calendar date by the browser.
+export function formatLocalISODate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}

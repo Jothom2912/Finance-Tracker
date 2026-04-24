@@ -7,6 +7,7 @@ import Modal from '../components/Modal/Modal';
 import { useCategories } from '../hooks/useCategories';
 import { useTransactions } from '../hooks/useTransactions';
 import { useNotifications } from '../hooks/useNotifications';
+import { formatLocalISODate } from '../lib/formatters';
 
 import '../components/FilterComponent/FilterComponent.css';
 import './TransactionsPage.css';
@@ -19,8 +20,14 @@ function TransactionsPage() {
   const [transactionToEdit, setTransactionToEdit] = useState(null);
   const [showFormModal, setShowFormModal] = useState(false);
 
-  const [filterStartDate, setFilterStartDate] = useState('2020-01-01');
-  const [filterEndDate, setFilterEndDate] = useState('2030-12-31');
+  const [filterStartDate, setFilterStartDate] = useState(() => {
+    const d = new Date();
+    return formatLocalISODate(new Date(d.getFullYear(), d.getMonth(), 1));
+  });
+  const [filterEndDate, setFilterEndDate] = useState(() => {
+    const d = new Date();
+    return formatLocalISODate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  });
   const [selectedCategory, setSelectedCategory] = useState('');
 
   const [csvFile, setCsvFile] = useState(null);
