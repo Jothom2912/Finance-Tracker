@@ -215,3 +215,99 @@ and the codebase had drifted. Lesson: every sweep starts with a
 fresh `rg` pass against the current tree, not a re-read of the
 plan. The plan tells you *what kind of work* to do; the `rg`
 tells you *where it applies*.
+
+## Session stand-down (2026-04-24, Phase 2 ~95% complete)
+
+Stopping point after landing Phase 2.4. Notes for picking the
+thread back up next session.
+
+### Where we are
+
+Phase 2 (frontend accessibility + icon consistency) is
+effectively complete:
+
+* **2.1 — install deps.** Done. `@radix-ui/react-dialog` and
+  `lucide-react` pinned in `services/frontend/package.json`.
+* **2.2 — Modal.jsx → Radix Dialog.** Done. Focus trap, Esc,
+  scroll lock, `aria-modal` all delegated to Radix. Class
+  names prefixed `app-modal-*` to avoid collisions. Browser
+  verified.
+* **2.3 — ConfirmDialog + window.confirm replacement.** Done.
+  Imperative provider API (`useConfirm` hook returning a
+  promise). All eight `window.confirm` call sites migrated.
+  The decision to use an imperative rather than declarative
+  API is documented with honest retrospective in
+  `docs/adr/0002-confirm-dialog-imperative-api.md`.
+* **2.4 — emoji → lucide-react.** Done (commit `bc77975`).
+  21 replacements across 11 files, a11y pattern documented
+  in the commit body. Browser smoke-tested; no regressions.
+
+### What is left for next session
+
+1. **Phase 2.2b — GoalPage hand-rolled modal → Modal
+   component.** This is the last outstanding item in Phase 2
+   and closes three threads at once:
+   * A11y gap: the hand-rolled modal in
+     `services/frontend/src/pages/GoalPage/GoalPage.jsx:89-108`
+     has no focus trap, no Esc handling, no `aria-modal`.
+   * Last emoji in the codebase: `✕` at line 95 disappears
+     automatically once Radix `Dialog.Close` handles the
+     close-button concern.
+   * CSS duplication: `_modals.css` in GoalPage duplicates
+     logic that already lives in `Modal.css` (prefixed
+     `app-modal-*`).
+   Scope: migrate the `{showGoalModal && (...)}` block to the
+   shared `<Modal>` component, delete the `.modal-overlay` /
+   `.modal-content` / `.modal-header` / `.modal-close-btn`
+   CSS rules in `_modals.css` that are no longer referenced,
+   and verify in the browser that edit-goal still opens,
+   closes on Esc, and traps focus.
+
+2. **Phase 3 — TanStack Query on Dashboard.** Architectural
+   refactor to demonstrate modern server-state management.
+   Scope per earlier plan:
+   * Install `@tanstack/react-query`
+   * Wrap app in `QueryClientProvider`
+   * Refactor `DashboardPage` data loading from bespoke
+     `useEffect` + `useState` + `refreshTrigger` to
+     `useQuery` with a stable query key
+   * Replace manual refresh calls with
+     `queryClient.invalidateQueries`
+   * Decide: keep `useEffect`-based loading in other pages
+     for now (scope discipline), or sweep more broadly.
+     Recommended: dashboard only; a focused change is a
+     better demo for the exam than a half-finished sweep.
+
+### Open cross-cutting followups (from this document, above)
+
+Not blocking, but worth having in view:
+
+* **Amount encoding sweep** (4-point checklist under
+  "Amount encoding consistency sweep"). Priority medium.
+  A reviewer may ask.
+* **Bank date edge case** — `BankParseError` wrapping. YAGNI
+  unless a real operational need appears.
+* **MySQL duplicates cleanup script** — still sitting in
+  `scripts/cleanup_mysql_duplicates.py`, to be run + removed.
+
+### Dev environment state at stand-down
+
+* `make dev-frontend` running in terminal 2 (Vite HMR live,
+  lucide-react optimised in deps).
+* Backend services up via `docker compose up -d`
+  (transaction-service fix for `httpx` already shipped).
+* Test baseline: **111/111 passed** on
+  `services/frontend` (last run at commit `bc77975`).
+
+### Meta — decision hygiene for next session
+
+Two habits that served this session well and should continue:
+
+1. **Every bug discovered during a feature gets its own
+   commit**, not folded into the feature's scope. This kept
+   Phase 2.4's commit history clean even though three extra
+   icons were found mid-sweep.
+2. **Deviations from plan or prior recommendation are
+   flagged explicitly**, ideally in-line in the response and
+   in the commit body. ADR-0002 exists precisely because this
+   habit was missed once; it should not be missed again.
