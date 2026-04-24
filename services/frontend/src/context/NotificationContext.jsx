@@ -44,13 +44,34 @@ export function NotificationProvider({ children }) {
     setNotifications([]);
   }, []);
 
+  const successNotifications = notifications.filter((n) => n.type === 'success');
+  const errorNotifications = notifications.filter((n) => n.type === 'error');
+
   return (
     <NotificationContext.Provider value={{ showError, showSuccess, clearMessages }}>
       {children}
-      {notifications.length > 0 && (
-        <div className="notification-container" role="status" aria-live="polite">
-          {notifications.map((n) => (
-            <div key={n.id} className={`notification notification--${n.type}`}>
+      {/*
+        Two permanent live regions. Screen readers attach their observer to the
+        region at the moment it enters the accessibility tree -- if the region
+        only exists when a message is present, the message is considered
+        pre-existing content and never announced. Rendering both containers
+        unconditionally guarantees announcements for every subsequent update.
+
+        Split by priority: role=status/aria-live=polite waits for idle for
+        success confirmations, while role=alert/aria-live=assertive interrupts
+        for errors. The split cannot be expressed per-message; it must live on
+        the region itself.
+      */}
+      <div className="notification-container">
+        <div
+          className="notification-group"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          data-testid="notification-polite"
+        >
+          {successNotifications.map((n) => (
+            <div key={n.id} className="notification notification--success">
               <span className="notification__message">{n.message}</span>
               <button
                 className="notification__dismiss"
@@ -62,7 +83,27 @@ export function NotificationProvider({ children }) {
             </div>
           ))}
         </div>
-      )}
+        <div
+          className="notification-group"
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+          data-testid="notification-assertive"
+        >
+          {errorNotifications.map((n) => (
+            <div key={n.id} className="notification notification--error">
+              <span className="notification__message">{n.message}</span>
+              <button
+                className="notification__dismiss"
+                onClick={() => dismiss(n.id)}
+                aria-label="Luk besked"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </NotificationContext.Provider>
   );
 }
