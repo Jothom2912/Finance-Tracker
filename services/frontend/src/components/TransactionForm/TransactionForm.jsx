@@ -44,9 +44,10 @@ function TransactionForm({
             return;
         }
 
-        // Backend forventer negativt beløb for expenses, positivt for income
+        // Backend kræver positivt beløb (>= 0.01). Retningen (income vs. expense)
+        // kodes af transaction_type-enum'en, ikke af fortegnet på beløbet.
         const amountValue = parseFloat(amount);
-        const finalAmount = isExpense ? -Math.abs(amountValue) : Math.abs(amountValue);
+        const finalAmount = Math.abs(amountValue);
 
         // Valider at kategori er valgt
         if (!category || category === '') {
