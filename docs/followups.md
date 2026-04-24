@@ -110,6 +110,55 @@ The frontend `BankCallbackPage` maps short codes to user-friendly
 Danish messages via a local lookup table and never renders URL params
 directly as HTML, avoiding both information leakage and XSS surface.
 
+## Amount encoding consistency sweep (2026-04-24)
+
+Commit `9f8a27d` switched the canonical amount convention used by
+`TransactionForm.jsx` from *signed amount* (negative for expenses) to
+*positive amount + `transaction_type` enum*. This matches the backend
+DTO (`CreateTransactionDTO.amount` with `ge=0.01`, direction carried
+by the `transaction_type` field), and fixes a 422 on expense create.
+
+The fix was verified not to regress the three frontend consumers that
+a quick read uncovered (`TransactionsList` uses `Math.abs` + `type`;
+`RecentTransactions` prefers `type` with an `amount < 0` fallback;
+`SummaryCards` gets pre-aggregated totals from the monolith GraphQL
+overview). The `amount < 0` fallback in
+`services/frontend/src/components/RecentTransactions/RecentTransactions.jsx`
+was kept and annotated as defensive code for legacy rows.
+
+**Still to verify** (post Modal 2.2 browser verification, before
+shipping to exam):
+
+1. **CSV import path.** Walk `POST /transactions/import-csv` end-to-end:
+   what does the frontend CSV parser send? If it sends signed amounts,
+   we now have an asymmetry between manual create (positive) and
+   import (signed). Start at `uploadTransactionsCsv` in
+   `services/frontend/src/api/transactions.jsx` and follow into
+   `services/transaction-service/app/application/service.py`
+   (`import_csv` / line 249 `amount = Decimal(row["amount"])`).
+2. **Edit flow.** `TransactionForm` preloads `setAmount(transactionToEdit.amount)`.
+   If historical rows have negative amounts in the DB *and* new rows
+   have positive amounts, the form will show a minus sign for old
+   expenses but not new ones — inconsistent UX. Confirm the preload
+   uses `Math.abs` or verify the DB is already uniformly positive.
+3. **Aggregations.** Grep for any chart/summary code that uses
+   arithmetic on `amount` (sum, reduce, comparison to 0) and confirm
+   it disambiguates via `transaction_type` rather than sign. Known
+   clean: `SummaryCards` (pre-aggregated by monolith),
+   `TransactionsList` (display only). Known defensive:
+   `RecentTransactions` (dual check, already annotated).
+4. **Historical data.** Run a one-off query against the
+   `transactions` table in Postgres: are existing rows uniformly
+   positive, or is there a mix? If mixed, decide: (a) one-shot
+   migration to normalise signs, or (b) leave historical data mixed
+   and rely on `transaction_type` for all new reads. Neither is wrong;
+   the point is that the decision is deliberate and documented.
+
+**Priority:** medium. Nothing is broken today — the fix works and
+tests pass. But an exam reviewer may ask "did you check for
+asymmetric behaviour?" and the right answer is "yes, here is the
+sweep I ran", not "I fixed the symptom I saw".
+
 ## Duplicate transactions in MySQL projection (2026-04-22, cleanup script ready 2026-04-23)
 
 A reconciliation script was added at `scripts/cleanup_mysql_duplicates.py`
