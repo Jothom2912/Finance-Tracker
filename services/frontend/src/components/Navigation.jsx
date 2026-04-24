@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import '../styles/Navigation.css';
 
@@ -17,7 +18,8 @@ function Navigation() {
       <div className="navbar-container">
         <div className="navbar-brand">
           <Link to="/dashboard" className="brand-link">
-            💰 Finans Tracker
+            <Wallet className="brand-icon" aria-hidden="true" size={20} />
+            Finans Tracker
           </Link>
         </div>
 

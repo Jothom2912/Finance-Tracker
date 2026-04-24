@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Check, X } from 'lucide-react';
 import { fetchConnections, syncConnection } from '../../api/bank';
 import './BankConnectionWidget.css';
 
@@ -139,7 +140,11 @@ function BankConnectionWidget({ onSyncComplete }) {
 
               {syncResult && syncResult.connectionId === conn.id && (
                 <div className={`bank-sync-result ${syncResult.type}`}>
-                  {syncResult.type === 'success' ? '✓' : '✗'}{' '}
+                  {syncResult.type === 'success' ? (
+                    <Check aria-hidden="true" size={14} />
+                  ) : (
+                    <X aria-hidden="true" size={14} />
+                  )}{' '}
                   {syncResult.message}
                   {syncResult.detail && (
                     <span style={{ opacity: 0.7 }}>

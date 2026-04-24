@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import MessageDisplay from '../../MessageDisplay';
 import apiClient from '../../../utils/apiClient';
 import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
@@ -480,7 +481,8 @@ function BudgetSetup({
 
                 {hasDuplicate && (
                     <div className="duplicate-warning">
-                        ⚠️ Der findes allerede et budget for denne kategori i den valgte periode.
+                        <AlertTriangle aria-hidden="true" size={16} />
+                        Der findes allerede et budget for denne kategori i den valgte periode.
                     </div>
                 )}
 

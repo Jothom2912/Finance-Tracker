@@ -1,4 +1,5 @@
 import React from 'react';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import './SummaryCards.css';
 
 function TrendBadge({ changePercent, invertColor }) {
@@ -17,12 +18,13 @@ function TrendBadge({ changePercent, invertColor }) {
     colorClass = isUp ? 'trend-positive' : 'trend-negative';
   }
 
-  const arrow = isUp ? '▲' : isDown ? '▼' : '—';
+  const IconComp = isUp ? TrendingUp : isDown ? TrendingDown : Minus;
+  const trendLabel = isUp ? 'Stigning' : isDown ? 'Fald' : 'Uændret';
   const label = isFlat ? '0%' : `${Math.abs(changePercent)}%`;
 
   return (
     <span className={`trend-badge ${colorClass}`} title="vs. forrige måned">
-      <span className="trend-arrow">{arrow}</span>
+      <IconComp className="trend-arrow" aria-label={trendLabel} size={14} />
       <span className="trend-value">{label}</span>
     </span>
   );
