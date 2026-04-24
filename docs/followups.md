@@ -179,3 +179,39 @@ the Transaction model, preventing recurrence.
 **Run with** `make cleanup-mysql-duplicates-once` (dry-run) or
 `make cleanup-mysql-duplicates-once EXECUTE=1` (delete).
 **Remove the script and Makefile target after running.**
+
+## Sweep discipline: Unicode regex for emoji/icon hunts (2026-04-24)
+
+Lesson captured from the Phase 2.4 emoji → lucide-react sweep
+(commit `bc77975`). The first `rg` pass used a regex that only
+covered part of the Unicode symbol ranges and an explicit glyph
+list derived from a stale plan document. It missed three
+replacements: `✓`/`✗` (U+2713/U+2717) in `BankConnectionWidget`
+and `📤` (U+1F4E4) in `CSVUpload`. A second, broader pass caught
+them before the commit landed, but three round-trips would have
+been one pass with the right regex upfront.
+
+For future emoji/icon hunts, one combined regex covering:
+
+* **U+2600–U+27BF** — dingbats + miscellaneous symbols.
+  Catches `✓ ✗ ✕ ⚙ ▲ ▼ ☆ ★ ✏ ✅ ❌ ➤` etc. Easy to forget
+  because these are often treated as "ASCII-ish" glyphs.
+* **U+1F300–U+1F9FF** — pictographs (the "proper" emoji range).
+  Catches `💰 📊 🎯 📤 💳 🚨 🟡` etc.
+* **U+2300–U+23FF** — technical symbols. Catches `⌘ ⌥ ⏰ ⚠`
+  (note: `⚠` at U+26A0 is in the 2600 range, but `⚠️` with the
+  variation selector still matches on the base glyph).
+
+Ripgrep syntax: `rg "[\x{2600}-\x{27BF}\x{1F300}-\x{1F9FF}\x{2300}-\x{23FF}]" path`.
+Always do this before any "replace emojis with icons" or "audit
+UI for non-themed glyphs" task. The regex is cheap; the round
+trips are not.
+
+Second lesson from the same commit: **the plan document is a
+starting point, not ground truth.** Phase 2.4's plan listed 8
+replacements; actual codebase scan found 14, split across 11
+files. The planning document was written ~11 commits earlier
+and the codebase had drifted. Lesson: every sweep starts with a
+fresh `rg` pass against the current tree, not a re-read of the
+plan. The plan tells you *what kind of work* to do; the `rg`
+tells you *where it applies*.
