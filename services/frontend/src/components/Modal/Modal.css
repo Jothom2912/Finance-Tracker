@@ -1,83 +1,118 @@
-/* ── Modal (component-level) ── */
+/* ── Modal (Radix Dialog wrapper) ── */
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  animation: modal-fade-in var(--transition-fast) ease-out;
+/*
+ * Classes are prefixed `app-modal-` to isolate this Radix-backed modal
+ * from the legacy shared styles in `styles/_modals.css`. The legacy
+ * styles are still consumed by the hand-rolled modal in GoalPage and
+ * will be removed when that page migrates to this component.
+ *
+ * Radix renders Dialog.Overlay and Dialog.Content as siblings inside
+ * Dialog.Portal, not as parent/child. The overlay therefore cannot use
+ * flexbox to centre the content; the content centres itself with
+ * position:fixed + translate, and the slide animation composes on top
+ * of the centring transform.
+ */
+
+.app-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
 }
 
-.modal-content {
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  padding: 1.75rem;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  border: 1px solid var(--color-border-light);
-  max-width: 520px;
-  width: 90%;
-  position: relative;
-  animation: modal-slide-up var(--transition-base) ease-out;
+.app-modal-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1001;
+    background: var(--color-bg-surface);
+    color: var(--color-text-primary);
+    padding: 1.75rem;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    border: 1px solid var(--color-border-light);
+    max-width: 520px;
+    width: 90%;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
 }
 
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--color-border-light);
+/*
+ * Radix sets data-state="open" / data-state="closed" on both Overlay
+ * and Content. We scope animations to the open state only; close is
+ * immediate (symmetric close animation requires forceMount + Framer
+ * Motion or similar, which is out of scope for this refactor).
+ */
+.app-modal-overlay[data-state="open"] {
+    animation: app-modal-fade-in var(--transition-fast) ease-out;
 }
 
-.modal-header h2 {
-  font-size: var(--font-size-lg);
-  color: var(--color-text-primary);
-  font-weight: 600;
-  margin: 0;
+.app-modal-content[data-state="open"] {
+    animation: app-modal-slide-up var(--transition-base) ease-out;
 }
 
-.modal-close-button {
-  background: none;
-  border: none;
-  font-size: 1.25rem;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-  line-height: 1;
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.app-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border-light);
 }
 
-.modal-close-button:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-sunken);
+.app-modal-header h2 {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-primary);
+    font-weight: 600;
+    margin: 0;
 }
 
-@keyframes modal-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.app-modal-close-button {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+    line-height: 1;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-@keyframes modal-slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+.app-modal-close-button:hover {
+    color: var(--color-text-primary);
+    background: var(--color-bg-sunken);
+}
+
+.app-modal-close-button:focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+}
+
+@keyframes app-modal-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes app-modal-slide-up {
+    from {
+        opacity: 0;
+        /* Compose slide-in on top of the centring translate */
+        transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
 }

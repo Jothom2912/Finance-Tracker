@@ -165,7 +165,11 @@ function TransactionsPage() {
       </div>
 
       {showFormModal && (
-        <Modal isOpen={showFormModal} onClose={handleCancelEdit}>
+        <Modal
+          isOpen={showFormModal}
+          onClose={handleCancelEdit}
+          title={transactionToEdit ? 'Rediger transaktion' : 'Ny transaktion'}
+        >
           <TransactionForm
             categories={categories}
             onTransactionAdded={() => handleTransactionSaved(false)}

@@ -131,7 +131,11 @@ function CategoriesPage() {
         />
       )}
 
-      <Modal isOpen={showManagementModal} onClose={() => setShowManagementModal(false)}>
+      <Modal
+        isOpen={showManagementModal}
+        onClose={() => setShowManagementModal(false)}
+        title="Administrer kategorier"
+      >
         <CategoryManagement
           categories={categories}
           onCategoryAdded={handleCategoryChange}
