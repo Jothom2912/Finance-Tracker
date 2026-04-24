@@ -4,6 +4,7 @@ import './App.css';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ConfirmDialogProvider } from './components/ConfirmDialog/ConfirmDialog';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import Navigation from './components/Navigation';
 import LoginPage from './pages/LoginPage';
@@ -65,7 +66,9 @@ function AppWithAuth() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        <App />
+        <ConfirmDialogProvider>
+          <App />
+        </ConfirmDialogProvider>
       </NotificationProvider>
     </AuthProvider>
   );
