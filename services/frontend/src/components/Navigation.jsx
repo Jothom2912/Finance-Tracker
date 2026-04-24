@@ -1,6 +1,5 @@
-// frontend/finans-tracker-frontend/src/components/Navigation.js
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import '../styles/Navigation.css';
 
@@ -23,11 +22,11 @@ function Navigation() {
         </div>
 
         <ul className="navbar-menu">
-          <li><Link to="/dashboard" className="nav-link" data-cy="nav-dashboard">Dashboard</Link></li>
-          <li><Link to="/transactions" className="nav-link" data-cy="nav-transactions">Transaktioner</Link></li>
-          <li><Link to="/categories" className="nav-link" data-cy="nav-categories">Kategorier</Link></li>
-          <li><Link to="/budget" className="nav-link" data-cy="nav-budget">Budget</Link></li>
-          <li><Link to="/goals" className="nav-link" data-cy="nav-goals">Mål</Link></li>
+          <li><NavLink to="/dashboard" end className="nav-link" data-cy="nav-dashboard">Dashboard</NavLink></li>
+          <li><NavLink to="/transactions" end className="nav-link" data-cy="nav-transactions">Transaktioner</NavLink></li>
+          <li><NavLink to="/categories" end className="nav-link" data-cy="nav-categories">Kategorier</NavLink></li>
+          <li><NavLink to="/budget" end className="nav-link" data-cy="nav-budget">Budget</NavLink></li>
+          <li><NavLink to="/goals" end className="nav-link" data-cy="nav-goals">Mål</NavLink></li>
         </ul>
 
         <div className="navbar-user">
