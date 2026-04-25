@@ -216,6 +216,49 @@ fresh `rg` pass against the current tree, not a re-read of the
 plan. The plan tells you *what kind of work* to do; the `rg`
 tells you *where it applies*.
 
+## Scope discipline: API-shape changes vs caller upgrades (2026-04-25)
+
+Lesson captured from commit `e39640d` (Phase 3.1 — TanStack Query
+refactor of `useDashboardData`). The commit bundled two logically
+separable changes:
+
+1. The refactor itself — `useDashboardData` from `useState`/`useEffect`
+   to `useQuery`, plus `DashboardOverview`'s `forceRefresh` switching
+   from `useReducer` dispatch (sync `() => void`) to
+   `queryClient.invalidateQueries(...)` (returns `Promise<void>`).
+2. A caller-side UX improvement — `BankConnectionWidget` adding `await`
+   in front of `onSyncComplete()` so the sync spinner stays visible
+   until the dashboard refetch completes.
+
+(2) is not a bug fix forced by (1). The pre-refactor widget called
+`onSyncComplete()` synchronously, which honored the old `() => void`
+contract correctly; nothing was broken. The new `Promise`-returning
+shape made awaiting it a reasonable improvement, but a strictly
+disciplined commit history would have shipped (1) and (2) as separate
+commits — the first leaving the new Promise return unused, the second
+adding the `await` motivated by it.
+
+**Rule for next time:**
+
+> When a refactor changes an API shape (e.g. `() => void` →
+> `() => Promise<void>`), commit the refactor as-is. Caller-side
+> changes that exploit the new shape (such as adding `await`) belong
+> in separate commits, even when logically coupled.
+
+**Exception** worth knowing: if leaving callers unchanged would put
+the code in a broken or meaningless state (e.g. unhandled rejection
+that crashes something, dangling Promise that causes a real bug),
+then the caller fix belongs in the same commit as the API change.
+That was not the case here — ignoring a returned Promise is valid
+JavaScript, just suboptimal.
+
+The reason this rule matters: (3.2) will introduce `useMutation`,
+which also returns Promises. There will be similar temptations to
+"just add `await` while I'm here" in callers. The mechanical rule
+above prevents those bundling decisions from being made on autopilot
+mid-edit. Reference this entry in the 3.2 commit body so the lesson
+stays in view at the moment of decision, not just after.
+
 ## Session stand-down (2026-04-24, Phase 2 ~95% complete)
 
 Stopping point after landing Phase 2.4. Notes for picking the
