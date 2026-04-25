@@ -88,7 +88,7 @@ function TransactionForm({
     };
 
     return (
-        <div className="transaction-form-container" data-cy="transaction-form"> {/* Ny container klasse for formularen */}
+        <div className="transaction-form-container">
             <h3>{transactionToEdit ? 'Rediger Transaktion' : 'Tilføj Ny Transaktion'}</h3>
             <form onSubmit={handleSubmit}>
                 <div className="form-group"> {/* Generel gruppe for input felter */}
@@ -96,7 +96,6 @@ function TransactionForm({
                     <input
                         type="number"
                         id="amount"
-                        data-cy="transaction-amount"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         required
@@ -107,7 +106,6 @@ function TransactionForm({
                     <label htmlFor="category">Kategori:</label>
                     <select
                         id="category"
-                        data-cy="transaction-category"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
                         required
@@ -126,7 +124,6 @@ function TransactionForm({
                     <input
                         type="date"
                         id="date"
-                        data-cy="transaction-date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
                         required
@@ -138,7 +135,6 @@ function TransactionForm({
                     <input
                         type="text"
                         id="description"
-                        data-cy="transaction-description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         required
@@ -150,7 +146,6 @@ function TransactionForm({
                         <input
                             type="radio"
                             value="expense"
-                            data-cy="transaction-type-expense"
                             checked={isExpense}
                             onChange={() => setIsExpense(true)}
                         />
@@ -160,7 +155,6 @@ function TransactionForm({
                         <input
                             type="radio"
                             value="income"
-                            data-cy="transaction-type-income"
                             checked={!isExpense}
                             onChange={() => setIsExpense(false)}
                         />
@@ -169,7 +163,7 @@ function TransactionForm({
                 </div>
 
                 <div className="form-actions"> {/* Gruppe for formular knapper */}
-                    <button type="submit" className="button" data-cy="submit-transaction">
+                    <button type="submit" className="button">
                         {transactionToEdit ? 'Opdater Transaktion' : 'Tilføj Transaktion'}
                     </button>
                     {transactionToEdit && (

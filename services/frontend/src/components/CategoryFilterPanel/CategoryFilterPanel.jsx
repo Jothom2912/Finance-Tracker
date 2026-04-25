@@ -38,13 +38,12 @@ function CategoryFilterPanel({
   };
 
   return (
-    <div className="category-filter-panel" data-cy="category-filter-panel">
+    <div className="category-filter-panel">
       <div className="filter-row">
         <div className="period-selector">
           <label htmlFor="cf-month">Måned:</label>
           <select
             id="cf-month"
-            data-cy="filter-month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
             className="period-select"
@@ -57,7 +56,6 @@ function CategoryFilterPanel({
           <label htmlFor="cf-year">År:</label>
           <select
             id="cf-year"
-            data-cy="filter-year"
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
             className="period-select"
@@ -72,7 +70,6 @@ function CategoryFilterPanel({
           <label htmlFor="cf-type">Type:</label>
           <select
             id="cf-type"
-            data-cy="filter-type"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
             className="period-select"
@@ -92,14 +89,13 @@ function CategoryFilterPanel({
           <button
             type="button"
             className="toggle-all-btn"
-            data-cy="toggle-all-categories"
             onClick={handleToggleAll}
           >
             {allSelected ? 'Fravælg alle' : 'Vælg alle'}
           </button>
         </div>
 
-        <div className="category-chips" data-cy="category-chips">
+        <div className="category-chips">
           {filteredCategories.map((cat) => {
             const catId = cat.idCategory ?? cat.id;
             const isSelected = selectedCategoryIds.includes(catId);
@@ -108,7 +104,6 @@ function CategoryFilterPanel({
                 key={catId}
                 type="button"
                 className={`category-chip ${isSelected ? 'selected' : ''} ${cat.type}`}
-                data-cy={`category-chip-${catId}`}
                 onClick={() => handleToggleCategory(catId)}
                 title={`${cat.name} (${cat.type === 'expense' ? 'Udgift' : 'Indtægt'})`}
               >

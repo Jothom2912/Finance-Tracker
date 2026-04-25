@@ -27,7 +27,7 @@ function TransactionsList({
   }
 
   return (
-    <div className="transactions-list-container" data-cy="transaction-list">
+    <div className="transactions-list-container">
       <table className="transactions-table">
         <thead>
           <tr>

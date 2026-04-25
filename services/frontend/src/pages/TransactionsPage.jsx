@@ -144,7 +144,6 @@ function TransactionsPage() {
             <input
               type="file"
               accept=".csv"
-              data-cy="csv-upload-input"
               onChange={(e) => setCsvFile(e.target.files[0])}
               disabled={uploadingCsv}
             />
@@ -152,7 +151,6 @@ function TransactionsPage() {
               type="submit"
               disabled={!csvFile || uploadingCsv}
               className="upload-button"
-              data-cy="upload-csv-button"
             >
               {uploadingCsv ? 'Uploader...' : 'Upload CSV'}
             </button>
@@ -164,7 +162,6 @@ function TransactionsPage() {
       <div className="action-buttons">
         <button
           className="add-transaction-button"
-          data-cy="add-transaction-button"
           onClick={() => { setShowFormModal(true); clearMessages(); }}
         >
           <span className="button-icon">+</span>

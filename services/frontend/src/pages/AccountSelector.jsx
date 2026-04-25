@@ -94,7 +94,7 @@ export default function AccountSelector() {
         {error && <div className="error-message">{error}</div>}
 
         {accounts.length > 0 && (
-          <div className="accounts-list" data-cy="account-list">
+          <div className="accounts-list">
             <h2>Dine konti:</h2>
             {accounts.map((account, index) => (
               <div
@@ -104,7 +104,6 @@ export default function AccountSelector() {
                 <button
                   onClick={() => selectAccount(account.idAccount || account.id, account.name)}
                   className="account-button"
-                  data-cy="account-button"
                 >
                   {account.name}
                 </button>
@@ -138,7 +137,6 @@ export default function AccountSelector() {
           <button
             onClick={() => { setShowCreateForm(!showCreateForm); setError(null); }}
             className="create-account-button"
-            data-cy="create-account-button"
           >
             {showCreateForm ? 'Annuller' : '+ Opret ny konto'}
           </button>
@@ -152,9 +150,8 @@ export default function AccountSelector() {
                 onChange={(e) => setNewAccountName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleCreateAccount()}
                 autoFocus
-                data-cy="account-name-input"
               />
-              <button onClick={handleCreateAccount} className="create-account-submit-button" data-cy="create-account-submit-button">
+              <button onClick={handleCreateAccount} className="create-account-submit-button">
                 Opret konto
               </button>
             </div>

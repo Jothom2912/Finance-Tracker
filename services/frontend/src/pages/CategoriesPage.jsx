@@ -94,7 +94,6 @@ function CategoriesPage() {
         <h2>Kategorioverblik</h2>
         <button
           className="manage-categories-btn"
-          data-cy="manage-categories-btn"
           onClick={() => { setShowManagementModal(true); clearMessages(); }}
         >
           Administrer kategorier
@@ -114,7 +113,7 @@ function CategoriesPage() {
       />
 
       {dataError === 'no-account' ? (
-        <div className="categories-no-account" data-cy="no-account-state">
+        <div className="categories-no-account">
           <div className="no-account-icon"><BarChart3 aria-hidden="true" size={48} /></div>
           <h3>Ingen konto valgt</h3>
           <p>Vælg en konto for at se dit kategori-overblik med forbrug og budgetter.</p>
