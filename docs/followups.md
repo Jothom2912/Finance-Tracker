@@ -4,6 +4,52 @@ Ongoing list of known issues and improvements deferred from active work.
 Not a replacement for an issue tracker — these are items not yet
 formalized. Reference entries from commit messages and ADRs as needed.
 
+## Transaction-service HTTP-layer integration tests deleted (2026-04-25)
+
+Two integration test files in `services/transaction-service/tests/integration/`
+were deleted: `test_category_api.py` (~16 tests) and `test_transaction_api.py`
+(~31 tests). Plus the now-orphan `tests/integration/conftest.py`.
+
+These tests had **never run successfully**. They were committed in
+`bee19e0 Complete Step 0: Foundation cleanup before service extractions`
+relying on `client: AsyncClient` and `auth_headers: dict` fixtures that
+were never implemented anywhere in the repo. CI silently tolerated the
+~47 setup-errors until this morning's pipeline finally surfaced them.
+
+### What was lost
+
+Most tests duplicated existing unit-test coverage in
+`tests/unit/test_category_service.py` and `tests/unit/test_transaction_service.py`
+(CRUD, validation, outbox events). That coverage remains intact.
+
+What was **uniquely covered at the HTTP layer** and is now untested:
+
+* **`test_no_auth_returns_401`** (categories + transactions) — verifies
+  the auth dependency rejects requests without a token.
+* **`test_wrong_user_returns_404`** (transactions, get + update) — IDOR
+  protection: requests for transactions owned by another user must
+  return 404, not 403 (avoiding existence-leak). Direct mapping to
+  ADR-001 / ADR-003 in `devsec`.
+* **`test_monolith_format_token_accepted`** — cross-service JWT
+  contract: tokens issued by the monolith must validate in the
+  transaction-service. Important regression-guard as the microservice
+  extraction matures.
+
+### When to re-implement
+
+When the conftest infrastructure exists. Specifically: an `httpx
+AsyncClient` fixture wired to the FastAPI app with dependency
+overrides (DB session + JWT verification), plus a JWT-signing helper
+for `auth_headers`. Estimated 2-4 hours of focused work, separate
+session.
+
+The deleted file content is recoverable from
+`bee19e0..HEAD~3 -- services/transaction-service/tests/integration/`
+when that work begins — the test bodies themselves are usable as-is
+once the fixtures are in place.
+
+
+
 ## `display_order` missing on API-created categories (2026-04-17, closed 2026-04-23)
 
 Closed by the commit that added `COALESCE(MAX(display_order), 0) + 1`
