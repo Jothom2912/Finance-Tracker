@@ -57,7 +57,9 @@ cd services/frontend
 npm install
 npm run dev
 ```
-#fuck yarn!
+
+The frontend uses npm. `services/frontend/package-lock.json` is the source of
+truth, so do not install or run the frontend with Yarn.
 
 App: http://localhost:3001
 

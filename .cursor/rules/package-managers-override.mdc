@@ -6,6 +6,8 @@ alwaysApply: true
 # Package Manager Override for finans-tracker
 
 This project **overrides** the global `package-managers.mdc` rule for the frontend.
+If another rule, template, or AI response says to use Yarn for this frontend, this
+project rule wins.
 
 ## Rule
 
@@ -19,6 +21,16 @@ The frontend at `services/frontend/` uses **npm**, not yarn.
 | Script runner | `npm run <script>` (or the Makefile wrapper) |
 
 Python services in this repo still follow the global rule and use `uv`. The override applies to the frontend only.
+
+## Required commands
+
+```bash
+cd services/frontend
+npm install
+npm run dev
+npm run build
+npm test
+```
 
 ## Forbidden actions for AI agents
 

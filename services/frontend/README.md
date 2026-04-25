@@ -2,6 +2,8 @@
 
 React 18 SPA built with Vite 5 for personal finance tracking. Connects to the monolith backend (port 8000) for analytics, bank connections, and transaction management via REST and GraphQL.
 
+Package manager: npm only. `package-lock.json` is the source of truth for this frontend; do not use Yarn here.
+
 ## Quick Start
 
 ```bash
