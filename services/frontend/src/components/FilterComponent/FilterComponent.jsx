@@ -60,7 +60,6 @@ function FilterComponent({
   selectedCategory,
   setSelectedCategory,
   categories,
-  onFilter,
 }) {
   const applyPreset = (preset) => {
     const [start, end] = preset.range();
@@ -131,9 +130,6 @@ function FilterComponent({
           </select>
         </div>
       </div>
-      <button className="button secondary" onClick={onFilter}>
-        Anvend Filter
-      </button>
     </div>
   );
 }
