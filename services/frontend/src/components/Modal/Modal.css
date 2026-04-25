@@ -1,10 +1,9 @@
 /* ── Modal (Radix Dialog wrapper) ── */
 
 /*
- * Classes are prefixed `app-modal-` to isolate this Radix-backed modal
- * from the legacy shared styles in `styles/_modals.css`. The legacy
- * styles are still consumed by the hand-rolled modal in GoalPage and
- * will be removed when that page migrates to this component.
+ * Classes are prefixed `app-modal-` to keep this Radix-backed modal's
+ * styles isolated from any page-level CSS that may reuse the generic
+ * `.modal-*` class names.
  *
  * Radix renders Dialog.Overlay and Dialog.Content as siblings inside
  * Dialog.Portal, not as parent/child. The overlay therefore cannot use

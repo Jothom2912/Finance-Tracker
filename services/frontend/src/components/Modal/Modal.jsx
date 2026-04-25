@@ -20,10 +20,9 @@ import './Modal.css';
  * - Correct role="dialog" and aria-modal="true"
  * - Focus returned to the trigger element on close
  *
- * Class names are prefixed `app-modal-` to avoid collision with the
- * legacy shared styles in `styles/_modals.css` which are still used by
- * the hand-rolled modal in GoalPage. That page will migrate to this
- * component in a follow-up.
+ * Class names are prefixed `app-modal-` to keep this component's
+ * styles isolated from any future page-level CSS that may reuse the
+ * generic `.modal-*` class names.
  */
 function Modal({ isOpen, onClose, title, children }) {
   return (
