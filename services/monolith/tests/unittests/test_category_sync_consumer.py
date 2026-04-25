@@ -3,9 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from backend.consumers.category_sync import CategorySyncConsumer
-from backend.models.mysql.category import Category as CategoryModel
 
 
 def _make_consumer(

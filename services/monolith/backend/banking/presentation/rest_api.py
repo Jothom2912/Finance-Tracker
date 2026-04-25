@@ -311,11 +311,11 @@ def bank_callback(
         ref = str(uuid.uuid4())[:8]
         logger.warning("Enable Banking rejected authorization code [%s]: %s", ref, exc)
         return _callback_redirect("error", code="auth_rejected", ref=ref)
-    except BankConfigError as exc:
+    except BankConfigError:
         ref = str(uuid.uuid4())[:8]
         logger.exception("Enable Banking misconfigured during callback [%s]", ref)
         return _callback_redirect("error", code="config_error", ref=ref)
-    except BankApiUnavailable as exc:
+    except BankApiUnavailable:
         ref = str(uuid.uuid4())[:8]
         logger.exception("Enable Banking upstream error during callback [%s]", ref)
         return _callback_redirect("error", code="upstream_unavailable", ref=ref)

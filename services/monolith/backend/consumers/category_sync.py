@@ -3,13 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from sqlalchemy import func
-
 from contracts.events.category import (
     CategoryCreatedEvent,
     CategoryDeletedEvent,
     CategoryUpdatedEvent,
 )
+from sqlalchemy import func
 
 from backend.consumers.base import BaseConsumer
 from backend.models.mysql.category import Category as CategoryModel
