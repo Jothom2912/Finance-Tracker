@@ -1,15 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as transactionsApi from '../api/transactions';
 
-export function transactionsQueryKey(filters) {
-  return ['transactions', filters];
+export function transactionsQueryKey(accountId, filters) {
+  return ['transactions', { accountId, filters }];
 }
 
 export function useTransactions(filters) {
   const queryClient = useQueryClient();
+  const accountId = localStorage.getItem('account_id');
 
   const query = useQuery({
-    queryKey: transactionsQueryKey(filters),
+    queryKey: transactionsQueryKey(accountId, filters),
     queryFn: () => transactionsApi.fetchTransactions(filters),
   });
 

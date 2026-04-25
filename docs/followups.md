@@ -4,6 +4,49 @@ Ongoing list of known issues and improvements deferred from active work.
 Not a replacement for an issue tracker — these are items not yet
 formalized. Reference entries from commit messages and ADRs as needed.
 
+## TanStack Query implicit context leak (2026-04-25, closed 2026-04-25)
+
+The Phase 3 TanStack Query rollout initially missed one security rule:
+when a query depends on implicit request context, that context must be
+part of the query key.
+
+In this frontend, `gqlRequest` and `apiClient` add `X-Account-ID` from
+`localStorage`. The first query keys only included visible arguments
+like month, year, and filters. That meant account-scoped dashboard and
+transaction data could be reused across account changes, or across
+users on the same device if cache survived logout.
+
+**Rule for next time:**
+
+> Any value that changes the server response must be explicit in the
+> TanStack Query key, even if the value is not passed as a function
+> argument. This includes headers, auth state, account ids, tenant ids,
+> locale, feature flags, and any value read from `localStorage`.
+
+The fix has two layers:
+
+* Query keys include `account_id` for the account-scoped dashboard and
+  transactions queries.
+* The QueryClient cache is cleared on login, logout, and account
+  selection, so future missed query keys do not leak stale user data
+  across auth or account boundaries.
+
+Follow-up pattern: when migrating any remaining account-scoped hook to
+TanStack Query, start by listing every implicit header/localStorage
+input that can affect the response, then put each one in the key before
+writing the `queryFn`.
+
+## Frontend route bundle size (2026-04-25)
+
+The production Vite build currently emits one large JavaScript chunk
+around 757 kB before gzip and 226 kB after gzip. This is not urgent and
+should not be mixed with the security fix.
+
+Future performance work can split route pages with `React.lazy` and
+`Suspense`, starting with dashboard, transactions, budget, goals, and
+categories. Re-run `make -C services/frontend build` before and after
+to check whether the main chunk meaningfully shrinks.
+
 ## Transaction-service HTTP-layer integration tests deleted (2026-04-25)
 
 Two integration test files in `services/transaction-service/tests/integration/`

@@ -6,7 +6,10 @@ import { createQueryClientWrapper } from '../test-utils/renderWithQueryClient';
 
 vi.mock('../api/transactions');
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  localStorage.clear();
+});
 
 const filters = { startDate: '2025-01-01', endDate: '2025-01-31' };
 
@@ -48,6 +51,27 @@ describe('useTransactions', () => {
         expect(transactionsApi.fetchTransactions).toHaveBeenCalledTimes(2),
       );
       expect(transactionsApi.fetchTransactions).toHaveBeenLastCalledWith(newFilters);
+    });
+
+    it('refetches instead of reusing cache when account changes', async () => {
+      localStorage.setItem('account_id', 'account-1');
+      transactionsApi.fetchTransactions.mockResolvedValueOnce([{ id: 1, amount: 100 }]);
+
+      const { wrapper } = createQueryClientWrapper();
+      const { result, rerender } = renderHook(() => useTransactions(filters), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.transactions).toEqual([{ id: 1, amount: 100 }]);
+      });
+
+      localStorage.setItem('account_id', 'account-2');
+      transactionsApi.fetchTransactions.mockResolvedValueOnce([{ id: 2, amount: 200 }]);
+      rerender();
+
+      await waitFor(() => {
+        expect(result.current.transactions).toEqual([{ id: 2, amount: 200 }]);
+      });
+      expect(transactionsApi.fetchTransactions).toHaveBeenCalledTimes(2);
     });
 
     it('exposes error message string on fetch failure', async () => {

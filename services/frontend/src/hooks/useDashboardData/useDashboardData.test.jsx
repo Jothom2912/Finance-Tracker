@@ -9,7 +9,10 @@ vi.mock('../../api/graphqlClient', () => ({
 
 import { gqlRequest } from '../../api/graphqlClient';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  localStorage.clear();
+});
 
 const mockGraphQLResponse = {
   currentMonthOverview: {
@@ -69,6 +72,7 @@ const mockGraphQLResponse = {
 
 describe('useDashboardData', () => {
   it('fetches all dashboard data via GraphQL on mount', async () => {
+    localStorage.setItem('account_id', 'account-1');
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
     const { wrapper } = createQueryClientWrapper();
@@ -85,6 +89,42 @@ describe('useDashboardData', () => {
     expect(result.current.goals).toEqual(mockGraphQLResponse.goalProgress);
     expect(result.current.recentTransactions).toEqual(mockGraphQLResponse.transactions);
     expect(result.current.error).toBeNull();
+  });
+
+  it('refetches instead of reusing cache when account changes', async () => {
+    const accountOneResponse = {
+      ...mockGraphQLResponse,
+      currentMonthOverview: {
+        ...mockGraphQLResponse.currentMonthOverview,
+        totalIncome: 100,
+      },
+    };
+    const accountTwoResponse = {
+      ...mockGraphQLResponse,
+      currentMonthOverview: {
+        ...mockGraphQLResponse.currentMonthOverview,
+        totalIncome: 200,
+      },
+    };
+
+    localStorage.setItem('account_id', 'account-1');
+    gqlRequest.mockResolvedValueOnce(accountOneResponse);
+
+    const { wrapper } = createQueryClientWrapper();
+    const { result, rerender } = renderHook(() => useDashboardData(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.overview?.totalIncome).toBe(100);
+    });
+
+    localStorage.setItem('account_id', 'account-2');
+    gqlRequest.mockResolvedValueOnce(accountTwoResponse);
+    rerender();
+
+    await waitFor(() => {
+      expect(result.current.overview?.totalIncome).toBe(200);
+    });
+    expect(gqlRequest).toHaveBeenCalledTimes(2);
   });
 
   it('processes category data sorted by value descending', async () => {

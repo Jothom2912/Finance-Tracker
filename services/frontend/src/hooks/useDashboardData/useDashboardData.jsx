@@ -68,17 +68,18 @@ const DASHBOARD_QUERY = gql`
   }
 `;
 
-export function dashboardQueryKey(month, year) {
-  return ['dashboard', { month, year }];
+export function dashboardQueryKey(accountId, month, year) {
+  return ['dashboard', { accountId, month, year }];
 }
 
 export function useDashboardData() {
+  const accountId = localStorage.getItem('account_id');
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: dashboardQueryKey(month, year),
+    queryKey: dashboardQueryKey(accountId, month, year),
     queryFn: () => gqlRequest(DASHBOARD_QUERY, { month, year }),
   });
 

@@ -1,9 +1,11 @@
 // frontend/finans-tracker-frontend/src/context/AuthContext.js
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,6 +28,8 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = (response) => {
+    queryClient.clear();
+
     // response = { access_token, token_type, user_id, username }
     localStorage.setItem('access_token', response.access_token);
     localStorage.setItem('user_id', response.user_id);
@@ -39,6 +43,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    queryClient.clear();
+
     localStorage.removeItem('access_token');
     localStorage.removeItem('user_id');
     localStorage.removeItem('username');

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { fetchAccounts, createAccount, updateAccount } from '../api/accounts';
 import '../styles/AccountSelector.css';
@@ -8,6 +9,7 @@ const START_DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export default function AccountSelector() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,8 +20,9 @@ export default function AccountSelector() {
   const selectAccount = useCallback((accountId, accountName) => {
     localStorage.setItem('account_id', String(accountId));
     localStorage.setItem('account_name', accountName || 'Default');
+    queryClient.clear();
     navigate('/dashboard');
-  }, [navigate]);
+  }, [navigate, queryClient]);
 
   const handleStartDayChange = useCallback(async (account, newDay) => {
     try {
