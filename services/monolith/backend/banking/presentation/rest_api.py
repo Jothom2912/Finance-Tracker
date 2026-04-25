@@ -94,10 +94,7 @@ def validate_banking_config() -> None:
       error into ``BankConfigError`` so the caller only catches domain
       exceptions.
     """
-    configured = {
-        var: bool(os.getenv(var, "").strip())
-        for var in _BANKING_ENV_VARS
-    }
+    configured = {var: bool(os.getenv(var, "").strip()) for var in _BANKING_ENV_VARS}
 
     if not any(configured.values()):
         logger.info("Banking not configured (no ENABLE_BANKING_* vars), bank routes disabled")
@@ -105,9 +102,7 @@ def validate_banking_config() -> None:
 
     missing = [var for var, present in configured.items() if not present]
     if missing:
-        raise BankConfigError(
-            f"Partial banking config — set all or none. Missing: {', '.join(missing)}"
-        )
+        raise BankConfigError(f"Partial banking config — set all or none. Missing: {', '.join(missing)}")
 
     key_path = os.getenv("ENABLE_BANKING_KEY_PATH", "")
     resolved = _resolve_key_path(key_path)
@@ -123,9 +118,7 @@ def validate_banking_config() -> None:
 def _get_client() -> EnableBankingClient:
     global _client
     if _client is None:
-        key_path = _resolve_key_path(
-            os.getenv("ENABLE_BANKING_KEY_PATH", "./enablebanking-privat.pem")
-        )
+        key_path = _resolve_key_path(os.getenv("ENABLE_BANKING_KEY_PATH", "./enablebanking-privat.pem"))
         config = EnableBankingConfig(
             app_id=os.getenv("ENABLE_BANKING_APP_ID", ""),
             key_path=key_path,

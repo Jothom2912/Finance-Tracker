@@ -77,9 +77,7 @@ def _await_category_projection(db, expected_names: list[str]) -> dict[str, int]:
     deadline = time.monotonic() + _PROJECTION_TIMEOUT_S
 
     while True:
-        found = {
-            c.name: c.idCategory for c in db.query(Category).filter(Category.name.in_(expected_names)).all()
-        }
+        found = {c.name: c.idCategory for c in db.query(Category).filter(Category.name.in_(expected_names)).all()}
         missing = [n for n in expected_names if n not in found]
         if not missing:
             print(f"  [OK] {len(found)}/{len(expected_names)} Categories fundet i MySQL.")
@@ -132,9 +130,7 @@ def _seed_subcategories(db, name_to_id: dict[str, int]) -> None:
             continue
         for sub_name in cat_data["subcategories"]:
             existing = (
-                db.query(SubCategory)
-                .filter(SubCategory.name == sub_name, SubCategory.category_id == cat_id)
-                .first()
+                db.query(SubCategory).filter(SubCategory.name == sub_name, SubCategory.category_id == cat_id).first()
             )
             if existing is None:
                 db.add(SubCategory(name=sub_name, category_id=cat_id, is_default=True))

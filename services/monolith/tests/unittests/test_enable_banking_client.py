@@ -460,9 +460,7 @@ class TestHttpErrorTranslation:
         with pytest.raises(BankApiUnavailable):
             client.start_authorization("Nordea", "DK")
 
-    def test_get_transactions_transport_error_maps_to_bank_api_unavailable(
-        self, client_with_mock_http
-    ) -> None:
+    def test_get_transactions_transport_error_maps_to_bank_api_unavailable(self, client_with_mock_http) -> None:
         """Pagination-loop HTTP failure must be typed, not leak raw httpx."""
         client, mock_http = client_with_mock_http
         mock_http.get.side_effect = httpx.ConnectTimeout("connect timeout")

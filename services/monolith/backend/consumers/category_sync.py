@@ -71,11 +71,7 @@ class CategorySyncConsumer(BaseConsumer):
             # so a theoretical race exists if two category.created events
             # process concurrently — acceptable given the single-consumer
             # topology.
-            max_order = (
-                session.query(
-                    func.coalesce(func.max(CategoryModel.display_order), 0)
-                ).scalar()
-            )
+            max_order = session.query(func.coalesce(func.max(CategoryModel.display_order), 0)).scalar()
 
             model = CategoryModel(
                 idCategory=event.category_id,
