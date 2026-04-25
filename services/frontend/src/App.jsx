@@ -1,7 +1,9 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import './App.css';
 
+import { queryClient } from './lib/queryClient';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ConfirmDialogProvider } from './components/ConfirmDialog/ConfirmDialog';
@@ -62,15 +64,30 @@ function App() {
   );
 }
 
+const ReactQueryDevtools = import.meta.env.DEV
+  ? React.lazy(() =>
+      import('@tanstack/react-query-devtools').then((mod) => ({
+        default: mod.ReactQueryDevtools,
+      })),
+    )
+  : null;
+
 function AppWithAuth() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <ConfirmDialogProvider>
-          <App />
-        </ConfirmDialogProvider>
-      </NotificationProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <NotificationProvider>
+          <ConfirmDialogProvider>
+            <App />
+          </ConfirmDialogProvider>
+        </NotificationProvider>
+      </AuthProvider>
+      {ReactQueryDevtools && (
+        <React.Suspense fallback={null}>
+          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+        </React.Suspense>
+      )}
+    </QueryClientProvider>
   );
 }
 
