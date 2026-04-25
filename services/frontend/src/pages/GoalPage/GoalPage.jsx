@@ -96,7 +96,7 @@ function GoalPage() {
         <GoalSetup
           onGoalAdded={handleGoalSaved}
           onGoalUpdated={handleGoalSaved}
-          onGoalDeleted={handleGoalChange}
+          onGoalDeleted={handleGoalSaved}
           setError={showError}
           setSuccessMessage={showSuccess}
           onCloseModal={handleCancelEdit}
