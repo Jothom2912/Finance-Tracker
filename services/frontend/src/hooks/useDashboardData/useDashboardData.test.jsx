@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useDashboardData } from './useDashboardData';
+import { createQueryClientWrapper } from '../../test-utils/renderWithQueryClient';
 
 vi.mock('../../api/graphqlClient', () => ({
   gqlRequest: vi.fn(),
@@ -70,7 +71,8 @@ describe('useDashboardData', () => {
   it('fetches all dashboard data via GraphQL on mount', async () => {
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     expect(result.current.loading).toBe(true);
 
@@ -88,7 +90,8 @@ describe('useDashboardData', () => {
   it('processes category data sorted by value descending', async () => {
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -102,7 +105,8 @@ describe('useDashboardData', () => {
   it('computes percentages and assigns colors', async () => {
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -125,7 +129,8 @@ describe('useDashboardData', () => {
       },
     });
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -146,7 +151,8 @@ describe('useDashboardData', () => {
       },
     });
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -159,7 +165,8 @@ describe('useDashboardData', () => {
   it('sets error on fetch failure', async () => {
     gqlRequest.mockRejectedValue(new Error('Network error'));
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -172,7 +179,8 @@ describe('useDashboardData', () => {
   it('returns empty arrays when data is null', async () => {
     gqlRequest.mockResolvedValue({});
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -188,7 +196,8 @@ describe('useDashboardData', () => {
   it('exposes formatAmount and formatDate utilities', async () => {
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     expect(typeof result.current.formatAmount).toBe('function');
     expect(typeof result.current.formatDate).toBe('function');

@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { gql } from 'graphql-request';
 import { gqlRequest } from '../../api/graphqlClient';
 import { formatAmount, formatDate } from '../../lib/formatters';
@@ -67,38 +68,19 @@ const DASHBOARD_QUERY = gql`
   }
 `;
 
-export function useDashboardData(refreshKey = 0) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+export function dashboardQueryKey(month, year) {
+  return ['dashboard', { month, year }];
+}
 
+export function useDashboardData() {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const result = await gqlRequest(DASHBOARD_QUERY, { month, year });
-        if (!cancelled) setData(result);
-      } catch (e) {
-        if (!cancelled) {
-          setError(e.message || 'Kunne ikke hente dashboard-data.');
-          setData(null);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    return () => { cancelled = true; };
-  }, [month, year, refreshKey]);
+  const { data, isLoading, error } = useQuery({
+    queryKey: dashboardQueryKey(month, year),
+    queryFn: () => gqlRequest(DASHBOARD_QUERY, { month, year }),
+  });
 
   const overview = data?.currentMonthOverview ?? null;
   const budgetSummary = data?.budgetSummary ?? null;
@@ -135,8 +117,8 @@ export function useDashboardData(refreshKey = 0) {
     goals,
     recentTransactions,
     expensesByMonth,
-    loading,
-    error,
+    loading: isLoading,
+    error: error ? error.message || 'Kunne ikke hente dashboard-data.' : null,
     processedCategoryData,
     categoryDataWithPercentages,
     formatAmount,

@@ -58,7 +58,7 @@ function BankConnectionWidget({ onSyncComplete }) {
           : 'Ingen nye transaktioner',
       });
       await loadConnections();
-      if (onSyncComplete) onSyncComplete();
+      if (onSyncComplete) await onSyncComplete();
     } catch (err) {
       setSyncResult({
         connectionId,

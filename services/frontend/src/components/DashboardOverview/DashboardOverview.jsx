@@ -1,5 +1,6 @@
-import React, { useCallback, useReducer } from 'react';
+import React, { useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import CategoryPieChart from '../../Charts/PieChart';
 import SummaryCards from '../SummaryCards/SummaryCards';
 import CategoryExpensesList from '../CategoryExpensesList/CategoryExpensesList';
@@ -13,7 +14,11 @@ import { getMonthLabel } from '../../lib/formatters';
 import './DashboardOverview.css';
 
 function DashboardOverview() {
-  const [refreshKey, forceRefresh] = useReducer((x) => x + 1, 0);
+  const queryClient = useQueryClient();
+  const forceRefresh = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+    [queryClient],
+  );
 
   const {
     overview,
@@ -26,7 +31,7 @@ function DashboardOverview() {
     processedCategoryData,
     categoryDataWithPercentages,
     formatAmount,
-  } = useDashboardData(refreshKey);
+  } = useDashboardData();
 
   if (loading) return <div className="dashboard-loading">Indlæser dashboard...</div>;
   if (error) return <div className="dashboard-error">Fejl: {error}</div>;
