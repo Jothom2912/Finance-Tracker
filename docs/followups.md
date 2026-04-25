@@ -259,6 +259,190 @@ above prevents those bundling decisions from being made on autopilot
 mid-edit. Reference this entry in the 3.2 commit body so the lesson
 stays in view at the moment of decision, not just after.
 
+## Session stand-down (2026-04-25, Phase 3 complete)
+
+Stopping point after landing the full TanStack Query rollout. The
+2026-04-24 stand-down below is preserved as historical record of
+where things stood before this session; this entry supersedes its
+"What is left for next session" list.
+
+### What landed since the previous stand-down
+
+Six commits, in order:
+
+* `5b56310` refactor(goal-page): replace hand-rolled modal with shared Modal
+* `10813f3` fix(goal-page): close modal after deleting a goal from inside it
+* `a4d85c1` feat(frontend): wire TanStack Query provider and devtools
+* `e39640d` refactor(dashboard): migrate useDashboardData to TanStack Query
+* `0dfd492` docs(followups): capture scope discipline lapse from commit e39640d
+* `7565232` refactor(transactions): migrate useTransactions to TanStack Query
+
+Phase 2.2b is closed (all hand-rolled modals migrated; legacy
+`_modals.css` deleted in `5b56310`). Phase 3 is closed (provider
+wired, two consumer hooks migrated, lapse-rule established and
+applied operationally).
+
+### Where TanStack Query lives now
+
+* `QueryClientProvider` is the outermost provider in `App.jsx`
+  with a singleton `QueryClient` from `src/lib/queryClient.js`.
+  Devtools are conditionally rendered via `import.meta.env.DEV`.
+* `useDashboardData` (Dashboard) and `useTransactions`
+  (TransactionsPage) are `useQuery`-based with parameterised
+  query keys (`['dashboard', { month, year }]` and
+  `['transactions', filters]`).
+* Mutations on `useTransactions` (`remove`, `uploadCsv`) cross-
+  invalidate `['transactions']` and `['dashboard']` on success.
+  `TransactionsPage.handleTransactionSaved` does the same
+  invalidation explicitly for the create/update paths that go
+  through `TransactionForm`'s direct API calls.
+* Test-side helper: `src/test-utils/renderWithQueryClient.jsx`
+  exposes both `renderWithQueryClient` (for components) and
+  `createQueryClientWrapper` (for `renderHook`). Each test gets
+  a fresh `QueryClient`. The file's header comment documents
+  why the production singleton is deliberately not imported in
+  tests.
+
+### What is *not* migrated (deliberate scope, not open task)
+
+`BudgetPage`, `GoalPage`, `CategoriesPage`, and `useCategories`
+were not migrated to TanStack Query. This is a deliberate scope
+choice, not an incomplete sweep:
+
+* A focused two-page example (Dashboard + Transactions)
+  demonstrates the pattern more sharply than a half-finished
+  five-page sweep.
+* The remaining hooks/pages can be migrated in a future session
+  if there is a concrete reason (e.g. a UX problem with stale
+  data, or an exam discussion that benefits from broader coverage).
+  Until then, leaving them on the existing `useState`/`useEffect`
+  pattern is the right state, not a regression.
+
+### Known boundaries from this session (not bugs)
+
+* **`TransactionForm` bypasses `useTransactions` for writes.**
+  It calls `apiCreateTransaction` / `apiUpdateTransaction`
+  directly from `api/transactions.jsx`. The hook's previous
+  `create`/`update` exports were therefore unreached and were
+  removed in `7565232` as a side effect of the migration. A
+  future commit may migrate the form to use mutations through
+  the hook; that commit would re-introduce these exports as
+  proper `useMutation` instances. Documented in `7565232`'s
+  body under "Hook API (intentional non-changes)".
+* **`useCategories` cache-invalidation is currently a no-op.**
+  Category data lives outside the TanStack cache. Adding
+  `queryClient.invalidateQueries({ queryKey: ['categories'] })`
+  anywhere right now would do nothing observable. Defer
+  category-related invalidations until `useCategories` itself
+  is migrated.
+
+### Lapse-to-rule applied operationally
+
+The "Scope discipline: API-shape changes vs caller upgrades" rule
+introduced in `0dfd492` (in response to a bundling lapse in
+`e39640d`) was applied as a binding constraint in `7565232`. The
+specific decision was to expose `mutateAsync` (preserving the
+pre-existing `Promise<void>` contract that callers already await)
+rather than `mutate` (which would have forced a callback-style
+rewrite of all callsites in the same commit). The rule is
+operational, not aspirational.
+
+### Test status
+
+110 of 110 Vitest tests pass. The count went from 111 to 110 by
+net `-1` in `useTransactions.test.jsx` after the migration:
+
+* Removed: `starts with empty state` (obsolete implementation
+  detail; with `useQuery` the query auto-fires on mount, so
+  `loading: true` initially is the new contract).
+* Removed: `create` and `update` delegate-tests (those exports
+  no longer exist on the hook; see "Known boundaries" above).
+* Removed: simple delegate-tests for `remove` and `uploadCsv`
+  (replaced with stronger versions that also verify cache
+  invalidation).
+* Added: `refetches automatically when filters change
+  (queryKey change)` (exercises the queryKey-driven refetch
+  and pins the race-condition fix).
+* Added: `rejects with the underlying error when API fails`
+  (verifies `mutateAsync` propagates the original error
+  unwrapped, which the existing `try`/`catch` blocks in
+  `TransactionsPage` rely on).
+* Net: -1.
+
+Browser-verified: cache segmentation per filter permutation
+visible in React Query Devtools. Filter A → B → A within the
+30s `staleTime` window serves from cache without a network
+roundtrip. Cross-invalidation from a mutation marks
+`['dashboard']` stale; the actual refetch happens on next
+navigation to `/dashboard`.
+
+### Outstanding cross-cutting items (carried forward, not closed)
+
+These items existed before this session and were not touched
+during Phase 3 per scope. They remain open:
+
+* **Amount encoding consistency sweep** — 4-point checklist in
+  the entry above. Priority medium. An exam reviewer is the
+  most likely person to ask about asymmetric handling.
+* **MySQL duplicates cleanup script** — `scripts/cleanup_mysql_duplicates.py`
+  still in repo. Run with `make cleanup-mysql-duplicates-once
+  EXECUTE=1`, verify output, then remove the script and
+  Makefile target.
+* **`BankParseError` wrapping** — YAGNI. Revisit only if
+  parse failures become a metric we want to distinguish.
+
+### Pattern that worked across these two sessions
+
+Worth naming explicitly so it can be repeated:
+
+1. **Plan up front, verify against the code before executing.**
+   The "Anvend Filter" placebo button and the
+   `TransactionForm` bypass were both discovered by reading
+   the code rather than assuming the plan was accurate.
+   Both discoveries reshaped scope before any code was
+   written, which is far cheaper than reshaping it after a
+   commit.
+2. **Every bug discovered during a feature gets its own
+   commit.** `10813f3` (modal-close-after-delete) is the
+   canonical example.
+3. **Deviations from plan or recommendation are flagged
+   explicitly**, in the response and in the commit body.
+   Both `0dfd492` (lapse-to-rule) and the `mutateAsync`
+   override of the original `mutate` recommendation in
+   `7565232` are visible in the historical record because
+   of this habit.
+4. **Scope decisions are encoded as rules, not intentions.**
+   The lapse in `e39640d` became a written rule in
+   `0dfd492` that was then applied mechanically in
+   `7565232`. The difference between aspirational and
+   operational documentation is whether it changes the next
+   decision.
+
+### Where to start next session
+
+Most likely next step is the **amount encoding consistency
+sweep** above. Of the three outstanding items it is the only
+one with a concrete checklist already drafted, and it is the
+one most likely to come up in an exam discussion. Estimated
+work: half a session for the four-point sweep + any decisions
+that fall out of step 4 (historical data normalisation).
+
+If energy permits something larger, the next architectural
+piece worth considering is **microservice extraction of the
+remaining monolith concerns** (categorization, banking) —
+but that is a multi-session arc and should not be started
+without a fresh plan.
+
+### Dev environment state at stand-down
+
+* `make dev-frontend` running in terminal 2 (Vite HMR live).
+* Backend services up via `docker compose up -d`.
+* Test baseline: **110/110 passed** on `services/frontend`.
+* Working tree clean apart from two untracked items
+  (`docs/retrospective-transaction-ownership.md` and
+  `.cursor/rules/design-review.mdc`) that predate this
+  session and are unrelated.
+
 ## Session stand-down (2026-04-24, Phase 2 ~95% complete)
 
 Stopping point after landing Phase 2.4. Notes for picking the
