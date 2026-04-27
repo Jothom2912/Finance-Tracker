@@ -5,15 +5,15 @@ Defines the service interface for external consumers."""
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from backend.account.application.dto import (
+from app.application.dto import (
     Account as AccountSchema,
 )
-from backend.account.application.dto import (
+from app.application.dto import (
     AccountBase,
     AccountCreate,
     AccountGroupsCreate,
 )
-from backend.account.application.dto import (
+from app.application.dto import (
     AccountGroups as AccountGroupSchema,
 )
 

@@ -210,6 +210,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  account-service:
+    build:
+      context: .
+      dockerfile: services/account-service/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
+      SECRET_KEY: your-secret-key
+      USER_SERVICE_URL: http://user-service:8001
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+    depends_on:
+    mysql:
+      condition: service_healthy
+    user-service:
+      condition: service_started
+
   transaction-outbox-worker:
     build:
       context: .

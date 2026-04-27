@@ -2,15 +2,15 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.account.application.dto import (
+from app.application.dto import (
     AccountGroups as AccountGroupSchema,
 )
-from backend.account.application.dto import (
+from app.application.dto import (
     AccountGroupsCreate,
 )
-from backend.account.application.service import AccountService
-from backend.account.domain.exceptions import InvalidUserInGroup
-from backend.dependencies import get_account_service
+from app.application.service import AccountService
+from app.domain.exceptions import InvalidUserInGroup
+from app.dependencies import get_account_service
 
 router = APIRouter(
     prefix="/account-groups",

@@ -9,8 +9,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.shared.budget_period import MAX_START_DAY, MIN_START_DAY
-from backend.validation_boundaries import ACCOUNT_BVA, ACCOUNT_GROUP_BVA
+from app.shared.budget_period import MAX_START_DAY, MIN_START_DAY
+from app.shared.validation_boundaries import ACCOUNT_BVA, ACCOUNT_GROUP_BVA
 
 
 # Forward references for relationships (minimal info)
