@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Check, X } from 'lucide-react';
 import { fetchConnections, syncConnection } from '../../api/bank';
 import './BankConnectionWidget.css';

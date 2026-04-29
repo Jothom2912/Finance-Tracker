@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import MessageDisplay from '../MessageDisplay';
 import { createCategory, updateCategory, deleteCategory as apiDeleteCategory } from '../../api/categories';
 import { useConfirm } from '../ConfirmDialog/ConfirmDialog';

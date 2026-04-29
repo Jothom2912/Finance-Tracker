@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { formatLocalISODate } from '../../lib/formatters';
 
 // Presets describe a start/end date range relative to "today". Evaluated at

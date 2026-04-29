@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Link } from 'react-router-dom';
 import { formatAmount, formatDate } from '../../lib/formatters';
 import './RecentTransactions.css';

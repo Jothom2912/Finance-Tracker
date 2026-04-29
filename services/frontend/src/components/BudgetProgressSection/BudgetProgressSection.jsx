@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { formatAmount } from '../../lib/formatters';
 import './BudgetProgressSection.css';
 

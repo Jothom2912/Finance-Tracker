@@ -1,5 +1,5 @@
 // frontend/src/components/Goal/GoalOverview/GoalOverview.js
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Target } from 'lucide-react';
 import apiClient from '../../../utils/apiClient';
 import MessageDisplay from '../../MessageDisplay';

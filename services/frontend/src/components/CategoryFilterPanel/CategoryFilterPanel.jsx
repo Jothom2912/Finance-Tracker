@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { MONTH_OPTIONS, getYearOptions, getMonthLabel } from '../../lib/formatters';
 import './CategoryFilterPanel.css';
 

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import CategoryBarChart from '../../Charts/CategoryBarChart';
 import { formatAmount } from '../../lib/formatters';
 import { CHART_COLORS as COLORS } from '../../lib/chartColors';

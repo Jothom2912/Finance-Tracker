@@ -1,5 +1,5 @@
 // frontend/src/components/Goal/GoalSetup/GoalSetup.js
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import MessageDisplay from '../../MessageDisplay';
 import apiClient from '../../../utils/apiClient';
 import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';

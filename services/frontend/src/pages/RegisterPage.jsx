@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import apiClient from '../utils/apiClient';
 import { USER_SERVICE_URL } from '../config/serviceUrls';

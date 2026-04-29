@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import './ConfirmDialog.css';
 

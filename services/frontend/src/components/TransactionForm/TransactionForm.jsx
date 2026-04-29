@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createTransaction as apiCreateTransaction, updateTransaction as apiUpdateTransaction } from '../../api/transactions';
 import './TransactionForm.css';
 
@@ -19,7 +19,7 @@ function TransactionForm({
 
     useEffect(() => {
         if (transactionToEdit) {
-            setAmount(transactionToEdit.amount);
+            setAmount(Math.abs(transactionToEdit.amount));
             setCategory(transactionToEdit.category_id || transactionToEdit.Category_idCategory);
             setDate(transactionToEdit.date);
             setDescription(transactionToEdit.description);

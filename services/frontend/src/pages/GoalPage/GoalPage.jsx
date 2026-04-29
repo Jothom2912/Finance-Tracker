@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Target, Settings } from 'lucide-react';
 import GoalOverview from '../../components/Goal/GoalOverview/GoalOverview';
 import GoalSetup from '../../components/Goal/GoalSetup/GoalSetup';

@@ -1,5 +1,5 @@
 // frontend/finans-tracker-frontend/src/context/AuthContext.js
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 const AuthContext = createContext(null);

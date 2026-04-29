@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AlertCircle, XCircle } from 'lucide-react';
 import apiClient from '../../../utils/apiClient';
 import { uploadTransactionsCsv } from '../../../api/transactions';

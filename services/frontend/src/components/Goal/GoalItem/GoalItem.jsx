@@ -1,5 +1,5 @@
 // frontend/src/components/Goal/GoalItem/GoalItem.js
-import React from 'react';
+
 import { Pencil } from 'lucide-react';
 import './GoalItem.css';
 

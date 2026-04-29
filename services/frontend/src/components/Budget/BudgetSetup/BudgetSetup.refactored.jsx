@@ -3,7 +3,7 @@
  * Apenas presenter, detaljer til hooks
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import MessageDisplay from '../../MessageDisplay';
 import { useBudgetService } from '../adapters/inbound/useBudgetService';

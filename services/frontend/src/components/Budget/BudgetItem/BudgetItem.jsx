@@ -1,5 +1,5 @@
 // frontend/src/components/BudgetItem/BudgetItem.js
-import React from 'react';
+
 import { AlertCircle, AlertTriangle, CircleDot, CheckCircle2 } from 'lucide-react';
 import './BudgetItem.css';
 

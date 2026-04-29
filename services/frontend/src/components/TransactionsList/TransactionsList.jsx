@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { formatDate } from '../../lib/formatters';
 import './TransactionsList.css';
 
