@@ -1,3 +1,5 @@
+import { handleUnauthorized } from './handleUnauthorized';
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
@@ -42,6 +44,19 @@ export const apiClient = {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
+
+      if (response.status === 401) {
+        const isAuthEndpoint =
+          fullUrl.includes('/login') || fullUrl.includes('/register');
+        if (!isAuthEndpoint) {
+          handleUnauthorized();
+          // Navigation is in progress. Return a Promise that never resolves
+          // so callers hang until the page teardown completes, avoiding a
+          // brief error-state flash in components before the redirect lands.
+          return new Promise(() => {});
+        }
+      }
+
       return response;
     } catch (error) {
       clearTimeout(timeoutId);

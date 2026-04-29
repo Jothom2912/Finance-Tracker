@@ -16,10 +16,10 @@ import { QueryClient } from '@tanstack/react-query';
  *   triggering a new request. This keeps the UI snappy without
  *   showing data that is meaningfully out of date.
  *
- * - retry: 1. The library default of 3 is too aggressive for a small
- *   app talking to local services - one retry is enough to ride out a
- *   transient blip without burying the user under retry latency when
- *   the backend is genuinely down.
+ * - retry: skips retry when access_token is missing from localStorage
+ *   (session has been torn down by the 401 interceptor). Otherwise
+ *   retries once — the library default of 3 is too aggressive for a
+ *   small app talking to local services.
  *
  * - refetchOnWindowFocus: false. Refetching every time the window
  *   regains focus is noisy for a finance dashboard where the user
@@ -30,7 +30,10 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      retry: (failureCount) => {
+        if (!localStorage.getItem('access_token')) return false;
+        return failureCount < 1;
+      },
       refetchOnWindowFocus: false,
     },
     mutations: {
