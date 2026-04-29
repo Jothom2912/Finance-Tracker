@@ -1,27 +1,29 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCategories as apiFetchCategories } from '../api/categories';
 
+export function categoriesQueryKey(accountId) {
+  return ['categories', { accountId }];
+}
+
 export function useCategories() {
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
+  const accountId = localStorage.getItem('account_id');
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiFetchCategories();
-      setCategories(data);
-    } catch (err) {
-      setError(err.message || 'Kunne ikke hente kategorier.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const query = useQuery({
+    queryKey: categoriesQueryKey(accountId),
+    queryFn: () => apiFetchCategories(),
+  });
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['categories'] });
+  };
 
-  return { categories, loading, error, refresh };
+  return {
+    categories: query.data ?? [],
+    loading: query.isLoading,
+    error: query.error
+      ? query.error.message || 'Kunne ikke hente kategorier.'
+      : null,
+    refresh,
+  };
 }
