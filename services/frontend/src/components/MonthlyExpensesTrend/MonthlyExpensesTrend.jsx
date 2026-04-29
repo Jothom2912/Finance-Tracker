@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { formatAmount, getMonthName } from '../../lib/formatters';
+import { formatAmount } from '../../lib/formatters';
 import './MonthlyExpensesTrend.css';
 
 const SHORT_MONTHS = [

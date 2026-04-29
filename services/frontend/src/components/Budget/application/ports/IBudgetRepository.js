@@ -9,7 +9,7 @@ export class IBudgetRepository {
    * @param {Budget} budget
    * @returns {Promise<Budget>}
    */
-  async save(budget) {
+  async save(_budget) {
     throw new Error('Not implemented');
   }
 
@@ -18,7 +18,7 @@ export class IBudgetRepository {
    * @param {number} budgetId
    * @returns {Promise<Budget|null>}
    */
-  async findById(budgetId) {
+  async findById(_budgetId) {
     throw new Error('Not implemented');
   }
 
@@ -27,7 +27,7 @@ export class IBudgetRepository {
    * @param {number} year
    * @returns {Promise<Budget[]>}
    */
-  async findByYear(year) {
+  async findByYear(_year) {
     throw new Error('Not implemented');
   }
 
@@ -44,7 +44,7 @@ export class IBudgetRepository {
    * @param {number} budgetId
    * @returns {Promise<void>}
    */
-  async delete(budgetId) {
+  async delete(_budgetId) {
     throw new Error('Not implemented');
   }
 }

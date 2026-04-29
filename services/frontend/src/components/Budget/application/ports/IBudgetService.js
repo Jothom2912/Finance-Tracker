@@ -9,7 +9,7 @@ export class IBudgetService {
    * @param {Budget} budget
    * @returns {Promise<Budget>}
    */
-  async createBudget(budget) {
+  async createBudget(_budget) {
     throw new Error('Not implemented');
   }
 
@@ -18,7 +18,7 @@ export class IBudgetService {
    * @param {Budget} budget
    * @returns {Promise<Budget>}
    */
-  async updateBudget(budget) {
+  async updateBudget(_budget) {
     throw new Error('Not implemented');
   }
 
@@ -27,7 +27,7 @@ export class IBudgetService {
    * @param {number} budgetId
    * @returns {Promise<void>}
    */
-  async deleteBudget(budgetId) {
+  async deleteBudget(_budgetId) {
     throw new Error('Not implemented');
   }
 
@@ -36,7 +36,7 @@ export class IBudgetService {
    * @param {number} year
    * @returns {Promise<Budget[]>}
    */
-  async getBudgetsByYear(year) {
+  async getBudgetsByYear(_year) {
     throw new Error('Not implemented');
   }
 

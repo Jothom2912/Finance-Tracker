@@ -138,6 +138,11 @@ function BudgetSetup({
         );
     }, [selectedCategoryId, budgetMonth, budgetYear, budgets, editingBudget]);
 
+    const getCategoryName = useCallback((categoryId) => {
+        const category = categories.find(cat => cat.id === categoryId);
+        return category ? category.name : 'Ukendt kategori';
+    }, [categories]);
+
     // Group budgets by period
     const groupedBudgets = useMemo(() => {
         const grouped = budgets.reduce((acc, budget) => {
@@ -157,12 +162,7 @@ function BudgetSetup({
                     )
                 )
             }));
-    }, [budgets]);
-
-    const getCategoryName = useCallback((categoryId) => {
-        const category = categories.find(cat => cat.id === categoryId);
-        return category ? category.name : 'Ukendt kategori';
-    }, [categories]);
+    }, [budgets, getCategoryName]);
 
     const handleSubmitBudget = async (e) => {
         e.preventDefault();
@@ -198,7 +198,7 @@ function BudgetSetup({
                 onBudgetAdded?.();
             }
             resetForm();
-        } catch (err) {
+        } catch {
             // Errors are handled by the hook
         } finally {
             setIsSubmitting(false);
@@ -219,7 +219,7 @@ function BudgetSetup({
         try {
             await deleteBudget(budgetId, selectedViewYear);
             onBudgetDeleted?.();
-        } catch (err) {
+        } catch {
             // Errors are handled by the hook
         } finally {
             setIsSubmitting(false);

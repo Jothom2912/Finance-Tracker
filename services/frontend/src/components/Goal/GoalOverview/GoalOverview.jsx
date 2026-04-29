@@ -6,7 +6,7 @@ import MessageDisplay from '../../MessageDisplay';
 import GoalItem from '../GoalItem/GoalItem';
 import './GoalOverview.css';
 
-function GoalOverview({ refreshTrigger, setError, setSuccessMessage, onEditGoal }) {
+function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal }) {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [localError, setLocalError] = useState(null);

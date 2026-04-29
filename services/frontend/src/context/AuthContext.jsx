@@ -55,10 +55,8 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
   };
 
-  const handleLoginFallback = (username, accounts) => {
-    // Dette bruges hvis login kræver account selection
-    // For nu, gemmer vi bare username hvis nødvendigt
-    console.log('Login fallback triggered', { username, accounts });
+  const handleLoginFallback = (_username, _accounts) => {
+    // Placeholder: bruges hvis login kræver account selection
   };
 
   const isAuthenticated = () => {

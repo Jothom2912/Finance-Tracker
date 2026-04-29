@@ -8,7 +8,7 @@ import './BudgetComparison.css';
 
 function BudgetComparison({ 
     categories, 
-    refreshTrigger, 
+    _refreshTrigger, 
     setError, 
     setSuccessMessage,
     onEditBudget 
@@ -99,7 +99,7 @@ function BudgetComparison({
                     } else {
                         errorMessage = JSON.stringify(errorData);
                     }
-                } catch (e) {
+                } catch {
                     errorMessage = `HTTP ${response.status}: ${response.statusText}`;
                 }
                 throw new Error(`Kunne ikke hente budget oversigt: ${errorMessage}`);

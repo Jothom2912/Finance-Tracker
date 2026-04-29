@@ -196,7 +196,7 @@ function BudgetSetup({
         fetchBudgetsForYear(selectedViewYear);
     }, [selectedViewYear, fetchBudgetsForYear]);
 
-    const clearMessages = React.useCallback(() => {
+    const clearMessages = useCallback(() => {
         setLocalError(null);
         setLocalSuccessMessage(null);
         setError?.(null);
