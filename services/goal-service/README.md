@@ -31,6 +31,17 @@ Or:
 make test
 ```
 
+## Tests
+
+- `tests/unit/test_goal_service.py`: service-layer behavior and outbox writing
+- `tests/unit/test_goal_repository.py`: repository CRUD against an in-memory database
+- `tests/unit/test_goal_api.py`: FastAPI route behavior with dependency overrides
+- `tests/integration/test_goal_api_integration.py`: API -> service -> repository round trip
+- `tests/integration/test_goal_service_outbox_integration.py`: outbox rows for create, update, delete
+- `tests/integration/test_outbox_worker_integration.py`: worker publishes pending outbox events
+- `tests/integration/test_outbox_worker_retry_integration.py`: worker marks failures and retries
+- `tests/integration/test_outbox_worker_multiattempt_integration.py`: repeated retry flow until success
+
 ## Notes
 
 - `tests/conftest.py` sets safe defaults for local test execution.
