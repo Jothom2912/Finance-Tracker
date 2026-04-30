@@ -1,9 +1,12 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import './App.css';
 
+import { queryClient } from './lib/queryClient';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ConfirmDialogProvider } from './components/ConfirmDialog/ConfirmDialog';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import Navigation from './components/Navigation';
 import LoginPage from './pages/LoginPage';
@@ -15,6 +18,7 @@ import TransactionsPage from './pages/TransactionsPage';
 import CategoriesPage from './pages/CategoriesPage';
 import BudgetPage from './pages/BudgetPage/BudgetPage';
 import GoalPage from './pages/GoalPage/GoalPage';
+import BankCallbackPage from './pages/BankCallbackPage';
 
 function AppContent() {
   return (
@@ -47,6 +51,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/bank/callback" element={<BankCallbackPage />} />
       <Route
         path="/account-selector"
         element={isAuthenticated() ? <AccountSelector /> : <Navigate to="/login" replace />}
@@ -59,13 +64,30 @@ function App() {
   );
 }
 
+const ReactQueryDevtools = import.meta.env.DEV
+  ? React.lazy(() =>
+      import('@tanstack/react-query-devtools').then((mod) => ({
+        default: mod.ReactQueryDevtools,
+      })),
+    )
+  : null;
+
 function AppWithAuth() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <App />
-      </NotificationProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <NotificationProvider>
+          <ConfirmDialogProvider>
+            <App />
+          </ConfirmDialogProvider>
+        </NotificationProvider>
+      </AuthProvider>
+      {ReactQueryDevtools && (
+        <React.Suspense fallback={null}>
+          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+        </React.Suspense>
+      )}
+    </QueryClientProvider>
   );
 }
 

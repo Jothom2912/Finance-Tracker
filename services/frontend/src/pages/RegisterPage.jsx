@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import apiClient from '../utils/apiClient';
 import { USER_SERVICE_URL } from '../config/serviceUrls';
@@ -78,25 +78,25 @@ function RegisterPage() {
         <form onSubmit={handleRegister} className="register-form">
           <div className="form-group">
             <label htmlFor="username">Brugernavn:</label>
-            <input type="text" id="username" name="username" data-cy="username-input" value={formData.username} onChange={handleChange} placeholder="Vælg et brugernavn (3-20 tegn)" required disabled={loading} minLength="3" maxLength="20" />
+            <input type="text" id="username" name="username" value={formData.username} onChange={handleChange} placeholder="Vælg et brugernavn (3-20 tegn)" required disabled={loading} minLength="3" maxLength="20" />
           </div>
 
           <div className="form-group">
             <label htmlFor="email">Email:</label>
-            <input type="email" id="email" name="email" data-cy="email-input" value={formData.email} onChange={handleChange} placeholder="Indtast din email" required disabled={loading} />
+            <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} placeholder="Indtast din email" required disabled={loading} />
           </div>
 
           <div className="form-group">
             <label htmlFor="password">Adgangskode:</label>
-            <input type="password" id="password" name="password" data-cy="password-input" value={formData.password} onChange={handleChange} placeholder="Mindst 8 tegn" required disabled={loading} minLength="8" />
+            <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} placeholder="Mindst 8 tegn" required disabled={loading} minLength="8" />
           </div>
 
           <div className="form-group">
             <label htmlFor="password_confirm">Bekræft adgangskode:</label>
-            <input type="password" id="password_confirm" name="password_confirm" data-cy="password-confirm-input" value={formData.password_confirm} onChange={handleChange} placeholder="Gentag adgangskode" required disabled={loading} />
+            <input type="password" id="password_confirm" name="password_confirm" value={formData.password_confirm} onChange={handleChange} placeholder="Gentag adgangskode" required disabled={loading} />
           </div>
 
-          <button type="submit" className="register-button" data-cy="register-button" disabled={loading}>
+          <button type="submit" className="register-button" disabled={loading}>
             {loading ? 'Opretter konto...' : 'Opret konto'}
           </button>
         </form>

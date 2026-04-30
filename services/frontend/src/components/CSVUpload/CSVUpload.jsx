@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { Upload } from 'lucide-react';
 import { uploadTransactionsCsv } from '../../api/transactions';
 import './CSVUpload.css';
 
@@ -43,7 +44,7 @@ function CSVUpload({ onUploadSuccess, setError, setSuccessMessage }) {
                 <p>Valgt fil: {selectedFile.name}</p>
             )}
             <button className="button secondary" onClick={handleUpload} disabled={!selectedFile}>
-                📤 Upload CSV
+                <Upload aria-hidden="true" size={16} /> Upload CSV
             </button>
         </div>
     );

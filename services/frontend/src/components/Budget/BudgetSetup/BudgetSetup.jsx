@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import MessageDisplay from '../../MessageDisplay';
 import apiClient from '../../../utils/apiClient';
+import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
 import './BudgetSetup.css';
 
 function BudgetSetup({
@@ -13,6 +15,8 @@ function BudgetSetup({
     onCloseModal,
     initialBudget
 }) {
+    const confirm = useConfirm();
+
     // Transform initialBudget hvis den kommer fra parent
     const transformBudget = useCallback((budget) => {
         if (!budget) return null;
@@ -192,7 +196,7 @@ function BudgetSetup({
         fetchBudgetsForYear(selectedViewYear);
     }, [selectedViewYear, fetchBudgetsForYear]);
 
-    const clearMessages = React.useCallback(() => {
+    const clearMessages = useCallback(() => {
         setLocalError(null);
         setLocalSuccessMessage(null);
         setError?.(null);
@@ -321,7 +325,13 @@ function BudgetSetup({
     };
 
     const handleDeleteBudget = async (budgetId) => {
-        if (!window.confirm("Er du sikker på, at du vil slette dette budget?")) return;
+        const ok = await confirm({
+            title: 'Slet budget?',
+            message: 'Budgetposten slettes permanent.',
+            confirmLabel: 'Slet',
+            variant: 'danger',
+        });
+        if (!ok) return;
 
         setIsSubmitting(true);
         try {
@@ -471,7 +481,8 @@ function BudgetSetup({
 
                 {hasDuplicate && (
                     <div className="duplicate-warning">
-                        ⚠️ Der findes allerede et budget for denne kategori i den valgte periode.
+                        <AlertTriangle aria-hidden="true" size={16} />
+                        Der findes allerede et budget for denne kategori i den valgte periode.
                     </div>
                 )}
 

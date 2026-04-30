@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import SummaryCards from './SummaryCards';
@@ -98,8 +98,11 @@ describe('SummaryCards', () => {
       />,
     );
 
-    const arrows = screen.getAllByText('▲');
-    expect(arrows.length).toBeGreaterThanOrEqual(1);
+    // Trend direction is communicated via aria-label on the icon, not
+    // via the (identical) "10%" text -- so the test matches how screen
+    // readers resolve the meaning, not the visual glyph.
+    const upIcons = screen.getAllByLabelText('Stigning');
+    expect(upIcons.length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows down arrow for negative trend', () => {
@@ -114,8 +117,8 @@ describe('SummaryCards', () => {
       />,
     );
 
-    const arrows = screen.getAllByText('▼');
-    expect(arrows.length).toBeGreaterThanOrEqual(1);
+    const downIcons = screen.getAllByLabelText('Fald');
+    expect(downIcons.length).toBeGreaterThanOrEqual(1);
   });
 
   it('does not show trend badges when trend is null', () => {
@@ -130,8 +133,8 @@ describe('SummaryCards', () => {
       />,
     );
 
-    expect(screen.queryByText('▲')).not.toBeInTheDocument();
-    expect(screen.queryByText('▼')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Stigning')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Fald')).not.toBeInTheDocument();
   });
 
   it('inverts color on expense trend (up = red, down = green)', () => {

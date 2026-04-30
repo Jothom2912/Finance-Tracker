@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createTransaction as apiCreateTransaction, updateTransaction as apiUpdateTransaction } from '../../api/transactions';
 import './TransactionForm.css';
 
@@ -19,7 +19,7 @@ function TransactionForm({
 
     useEffect(() => {
         if (transactionToEdit) {
-            setAmount(transactionToEdit.amount);
+            setAmount(Math.abs(transactionToEdit.amount));
             setCategory(transactionToEdit.category_id || transactionToEdit.Category_idCategory);
             setDate(transactionToEdit.date);
             setDescription(transactionToEdit.description);
@@ -44,9 +44,10 @@ function TransactionForm({
             return;
         }
 
-        // Backend forventer negativt beløb for expenses, positivt for income
+        // Backend kræver positivt beløb (>= 0.01). Retningen (income vs. expense)
+        // kodes af transaction_type-enum'en, ikke af fortegnet på beløbet.
         const amountValue = parseFloat(amount);
-        const finalAmount = isExpense ? -Math.abs(amountValue) : Math.abs(amountValue);
+        const finalAmount = Math.abs(amountValue);
 
         // Valider at kategori er valgt
         if (!category || category === '') {
@@ -87,7 +88,7 @@ function TransactionForm({
     };
 
     return (
-        <div className="transaction-form-container" data-cy="transaction-form"> {/* Ny container klasse for formularen */}
+        <div className="transaction-form-container">
             <h3>{transactionToEdit ? 'Rediger Transaktion' : 'Tilføj Ny Transaktion'}</h3>
             <form onSubmit={handleSubmit}>
                 <div className="form-group"> {/* Generel gruppe for input felter */}
@@ -95,7 +96,6 @@ function TransactionForm({
                     <input
                         type="number"
                         id="amount"
-                        data-cy="transaction-amount"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         required
@@ -106,7 +106,6 @@ function TransactionForm({
                     <label htmlFor="category">Kategori:</label>
                     <select
                         id="category"
-                        data-cy="transaction-category"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
                         required
@@ -125,7 +124,6 @@ function TransactionForm({
                     <input
                         type="date"
                         id="date"
-                        data-cy="transaction-date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
                         required
@@ -137,7 +135,6 @@ function TransactionForm({
                     <input
                         type="text"
                         id="description"
-                        data-cy="transaction-description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         required
@@ -149,7 +146,6 @@ function TransactionForm({
                         <input
                             type="radio"
                             value="expense"
-                            data-cy="transaction-type-expense"
                             checked={isExpense}
                             onChange={() => setIsExpense(true)}
                         />
@@ -159,7 +155,6 @@ function TransactionForm({
                         <input
                             type="radio"
                             value="income"
-                            data-cy="transaction-type-income"
                             checked={!isExpense}
                             onChange={() => setIsExpense(false)}
                         />
@@ -168,7 +163,7 @@ function TransactionForm({
                 </div>
 
                 <div className="form-actions"> {/* Gruppe for formular knapper */}
-                    <button type="submit" className="button" data-cy="submit-transaction">
+                    <button type="submit" className="button">
                         {transactionToEdit ? 'Opdater Transaktion' : 'Tilføj Transaktion'}
                     </button>
                     {transactionToEdit && (

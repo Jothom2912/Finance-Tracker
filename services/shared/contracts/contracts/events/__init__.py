@@ -10,6 +10,7 @@ from contracts.events.category import (
     CategoryUpdatedEvent,
 )
 from contracts.events.transaction import (
+    TransactionCategorizedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
     TransactionUpdatedEvent,
@@ -22,6 +23,7 @@ __all__ = [
     "CategoryCreatedEvent",
     "CategoryDeletedEvent",
     "CategoryUpdatedEvent",
+    "TransactionCategorizedEvent",
     "TransactionCreatedEvent",
     "TransactionDeletedEvent",
     "TransactionUpdatedEvent",

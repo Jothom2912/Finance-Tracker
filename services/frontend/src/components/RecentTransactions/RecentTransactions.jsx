@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Link } from 'react-router-dom';
 import { formatAmount, formatDate } from '../../lib/formatters';
 import './RecentTransactions.css';
@@ -28,6 +28,10 @@ function RecentTransactions({ transactions }) {
       </div>
       <ul className="recent-transactions-list">
         {transactions.map((tx) => {
+          // defensive: `tx.amount < 0` is a legacy fallback for rows created
+          // before the canonical amount convention (positive + transaction_type
+          // enum; see commit 9f8a27d). `tx.type` is the authoritative signal
+          // for new data. Kept as belt-and-braces for historical database rows.
           const isExpense = tx.type === 'expense' || tx.amount < 0;
           return (
             <li key={tx.id} className="recent-transaction-item">

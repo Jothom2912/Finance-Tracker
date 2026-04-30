@@ -1,5 +1,5 @@
 // frontend/src/components/CategoryExpensesList.js
-import React from 'react';
+
 import './CategoryExpensesList.css'; // Opret denne CSS-fil
 
 function CategoryExpensesList({ data, totalExpenses, formatAmount }) {

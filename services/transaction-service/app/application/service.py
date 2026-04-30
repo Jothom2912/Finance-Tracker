@@ -51,14 +51,51 @@ class TransactionService(ITransactionService):
     a transactional outbox.  Domain writes and event-intent rows
     are committed atomically — the outbox publisher worker handles
     delivery to RabbitMQ independently.
+
+    The optional ``categorization_client`` calls categorization-service's
+    sync /categorize endpoint (tier 1 rule engine) before persisting.
+    If the client is None or the call fails, transactions are saved
+    without categorization — the async pipeline picks them up via
+    the transaction.created event.
     """
 
-    def __init__(self, uow: IUnitOfWork) -> None:
+    def __init__(
+        self,
+        uow: IUnitOfWork,
+        categorization_client: object | None = None,
+    ) -> None:
         self._uow = uow
+        self._cat_client = categorization_client
 
     # ── Transactions ────────────────────────────────────────────────
 
     async def create_transaction(self, user_id: int, dto: CreateTransactionDTO) -> TransactionResponse:
+        subcategory_id = dto.subcategory_id
+        cat_tier = dto.categorization_tier
+        cat_confidence = dto.categorization_confidence
+
+        already_categorized = cat_tier is not None and cat_tier != "fallback"
+        if not already_categorized and self._cat_client is not None:
+            cat_result = await self._cat_client.categorize(
+                description=dto.description or "",
+                amount=float(dto.amount),
+            )
+            if cat_result is not None:
+                subcategory_id = cat_result.subcategory_id
+                cat_tier = cat_result.tier
+                cat_confidence = cat_result.confidence
+                logger.info(
+                    "Sync categorization: '%s' -> sub=%d, tier=%s",
+                    (dto.description or "")[:40],
+                    cat_result.subcategory_id,
+                    cat_result.tier,
+                )
+            else:
+                logger.info(
+                    "Categorization fallback for '%s' — async pipeline will retry",
+                    (dto.description or "")[:40],
+                )
+
         async with self._uow:
             transaction = await self._uow.transactions.create(
                 user_id=user_id,
@@ -70,9 +107,9 @@ class TransactionService(ITransactionService):
                 transaction_type=dto.transaction_type,
                 description=dto.description,
                 tx_date=dto.date,
-                subcategory_id=dto.subcategory_id,
-                categorization_tier=dto.categorization_tier,
-                categorization_confidence=dto.categorization_confidence,
+                subcategory_id=subcategory_id,
+                categorization_tier=cat_tier,
+                categorization_confidence=cat_confidence,
             )
 
             await self._uow.outbox.add(
@@ -279,6 +316,9 @@ class TransactionService(ITransactionService):
         Performs deduplication on ``(user_id, account_id, date, amount,
         description)`` and publishes one ``TransactionCreatedEvent``
         per newly inserted row via the outbox.
+
+        If items lack categorization metadata and a categorization client
+        is available, a batch sync call enriches them before persist.
         """
         duplicates_skipped = 0
         errors = 0
@@ -319,6 +359,32 @@ class TransactionService(ITransactionService):
                     logger.exception("Bulk-import validation failed for item")
                     errors += 1
 
+        uncategorized = [
+            i
+            for i, row in enumerate(rows_to_create)
+            if not row.get("categorization_tier") or row.get("categorization_tier") == "fallback"
+        ]
+
+        if uncategorized and self._cat_client is not None:
+            batch_items = [
+                {
+                    "description": rows_to_create[i].get("description") or "",
+                    "amount": float(rows_to_create[i]["amount"]),
+                }
+                for i in uncategorized
+            ]
+            cat_results = await self._cat_client.categorize_batch(batch_items)
+            enriched = 0
+            for idx, cat_result in zip(uncategorized, cat_results):
+                if cat_result is not None:
+                    rows_to_create[idx]["subcategory_id"] = cat_result.subcategory_id
+                    rows_to_create[idx]["categorization_tier"] = cat_result.tier
+                    rows_to_create[idx]["categorization_confidence"] = cat_result.confidence
+                    enriched += 1
+            if enriched:
+                logger.info("Bulk categorization: %d/%d items enriched", enriched, len(uncategorized))
+
+        async with self._uow:
             if not rows_to_create:
                 await self._uow.commit()
                 return BulkCreateResultDTO(

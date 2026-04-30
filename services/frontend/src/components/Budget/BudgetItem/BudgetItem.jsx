@@ -1,5 +1,6 @@
 // frontend/src/components/BudgetItem/BudgetItem.js
-import React from 'react';
+
+import { AlertCircle, AlertTriangle, CircleDot, CheckCircle2 } from 'lucide-react';
 import './BudgetItem.css';
 
 function BudgetItem({ 
@@ -36,17 +37,20 @@ function BudgetItem({
     };
 
     const getStatusIcon = (status) => {
+        // Icons are decorative: the adjacent `getStatusText()` label carries
+        // the semantic meaning for screen readers, so each icon is rendered
+        // with aria-hidden="true".
         switch (status) {
             case 'over-budget':
-                return '🚨';
+                return <AlertCircle aria-hidden="true" size={16} />;
             case 'close-to-limit':
-                return '⚠️';
+                return <AlertTriangle aria-hidden="true" size={16} />;
             case 'approaching-limit':
-                return '🟡';
+                return <CircleDot aria-hidden="true" size={16} />;
             case 'within-budget':
-                return '✅';
+                return <CheckCircle2 aria-hidden="true" size={16} />;
             default:
-                return '';
+                return null;
         }
     };
 

@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import TransactionForm from '../components/TransactionForm/TransactionForm';
 import TransactionsList from '../components/TransactionsList/TransactionsList';
 import FilterComponent from '../components/FilterComponent/FilterComponent';
@@ -7,39 +8,62 @@ import Modal from '../components/Modal/Modal';
 import { useCategories } from '../hooks/useCategories';
 import { useTransactions } from '../hooks/useTransactions';
 import { useNotifications } from '../hooks/useNotifications';
+import { useConfirm } from '../components/ConfirmDialog/ConfirmDialog';
+import { formatLocalISODate } from '../lib/formatters';
 
 import '../components/FilterComponent/FilterComponent.css';
 import './TransactionsPage.css';
 
 function TransactionsPage() {
+  const queryClient = useQueryClient();
   const { categories } = useCategories();
-  const { transactions, loading: txLoading, error: txError, fetch: fetchTx, remove: removeTx, uploadCsv } = useTransactions();
   const { showError, showSuccess, clearMessages } = useNotifications();
+  const confirm = useConfirm();
 
   const [transactionToEdit, setTransactionToEdit] = useState(null);
   const [showFormModal, setShowFormModal] = useState(false);
 
-  const [filterStartDate, setFilterStartDate] = useState('2020-01-01');
-  const [filterEndDate, setFilterEndDate] = useState('2030-12-31');
+  const [filterStartDate, setFilterStartDate] = useState(() => {
+    const d = new Date();
+    return formatLocalISODate(new Date(d.getFullYear(), d.getMonth(), 1));
+  });
+  const [filterEndDate, setFilterEndDate] = useState(() => {
+    const d = new Date();
+    return formatLocalISODate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  });
   const [selectedCategory, setSelectedCategory] = useState('');
 
   const [csvFile, setCsvFile] = useState(null);
   const [uploadingCsv, setUploadingCsv] = useState(false);
 
-  const loadTransactions = useCallback(() => {
-    fetchTx({ startDate: filterStartDate, endDate: filterEndDate, categoryId: selectedCategory });
-  }, [fetchTx, filterStartDate, filterEndDate, selectedCategory]);
+  const filters = useMemo(
+    () => ({
+      startDate: filterStartDate,
+      endDate: filterEndDate,
+      categoryId: selectedCategory,
+    }),
+    [filterStartDate, filterEndDate, selectedCategory],
+  );
 
-  useEffect(() => {
-    loadTransactions();
-  }, [loadTransactions]);
+  const {
+    transactions,
+    loading: txLoading,
+    error: txError,
+    remove: removeTx,
+    uploadCsv,
+  } = useTransactions(filters);
+
+  const invalidateTransactionViews = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+  }, [queryClient]);
 
   const handleTransactionSaved = useCallback((isEdit) => {
     setShowFormModal(false);
     setTransactionToEdit(null);
-    loadTransactions();
+    invalidateTransactionViews();
     showSuccess(isEdit ? 'Transaktion opdateret!' : 'Transaktion tilføjet!');
-  }, [loadTransactions, showSuccess]);
+  }, [invalidateTransactionViews, showSuccess]);
 
   const handleEditTransaction = useCallback((transaction) => {
     setTransactionToEdit(transaction);
@@ -54,15 +78,20 @@ function TransactionsPage() {
   }, [clearMessages]);
 
   const handleDeleteTransaction = useCallback(async (transactionId) => {
-    if (!window.confirm('Er du sikker på, du vil slette denne transaktion?')) return;
+    const ok = await confirm({
+      title: 'Slet transaktion?',
+      message: 'Transaktionen slettes permanent og kan ikke gendannes.',
+      confirmLabel: 'Slet',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await removeTx(transactionId);
-      loadTransactions();
       showSuccess('Transaktion slettet!');
     } catch (err) {
       showError(`Fejl ved sletning: ${err.message}`);
     }
-  }, [removeTx, loadTransactions, showSuccess, showError]);
+  }, [confirm, removeTx, showSuccess, showError]);
 
   const handleCsvUpload = useCallback(async (e) => {
     e.preventDefault();
@@ -73,7 +102,6 @@ function TransactionsPage() {
     try {
       const result = await uploadCsv(csvFile);
       showSuccess(result.message || `CSV uploadet! ${result.imported_count || ''} transaktioner importeret.`);
-      loadTransactions();
     } catch (err) {
       showError(err.message || 'Fejl ved CSV upload.');
     } finally {
@@ -82,7 +110,7 @@ function TransactionsPage() {
       const fileInput = document.querySelector('.csv-upload-section input[type="file"]');
       if (fileInput) fileInput.value = '';
     }
-  }, [csvFile, uploadCsv, loadTransactions, showError, showSuccess, clearMessages]);
+  }, [csvFile, uploadCsv, showError, showSuccess, clearMessages]);
 
   const getCurrentPeriodLabel = () => {
     if (!filterStartDate || !filterEndDate) return 'valgt periode';
@@ -117,7 +145,6 @@ function TransactionsPage() {
             selectedCategory={selectedCategory}
             setSelectedCategory={setSelectedCategory}
             categories={categories}
-            onFilter={loadTransactions}
           />
         </div>
       </div>
@@ -129,7 +156,6 @@ function TransactionsPage() {
             <input
               type="file"
               accept=".csv"
-              data-cy="csv-upload-input"
               onChange={(e) => setCsvFile(e.target.files[0])}
               disabled={uploadingCsv}
             />
@@ -137,7 +163,6 @@ function TransactionsPage() {
               type="submit"
               disabled={!csvFile || uploadingCsv}
               className="upload-button"
-              data-cy="upload-csv-button"
             >
               {uploadingCsv ? 'Uploader...' : 'Upload CSV'}
             </button>
@@ -149,7 +174,6 @@ function TransactionsPage() {
       <div className="action-buttons">
         <button
           className="add-transaction-button"
-          data-cy="add-transaction-button"
           onClick={() => { setShowFormModal(true); clearMessages(); }}
         >
           <span className="button-icon">+</span>
@@ -158,7 +182,11 @@ function TransactionsPage() {
       </div>
 
       {showFormModal && (
-        <Modal isOpen={showFormModal} onClose={handleCancelEdit}>
+        <Modal
+          isOpen={showFormModal}
+          onClose={handleCancelEdit}
+          title={transactionToEdit ? 'Rediger transaktion' : 'Ny transaktion'}
+        >
           <TransactionForm
             categories={categories}
             onTransactionAdded={() => handleTransactionSaved(false)}

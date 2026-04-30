@@ -1,11 +1,12 @@
 // frontend/src/components/Goal/GoalOverview/GoalOverview.js
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { Target } from 'lucide-react';
 import apiClient from '../../../utils/apiClient';
 import MessageDisplay from '../../MessageDisplay';
 import GoalItem from '../GoalItem/GoalItem';
 import './GoalOverview.css';
 
-function GoalOverview({ refreshTrigger, setError, setSuccessMessage, onEditGoal }) {
+function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal }) {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [localError, setLocalError] = useState(null);
@@ -158,7 +159,7 @@ function GoalOverview({ refreshTrigger, setError, setSuccessMessage, onEditGoal 
       {/* Goals Liste */}
       {goals.length === 0 ? (
         <div className="no-goals">
-          <div className="no-goals-icon">🎯</div>
+          <div className="no-goals-icon"><Target aria-hidden="true" size={48} /></div>
           <h3>Ingen mål endnu</h3>
           <p>Opret dit første mål for at komme i gang!</p>
           <button 

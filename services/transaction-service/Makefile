@@ -25,8 +25,9 @@ install-deps: ## Install all dependencies (prod + dev)
 dev: ## Start service with hot-reload on port 8002
 	uv run uvicorn app.main:app --reload --port 8002
 
-test: ## Fast suite — unit + existing SQLite integration tests. Excludes migrations/ (Testcontainers, slow, requires Docker).
-	uv run pytest tests/ -v --ignore=tests/migrations
+test: ## Fast suite — unit + integration in separate pytest invocations to avoid module-import state pollution.
+	uv run pytest tests/unit/ -v
+	uv run pytest tests/integration/ -v
 
 test-unit: ## Run unit tests only
 	uv run pytest tests/unit/ -v

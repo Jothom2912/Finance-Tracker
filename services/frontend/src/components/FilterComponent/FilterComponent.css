@@ -18,6 +18,45 @@
     border: none;
 }
 
+.filter-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.filter-preset-chip {
+    padding: 0.375rem 0.875rem;
+    border-radius: var(--radius-full, 999px);
+    border: 1.5px solid var(--color-border-light);
+    background: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color var(--transition-fast),
+        color var(--transition-fast),
+        background-color var(--transition-fast);
+    white-space: nowrap;
+}
+
+.filter-preset-chip:hover {
+    border-color: var(--color-brand-400, var(--color-brand-500));
+    color: var(--color-text-primary);
+}
+
+.filter-preset-chip:focus-visible {
+    outline: none;
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 3px rgba(54, 79, 199, 0.1);
+}
+
+.filter-preset-chip.active {
+    background: var(--color-brand-500);
+    border-color: var(--color-brand-500);
+    color: var(--color-text-inverse);
+}
+
 .filter-inputs {
     display: flex;
     flex-wrap: wrap;

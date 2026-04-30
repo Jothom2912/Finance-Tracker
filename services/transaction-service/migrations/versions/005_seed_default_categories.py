@@ -71,21 +71,13 @@ def upgrade() -> None:
     bind = op.get_bind()
 
     insert_stmt = sa.text(
-        "INSERT INTO categories (id, name, type) "
-        "VALUES (:id, :name, :type) "
-        "ON CONFLICT (id) DO NOTHING"
+        "INSERT INTO categories (id, name, type) VALUES (:id, :name, :type) ON CONFLICT (id) DO NOTHING"
     )
     for cat_id, name, type_ in _DEFAULT_CATEGORIES:
         bind.execute(insert_stmt, {"id": cat_id, "name": name, "type": type_})
 
     bind.execute(
-        sa.text(
-            "SELECT setval("
-            "  'categories_id_seq', "
-            "  (SELECT COALESCE(MAX(id), 0) FROM categories), "
-            "  true"
-            ")"
-        )
+        sa.text("SELECT setval(  'categories_id_seq',   (SELECT COALESCE(MAX(id), 0) FROM categories),   true)")
     )
 
 

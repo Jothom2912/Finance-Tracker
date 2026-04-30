@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   fetchMonthlyBudget,
@@ -10,6 +10,7 @@ import {
 } from '../../api/monthlyBudgets';
 import { useCategories } from '../../hooks/useCategories';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useConfirm } from '../../components/ConfirmDialog/ConfirmDialog';
 import { getMonthName, MONTH_OPTIONS } from '../../lib/formatters';
 import './BudgetPage.css';
 
@@ -20,6 +21,7 @@ function BudgetPage() {
 
   const { categories, loading: catsLoading } = useCategories();
   const { showError, showSuccess } = useNotifications();
+  const confirm = useConfirm();
 
   const [budget, setBudget] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -107,7 +109,13 @@ function BudgetPage() {
 
   const handleDelete = async () => {
     if (!budget?.id) return;
-    if (!window.confirm('Er du sikker på at du vil slette hele budgettet for denne måned?')) return;
+    const ok = await confirm({
+      title: 'Slet månedens budget?',
+      message: 'Hele månedens budget slettes permanent.',
+      confirmLabel: 'Slet',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setSaving(true);
     try {
       await deleteMonthlyBudget(budget.id);
@@ -184,11 +192,11 @@ function BudgetPage() {
   if (!accountId) {
     return (
       <div className="budget-page">
-        <div className="budget-no-account" data-cy="no-account-state">
+        <div className="budget-no-account">
           <div className="no-account-icon">&#128179;</div>
           <h2>Ingen konto valgt</h2>
           <p>Vælg en konto for at se og administrere dine budgetter.</p>
-          <Link to="/" className="btn-primary">Gå til kontoer</Link>
+          <Link to="/account-selector" className="btn-primary">Gå til kontoer</Link>
         </div>
       </div>
     );
@@ -197,7 +205,7 @@ function BudgetPage() {
   const totalEdited = editLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
 
   return (
-    <div className="budget-page" data-cy="budget-page">
+    <div className="budget-page">
       {/* Header */}
       <div className="budget-page-header">
         <div className="header-content">
@@ -209,7 +217,7 @@ function BudgetPage() {
       </div>
 
       {/* Period selector */}
-      <div className="budget-period-selector" data-cy="period-selector">
+      <div className="budget-period-selector">
         <button
           className="period-nav-btn"
           onClick={() => {
@@ -225,7 +233,6 @@ function BudgetPage() {
           <select
             value={month}
             onChange={(e) => setMonth(parseInt(e.target.value, 10))}
-            data-cy="budget-month"
           >
             {MONTH_OPTIONS.map((m) => (
               <option key={m.value} value={parseInt(m.value, 10)}>{m.label}</option>
@@ -234,7 +241,6 @@ function BudgetPage() {
           <select
             value={year}
             onChange={(e) => setYear(parseInt(e.target.value, 10))}
-            data-cy="budget-year"
           >
             {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -260,7 +266,7 @@ function BudgetPage() {
         <>
           {/* Summary cards */}
           {summary && (
-            <div className="budget-summary-cards" data-cy="budget-summary">
+            <div className="budget-summary-cards">
               <div className="summary-card">
                 <span className="summary-label">Total budget</span>
                 <span className="summary-value">{formatKr(summary.total_budget)}</span>
@@ -285,7 +291,7 @@ function BudgetPage() {
           )}
 
           {/* Budget lines */}
-          <div className="budget-lines-card" data-cy="budget-lines">
+          <div className="budget-lines-card">
             <div className="lines-header">
               <h2>Budget-linjer</h2>
               <div className="lines-actions">
@@ -294,7 +300,6 @@ function BudgetPage() {
                     className="btn-secondary"
                     onClick={handleCopyFromPrevious}
                     disabled={saving}
-                    data-cy="copy-budget-btn"
                   >
                     Kopiér fra forrige måned
                   </button>
@@ -312,7 +317,6 @@ function BudgetPage() {
                       className="btn-primary"
                       onClick={handleSave}
                       disabled={saving}
-                      data-cy="save-budget-btn"
                     >
                       {saving ? 'Gemmer...' : 'Gem ændringer'}
                     </button>
@@ -323,7 +327,6 @@ function BudgetPage() {
                     className="btn-danger-ghost"
                     onClick={handleDelete}
                     disabled={saving}
-                    data-cy="delete-budget-btn"
                   >
                     Slet budget
                   </button>
@@ -332,7 +335,7 @@ function BudgetPage() {
             </div>
 
             {editLines.length === 0 && !isEditing ? (
-              <div className="budget-empty" data-cy="budget-empty">
+              <div className="budget-empty">
                 <p>Ingen budget for {getMonthName(month)} {year}.</p>
                 <p>Tilføj kategorier nedenfor, eller kopiér fra forrige måned.</p>
               </div>
@@ -361,7 +364,7 @@ function BudgetPage() {
                       const isOver = remaining < 0;
 
                       return (
-                        <tr key={line.category_id} data-cy={`budget-line-${line.category_id}`}>
+                        <tr key={line.category_id}>
                           <td className="cat-name">{line.category_name || `Kategori #${line.category_id}`}</td>
                           <td className="num">
                             <input
@@ -371,7 +374,6 @@ function BudgetPage() {
                               min="0"
                               step="100"
                               onChange={(e) => handleLineAmountChange(idx, e.target.value)}
-                              data-cy={`amount-input-${line.category_id}`}
                             />
                           </td>
                           <td className="num spent-cell">{formatKr(spent)}</td>
@@ -417,11 +419,10 @@ function BudgetPage() {
             )}
 
             {/* Add category row */}
-            <div className="add-line-row" data-cy="add-line">
+            <div className="add-line-row">
               <select
                 value={addCategoryId}
                 onChange={(e) => setAddCategoryId(e.target.value)}
-                data-cy="add-category-select"
               >
                 <option value="">Tilføj kategori...</option>
                 {availableCategories.map((c) => (
@@ -432,7 +433,6 @@ function BudgetPage() {
                 className="btn-secondary btn-sm"
                 onClick={handleAddLine}
                 disabled={!addCategoryId}
-                data-cy="add-line-btn"
               >
                 Tilføj
               </button>

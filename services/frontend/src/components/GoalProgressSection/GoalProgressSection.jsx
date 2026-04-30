@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { formatAmount, formatDate } from '../../lib/formatters';
 import './GoalProgressSection.css';
 

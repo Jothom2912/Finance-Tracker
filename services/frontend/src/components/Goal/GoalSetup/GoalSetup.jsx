@@ -1,7 +1,8 @@
 // frontend/src/components/Goal/GoalSetup/GoalSetup.js
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import MessageDisplay from '../../MessageDisplay';
 import apiClient from '../../../utils/apiClient';
+import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
 import './GoalSetup.css';
 
 function GoalSetup({
@@ -13,6 +14,7 @@ function GoalSetup({
     onCloseModal,
     initialGoal
 }) {
+    const confirm = useConfirm();
     const [goalName, setGoalName] = useState('');
     const [targetAmount, setTargetAmount] = useState('');
     const [currentAmount, setCurrentAmount] = useState('');
@@ -190,9 +192,13 @@ function GoalSetup({
     const handleDelete = async () => {
         if (!initialGoal?.idGoal) return;
 
-        if (!window.confirm('Er du sikker på, at du vil slette dette mål?')) {
-            return;
-        }
+        const ok = await confirm({
+            title: 'Slet mål?',
+            message: 'Det opsparingsmål slettes permanent.',
+            confirmLabel: 'Slet',
+            variant: 'danger',
+        });
+        if (!ok) return;
 
         clearMessages();
         setIsSubmitting(true);

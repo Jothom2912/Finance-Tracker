@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { BarChart3 } from 'lucide-react';
 import CategoryFilterPanel from '../components/CategoryFilterPanel/CategoryFilterPanel';
 import CategorySpendingOverview from '../components/CategorySpendingOverview/CategorySpendingOverview';
 import CategoryManagement from '../components/CategoryManagement/CategoryManagement';
@@ -93,7 +94,6 @@ function CategoriesPage() {
         <h2>Kategorioverblik</h2>
         <button
           className="manage-categories-btn"
-          data-cy="manage-categories-btn"
           onClick={() => { setShowManagementModal(true); clearMessages(); }}
         >
           Administrer kategorier
@@ -113,8 +113,8 @@ function CategoriesPage() {
       />
 
       {dataError === 'no-account' ? (
-        <div className="categories-no-account" data-cy="no-account-state">
-          <div className="no-account-icon">📊</div>
+        <div className="categories-no-account">
+          <div className="no-account-icon"><BarChart3 aria-hidden="true" size={48} /></div>
           <h3>Ingen konto valgt</h3>
           <p>Vælg en konto for at se dit kategori-overblik med forbrug og budgetter.</p>
           <Link to="/account-selector" className="select-account-btn">
@@ -131,7 +131,11 @@ function CategoriesPage() {
         />
       )}
 
-      <Modal isOpen={showManagementModal} onClose={() => setShowManagementModal(false)}>
+      <Modal
+        isOpen={showManagementModal}
+        onClose={() => setShowManagementModal(false)}
+        title="Administrer kategorier"
+      >
         <CategoryManagement
           categories={categories}
           onCategoryAdded={handleCategoryChange}

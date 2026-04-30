@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { Target, Settings } from 'lucide-react';
 import GoalOverview from '../../components/Goal/GoalOverview/GoalOverview';
 import GoalSetup from '../../components/Goal/GoalSetup/GoalSetup';
+import Modal from '../../components/Modal/Modal';
 import { useNotifications } from '../../hooks/useNotifications';
 import './GoalPage.css';
 
@@ -35,8 +37,8 @@ function GoalPage() {
   };
 
   const views = [
-    { id: 'overview', label: 'Mål Oversigt', icon: '🎯', description: 'Se alle dine mål og fremgang' },
-    { id: 'setup', label: 'Administrer', icon: '⚙️', description: 'Opret og rediger mål' },
+    { id: 'overview', label: 'Mål Oversigt', Icon: Target, description: 'Se alle dine mål og fremgang' },
+    { id: 'setup', label: 'Administrer', Icon: Settings, description: 'Opret og rediger mål' },
   ];
 
   return (
@@ -56,7 +58,7 @@ function GoalPage() {
             onClick={() => handleViewChange(view.id)}
             title={view.description}
           >
-            <span className="button-icon">{view.icon}</span>
+            <span className="button-icon"><view.Icon aria-hidden="true" size={18} /></span>
             <span className="button-label">{view.label}</span>
           </button>
         ))}
@@ -86,27 +88,21 @@ function GoalPage() {
         )}
       </div>
 
-      {showGoalModal && (
-        <div className="modal-overlay" onClick={handleCancelEdit}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingGoal?.idGoal ? 'Rediger Mål' : 'Opret Nyt Mål'}</h2>
-              <button className="modal-close-btn" onClick={handleCancelEdit} title="Luk">✕</button>
-            </div>
-            <div className="modal-body">
-              <GoalSetup
-                onGoalAdded={handleGoalSaved}
-                onGoalUpdated={handleGoalSaved}
-                onGoalDeleted={handleGoalChange}
-                setError={showError}
-                setSuccessMessage={showSuccess}
-                onCloseModal={handleCancelEdit}
-                initialGoal={editingGoal}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={showGoalModal}
+        onClose={handleCancelEdit}
+        title={editingGoal?.idGoal ? 'Rediger Mål' : 'Opret Nyt Mål'}
+      >
+        <GoalSetup
+          onGoalAdded={handleGoalSaved}
+          onGoalUpdated={handleGoalSaved}
+          onGoalDeleted={handleGoalSaved}
+          setError={showError}
+          setSuccessMessage={showSuccess}
+          onCloseModal={handleCancelEdit}
+          initialGoal={editingGoal}
+        />
+      </Modal>
     </div>
   );
 }

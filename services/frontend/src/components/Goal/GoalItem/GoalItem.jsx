@@ -1,5 +1,6 @@
 // frontend/src/components/Goal/GoalItem/GoalItem.js
-import React from 'react';
+
+import { Pencil } from 'lucide-react';
 import './GoalItem.css';
 
 function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
@@ -38,12 +39,13 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
             </span>
           )}
         </div>
-        <button 
+        <button
           className="edit-goal-button"
           onClick={() => onEdit?.(goal)}
           title="Rediger mål"
+          aria-label="Rediger mål"
         >
-          ✏️
+          <Pencil aria-hidden="true" size={16} />
         </button>
       </div>
 

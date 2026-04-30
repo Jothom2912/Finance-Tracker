@@ -20,9 +20,9 @@ include this subdir.
 
 from __future__ import annotations
 
-import pytest
-import pymysql
 import psycopg2
+import pymysql
+import pytest
 
 _MYSQL_CONN_KWARGS = dict(
     host="localhost",
