@@ -65,9 +65,9 @@ try:
     for uid in account_uids:
         print(f"\n  Account {uid[:12]}...:")
         try:
-            txns = client.get_transactions(uid)
+            txns, parse_skipped = client.get_transactions(uid)
             total += len(txns)
-            print(f"  Found {len(txns)} transactions")
+            print(f"  Found {len(txns)} transactions (parse-skipped: {parse_skipped})")
             for t in txns[:10]:
                 print(f"    {t.date}  {t.amount:>10.2f} {t.currency}  {t.description[:60]}")
             if len(txns) > 10:

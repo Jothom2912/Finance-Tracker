@@ -105,6 +105,16 @@ async def lifespan(app: FastAPI):
         from backend.database.mysql import create_db_tables
 
         create_db_tables()
+
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        from backend.banking.adapters.outbound.enable_banking_client import BankConfigError
+        from backend.banking.presentation.rest_api import validate_banking_config
+
+        try:
+            validate_banking_config()
+        except BankConfigError as exc:
+            logger.error("Banking misconfigured, bank routes will fail: %s", exc)
+
     yield
     logger.info("Stopping FastAPI application...")
 

@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { vi, describe, it, expect } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { NotificationProvider, useNotifications } from './NotificationContext';
@@ -104,12 +104,44 @@ describe('NotificationContext', () => {
     expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
   });
 
-  it('renders notification container with correct a11y attributes', () => {
+  it('renders both live regions permanently, even when empty', () => {
+    renderWithProvider();
+
+    const polite = screen.getByTestId('notification-polite');
+    const assertive = screen.getByTestId('notification-assertive');
+
+    expect(polite).toBeInTheDocument();
+    expect(polite).toHaveAttribute('role', 'status');
+    expect(polite).toHaveAttribute('aria-live', 'polite');
+    expect(polite).toHaveAttribute('aria-atomic', 'true');
+
+    expect(assertive).toBeInTheDocument();
+    expect(assertive).toHaveAttribute('role', 'alert');
+    expect(assertive).toHaveAttribute('aria-live', 'assertive');
+    expect(assertive).toHaveAttribute('aria-atomic', 'true');
+  });
+
+  it('routes error notifications into the assertive region', () => {
     renderWithProvider();
 
     fireEvent.click(screen.getByText('Show Error'));
 
-    const container = screen.getByRole('status');
-    expect(container).toHaveAttribute('aria-live', 'polite');
+    const assertive = screen.getByTestId('notification-assertive');
+    const polite = screen.getByTestId('notification-polite');
+
+    expect(assertive).toHaveTextContent('Something went wrong');
+    expect(polite).not.toHaveTextContent('Something went wrong');
+  });
+
+  it('routes success notifications into the polite region', () => {
+    renderWithProvider();
+
+    fireEvent.click(screen.getByText('Show Success'));
+
+    const polite = screen.getByTestId('notification-polite');
+    const assertive = screen.getByTestId('notification-assertive');
+
+    expect(polite).toHaveTextContent('Saved!');
+    expect(assertive).not.toHaveTextContent('Saved!');
   });
 });

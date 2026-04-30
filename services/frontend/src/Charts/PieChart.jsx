@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatAmount } from '../lib/formatters';
 
@@ -67,7 +67,7 @@ const CategoryPieChart = ({ data, colors }) => {
   };
 
   // Custom label formatter
-  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, _index, _name }) => {
     // Only show labels for slices that are large enough (>5%)
     if (percent < 0.05) return null;
 

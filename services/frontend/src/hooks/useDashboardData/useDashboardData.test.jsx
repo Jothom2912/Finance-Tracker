@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useDashboardData } from './useDashboardData';
+import { createQueryClientWrapper } from '../../test-utils/renderWithQueryClient';
 
 vi.mock('../../api/graphqlClient', () => ({
   gqlRequest: vi.fn(),
@@ -8,7 +9,10 @@ vi.mock('../../api/graphqlClient', () => ({
 
 import { gqlRequest } from '../../api/graphqlClient';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  localStorage.clear();
+});
 
 const mockGraphQLResponse = {
   currentMonthOverview: {
@@ -68,9 +72,11 @@ const mockGraphQLResponse = {
 
 describe('useDashboardData', () => {
   it('fetches all dashboard data via GraphQL on mount', async () => {
+    localStorage.setItem('account_id', 'account-1');
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     expect(result.current.loading).toBe(true);
 
@@ -85,10 +91,47 @@ describe('useDashboardData', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('refetches instead of reusing cache when account changes', async () => {
+    const accountOneResponse = {
+      ...mockGraphQLResponse,
+      currentMonthOverview: {
+        ...mockGraphQLResponse.currentMonthOverview,
+        totalIncome: 100,
+      },
+    };
+    const accountTwoResponse = {
+      ...mockGraphQLResponse,
+      currentMonthOverview: {
+        ...mockGraphQLResponse.currentMonthOverview,
+        totalIncome: 200,
+      },
+    };
+
+    localStorage.setItem('account_id', 'account-1');
+    gqlRequest.mockResolvedValueOnce(accountOneResponse);
+
+    const { wrapper } = createQueryClientWrapper();
+    const { result, rerender } = renderHook(() => useDashboardData(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.overview?.totalIncome).toBe(100);
+    });
+
+    localStorage.setItem('account_id', 'account-2');
+    gqlRequest.mockResolvedValueOnce(accountTwoResponse);
+    rerender();
+
+    await waitFor(() => {
+      expect(result.current.overview?.totalIncome).toBe(200);
+    });
+    expect(gqlRequest).toHaveBeenCalledTimes(2);
+  });
+
   it('processes category data sorted by value descending', async () => {
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -102,7 +145,8 @@ describe('useDashboardData', () => {
   it('computes percentages and assigns colors', async () => {
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -125,7 +169,8 @@ describe('useDashboardData', () => {
       },
     });
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -146,7 +191,8 @@ describe('useDashboardData', () => {
       },
     });
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -159,7 +205,8 @@ describe('useDashboardData', () => {
   it('sets error on fetch failure', async () => {
     gqlRequest.mockRejectedValue(new Error('Network error'));
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -172,7 +219,8 @@ describe('useDashboardData', () => {
   it('returns empty arrays when data is null', async () => {
     gqlRequest.mockResolvedValue({});
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -188,7 +236,8 @@ describe('useDashboardData', () => {
   it('exposes formatAmount and formatDate utilities', async () => {
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
 
-    const { result } = renderHook(() => useDashboardData());
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
 
     expect(typeof result.current.formatAmount).toBe('function');
     expect(typeof result.current.formatDate).toBe('function');

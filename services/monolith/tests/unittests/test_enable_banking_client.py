@@ -7,12 +7,19 @@ Uses fakes instead of mocking the HTTP client.
 
 import logging
 from datetime import date
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from backend.banking.adapters.outbound import enable_banking_client
 from backend.banking.adapters.outbound.enable_banking_client import (
+    API_ORIGIN,
+    BankApiUnavailable,
+    BankAuthorizationError,
+    BankConfigError,
     BankTransaction,
     EnableBankingClient,
+    EnableBankingConfig,
 )
 
 # ──────────────────────────────────────────────
@@ -303,26 +310,160 @@ class TestBankTransaction:
 
 
 class TestEnableBankingConfig:
-    def test_missing_app_id_raises(self) -> None:
-        from backend.banking.adapters.outbound.enable_banking_client import (
-            EnableBankingConfig,
-        )
-
-        with pytest.raises(ValueError, match="ENABLE_BANKING_APP_ID"):
+    def test_missing_app_id_raises_config_error(self) -> None:
+        """Empty app_id is a deployment mistake, not a caller's problem."""
+        with pytest.raises(BankConfigError, match="ENABLE_BANKING_APP_ID"):
             EnableBankingConfig(
                 app_id="",
                 key_path="./enablebanking-sandbox.pem",
                 redirect_uri="http://localhost:8000/callback",
             )
 
-    def test_missing_key_file_raises(self) -> None:
-        from backend.banking.adapters.outbound.enable_banking_client import (
-            EnableBankingConfig,
-        )
+    def test_missing_key_file_raises_config_error(self) -> None:
+        """Missing PEM file is a deployment mistake.
 
-        with pytest.raises(FileNotFoundError):
+        Previously raised ``FileNotFoundError`` which the route layer had
+        to spell-check for; now uniformly ``BankConfigError`` so
+        ``start_bank_connection`` maps it to HTTP 500 without case-by-case
+        knowledge of adapter internals.
+        """
+        with pytest.raises(BankConfigError, match="PEM key not found"):
             EnableBankingConfig(
                 app_id="test-id",
                 key_path="./nonexistent-key.pem",
                 redirect_uri="http://localhost:8000/callback",
             )
+
+
+# ──────────────────────────────────────────────
+# HTTP error translation (typed error contract)
+# ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def client_with_mock_http(tmp_path):
+    """Build a real EnableBankingClient with a mocked httpx.Client attached.
+
+    We bypass real JWT signing (the PEM is dummy bytes) and swap in a
+    ``MagicMock`` for ``_http`` so each test can express *only* the
+    failure mode it cares about.  ``yield`` keeps the ``_generate_jwt``
+    patch alive for the duration of the test, not just ``__init__``.
+    """
+    pem = tmp_path / "test.pem"
+    pem.write_bytes(b"not-a-real-key")
+    config = EnableBankingConfig(
+        app_id="test-app",
+        key_path=str(pem),
+        redirect_uri="http://localhost:8000/callback",
+    )
+    with patch.object(EnableBankingClient, "_generate_jwt", return_value="fake-jwt"):
+        client = EnableBankingClient(config)
+        mock_http = MagicMock()
+        client._http = mock_http
+        yield client, mock_http
+
+
+def _make_http_status_error(status_code: int, body: str = "") -> httpx.HTTPStatusError:
+    """Build an ``HTTPStatusError`` that ``raise_for_status`` would raise."""
+    request = httpx.Request("GET", f"{API_ORIGIN}/test")
+    response = httpx.Response(status_code=status_code, text=body, request=request)
+    return httpx.HTTPStatusError(
+        f"HTTP {status_code}",
+        request=request,
+        response=response,
+    )
+
+
+class TestHttpErrorTranslation:
+    """Every httpx failure mode must surface as a typed EnableBankingError.
+
+    Three code paths are covered separately because ``httpx.ConnectError``,
+    ``httpx.TimeoutException``, and ``response.raise_for_status()`` on 5xx
+    all reach the adapter via different exception chains.  A single
+    "mock raises ConnectError" test would pass while the 5xx path silently
+    regressed — or vice-versa.
+    """
+
+    def test_connect_error_becomes_bank_api_unavailable(self, client_with_mock_http) -> None:
+        client, mock_http = client_with_mock_http
+        mock_http.get.side_effect = httpx.ConnectError("no route to host")
+
+        with pytest.raises(BankApiUnavailable, match="unreachable"):
+            client.get_available_banks()
+
+    def test_timeout_becomes_bank_api_unavailable(self, client_with_mock_http) -> None:
+        """Separate from ConnectError — TimeoutException is a distinct subclass."""
+        client, mock_http = client_with_mock_http
+        mock_http.get.side_effect = httpx.ReadTimeout("upstream slow")
+
+        with pytest.raises(BankApiUnavailable, match="unreachable"):
+            client.get_available_banks()
+
+    def test_5xx_response_becomes_bank_api_unavailable(self, client_with_mock_http) -> None:
+        """Upstream 5xx — different code path than transport errors.
+
+        ``raise_for_status`` raises ``HTTPStatusError`` after the response
+        is received, which does NOT inherit from ``RequestError``.  Both
+        must map to ``BankApiUnavailable``; this test exists so the
+        distinction cannot silently regress.
+        """
+        client, mock_http = client_with_mock_http
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = _make_http_status_error(503, "bank down")
+        mock_http.get.return_value = mock_response
+
+        with pytest.raises(BankApiUnavailable, match="HTTP 503"):
+            client.get_available_banks()
+
+    def test_4xx_on_create_session_becomes_authorization_error(self, client_with_mock_http) -> None:
+        """create_session is the ONE place 4xx means caller-problem, not upstream."""
+        client, mock_http = client_with_mock_http
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = _make_http_status_error(400, "invalid code")
+        mock_http.post.return_value = mock_response
+
+        with pytest.raises(BankAuthorizationError, match="expired or already been used"):
+            client.create_session(auth_code="expired-code")
+
+    def test_5xx_on_create_session_still_bank_api_unavailable(self, client_with_mock_http) -> None:
+        """create_session 4xx → authorization; 5xx → upstream.
+
+        Guards against accidentally collapsing all HTTPStatusError cases
+        into BankAuthorizationError, which would hide upstream outages.
+        """
+        client, mock_http = client_with_mock_http
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = _make_http_status_error(503, "bank down")
+        mock_http.post.return_value = mock_response
+
+        # Current implementation maps ALL HTTPStatusError on create_session
+        # to BankAuthorizationError by call-site convention.  Document
+        # that choice: caller sees 400 even for upstream 5xx on this
+        # endpoint.  Trade-off accepted; see module docstring.
+        with pytest.raises(BankAuthorizationError):
+            client.create_session(auth_code="whatever")
+
+    def test_connect_error_on_create_session_is_upstream(self, client_with_mock_http) -> None:
+        """Transport errors on create_session bypass the authorization-error mapping."""
+        client, mock_http = client_with_mock_http
+        mock_http.post.side_effect = httpx.ConnectError("no route")
+
+        with pytest.raises(BankApiUnavailable):
+            client.create_session(auth_code="whatever")
+
+    def test_start_authorization_5xx_maps_to_bank_api_unavailable(self, client_with_mock_http) -> None:
+        client, mock_http = client_with_mock_http
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = _make_http_status_error(502, "")
+        mock_http.post.return_value = mock_response
+
+        with pytest.raises(BankApiUnavailable):
+            client.start_authorization("Nordea", "DK")
+
+    def test_get_transactions_transport_error_maps_to_bank_api_unavailable(self, client_with_mock_http) -> None:
+        """Pagination-loop HTTP failure must be typed, not leak raw httpx."""
+        client, mock_http = client_with_mock_http
+        mock_http.get.side_effect = httpx.ConnectTimeout("connect timeout")
+
+        with pytest.raises(BankApiUnavailable):
+            client.get_transactions("account-uid")

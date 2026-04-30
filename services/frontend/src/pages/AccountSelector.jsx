@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { fetchAccounts, createAccount, updateAccount } from '../api/accounts';
 import '../styles/AccountSelector.css';
@@ -8,6 +9,7 @@ const START_DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export default function AccountSelector() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,8 +20,9 @@ export default function AccountSelector() {
   const selectAccount = useCallback((accountId, accountName) => {
     localStorage.setItem('account_id', String(accountId));
     localStorage.setItem('account_name', accountName || 'Default');
+    queryClient.clear();
     navigate('/dashboard');
-  }, [navigate]);
+  }, [navigate, queryClient]);
 
   const handleStartDayChange = useCallback(async (account, newDay) => {
     try {
@@ -94,7 +97,7 @@ export default function AccountSelector() {
         {error && <div className="error-message">{error}</div>}
 
         {accounts.length > 0 && (
-          <div className="accounts-list" data-cy="account-list">
+          <div className="accounts-list">
             <h2>Dine konti:</h2>
             {accounts.map((account, index) => (
               <div
@@ -104,7 +107,6 @@ export default function AccountSelector() {
                 <button
                   onClick={() => selectAccount(account.idAccount || account.id, account.name)}
                   className="account-button"
-                  data-cy="account-button"
                 >
                   {account.name}
                 </button>
@@ -138,7 +140,6 @@ export default function AccountSelector() {
           <button
             onClick={() => { setShowCreateForm(!showCreateForm); setError(null); }}
             className="create-account-button"
-            data-cy="create-account-button"
           >
             {showCreateForm ? 'Annuller' : '+ Opret ny konto'}
           </button>
@@ -152,9 +153,8 @@ export default function AccountSelector() {
                 onChange={(e) => setNewAccountName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleCreateAccount()}
                 autoFocus
-                data-cy="account-name-input"
               />
-              <button onClick={handleCreateAccount} className="create-account-submit-button" data-cy="create-account-submit-button">
+              <button onClick={handleCreateAccount} className="create-account-submit-button">
                 Opret konto
               </button>
             </div>

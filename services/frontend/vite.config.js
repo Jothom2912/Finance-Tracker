@@ -16,5 +16,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
     css: true,
+    // Pin pool explicitly; vitest 3 changes default from 'threads' to 'forks'
+    // which alters test timing. Explicit choice = stable across future upgrades.
+    pool: 'threads',
   },
 });

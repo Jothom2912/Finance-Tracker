@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 const MessageDisplay = ({ message, type = 'info' }) => {
   if (!message) return null;

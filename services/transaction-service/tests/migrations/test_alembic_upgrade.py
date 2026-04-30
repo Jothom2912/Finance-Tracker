@@ -55,9 +55,7 @@ class TestMigration005SeedsCategories:
         _upgrade_head(alembic_cfg)
 
         with clean_db.connect() as conn:
-            rows = conn.execute(
-                sa.text("SELECT id, name, type FROM categories ORDER BY id")
-            ).fetchall()
+            rows = conn.execute(sa.text("SELECT id, name, type FROM categories ORDER BY id")).fetchall()
 
         assert len(rows) == 10
         assert [r.id for r in rows] == list(range(1, 11))
@@ -125,10 +123,7 @@ class TestMigration006EmitsOutboxEvents:
 
         with clean_db.connect() as conn:
             rows = conn.execute(
-                sa.text(
-                    "SELECT aggregate_id, payload_json FROM outbox_events "
-                    "WHERE aggregate_type='category'"
-                )
+                sa.text("SELECT aggregate_id, payload_json FROM outbox_events WHERE aggregate_type='category'")
             ).fetchall()
 
         for row in rows:
@@ -196,7 +191,12 @@ class TestMigrationRoundTrip:
         _upgrade_head(alembic_cfg)
 
         with clean_db.connect() as conn:
-            before_ids = sorted(r[0] for r in conn.execute(sa.text("SELECT id FROM outbox_events WHERE aggregate_type='category'")).fetchall())
+            before_ids = sorted(
+                r[0]
+                for r in conn.execute(
+                    sa.text("SELECT id FROM outbox_events WHERE aggregate_type='category'")
+                ).fetchall()
+            )
 
         _downgrade_to(alembic_cfg, "004")
 
@@ -211,11 +211,15 @@ class TestMigrationRoundTrip:
         _upgrade_head(alembic_cfg)
 
         with clean_db.connect() as conn:
-            after_ids = sorted(r[0] for r in conn.execute(sa.text("SELECT id FROM outbox_events WHERE aggregate_type='category'")).fetchall())
+            after_ids = sorted(
+                r[0]
+                for r in conn.execute(
+                    sa.text("SELECT id FROM outbox_events WHERE aggregate_type='category'")
+                ).fetchall()
+            )
 
         assert before_ids == after_ids, (
-            "Deterministic UUIDs should produce byte-identical outbox "
-            "row IDs across upgrade/downgrade cycles."
+            "Deterministic UUIDs should produce byte-identical outbox row IDs across upgrade/downgrade cycles."
         )
 
 

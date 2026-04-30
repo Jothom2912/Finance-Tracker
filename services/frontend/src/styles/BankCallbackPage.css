@@ -1,0 +1,112 @@
+/* ── Bank Callback Page ── */
+
+.bank-callback-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: var(--color-bg-base);
+  font-family: var(--font-family-base);
+}
+
+.bank-callback-card {
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--color-border-light);
+  width: 100%;
+  max-width: 440px;
+  padding: 2.5rem;
+  text-align: center;
+  animation: callback-slide-up var(--transition-slow) ease-out;
+}
+
+@keyframes callback-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bank-callback-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+}
+
+.bank-callback-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.bank-callback-icon--success {
+  background-color: var(--color-success-50);
+  color: var(--color-success-600);
+}
+
+.bank-callback-icon--error {
+  background-color: var(--color-error-50);
+  color: var(--color-error-600);
+}
+
+.bank-callback-card h1 {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  margin: 0 0 0.75rem 0;
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.bank-callback-detail {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0 0 0.5rem 0;
+  line-height: 1.5;
+}
+
+.bank-callback-hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin: 0;
+}
+
+.bank-callback-ref {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin: 0.5rem 0 0;
+  font-family: monospace;
+}
+
+.bank-callback-button {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.75rem 2rem;
+  background: var(--color-brand-500);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.bank-callback-button:hover {
+  background: var(--color-brand-600);
+}
+
+@media (max-width: 480px) {
+  .bank-callback-card {
+    margin: 1.25rem;
+    padding: 2rem 1.5rem;
+  }
+}

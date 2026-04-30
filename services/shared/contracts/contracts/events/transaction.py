@@ -62,6 +62,29 @@ class TransactionUpdatedEvent(BaseEvent):
     categorization_confidence: str | None = None
 
 
+class TransactionCategorizedEvent(BaseEvent):
+    """Published by categorization-service when a transaction is categorized.
+
+    Emitted after the categorization pipeline (rules/ML/LLM) resolves a
+    category for a transaction.  Consumed by transaction-service to update
+    the denormalized categorization fields on the transaction row.
+
+    ``model_version`` identifies which pipeline configuration produced the
+    result (e.g. ``rules-keyword-v1``), enabling audit and rollback.
+    """
+
+    event_type: str = "transaction.categorized"
+    event_version: int = 1
+
+    transaction_id: int
+    category_id: int
+    subcategory_id: int
+    merchant_id: int | None = None
+    tier: str = ""
+    confidence: str = ""
+    model_version: str = ""
+
+
 class TransactionDeletedEvent(BaseEvent):
     """Published when a financial transaction is removed."""
 

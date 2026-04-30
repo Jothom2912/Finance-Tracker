@@ -39,12 +39,7 @@ from backend.category.domain.taxonomy import DEFAULT_TAXONOMY
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _MIGRATION_005 = (
-    _REPO_ROOT
-    / "services"
-    / "transaction-service"
-    / "migrations"
-    / "versions"
-    / "005_seed_default_categories.py"
+    _REPO_ROOT / "services" / "transaction-service" / "migrations" / "versions" / "005_seed_default_categories.py"
 )
 
 
@@ -97,10 +92,7 @@ def test_migration_005_matches_default_taxonomy_order() -> None:
     """
     seed_rows = _extract_default_categories()
 
-    expected_rows = [
-        (i + 1, name, data["type"].value)
-        for i, (name, data) in enumerate(DEFAULT_TAXONOMY.items())
-    ]
+    expected_rows = [(i + 1, name, data["type"].value) for i, (name, data) in enumerate(DEFAULT_TAXONOMY.items())]
 
     assert seed_rows == expected_rows, (
         "Migration 005 _DEFAULT_CATEGORIES is out of sync with "
@@ -119,10 +111,7 @@ def test_migration_005_ids_are_contiguous_from_one() -> None:
     """
     ids = [row[0] for row in _extract_default_categories()]
     expected = list(range(1, len(ids) + 1))
-    assert ids == expected, (
-        f"Migration 005 IDs must be contiguous starting at 1. "
-        f"Got {ids}, expected {expected}."
-    )
+    assert ids == expected, f"Migration 005 IDs must be contiguous starting at 1. Got {ids}, expected {expected}."
 
 
 def test_default_taxonomy_types_are_supported_by_transaction_service() -> None:

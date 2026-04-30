@@ -23,6 +23,13 @@ main {
     flex-direction: column;
     gap: 0.5rem;
     max-width: 400px;
+    pointer-events: none;
+}
+
+.notification-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
     width: 100%;
     pointer-events: none;
 }

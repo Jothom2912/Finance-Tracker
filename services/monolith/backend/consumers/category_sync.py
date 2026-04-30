@@ -8,6 +8,7 @@ from contracts.events.category import (
     CategoryDeletedEvent,
     CategoryUpdatedEvent,
 )
+from sqlalchemy import func
 
 from backend.consumers.base import BaseConsumer
 from backend.models.mysql.category import Category as CategoryModel
@@ -62,10 +63,21 @@ class CategorySyncConsumer(BaseConsumer):
                 )
                 return
 
+            # Append after the highest existing display_order so new
+            # categories land at the end of the UI list rather than at 0.
+            # Single-writer in practice: CategorySyncConsumer is the only
+            # writer to this table, enforced by test_read_only_projections.
+            # The COALESCE+MAX is one statement but not INSERT...SELECT,
+            # so a theoretical race exists if two category.created events
+            # process concurrently — acceptable given the single-consumer
+            # topology.
+            max_order = session.query(func.coalesce(func.max(CategoryModel.display_order), 0)).scalar()
+
             model = CategoryModel(
                 idCategory=event.category_id,
                 name=event.name,
                 type=event.category_type,
+                display_order=max_order + 1,
             )
             session.add(model)
             session.commit()

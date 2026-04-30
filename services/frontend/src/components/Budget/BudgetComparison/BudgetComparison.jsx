@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { AlertCircle, XCircle } from 'lucide-react';
 import apiClient from '../../../utils/apiClient';
 import { uploadTransactionsCsv } from '../../../api/transactions';
 import MessageDisplay from '../../MessageDisplay';
@@ -7,7 +8,7 @@ import './BudgetComparison.css';
 
 function BudgetComparison({ 
     categories, 
-    refreshTrigger, 
+    _refreshTrigger, 
     setError, 
     setSuccessMessage,
     onEditBudget 
@@ -98,7 +99,7 @@ function BudgetComparison({
                     } else {
                         errorMessage = JSON.stringify(errorData);
                     }
-                } catch (e) {
+                } catch {
                     errorMessage = `HTTP ${response.status}: ${response.statusText}`;
                 }
                 throw new Error(`Kunne ikke hente budget oversigt: ${errorMessage}`);
@@ -392,12 +393,14 @@ function BudgetComparison({
                         <div className="alerts-summary">
                             {stats.overBudgetCount > 0 && (
                                 <div className="alert over-budget">
-                                    🚨 {stats.overBudgetCount} af {stats.budgetCount} budgetter overskredet
+                                    <AlertCircle aria-hidden="true" size={16} />
+                                    {stats.overBudgetCount} af {stats.budgetCount} budgetter overskredet
                                 </div>
                             )}
                             {stats.categoriesWithoutBudget > 0 && (
                                 <div className="alert no-budget">
-                                    ❌ {stats.categoriesWithoutBudget} kategorier uden budget
+                                    <XCircle aria-hidden="true" size={16} />
+                                    {stats.categoriesWithoutBudget} kategorier uden budget
                                 </div>
                             )}
                         </div>
@@ -440,7 +443,7 @@ function BudgetComparison({
                                 ) : (
                                     <div className="no-budget-item">
                                         <div className="no-budget-header">
-                                            <span className="status-icon">❌</span>
+                                            <span className="status-icon"><XCircle aria-hidden="true" size={16} /></span>
                                             <span className="category-name">{item.categoryName}</span>
                                             <span className="no-budget-label">Ingen budget</span>
                                         </div>

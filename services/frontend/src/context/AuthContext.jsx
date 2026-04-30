@@ -1,9 +1,12 @@
 // frontend/finans-tracker-frontend/src/context/AuthContext.js
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { clearAuthStorage } from '../utils/authStorage';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,6 +29,8 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = (response) => {
+    queryClient.clear();
+
     // response = { access_token, token_type, user_id, username }
     localStorage.setItem('access_token', response.access_token);
     localStorage.setItem('user_id', response.user_id);
@@ -39,20 +44,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('username');
-    localStorage.removeItem('account_id');
-    localStorage.removeItem('account_name');
-
+    queryClient.clear();
+    clearAuthStorage();
     setUser(null);
     setToken(null);
   };
 
-  const handleLoginFallback = (username, accounts) => {
-    // Dette bruges hvis login kræver account selection
-    // For nu, gemmer vi bare username hvis nødvendigt
-    console.log('Login fallback triggered', { username, accounts });
+  const handleLoginFallback = (_username, _accounts) => {
+    // Placeholder: bruges hvis login kræver account selection
   };
 
   const isAuthenticated = () => {

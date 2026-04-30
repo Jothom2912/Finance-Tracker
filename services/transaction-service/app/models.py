@@ -83,3 +83,24 @@ class OutboxEventModel(Base):
             "created_at",
         ),
     )
+
+
+class ProcessedEventModel(Base):
+    """Inbox pattern — deduplication for consumed events.
+
+    ``message_id`` maps to ``BaseEvent.correlation_id`` (per-event UUID).
+    See categorization-service docs/SCHEMA.md for naming rationale.
+    """
+
+    __tablename__ = "processed_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    message_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    consumer_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    processed_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    __table_args__ = (
+        Index("uq_processed_events", "message_id", "consumer_name", unique=True),
+        Index("ix_processed_at", "processed_at"),
+    )

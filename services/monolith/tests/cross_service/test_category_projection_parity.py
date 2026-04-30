@@ -82,18 +82,11 @@ def test_category_names_match_for_same_ids(postgres_conn, mysql_conn) -> None:  
     pg = _fetch_postgres_categories(postgres_conn)
     mysql = _fetch_mysql_categories(mysql_conn)
 
-    mismatches = [
-        (id_, mysql[id_], pg[id_])
-        for id_ in set(pg) & set(mysql)
-        if mysql[id_] != pg[id_]
-    ]
+    mismatches = [(id_, mysql[id_], pg[id_]) for id_ in set(pg) & set(mysql) if mysql[id_] != pg[id_]]
 
     assert not mismatches, (
         "Categories with matching ids have different names:\n"
-        + "\n".join(
-            f"  id={id_}  mysql={m!r}  postgres={p!r}"
-            for id_, m, p in mismatches
-        )
+        + "\n".join(f"  id={id_}  mysql={m!r}  postgres={p!r}" for id_, m, p in mismatches)
         + "\nThe projection is stale — check that category-sync-consumer "
         "processed the corresponding category.updated events."
     )

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import CategoryBarChart from '../../Charts/CategoryBarChart';
 import { formatAmount } from '../../lib/formatters';
 import { CHART_COLORS as COLORS } from '../../lib/chartColors';
@@ -92,7 +92,7 @@ function CategorySpendingOverview({
 
   if (categoryData.length === 0) {
     return (
-      <div className="spending-overview empty-state" data-cy="spending-empty-state">
+      <div className="spending-overview empty-state">
         <h3>Ingen udgifter fundet</h3>
         <p>Der er ingen transaktioner i den valgte periode og filtrering.</p>
       </div>
@@ -100,9 +100,9 @@ function CategorySpendingOverview({
   }
 
   return (
-    <div className="spending-overview" data-cy="spending-overview">
+    <div className="spending-overview">
       {/* Summary stats */}
-      <div className="spending-stats-grid" data-cy="spending-stats">
+      <div className="spending-stats-grid">
         <div className="spending-stat-card">
           <div className="spending-stat-value expense">
             {formatAmount(stats.totalExpenses)}
@@ -132,7 +132,7 @@ function CategorySpendingOverview({
       </div>
 
       {/* Bar chart: spending vs budget */}
-      <div className="spending-chart-full" data-cy="spending-chart">
+      <div className="spending-chart-full">
         <h3>Forbrug vs. budget pr. kategori</h3>
         <div className="chart-legend">
           <span className="legend-item">
@@ -155,7 +155,7 @@ function CategorySpendingOverview({
 
       {/* Budget compliance section */}
       {budgetItems.length > 0 && (
-        <div className="budget-compliance-section" data-cy="budget-compliance">
+        <div className="budget-compliance-section">
           <h3>Budget-overholdelse</h3>
           <div className="budget-compliance-list">
             {budgetItems
