@@ -1,4 +1,4 @@
-# backend/config.py
+# app/config.py
 """
 Centralized configuration - all environment variables are loaded here.
 Other modules should import config values from this module instead of
@@ -55,7 +55,7 @@ USE_NEO4J = os.getenv("USE_NEO4J", "false").lower() == "true"
 # Security Configuration
 # =============================================================================
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
