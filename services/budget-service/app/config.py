@@ -1,14 +1,17 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = ""
-    rabbitmq_url: str = ""
-    jwt_secret: str = ""
-    service_name: str = "budget-service"
-    service_port: int = 8000
+    model_config = SettingsConfigDict(env_file=".env")
 
-    model_config = {"env_file": ".env"}
+    DATABASE_URL: str
+    RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
+    JWT_SECRET: str
+    JWT_ALGORITHM: str = "HS256"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
+    CATEGORY_SERVICE_URL: str = "http://localhost:8003"
 
 
 settings = Settings()

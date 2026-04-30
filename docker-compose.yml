@@ -320,13 +320,41 @@ services:
 
   # === Placeholder services (uncomment as services are ready) ===
 
-  # budget-service:
-  #   build: ./services/budget-service
-  #   ports:
-  #     - "8003:8000"
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
+  postgres-budget:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: budget_service
+      POSTGRES_PASSWORD: budget_service_pass
+      POSTGRES_DB: budget_service
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_budget_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U budget_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  budget-service:
+    build:
+      context: .
+      dockerfile: services/budget-service/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+      ENVIRONMENT: development
+      CATEGORY_SERVICE_URL: http://categorization-service:8005
+    depends_on:
+      postgres-budget:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   # analytics-service:
   #   build: ./services/analytics-service
@@ -349,4 +377,5 @@ volumes:
   postgres_data:
   postgres_transactions_data:
   postgres_categorization_data:
+  postgres_budget_data:
   rabbitmq_data:
