@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 from app.application.dto import Goal as GoalDTO
+from app.auth import get_current_user_id
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -19,6 +20,7 @@ def client_with_service(service: DummyService) -> TestClient:
     from app.dependencies import get_goal_service
 
     app.dependency_overrides[get_goal_service] = lambda: service
+    app.dependency_overrides[get_current_user_id] = lambda: 1
     return TestClient(app)
 
 
@@ -28,6 +30,15 @@ def test_health_endpoint() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "healthy", "service": "goal-service"}
+
+
+def test_goal_routes_require_authentication() -> None:
+    app.dependency_overrides.clear()
+    client = TestClient(app)
+
+    response = client.get("/api/v1/goals/123")
+
+    assert response.status_code == 401
 
 
 def test_get_goal_returns_404_when_missing() -> None:

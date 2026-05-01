@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.application.service import GoalService
+from app.auth import get_current_user_id
 from app.database import Base
 from app.main import app
 from app.models import GoalModel
@@ -39,6 +40,7 @@ async def test_goal_api_round_trip_persists_through_service_and_repository() -> 
         from app.dependencies import get_goal_service
 
         app.dependency_overrides[get_goal_service] = override_goal_service
+        app.dependency_overrides[get_current_user_id] = lambda: 1
 
         with TestClient(app) as client:
             create_response = client.post(

@@ -8,6 +8,7 @@ Goal Service is a FastAPI microservice for managing savings goals.
 - Validates accounts through the user service
 - Writes goal events into an outbox table
 - Publishes outbox events through a background worker
+- Validates JWTs issued by user-service on goal CRUD endpoints
 
 ## Run locally
 
@@ -17,18 +18,21 @@ From the repository root:
 docker compose up -d postgres-goals rabbitmq user-service goal-service goal-outbox-worker
 ```
 
+The service listens on port `8006`. Its local PostgreSQL database is exposed on
+port `5438`.
+
 ## Test locally
 
 From `services/goal-service`:
 
 ```bash
-python run_tests.py
+make test
 ```
 
-Or:
+Run quality checks with:
 
 ```bash
-make test
+make check
 ```
 
 ## Tests

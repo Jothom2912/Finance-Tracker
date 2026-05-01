@@ -104,7 +104,7 @@ services:
       POSTGRES_PASSWORD: goal_service_pass
       POSTGRES_DB: goals
     ports:
-      - "5435:5432"
+      - "5438:5432"
     volumes:
       - postgres_goals_data:/var/lib/postgresql/data
     healthcheck:
@@ -119,7 +119,7 @@ services:
       context: .
       dockerfile: services/goal-service/Dockerfile
     ports:
-      - "8003:8003"
+      - "8006:8006"
     environment:
       DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -388,7 +388,7 @@ services:
   # analytics-service:
   #   build: ./services/analytics-service
   #   ports:
-  #     - "8004:8000"
+  #     - "8007:8007"
   #   depends_on:
   #     rabbitmq:
   #       condition: service_healthy
@@ -396,7 +396,7 @@ services:
   # notification-service:
   #   build: ./services/notification-service
   #   ports:
-  #     - "8006:8000"
+  #     - "8008:8008"
   #   depends_on:
   #     rabbitmq:
   #       condition: service_healthy

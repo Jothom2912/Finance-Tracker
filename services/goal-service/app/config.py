@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     RABBITMQ_URL: str = "amqp://guest:guest@rabbitmq:5672/"
     INTERNAL_API_KEY: str = "dev-internal-api-key-change-in-production"
     JWT_SECRET: str
+    JWT_ALGORITHM: str = "HS256"
     ENVIRONMENT: str = "development"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
