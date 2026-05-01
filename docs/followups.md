@@ -155,6 +155,11 @@ stay in WARNING-log territory. Worth tracking across multiple syncs;
 a rising rate would indicate a broader data-quality issue upstream
 at Enable Banking or the specific bank ASPSP.
 
+**Budget close follow-up:** Addressed by ADR-0003 (`de4e47a`),
+pending implementation of the day-7 budget close publisher. The v1
+publisher lives in the monolith; the future budget-service extraction
+must keep publishing the same `BudgetMonthClosedEvent` contract.
+
 ## `start_bank_connection` + `bank_callback` still use catch-all → 502 (2026-04-22, closed 2026-04-22)
 
 Closed by the same-day follow-on commit that introduced
