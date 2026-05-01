@@ -3,13 +3,12 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
-
 from app.database import Base
 from app.models import OutboxEventModel
 from app.workers import outbox_publisher as worker_module
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.mark.asyncio()

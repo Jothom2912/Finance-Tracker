@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from typing import NoReturn
 
 from aio_pika import DeliveryMode, Message
-
 from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.adapters.outbound.rabbitmq_publisher import RabbitMQPublisher
 from app.config import settings
@@ -22,7 +21,9 @@ MAX_BACKOFF_S = 300
 
 
 class OutboxPublisherWorker:
-    def __init__(self, publisher: RabbitMQPublisher, poll_interval: float = POLL_INTERVAL_S, batch_size: int = BATCH_SIZE) -> None:
+    def __init__(
+        self, publisher: RabbitMQPublisher, poll_interval: float = POLL_INTERVAL_S, batch_size: int = BATCH_SIZE
+    ) -> None:
         self._publisher = publisher
         self._poll_interval = poll_interval
         self._batch_size = batch_size
@@ -47,11 +48,15 @@ class OutboxPublisherWorker:
 
     async def _try_publish(self, repo: PostgresOutboxRepository, entry: OutboxEntry) -> None:
         try:
-            message = Message(body=entry.payload_json.encode("utf-8"), delivery_mode=DeliveryMode.PERSISTENT, content_type="application/json")
+            message = Message(
+                body=entry.payload_json.encode("utf-8"),
+                delivery_mode=DeliveryMode.PERSISTENT,
+                content_type="application/json",
+            )
             await self._publisher.publish_raw(message, routing_key=entry.event_type)
             await repo.mark_published(entry.id)
         except Exception:
-            backoff = min(2 ** entry.attempts * 5, MAX_BACKOFF_S)
+            backoff = min(2**entry.attempts * 5, MAX_BACKOFF_S)
             next_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=backoff)
             await repo.mark_failed(entry.id, next_at)
             logger.warning("Failed to publish %s (id=%s)", entry.event_type, entry.id, exc_info=True)

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, HTTPException
-
-from app.application.dto import Goal, GoalBase, GoalCreate
+from app.application.dto import GoalBase, GoalCreate
 from app.application.ports.inbound import IGoalService
 from app.dependencies import get_goal_service
+from fastapi import Depends, FastAPI, HTTPException
 
 app = FastAPI(title="Goal Service")
 

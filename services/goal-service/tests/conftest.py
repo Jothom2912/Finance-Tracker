@@ -9,7 +9,7 @@ SERVICE_ROOT = Path(__file__).resolve().parents[1]
 SHARED_CONTRACTS = SERVICE_ROOT.parent / "shared" / "contracts"
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
 for path in (SERVICE_ROOT, SHARED_CONTRACTS):
     path_str = str(path)

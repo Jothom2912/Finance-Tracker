@@ -3,12 +3,11 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
-
 from app.adapters.outbound.postgres_goal_repository import AsyncPostgresGoalRepository
 from app.database import Base
 from app.domain.entities import Goal
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture()

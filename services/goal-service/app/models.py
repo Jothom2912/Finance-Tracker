@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from app.database import Base
 from sqlalchemy import Date, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
-
-from app.database import Base
 
 
 class GoalModel(Base):
@@ -37,6 +36,4 @@ class OutboxEventModel(Base):
     published_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    __table_args__ = (
-        Index("ix_outbox_pending_poll", "status", "next_attempt_at", "created_at"),
-    )
+    __table_args__ = (Index("ix_outbox_pending_poll", "status", "next_attempt_at", "created_at"),)

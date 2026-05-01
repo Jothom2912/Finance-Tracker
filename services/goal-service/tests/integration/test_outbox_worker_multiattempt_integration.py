@@ -4,13 +4,12 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
-
 from app.database import Base
 from app.models import OutboxEventModel
 from app.workers import outbox_publisher as worker_module
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.mark.asyncio()
@@ -59,7 +58,9 @@ async def test_worker_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> 
                     await s.execute(
                         update(OutboxEventModel)
                         .where(OutboxEventModel.id == "evt-multi-1")
-                        .values(next_attempt_at=(datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=10)))
+                        .values(
+                            next_attempt_at=(datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=10))
+                        )
                     )
                     await s.commit()
 

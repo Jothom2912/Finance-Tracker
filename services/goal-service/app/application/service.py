@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from contracts.events.goal import GoalCreatedEvent, GoalDeletedEvent, GoalUpdatedEvent
-
 from app.application.dto import Goal as GoalDTO
 from app.application.dto import GoalBase, GoalCreate
 from app.application.ports.inbound import IGoalService
 from app.application.ports.outbound import IAccountPort, IUnitOfWork
 from app.domain.entities import Goal
 from app.domain.exceptions import AccountNotFoundForGoal
+from contracts.events.goal import GoalCreatedEvent, GoalDeletedEvent, GoalUpdatedEvent
 
 
 class GoalService(IGoalService):

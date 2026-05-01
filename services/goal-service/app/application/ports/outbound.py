@@ -4,9 +4,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Self
 
-from contracts.base import BaseEvent
-
 from app.domain.entities import Goal, OutboxEntry
+from contracts.base import BaseEvent
 
 
 class IGoalRepository(ABC):

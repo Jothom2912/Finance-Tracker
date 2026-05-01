@@ -5,9 +5,8 @@ import logging
 import aio_pika
 from aio_pika import DeliveryMode, ExchangeType, Message
 from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
-from contracts.base import BaseEvent
-
 from app.application.ports.outbound import IEventPublisher
+from contracts.base import BaseEvent
 
 logger = logging.getLogger(__name__)
 EXCHANGE_NAME = "finans_tracker.events"
@@ -30,7 +29,11 @@ class RabbitMQPublisher(IEventPublisher):
         if self._exchange is None:
             raise RuntimeError("RabbitMQPublisher is not connected")
         await self._exchange.publish(
-            Message(body=event.to_json().encode("utf-8"), delivery_mode=DeliveryMode.PERSISTENT, content_type="application/json"),
+            Message(
+                body=event.to_json().encode("utf-8"),
+                delivery_mode=DeliveryMode.PERSISTENT,
+                content_type="application/json",
+            ),
             routing_key=event.event_type,
         )
 

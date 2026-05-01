@@ -3,13 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from contracts.base import BaseEvent
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.application.ports.outbound import IOutboxRepository
 from app.domain.entities import OutboxEntry
 from app.models import OutboxEventModel
+from contracts.base import BaseEvent
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _utcnow_naive() -> datetime:

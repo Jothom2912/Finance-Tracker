@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from fastapi.testclient import TestClient
-
 from app.application.dto import Goal as GoalDTO
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 class DummyService:

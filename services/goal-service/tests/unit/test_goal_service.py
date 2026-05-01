@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.application.dto import GoalBase, GoalCreate
 from app.application.service import GoalService
 from app.domain.entities import Goal
@@ -68,7 +67,9 @@ async def test_create_goal_persists_goal_and_outbox(service: GoalService, uow: M
 
 
 @pytest.mark.asyncio()
-async def test_create_goal_rejects_unknown_account(service: GoalService, account_port: AsyncMock, uow: MagicMock) -> None:
+async def test_create_goal_rejects_unknown_account(
+    service: GoalService, account_port: AsyncMock, uow: MagicMock
+) -> None:
     account_port.exists.return_value = False
 
     with pytest.raises(AccountNotFoundForGoal):

@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.application.ports.outbound import IGoalRepository
 from app.domain.entities import Goal
 from app.models import GoalModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class AsyncPostgresGoalRepository(IGoalRepository):

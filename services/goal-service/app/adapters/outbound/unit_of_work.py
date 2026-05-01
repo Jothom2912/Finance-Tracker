@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import Self
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.adapters.outbound.postgres_goal_repository import AsyncPostgresGoalRepository
 from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.application.ports.outbound import IUnitOfWork
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SQLAlchemyUnitOfWork(IUnitOfWork):

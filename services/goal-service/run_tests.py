@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
-import os
 
 # Ensure local app package and shared contracts are importable
 ROOT = Path(__file__).resolve().parent

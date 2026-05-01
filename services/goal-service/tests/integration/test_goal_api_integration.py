@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
-
 from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
-from app.application.dto import GoalCreate
 from app.application.service import GoalService
 from app.database import Base
 from app.main import app
 from app.models import GoalModel
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 
 class _AccountPortStub:
