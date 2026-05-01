@@ -4,6 +4,36 @@ Ongoing list of known issues and improvements deferred from active work.
 Not a replacement for an issue tracker — these are items not yet
 formalized. Reference entries from commit messages and ADRs as needed.
 
+## ADR-0003 goal allocation status (2026-05-01)
+
+The foundation for automatic virtual savings from budget surplus is in
+place and pushed to `origin/master`:
+
+* `de4e47a` — documents ADR-0003 and locks the event, idempotency,
+  schema, and v1 scope.
+* `8d7c51b` — adds `BudgetMonthClosedEvent` to shared contracts.
+* `980ac09` — adds goal-service schema support for default goals,
+  allocation history, and unallocated surplus.
+* `1a37de4` — links the bank-date follow-up to ADR-0003.
+* `cffab9b` — adds the application-layer budget month close handler.
+* `3cd2622` — adds SQLAlchemy repositories and UoW for the handler.
+
+Verified before push:
+
+* `services/shared/contracts`: `uv run pytest tests -q` and
+  `uvx ruff check/format`.
+* `services/goal-service`: `make check` and `make test` (`30 passed`).
+
+Still missing for the runtime flow:
+
+1. RabbitMQ worker in goal-service that deserializes
+   `budget.month_closed`, calls `BudgetMonthClosedHandler`, and acks
+   idempotent-success statuses including `duplicate`.
+2. Monolith publisher and day-7 scheduled close job for the previous
+   budget month.
+3. Frontend support for selecting a default savings goal and reading
+   allocation history.
+
 ## TanStack Query implicit context leak (2026-04-25, closed 2026-04-25)
 
 The Phase 3 TanStack Query rollout initially missed one security rule:
