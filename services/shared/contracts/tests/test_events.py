@@ -3,16 +3,16 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 import pytest
-from pydantic import ValidationError
-
 from contracts import (
     AccountCreatedEvent,
     AccountCreationFailedEvent,
-    BaseEvent,
+    BudgetMonthClosedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
     UserCreatedEvent,
+    make_budget_month_closed_source_key,
 )
+from pydantic import ValidationError
 
 
 class TestUserCreatedEvent:
@@ -57,9 +57,7 @@ class TestUserCreatedEvent:
 
 class TestAccountCreatedEvent:
     def test_serialization_roundtrip(self) -> None:
-        event = AccountCreatedEvent(
-            account_id=10, user_id=1, account_name="Savings"
-        )
+        event = AccountCreatedEvent(account_id=10, user_id=1, account_name="Savings")
 
         restored = AccountCreatedEvent.from_json(event.to_json())
 
@@ -69,17 +67,13 @@ class TestAccountCreatedEvent:
         assert restored.correlation_id == event.correlation_id
 
     def test_event_type_correctness(self) -> None:
-        event = AccountCreatedEvent(
-            account_id=10, user_id=1, account_name="Savings"
-        )
+        event = AccountCreatedEvent(account_id=10, user_id=1, account_name="Savings")
 
         assert event.event_type == "account.created"
         assert event.event_version == 1
 
     def test_immutability(self) -> None:
-        event = AccountCreatedEvent(
-            account_id=10, user_id=1, account_name="Savings"
-        )
+        event = AccountCreatedEvent(account_id=10, user_id=1, account_name="Savings")
 
         with pytest.raises(ValidationError):
             event.account_name = "Checking"  # type: ignore[misc]
@@ -87,9 +81,7 @@ class TestAccountCreatedEvent:
 
 class TestAccountCreationFailedEvent:
     def test_serialization_roundtrip(self) -> None:
-        event = AccountCreationFailedEvent(
-            user_id=1, reason="Duplicate account name"
-        )
+        event = AccountCreationFailedEvent(user_id=1, reason="Duplicate account name")
 
         restored = AccountCreationFailedEvent.from_json(event.to_json())
 
@@ -98,20 +90,112 @@ class TestAccountCreationFailedEvent:
         assert restored.correlation_id == event.correlation_id
 
     def test_event_type_correctness(self) -> None:
-        event = AccountCreationFailedEvent(
-            user_id=1, reason="Duplicate account name"
-        )
+        event = AccountCreationFailedEvent(user_id=1, reason="Duplicate account name")
 
         assert event.event_type == "account.creation_failed"
         assert event.event_version == 1
 
     def test_immutability(self) -> None:
-        event = AccountCreationFailedEvent(
-            user_id=1, reason="Duplicate account name"
-        )
+        event = AccountCreationFailedEvent(user_id=1, reason="Duplicate account name")
 
         with pytest.raises(ValidationError):
             event.reason = "other"  # type: ignore[misc]
+
+
+class TestBudgetMonthClosedEvent:
+    def test_serialization_roundtrip_preserves_decimal_strings(self) -> None:
+        event = BudgetMonthClosedEvent(
+            account_id=7,
+            year=2026,
+            month=4,
+            budgeted_amount="5000.00",
+            actual_spent="4200.10",
+            surplus_amount="799.90",
+        )
+
+        restored = BudgetMonthClosedEvent.from_json(event.to_json())
+
+        assert restored.account_id == 7
+        assert restored.year == 2026
+        assert restored.month == 4
+        assert restored.budgeted_amount == "5000.00"
+        assert restored.actual_spent == "4200.10"
+        assert restored.surplus_amount == "799.90"
+        assert restored.correlation_id == event.correlation_id
+
+    def test_source_key_uses_account_year_and_month(self) -> None:
+        event = BudgetMonthClosedEvent(
+            account_id=7,
+            year=2026,
+            month=4,
+            budgeted_amount="5000.00",
+            actual_spent="4200.00",
+            surplus_amount="800.00",
+        )
+
+        assert event.source_key == "budget.month_closed:7:2026:4"
+        assert make_budget_month_closed_source_key(7, 2026, 4) == event.source_key
+
+    def test_zero_amount_string_is_valid_and_preserved(self) -> None:
+        event = BudgetMonthClosedEvent(
+            account_id=7,
+            year=2026,
+            month=4,
+            budgeted_amount="5000.00",
+            actual_spent="5000.00",
+            surplus_amount="0.00",
+        )
+
+        restored = BudgetMonthClosedEvent.from_json(event.to_json())
+
+        assert restored.surplus_amount == "0.00"
+
+    def test_event_type_correctness(self) -> None:
+        event = BudgetMonthClosedEvent(
+            account_id=7,
+            year=2026,
+            month=4,
+            budgeted_amount="5000.00",
+            actual_spent="4200.00",
+            surplus_amount="800.00",
+        )
+
+        assert event.event_type == "budget.month_closed"
+        assert event.event_version == 1
+
+    @pytest.mark.parametrize("month", [0, 13])
+    def test_invalid_month_raises(self, month: int) -> None:
+        with pytest.raises(ValidationError):
+            BudgetMonthClosedEvent(
+                account_id=7,
+                year=2026,
+                month=month,
+                budgeted_amount="5000.00",
+                actual_spent="4200.00",
+                surplus_amount="800.00",
+            )
+
+    def test_negative_amount_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            BudgetMonthClosedEvent(
+                account_id=7,
+                year=2026,
+                month=4,
+                budgeted_amount="5000.00",
+                actual_spent="4200.00",
+                surplus_amount="-1.00",
+            )
+
+    def test_non_decimal_amount_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            BudgetMonthClosedEvent(
+                account_id=7,
+                year=2026,
+                month=4,
+                budgeted_amount="five thousand",
+                actual_spent="4200.00",
+                surplus_amount="800.00",
+            )
 
 
 class TestTransactionCreatedEvent:
@@ -224,17 +308,13 @@ class TestTransactionDeletedEvent:
         assert restored.correlation_id == event.correlation_id
 
     def test_event_type_correctness(self) -> None:
-        event = TransactionDeletedEvent(
-            transaction_id=1, account_id=1, user_id=1, amount="0.01"
-        )
+        event = TransactionDeletedEvent(transaction_id=1, account_id=1, user_id=1, amount="0.01")
 
         assert event.event_type == "transaction.deleted"
         assert event.event_version == 1
 
     def test_immutability(self) -> None:
-        event = TransactionDeletedEvent(
-            transaction_id=1, account_id=1, user_id=1, amount="10.00"
-        )
+        event = TransactionDeletedEvent(transaction_id=1, account_id=1, user_id=1, amount="10.00")
 
         with pytest.raises(ValidationError):
             event.transaction_id = 999  # type: ignore[misc]
