@@ -1,4 +1,4 @@
-# backend/models/account_groups.py
+# app/models/account_groups.py
 
 from .common import (
     Base,
