@@ -1,6 +1,6 @@
-# AI / Categorization Service (Planned Extraction)
+# AI / Categorization Service
 
-**Status: Partially implemented in monolith.** The categorization pipeline is built and running inside the monolith (`backend/category/`). Extraction to a standalone service is planned for a future phase.
+**Status: Extracted as `services/categorization-service` on port `8005`.** The rule-based pipeline now runs as a standalone service. ML/LLM adapters remain planned extensions.
 
 ## What is already implemented (in monolith)
 
@@ -26,13 +26,13 @@ Categorization logic currently lives in:
 - `services/monolith/backend/category/application/ports/outbound.py` — `IRuleEngine`, `IMlCategorizer`, `ILlmCategorizer` protocols
 - `services/monolith/backend/category/domain/value_objects.py` — `CategorizationTier`, `CategorizationResult`
 
-## Planned Port (when extracted)
+## Port
 
 ```
 8005
 ```
 
-## Planned Event Flow (when extracted)
+## Event Flow
 
 - Listens for `transaction.created` events
 - Categorizes the transaction using rule/ML/LLM pipeline

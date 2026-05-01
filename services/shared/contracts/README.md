@@ -15,7 +15,12 @@ uv add --editable services/shared/contracts/
 ### Usage
 
 ```python
-from contracts import UserCreatedEvent, TransactionCreatedEvent, CategoryCreatedEvent
+from contracts import (
+    BudgetMonthClosedEvent,
+    CategoryCreatedEvent,
+    TransactionCreatedEvent,
+    UserCreatedEvent,
+)
 
 # User events
 event = UserCreatedEvent(user_id=42, email="alice@example.com", username="alice")
@@ -37,6 +42,16 @@ cat_event = CategoryCreatedEvent(
     category_id=1,
     name="Groceries",
     category_type="expense",
+)
+
+# Budget close events (surplus as string for decimal precision)
+budget_event = BudgetMonthClosedEvent(
+    account_id=1,
+    year=2026,
+    month=4,
+    budgeted_amount="5000.00",
+    actual_spent="4200.00",
+    surplus_amount="800.00",
 )
 ```
 
@@ -62,6 +77,14 @@ cat_event = CategoryCreatedEvent(
 | `CategoryCreatedEvent` | `category.created` | `category_id`, `name`, `category_type` |
 | `CategoryUpdatedEvent` | `category.updated` | `category_id`, `name`, `category_type`, `previous_name`, `previous_type` |
 | `CategoryDeletedEvent` | `category.deleted` | `category_id`, `name`, `category_type` |
+
+### Budget Events (`contracts.events.budget`)
+
+| Event | Routing Key | Fields |
+|-------|-------------|--------|
+| `BudgetMonthClosedEvent` | `budget.month_closed` | `account_id`, `year`, `month`, `budgeted_amount` (str), `actual_spent` (str), `surplus_amount` (str) |
+
+See [ADR-0003](../../../docs/adr/0003-goal-allocation-from-budget-surplus.md#decision) for the event rationale, idempotency key, and consumer semantics.
 
 ### Transaction Events (`contracts.events.transaction`)
 
@@ -100,6 +123,7 @@ contracts/
 └── events/
     ├── user.py        # UserCreatedEvent
     ├── account.py     # AccountCreatedEvent, AccountCreationFailedEvent
+    ├── budget.py      # BudgetMonthClosedEvent
     ├── category.py    # CategoryCreatedEvent, CategoryUpdatedEvent, CategoryDeletedEvent
     └── transaction.py # TransactionCreatedEvent, TransactionUpdatedEvent, TransactionDeletedEvent
 ```
@@ -115,7 +139,7 @@ Events are **frozen** (immutable value objects) and carry:
 
 ## Design Decisions
 
-- **Amount as string in transaction events**: Pydantic serializes `Decimal` to `float` in JSON, which loses precision. By sending amount as a string (e.g. `"125.50"`), consumers can parse it with `Decimal("125.50")` for exact arithmetic.
+- **Amount as string in money events**: Pydantic can serialize `Decimal` in ways that lose precision or formatting. By sending amounts as strings (e.g. `"125.50"`), consumers can parse them with `Decimal("125.50")` for exact arithmetic.
 - **Frozen models**: Events are immutable value objects. Once created, they cannot be modified.
 - **No messaging dependencies**: This package contains only Pydantic models. RabbitMQ, Kafka, or any other transport is the responsibility of the publishing/consuming service.
 

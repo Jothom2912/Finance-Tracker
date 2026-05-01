@@ -5,9 +5,25 @@ from contracts.events.account import (
     AccountCreatedEvent,
     AccountCreationFailedEvent,
 )
+from contracts.events.budget import (
+    BudgetMonthClosedEvent,
+    make_budget_month_closed_source_key,
+)
+from contracts.events.category import (
+    CategoryCreatedEvent,
+    CategoryDeletedEvent,
+    CategoryUpdatedEvent,
+)
+from contracts.events.goal import (
+    GoalCreatedEvent,
+    GoalDeletedEvent,
+    GoalUpdatedEvent,
+)
 from contracts.events.transaction import (
+    TransactionCategorizedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
+    TransactionUpdatedEvent,
 )
 from contracts.events.user import UserCreatedEvent
 
@@ -15,7 +31,17 @@ __all__ = [
     "AccountCreatedEvent",
     "AccountCreationFailedEvent",
     "BaseEvent",
+    "BudgetMonthClosedEvent",
+    "CategoryCreatedEvent",
+    "CategoryDeletedEvent",
+    "CategoryUpdatedEvent",
+    "GoalCreatedEvent",
+    "GoalDeletedEvent",
+    "GoalUpdatedEvent",
+    "TransactionCategorizedEvent",
     "TransactionCreatedEvent",
     "TransactionDeletedEvent",
+    "TransactionUpdatedEvent",
     "UserCreatedEvent",
+    "make_budget_month_closed_source_key",
 ]

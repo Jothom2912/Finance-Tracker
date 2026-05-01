@@ -7,7 +7,7 @@ This service will provide dashboard analytics, reporting, data aggregation, and 
 ## Planned Port
 
 ```
-8004
+8007
 ```
 
 ## Current Location

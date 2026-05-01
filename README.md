@@ -42,12 +42,17 @@ This starts all services:
 | MySQL | 3307 | Monolith database |
 | PostgreSQL (users) | 5433 | User-service database |
 | PostgreSQL (transactions) | 5434 | Transaction-service database |
+| PostgreSQL (categorization) | 5435 | Categorization-service database |
+| PostgreSQL (goals) | 5438 | Goal-service database |
 | RabbitMQ | 5672 / 15672 | Event bus + management UI |
-| Monolith | 8000 | Accounts, budgets, goals, analytics, bank sync, categorization |
+| Monolith | 8000 | Accounts, budgets, analytics, bank sync |
 | User Service | 8001 | Registration, login, JWT issuing |
 | Transaction Service | 8002 | Transaction CRUD, CSV import, planned transactions, categories |
+| Categorization Service | 8005 | Rule/ML/LLM categorization pipeline |
+| Goal Service | 8006 | Savings goals and goal events |
 | User Outbox Worker | — | Polls outbox table, publishes user events to RabbitMQ |
 | Transaction Outbox Worker | — | Polls outbox table, publishes transaction events to RabbitMQ |
+| Goal Outbox Worker | — | Polls outbox table, publishes goal events to RabbitMQ |
 | UserSync Consumer | — | Syncs users from events to MySQL |
 | AccountCreation Consumer | — | Creates default accounts from events |
 | CategorySync Consumer | — | Syncs categories from transaction-service to MySQL |
@@ -242,11 +247,14 @@ sequenceDiagram
 
 | Service | Port | Database | Role |
 |---------|------|----------|------|
-| **Monolith** | 8000 | MySQL (3307) | Accounts, budgets, goals, analytics, GraphQL gateway |
+| **Monolith** | 8000 | MySQL (3307) | Accounts, budgets, analytics, GraphQL gateway |
 | **User Service** | 8001 | PostgreSQL (5433) | User registration, login, JWT issuing (source of truth) |
 | **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions, categories |
+| **Categorization Service** | 8005 | PostgreSQL (5435) | Transaction categorization pipeline |
+| **Goal Service** | 8006 | PostgreSQL (5438) | Savings goals and goal events |
 | **User Outbox Worker** | — | PostgreSQL (5433) | Polls `outbox_events`, publishes user events to RabbitMQ |
 | **Transaction Outbox Worker** | — | PostgreSQL (5434) | Polls `outbox_events`, publishes transaction events to RabbitMQ |
+| **Goal Outbox Worker** | — | PostgreSQL (5438) | Polls `outbox_events`, publishes goal events to RabbitMQ |
 | **UserSync Consumer** | — | MySQL | Sync user data from events to MySQL User table |
 | **AccountCreation Consumer** | — | MySQL | Create default account from user.created events |
 | **CategorySync Consumer** | — | MySQL | Sync categories from transaction-service to MySQL |
@@ -257,9 +265,9 @@ sequenceDiagram
 | Service | Planned Port | Description |
 |---------|-------------|-------------|
 | Budget Service | 8003 | Budget management |
-| Analytics Service | 8004 | GraphQL gateway + Elasticsearch |
-| AI Service | 8005 | Transaction categorization (rule/ML/LLM) |
-| Notification Service | 8006 | Email/push notifications |
+| Account Service | 8004 | Accounts and account groups |
+| Analytics Service | 8007 | GraphQL gateway + Elasticsearch |
+| Notification Service | 8008 | Email/push notifications |
 | API Gateway | — | Routing, rate limiting, JWT validation |
 
 ---
