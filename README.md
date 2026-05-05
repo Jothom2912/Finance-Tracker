@@ -53,6 +53,9 @@ This starts all services:
 | User Outbox Worker | — | Polls outbox table, publishes user events to RabbitMQ |
 | Transaction Outbox Worker | — | Polls outbox table, publishes transaction events to RabbitMQ |
 | Goal Outbox Worker | — | Polls outbox table, publishes goal events to RabbitMQ |
+| Categorization Outbox Worker | — | Polls outbox table, publishes categorization events to RabbitMQ |
+| Transaction Categorized Consumer | — | Writes categorization results back to transaction-service |
+| Categorization Category Sync | — | Syncs categories from transaction-service into categorization-service |
 | UserSync Consumer | — | Syncs users from events to MySQL |
 | AccountCreation Consumer | — | Creates default accounts from events |
 | CategorySync Consumer | — | Syncs categories from transaction-service to MySQL |
@@ -68,7 +71,7 @@ npm install
 npm run dev
 ```
 
-App: http://localhost:3001
+App: http://localhost:3000
 
 ### Verify services
 
@@ -76,6 +79,8 @@ App: http://localhost:3001
 curl http://localhost:8000/health   # Monolith
 curl http://localhost:8001/health   # User Service
 curl http://localhost:8002/health   # Transaction Service
+curl http://localhost:8005/health   # Categorization Service
+curl http://localhost:8006/health   # Goal Service
 ```
 
 See [INSTALLATION.md](INSTALLATION.md) for detailed setup including database seeding.
@@ -86,27 +91,39 @@ See [INSTALLATION.md](INSTALLATION.md) for detailed setup including database see
 
 ### System Overview
 
-The application is being incrementally extracted from a monolith to microservices. Currently extracted: **user-service** and **transaction-service**. The monolith handles everything else and receives event-driven updates.
+The application is being incrementally extracted from a monolith to microservices. Currently extracted: **user-service**, **transaction-service**, **categorization-service**, and **goal-service**. The monolith handles accounts, budgets, analytics, and bank sync, and receives event-driven updates.
 
 ```mermaid
 graph LR
     FE[React Frontend] -->|register/login| US[User Service<br/>:8001]
     FE -->|transactions| TS[Transaction Service<br/>:8002]
-    FE -->|accounts, budgets,<br/>goals, analytics| MON[Monolith<br/>:8000]
+    FE -->|accounts, budgets,<br/>analytics| MON[Monolith<br/>:8000]
+    FE -->|goals| GS[Goal Service<br/>:8006]
 
     US -->|"write domain data +<br/>outbox event (same tx)"| PG_U[(PostgreSQL<br/>Users + outbox)]
     TS -->|"write domain data +<br/>outbox event (same tx)"| PG_T[(PostgreSQL<br/>Transactions + outbox)]
+    GS -->|"write domain data +<br/>outbox event (same tx)"| PG_G[(PostgreSQL<br/>Goals + outbox)]
+    CS[Categorization Service<br/>:8005] -->|"categorize + outbox event"| PG_C[(PostgreSQL<br/>Categorization)]
+
+    TS -->|"sync categorize<br/>(HTTP, 500ms timeout)"| CS
 
     PG_U -->|poll pending| UOW[User Outbox<br/>Worker]
     PG_T -->|poll pending| TOW[Transaction Outbox<br/>Worker]
+    PG_G -->|poll pending| GOW[Goal Outbox<br/>Worker]
+    PG_C -->|poll pending| COW[Categorization Outbox<br/>Worker]
 
     UOW -->|publish| RMQ[RabbitMQ]
     TOW -->|publish| RMQ
+    GOW -->|publish| RMQ
+    COW -->|publish| RMQ
 
     RMQ -->|user.created| USC[UserSync<br/>Consumer]
     RMQ -->|user.created| ACC[AccountCreation<br/>Consumer]
     RMQ -->|category.*| CSC[CategorySync<br/>Consumer]
     RMQ -->|transaction.*| TSC[TransactionSync<br/>Consumer]
+    RMQ -->|transaction.created| CS
+    RMQ -->|transaction.categorized| TCC[Transaction Categorized<br/>Consumer]
+    RMQ -->|category.*| CCSC[Cat-Service<br/>Category Sync]
 
     USC -->|INSERT User| MYSQL[(MySQL)]
     ACC -->|INSERT Account| MYSQL
@@ -268,6 +285,7 @@ sequenceDiagram
 | Account Service | 8004 | Accounts and account groups |
 | Analytics Service | 8007 | GraphQL gateway + Elasticsearch |
 | Notification Service | 8008 | Email/push notifications |
+| AI Service | — | ML/LLM categorization adapters (extends categorization-service) |
 | API Gateway | — | Routing, rate limiting, JWT validation |
 
 ---
@@ -284,7 +302,6 @@ finance-tracker/
 │   │   │   ├── auth.py              # JWT auth (creates + validates tokens)
 │   │   │   ├── dependencies.py      # FastAPI DI wiring
 │   │   │   ├── consumers/           # RabbitMQ event consumers
-│   │   │   ├── transaction/         # Bounded context (hexagonal)
 │   │   │   ├── category/            # Bounded context + categorization pipeline
 │   │   │   ├── banking/             # Bank integration (Enable Banking / PSD2)
 │   │   │   ├── budget/              # Legacy budget context
@@ -310,8 +327,22 @@ finance-tracker/
 │   │
 │   ├── transaction-service/         # Transaction microservice
 │   │   ├── app/                     # FastAPI app (hexagonal + UoW)
-│   │   │   └── workers/             # Outbox publisher worker
+│   │   │   └── workers/             # Outbox publisher + categorized consumer
 │   │   ├── migrations/              # Alembic migrations (incl. outbox_events)
+│   │   ├── tests/                   # Unit + integration tests
+│   │   └── Dockerfile
+│   │
+│   ├── categorization-service/      # Categorization microservice
+│   │   ├── app/                     # FastAPI app (hexagonal)
+│   │   │   └── workers/             # Outbox publisher + category sync consumer
+│   │   ├── migrations/              # Alembic migrations (taxonomy + rules)
+│   │   ├── tests/                   # Unit + integration + migration tests
+│   │   └── Dockerfile
+│   │
+│   ├── goal-service/                # Goal microservice
+│   │   ├── app/                     # FastAPI app (hexagonal)
+│   │   │   └── workers/             # Outbox publisher worker
+│   │   ├── migrations/              # Alembic migrations
 │   │   ├── tests/                   # Unit + integration tests
 │   │   └── Dockerfile
 │   │
@@ -370,6 +401,23 @@ finance-tracker/
 | `GET` | `/api/v1/categories/{id}` | Get category | Yes |
 | `PUT` | `/api/v1/categories/{id}` | Update category | Yes |
 | `DELETE` | `/api/v1/categories/{id}` | Delete category | Yes |
+
+### Categorization Service (port 8005)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `POST` | `/api/v1/categorize/` | Sync categorize (tier 1 rule engine) | Internal |
+
+The categorization service also consumes `transaction.created` events for async full-pipeline categorization (rules, ML, LLM, fallback).
+
+### Goal Service (port 8006)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `POST` | `/api/v1/goals` | Create goal | Yes |
+| `GET` | `/api/v1/goals/{id}` | Get goal | Yes |
+| `PUT` | `/api/v1/goals/{id}` | Update goal | Yes |
+| `DELETE` | `/api/v1/goals/{id}` | Delete goal | Yes |
 
 ### Monolith (port 8000)
 
@@ -446,6 +494,11 @@ sequenceDiagram
 | `CategoryCreatedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.created` |
 | `CategoryUpdatedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.updated` |
 | `CategoryDeletedEvent` | transaction-service | Outbox worker | CategorySyncConsumer | `category.deleted` |
+| `TransactionCategorizedEvent` | categorization-service | Outbox worker | TransactionCategorizedConsumer | `transaction.categorized` |
+| `GoalCreatedEvent` | goal-service | Outbox worker | (future consumers) | `goal.created` |
+| `GoalUpdatedEvent` | goal-service | Outbox worker | (future consumers) | `goal.updated` |
+| `GoalDeletedEvent` | goal-service | Outbox worker | (future consumers) | `goal.deleted` |
+| `BudgetMonthClosedEvent` | monolith (planned) | Direct publish | Goal-service consumer (planned) | `budget.month_closed` |
 | `AccountCreatedEvent` | AccountCreationConsumer | Direct publish | (future consumers) | `account.created` |
 
 ### Projecting transactions into MySQL
@@ -506,7 +559,7 @@ See `example.env` for the full list with descriptions.
 
 ## Testing
 
-The project has **530+ tests** (335 backend + 96 frontend + 104 transaction-service) organized following the testing pyramid:
+The project has **620+ tests** across all services, organized following the testing pyramid:
 
 ```
      +----------+
@@ -525,9 +578,11 @@ The project has **530+ tests** (335 backend + 96 frontend + 104 transaction-serv
 | Service | Unit | Integration | E2E | Total |
 |---------|------|-------------|-----|-------|
 | Monolith | ~290 | 45 | — | 335 |
-| Frontend | 96 | — | — | 96 |
+| Frontend | 110 | — | — | 110 |
 | User Service | 28 | 12 | — | 40 |
 | Transaction Service | 61 | 43 | — | 104 |
+| Goal Service | ~15 | ~15 | — | ~30 |
+| Categorization Service | ~10 | ~5 | — | ~15 |
 | Cross-service E2E | — | — | ~15 | ~15 |
 
 ### Running Tests
@@ -539,7 +594,7 @@ make test
 # Monolith tests (335 tests)
 cd services/monolith && uv run pytest tests/ -v
 
-# Frontend tests (96 tests)
+# Frontend tests (110 tests)
 cd services/frontend && npx vitest run
 
 # User service tests (40 tests)
@@ -547,6 +602,12 @@ cd services/user-service && uv run pytest tests/ -v
 
 # Transaction service tests (104 tests)
 cd services/transaction-service && uv run pytest tests/ -v
+
+# Goal service tests (~30 tests)
+cd services/goal-service && uv run pytest tests/ -v
+
+# Categorization service tests (~15 tests)
+cd services/categorization-service && uv run pytest tests/ -v
 
 # E2E tests (requires docker compose up)
 uv run pytest tests/e2e/ -v -m e2e
@@ -573,9 +634,9 @@ uv run pytest tests/e2e/ -v -m e2e
 
 ```bash
 docker compose up -d
-# All services: http://localhost:8000 (monolith), :8001 (user), :8002 (transaction)
+# All services: http://localhost:8000 (monolith), :8001 (user), :8002 (transaction), :8005 (categorization), :8006 (goal)
 # RabbitMQ UI: http://localhost:15672 (guest/guest)
-# Frontend: http://localhost:3001
+# Frontend: http://localhost:3000
 ```
 
 ### Local Development (without Docker)
@@ -592,6 +653,12 @@ cd services/user-service && make dev
 
 # Transaction service
 cd services/transaction-service && make dev
+
+# Categorization service
+cd services/categorization-service && make dev
+
+# Goal service
+cd services/goal-service && make dev
 
 # Consumers (in separate terminals from services/monolith/)
 uv run python -m backend.consumers.worker --consumer user-sync
@@ -623,7 +690,10 @@ npm install && npm run dev
 | [services/frontend/README.md](services/frontend/README.md) | Frontend architecture, dashboard components, design tokens |
 | [services/user-service/README.md](services/user-service/README.md) | User service API, events, JWT format |
 | [services/transaction-service/README.md](services/transaction-service/README.md) | Transaction service API, UoW pattern, CSV import |
-| [services/ai-service/README.md](services/ai-service/README.md) | Categorization pipeline status and planned extraction |
+| [services/categorization-service/docs/SCHEMA.md](services/categorization-service/docs/SCHEMA.md) | Categorization service database schema design |
+| [services/categorization-service/docs/RETROSPECTIVE.md](services/categorization-service/docs/RETROSPECTIVE.md) | Phase 1 extraction retrospective |
+| [services/goal-service/README.md](services/goal-service/README.md) | Goal service API, events, outbox pattern |
+| [services/ai-service/README.md](services/ai-service/README.md) | Categorization pipeline status and ML/LLM plans |
 | [services/shared/contracts/README.md](services/shared/contracts/README.md) | Shared event contracts (Pydantic models) |
 | [docs/microservice-architecture.mermaid](docs/microservice-architecture.mermaid) | Full architecture diagram (current + future) |
 | [services/monolith/DATABASE_COMPARISON.md](services/monolith/DATABASE_COMPARISON.md) | MySQL vs Elasticsearch vs Neo4j comparison |
@@ -642,7 +712,7 @@ npm install && npm run dev
 - [x] Monthly budget system with aggregate model
 - [x] Unit of Work pattern for transactional boundaries
 - [x] Architecture fitness tests (import boundary enforcement)
-- [x] 530+ tests (unit, integration, frontend, e2e)
+- [x] 620+ tests (unit, integration, frontend, e2e)
 - [x] User-service extraction (PostgreSQL, RabbitMQ events)
 - [x] Transaction-service extraction (PostgreSQL, UoW, CSV import)
 - [x] Event-driven sync (UserSync + AccountCreation consumers)
@@ -662,8 +732,23 @@ npm install && npm run dev
 - [x] Removed duplicate transaction/planned-transaction bounded context from monolith (single source of truth in transaction-service)
 - [x] Banking writes via transaction-service HTTP client — no direct MySQL writes from bank sync
 - [x] `POST /api/v1/transactions/bulk` endpoint with server-side dedup on transaction-service
+- [x] Categorization-service extraction (rule engine, taxonomy, categorization pipeline as standalone service)
+- [x] Hybrid sync/async categorization (sync tier 1 via HTTP, async tier 2/3 via events)
+- [x] Rules as data — categorization rules stored in database, not code
+- [x] Categorization audit trail (`categorization_results` table)
+- [x] Goal-service extraction (CRUD, outbox events, JWT validation)
+- [x] ADR-0003: Automatic goal allocation from budget surplus (schema and handler implemented)
+- [x] `BudgetMonthClosedEvent` shared contract for cross-service budget close flow
+- [x] Positive amount CHECK constraint on transactions and planned_transactions
+- [x] TanStack Query for dashboard and transactions (server-state management)
+- [x] Radix UI Dialog (accessible modals with focus trap)
+- [x] lucide-react icons (replaced emojis with accessible SVG icons)
+- [x] Imperative ConfirmDialog provider (replaced `window.confirm`)
 - [ ] ML categorizer adapter (train on user-confirmed merchants)
 - [ ] LLM categorizer adapter (GPT/Claude for unknown transactions)
+- [ ] Budget month close publisher and day-7 scheduled job
+- [ ] Goal allocation RabbitMQ consumer (runtime flow for ADR-0003)
+- [ ] Frontend support for default savings goal and allocation history
 - [ ] API Gateway (routing, rate limiting)
 - [ ] Budget service extraction
 - [ ] Analytics service + Elasticsearch

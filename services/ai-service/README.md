@@ -1,30 +1,30 @@
 # AI / Categorization Service
 
-**Status: Extracted as `services/categorization-service` on port `8005`.** The rule-based pipeline now runs as a standalone service. ML/LLM adapters remain planned extensions.
+**Status: Rule-based pipeline extracted to `services/categorization-service` (port `8005`).** ML/LLM adapters remain planned extensions.
 
-## What is already implemented (in monolith)
+## What is implemented
 
-The monolith contains a complete multi-tier categorization pipeline:
+### Categorization-service (port 8005)
 
-1. **Rule Engine** — Keyword-based matching with longest-match-first strategy and sign-dependent overrides. Uses a three-level hierarchy: Category, SubCategory, Merchant.
-2. **ML Categorizer** — Port defined (`IMlCategorizer` protocol), adapter not yet implemented.
-3. **LLM Categorizer** — Port defined (`ILlmCategorizer` protocol), adapter not yet implemented.
-4. **Fallback** — Default "Ovrigt" subcategory when no tier matches.
+The standalone categorization-service owns the full categorization domain:
 
-Each transaction stores `categorization_tier` ("rule", "ml", "llm", "fallback") and `categorization_confidence` for observability.
+1. **Taxonomy**: Categories, subcategories, merchants (7 Postgres tables)
+2. **Rule Engine**: Keyword-based matching with longest-match-first strategy, sign-dependent overrides, Danish character normalization
+3. **Categorization Pipeline Orchestrator**: Rules, ML (port defined), LLM (port defined), fallback
+4. **Sync HTTP endpoint**: `POST /api/v1/categorize/` for tier 1 rule engine (called by transaction-service with 500ms timeout)
+5. **Async consumer**: Listens for `transaction.created` events, runs full pipeline, publishes `transaction.categorized`
+6. **Category sync consumer**: Listens for `category.*` events from transaction-service to keep local taxonomy in sync
 
-### Current hit rate (Nordea sandbox, 267 transactions)
+See `services/categorization-service/docs/SCHEMA.md` for the database schema and `services/categorization-service/docs/RETROSPECTIVE.md` for the extraction retrospective.
 
-- Rule engine: ~39% auto-categorized
-- Fallback: ~61% (awaiting ML/LLM adapters)
+### Monolith (dual-run, pending removal)
 
-## Current Location
+The monolith's `BankingService` still runs its local rule engine before sending transactions to transaction-service. The categorization-service's async pipeline overwrites the result. Both produce the same output (1:1 port), so the dual-run is a no-op in practice. Removal is tracked as technical debt (see RETROSPECTIVE.md, section "Deferred as Technical Debt").
 
-Categorization logic currently lives in:
+Monolith categorization code:
 - `services/monolith/backend/category/application/categorization_service.py` — Multi-tier orchestrator
 - `services/monolith/backend/category/adapters/outbound/rule_engine.py` — Rule engine
 - `services/monolith/backend/category/application/ports/outbound.py` — `IRuleEngine`, `IMlCategorizer`, `ILlmCategorizer` protocols
-- `services/monolith/backend/category/domain/value_objects.py` — `CategorizationTier`, `CategorizationResult`
 
 ## Port
 
@@ -34,6 +34,20 @@ Categorization logic currently lives in:
 
 ## Event Flow
 
-- Listens for `transaction.created` events
-- Categorizes the transaction using rule/ML/LLM pipeline
+- Listens for `transaction.created` events (async full pipeline)
+- Categorizes using rule engine, ML (future), LLM (future), fallback
 - Publishes `transaction.categorized` event
+- Listens for `category.*` events (keeps local taxonomy in sync)
+
+## Current hit rate (baseline from 2026-04-22)
+
+- Rule engine: ~77% auto-categorized
+- Fallback: ~23% (N=205)
+
+See `docs/categorization-baseline.md` for the measurement methodology and decision thresholds.
+
+## Planned extensions
+
+- **ML categorizer adapter**: Train on user-confirmed merchants via fastText or BERT-Danish
+- **LLM categorizer adapter**: GPT/Claude for unknown transactions
+- **User-specific rules**: Schema supports `user_id` on rules; API and UI not yet built

@@ -18,6 +18,7 @@ uv add --editable services/shared/contracts/
 from contracts import (
     BudgetMonthClosedEvent,
     CategoryCreatedEvent,
+    TransactionCategorizedEvent,
     TransactionCreatedEvent,
     UserCreatedEvent,
 )
@@ -92,6 +93,7 @@ See [ADR-0003](../../../docs/adr/0003-goal-allocation-from-budget-surplus.md#dec
 |-------|-------------|--------|
 | `TransactionCreatedEvent` | `transaction.created` | `transaction_id`, `user_id`, `amount` (str), `account_id`, `category`, `description` |
 | `TransactionUpdatedEvent` | `transaction.updated` | `transaction_id`, `user_id`, `amount` (str), `previous_amount`, `account_id`, `category`, `previous_category`, `description` |
+| `TransactionCategorizedEvent` | `transaction.categorized` | `transaction_id`, `category_id`, `subcategory_id`, `merchant_id`, `tier`, `confidence`, `model_version` |
 | `TransactionDeletedEvent` | `transaction.deleted` | `transaction_id`, `user_id`, `amount` (str), `account_id` |
 
 ## Adding New Events
@@ -125,7 +127,7 @@ contracts/
     ├── account.py     # AccountCreatedEvent, AccountCreationFailedEvent
     ├── budget.py      # BudgetMonthClosedEvent
     ├── category.py    # CategoryCreatedEvent, CategoryUpdatedEvent, CategoryDeletedEvent
-    └── transaction.py # TransactionCreatedEvent, TransactionUpdatedEvent, TransactionDeletedEvent
+    └── transaction.py # TransactionCreatedEvent, TransactionUpdatedEvent, TransactionCategorizedEvent, TransactionDeletedEvent
 ```
 
 Events are **frozen** (immutable value objects) and carry:

@@ -65,7 +65,8 @@ app/
 │       ├── unit_of_work.py
 │       └── rabbitmq_publisher.py
 ├── workers/
-│   └── outbox_publisher.py  # Polls outbox, publishes to RabbitMQ
+│   ├── outbox_publisher.py  # Polls outbox, publishes to RabbitMQ
+│   └── transaction_categorized_consumer.py  # Consumes transaction.categorized events
 ├── alembic.ini
 └── migrations/
 ```
@@ -78,6 +79,9 @@ app/
 - **Denormalized names**: `account_name` and `category_name` are stored alongside IDs. No cross-service database calls.
 - **No foreign keys**: `user_id`, `account_id` are plain integers — no FK constraints to other services' databases.
 - **Data isolation**: Every transaction query filters by `user_id` for multi-tenant security.
+- **Categorization integration**: On create, the service calls `categorization-service` (HTTP, 500ms timeout) for sync tier-1 categorization. On timeout or failure, falls back gracefully to uncategorized. The async pipeline overwrites via the `transaction.categorized` consumer.
+- **Bulk import with dedup**: `POST /bulk` accepts batches (used by bank sync). Deduplicates on `(user_id, date, amount, description)` and skips existing entries.
+- **Amount constraint**: `CHECK (amount > 0)` enforced at database level. Direction carried by `transaction_type` enum.
 
 ## API Endpoints
 
@@ -90,6 +94,7 @@ app/
 | `GET` | `/api/v1/transactions/{id}` | Get by ID | Yes |
 | `DELETE` | `/api/v1/transactions/{id}` | Delete transaction | Yes |
 | `POST` | `/api/v1/transactions/import-csv` | Import CSV file | Yes |
+| `POST` | `/api/v1/transactions/bulk` | Bulk import with deduplication (used by bank sync) | Service JWT |
 
 ### Planned Transactions
 
@@ -139,6 +144,14 @@ On transaction and category mutations, events are written to the `outbox_events`
 | `CategoryUpdatedEvent` | `category.updated` | CategorySyncConsumer (monolith) |
 | `CategoryDeletedEvent` | `category.deleted` | CategorySyncConsumer (monolith) |
 
+### Inbound Events (consumed)
+
+| Event | Routing Key | Action |
+|-------|-------------|--------|
+| `TransactionCategorizedEvent` | `transaction.categorized` | Overwrites `category_id`, `category_name`, `categorization_tier` on the transaction |
+
+The consumer uses an inbox pattern (`processed_events` table) for idempotency.
+
 The `amount` field in transaction events is serialized as a string to preserve decimal precision across JSON serialization.
 
 ## Configuration
@@ -151,6 +164,7 @@ The `amount` field in transaction events is serialized as a string to preserve d
 | `JWT_ALGORITHM` | No | `HS256` | JWT algorithm |
 | `CORS_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | Allowed origins |
 | `ENVIRONMENT` | No | `development` | Runtime environment |
+| `CATEGORIZATION_SERVICE_URL` | No | `http://categorization-service:8005` | Categorization service base URL |
 
 ## Testing
 

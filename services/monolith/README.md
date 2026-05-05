@@ -2,7 +2,7 @@
 
 FastAPI monolith for personal finance tracking with hexagonal architecture, GraphQL read gateway, event-driven sync, structured logging, live bank integration (PSD2 via Enable Banking), and multi-tier auto-categorization.
 
-**This is the monolith component.** User authentication, transaction management, planned transactions and category ownership have been extracted into standalone microservices. The monolith handles accounts, budgets, goals, analytics, **bank connections**, and **transaction categorization**. It receives events via RabbitMQ to keep local user, category and transaction projections synchronized.
+**This is the monolith component.** User authentication, transaction management, planned transactions, category ownership, categorization pipeline, and savings goals have been extracted into standalone microservices. The monolith handles accounts, budgets, analytics, and **bank connections**. It receives events via RabbitMQ to keep local user, category, and transaction projections synchronized.
 
 ## Quick Start
 
@@ -26,6 +26,7 @@ make dev
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
 uv run python -m backend.consumers.worker --consumer category-sync
+uv run python -m backend.consumers.worker --consumer transaction-sync
 ```
 
 API base URL: `http://localhost:8000/api/v1/`
@@ -57,18 +58,20 @@ See `docs/STRUCTURE.md` for the full structure map.
 
 ### Active domains (still in monolith)
 
-- `category` — three-level hierarchy (Category / SubCategory / Merchant) + categorization pipeline. Category write ownership lives in `transaction-service`; this domain reads the projected MySQL copy
+- `category` — three-level hierarchy (Category / SubCategory / Merchant). Category write ownership lives in `transaction-service`; this domain reads the projected MySQL copy. The categorization pipeline now runs in `categorization-service` (port 8005); the monolith retains a local rule engine for bank sync pre-categorization (results are overwritten by the async pipeline)
 - `banking` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync). Bank-synced transactions are forwarded to `transaction-service` via HTTP (`POST /api/v1/transactions/bulk`); deduplication and persistence happen there, and the MySQL projection is populated via events
 - `budget` — legacy per-category budget CRUD + summary analytics
 - `monthly_budget` — aggregate-based monthly budgets with budget lines, summary, and copy
 - `analytics` — dashboard overview, expenses-by-month, budget summary, GraphQL read gateway. Reads the MySQL transaction projection populated by `TransactionSyncConsumer`
 - `account` — CRUD + account groups
-- `goal` — CRUD
+- `goal` — legacy CRUD (goal-service on port 8006 is now the source of truth for goal events and outbox)
 - `user` — local user management (user-service on port 8001 is source of truth)
 
 ### Extracted domains (no longer in the monolith)
 
 - `transaction` + `planned_transaction` — now fully owned by `transaction-service` (port 8002). The monolith keeps a read-only MySQL projection materialised from `transaction.*` events (see `TransactionSyncConsumer`)
+- `categorization` — now owned by `categorization-service` (port 8005). Taxonomy, rule engine, and async pipeline run there. The monolith's bank sync still pre-categorizes locally before forwarding to transaction-service
+- `goal` (events) — goal CRUD with outbox events now owned by `goal-service` (port 8006)
 
 ### Event consumers
 
@@ -160,6 +163,7 @@ make check
 uv run python -m backend.consumers.worker --consumer user-sync
 uv run python -m backend.consumers.worker --consumer account-creation
 uv run python -m backend.consumers.worker --consumer category-sync
+uv run python -m backend.consumers.worker --consumer transaction-sync
 
 # Run all consumers
 uv run python -m backend.consumers.worker

@@ -1,8 +1,8 @@
 # Categorization Service — Database Schema Design
 
-**Status:** Pre-migration design document (all questions resolved)
-**Date:** 2026-04-23
-**Update policy:** Mark as "as-built" when migrations are complete. Update when schema changes.
+**Status:** As-built (migrations complete, service deployed)
+**Date:** 2026-04-23 (design), updated 2026-05-05
+**Update policy:** Update when schema changes.
 
 ## Context
 

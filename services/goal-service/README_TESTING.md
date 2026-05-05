@@ -1,18 +1,29 @@
-Testing goal-service
----------------------
+# Testing goal-service
 
-Run unit and integration tests for the goal-service from the repository root.
+Run unit and integration tests for the goal-service.
 
-Makefile (from service folder):
+## Via Makefile (recommended)
 
 ```bash
 cd services/goal-service
 make test
 ```
 
-Direct (if you prefer explicit python command):
+## Quality checks
 
 ```bash
-PYTHONPATH=".;../shared/contracts" \\
-  c:/Users/markx/Documents/GitHub/Finance-Tracker/.venv/Scripts/python.exe -m uv run --active pytest tests/ -q
+cd services/goal-service
+make check
 ```
+
+## Direct pytest
+
+```bash
+cd services/goal-service
+uv run pytest tests/ -q
+```
+
+## Notes
+
+- `tests/conftest.py` sets safe defaults for local test execution (in-memory SQLite).
+- The service expects `JWT_SECRET` and `DATABASE_URL` in real deployments.
