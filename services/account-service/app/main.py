@@ -1,14 +1,27 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 from app.adapters.inbound.account_api import router as account_router
 from app.adapters.inbound.account_group_api import router as account_group_router
 from app.config import CORS_ORIGINS
+from app.database import create_db_tables
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    create_db_tables()
+    yield
+    # Shutdown (valgfrit)
+
+
 
 app = FastAPI(
     title="Account Service",
     version="0.1.0",
+    lifespan=lifespan
 )
+
 
 app.add_middleware(
     CORSMiddleware,

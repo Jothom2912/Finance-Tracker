@@ -1,27 +1,28 @@
 # backend/models/common.py
 
 import enum
-from datetime import datetime  # noqa: F401
+#from datetime import datetime  # noqa: F401
+from sqlalchemy import DECIMAL, Column, Integer, String
 
-from sqlalchemy import (  # noqa: F401
-    DECIMAL,
-    Column,
-    Date,
-    DateTime,
-    Enum,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    Table,
-)
-from sqlalchemy.orm import relationship  # noqa: F401
-from sqlalchemy.sql import func  # noqa: F401
+#from sqlalchemy import (  # noqa: F401
+#    DECIMAL,
+#    Column,
+#    Date,
+#    DateTime,
+#    Enum,
+#    Float,
+#    ForeignKey,
+#    Integer,
+#    String,
+#    Table,
+#)
+#from sqlalchemy.orm import relationship  # noqa: F401
+#from sqlalchemy.sql import func  # noqa: F401
 
-from app.mysql import Base  # noqa: F401
+from app.database import Base  # noqa: F401
 
 
-# --- ENUMS ---
+""" # --- ENUMS ---
 class TransactionType(enum.Enum):
     income = "income"
     expense = "expense"
@@ -49,4 +50,4 @@ account_group_user_association = Table(
     ),
     Column("User_idUser", Integer, primary_key=True),
     extend_existing=True,
-)
+) """

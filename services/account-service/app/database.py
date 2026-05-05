@@ -1,6 +1,6 @@
-# backend/database/mysql.py
+# service/account-service/app/database.py
 """
-MySQL Database Connection
+Postgresql Database Connection
 """
 
 import logging
@@ -65,9 +65,6 @@ if DATABASE_URL:
         DATABASE_URL,
         pool_pre_ping=True,
         echo=False,
-        connect_args={
-            "connect_timeout": 10,  # Øget til 10 sekunder
-        },
         pool_timeout=10,
         pool_size=5,
         max_overflow=10,
@@ -159,7 +156,7 @@ def create_db_tables():
         # Step 4: Verificer at tabeller blev oprettet
         with engine.connect() as conn:
             result = conn.execute(
-                text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()")
+                text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'")
             )
             table_count = result.fetchone()[0]
             logger.info(f"✅ Database indeholder {table_count} tabeller")

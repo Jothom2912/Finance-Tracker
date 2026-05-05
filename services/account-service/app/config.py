@@ -27,20 +27,20 @@ for _candidate in [_monolith_root / ".env", _project_root / ".env"]:
 
 
 class DatabaseType(Enum):
-    MYSQL = "mysql"
+    POSTGRESQL = "postgresql"
     ELASTICSEARCH = "elasticsearch"
     NEO4J = "neo4j"
     HYBRID = "hybrid"
 
 
-ACTIVE_DB = os.getenv("ACTIVE_DB", DatabaseType.MYSQL.value)
+ACTIVE_DB = os.getenv("ACTIVE_DB", DatabaseType.POSTGRESQL.value)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Domain-level DB roles (prepares split into microservices).
 # Defaults keep current behavior if only ACTIVE_DB is configured.
-TRANSACTIONS_DB = os.getenv("TRANSACTIONS_DB", DatabaseType.MYSQL.value)
+TRANSACTIONS_DB = os.getenv("TRANSACTIONS_DB", DatabaseType.POSTGRESQL.value)
 ANALYTICS_DB = os.getenv("ANALYTICS_DB", ACTIVE_DB)
-USER_DB = os.getenv("USER_DB", DatabaseType.MYSQL.value)
+USER_DB = os.getenv("USER_DB", DatabaseType.POSTGRESQL.value)
 
 ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 SYNC_TO_ELASTICSEARCH = os.getenv("SYNC_TO_ELASTICSEARCH", "false").lower() == "true"

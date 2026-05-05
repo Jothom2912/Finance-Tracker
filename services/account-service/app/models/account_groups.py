@@ -1,14 +1,15 @@
 # app/models/account_groups.py
 
 from .common import (
-    Base,
     Column,
     Integer,
     String,
     # IMPORTER NU ASSOCIATIONSTABELLEN DIREKTE FRA COMMON.PY:
-    account_group_user_association,
-    relationship,
+    #account_group_user_association,
+    #relationship,
 )
+
+from app.database import Base
 
 # FJERN DEN GAMLE LINJE:
 # from .__init__ import ( ... )
