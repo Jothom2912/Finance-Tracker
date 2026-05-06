@@ -87,17 +87,17 @@ function ChatPage() {
   };
 
   return (
-    <div className="chat-page-container">
+    <div className="chat-page">
       <div className="chat-page-header">
-        <div>
+        <div className="chat-header-content">
           <h1>Finans Chat</h1>
-          <p className="chat-subtitle">
-            Stil spørgsmål om dine transaktioner. Svarene kommer fra lokal LLM og RAG.
+          <p className="chat-header-subtitle">
+            Stil spørgsmål om dine transaktioner — svar fra lokal LLM og RAG
           </p>
         </div>
         <button
           type="button"
-          className="chat-secondary-button"
+          className="secondary"
           onClick={handleIngest}
           disabled={isIngesting}
         >
@@ -121,6 +121,13 @@ function ChatPage() {
       {statusMessage && <p className="chat-status">{statusMessage}</p>}
       {error && <p className="chat-error">{error}</p>}
 
+      {!hasIngested && messages.length === 0 && !isIngesting && (
+        <p className="chat-ingest-hint">
+          Vidensbasen er tom. Tryk <strong>Opdater vidensbase</strong> for at
+          indeksere dine transaktioner, før du stiller spørgsmål.
+        </p>
+      )}
+
       <section className="chat-panel" aria-label="Chatbeskeder">
         {messages.length === 0 ? (
           <div className="chat-empty-state">
@@ -138,13 +145,6 @@ function ChatPage() {
         {isAsking && <LoadingIndicator />}
       </section>
 
-      {!hasIngested && messages.length === 0 && !isIngesting && (
-        <p className="chat-ingest-hint">
-          Vidensbasen er tom. Tryk <strong>Opdater vidensbase</strong> for at
-          indeksere dine transaktioner, før du stiller spørgsmål.
-        </p>
-      )}
-
       <form className="chat-form" onSubmit={handleSubmit}>
         <label htmlFor="finance-question">Spørgsmål</label>
         <div className="chat-input-row">
@@ -152,12 +152,18 @@ function ChatPage() {
             id="finance-question"
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Fx: Hvad er min største udgift i april 2026?"
-            rows={3}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                if (canSubmit) handleSubmit(event);
+              }
+            }}
+            placeholder="Stil et spørgsmål om dine transaktioner..."
+            rows={1}
             disabled={isAsking}
           />
           <button type="submit" disabled={!canSubmit}>
-            {isAsking ? 'Svar genereres...' : 'Send'}
+            {isAsking ? 'Genererer...' : 'Send'}
           </button>
         </div>
       </form>
