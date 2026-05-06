@@ -48,6 +48,29 @@ services:
       retries: 10
       start_period: 30s
 
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  ollama-pull:
+    image: ollama/ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:1.7b && ollama pull embeddinggemma:latest"]
+    restart: "no"
+
   # === Application services ===
 
   monolith:
@@ -375,6 +398,30 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai-service/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: qwen3:1.7b
+      EMBEDDING_MODEL: embeddinggemma:latest
+      TRANSACTION_SERVICE_URL: http://transaction-service:8002
+      CHROMADB_PATH: /data/chromadb
+      RETRIEVAL_TOP_K: "30"
+      JWT_SECRET: dev-secret-key-change-in-production
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+      ENVIRONMENT: development
+    volumes:
+      - ai_chromadb_data:/data/chromadb
+    depends_on:
+      ollama:
+        condition: service_healthy
+      transaction-service:
+        condition: service_started
+
   # === Placeholder services (uncomment as services are ready) ===
 
   # budget-service:
@@ -408,3 +455,5 @@ volumes:
   postgres_transactions_data:
   postgres_categorization_data:
   rabbitmq_data:
+  ollama_models:
+  ai_chromadb_data:

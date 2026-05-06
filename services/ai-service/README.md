@@ -1,53 +1,81 @@
-# AI / Categorization Service
+# AI Service — Finans Q&A (RAG)
 
-**Status: Rule-based pipeline extracted to `services/categorization-service` (port `8005`).** ML/LLM adapters remain planned extensions.
+RAG-based chat service that lets users ask questions about their financial transactions. Uses a local LLM (Qwen 3 via Ollama) with ChromaDB for vector retrieval and 4T's prompt engineering.
 
-## What is implemented
+## Quick Start
 
-### Categorization-service (port 8005)
+```bash
+cd services/ai-service
+make install-deps
+make dev
+```
 
-The standalone categorization-service owns the full categorization domain:
+Or via Docker Compose from the project root:
 
-1. **Taxonomy**: Categories, subcategories, merchants (7 Postgres tables)
-2. **Rule Engine**: Keyword-based matching with longest-match-first strategy, sign-dependent overrides, Danish character normalization
-3. **Categorization Pipeline Orchestrator**: Rules, ML (port defined), LLM (port defined), fallback
-4. **Sync HTTP endpoint**: `POST /api/v1/categorize/` for tier 1 rule engine (called by transaction-service with 500ms timeout)
-5. **Async consumer**: Listens for `transaction.created` events, runs full pipeline, publishes `transaction.categorized`
-6. **Category sync consumer**: Listens for `category.*` events from transaction-service to keep local taxonomy in sync
+```bash
+docker compose up ollama ai-service -d
+```
 
-See `services/categorization-service/docs/SCHEMA.md` for the database schema and `services/categorization-service/docs/RETROSPECTIVE.md` for the extraction retrospective.
-
-### Monolith (dual-run, pending removal)
-
-The monolith's `BankingService` still runs its local rule engine before sending transactions to transaction-service. The categorization-service's async pipeline overwrites the result. Both produce the same output (1:1 port), so the dual-run is a no-op in practice. Removal is tracked as technical debt (see RETROSPECTIVE.md, section "Deferred as Technical Debt").
-
-Monolith categorization code:
-- `services/monolith/backend/category/application/categorization_service.py` — Multi-tier orchestrator
-- `services/monolith/backend/category/adapters/outbound/rule_engine.py` — Rule engine
-- `services/monolith/backend/category/application/ports/outbound.py` — `IRuleEngine`, `IMlCategorizer`, `ILlmCategorizer` protocols
+First-time setup pulls ~2 GB of model data (`qwen3:1.7b` + `embeddinggemma:latest`). This takes 5-15 minutes depending on your connection. The `ollama-pull` init container handles this automatically.
 
 ## Port
 
 ```
-8005
+8004
 ```
 
-## Event Flow
+## Architecture
 
-- Listens for `transaction.created` events (async full pipeline)
-- Categorizes using rule engine, ML (future), LLM (future), fallback
-- Publishes `transaction.categorized` event
-- Listens for `category.*` events (keeps local taxonomy in sync)
+```
+User question
+    |
+    v
+POST /api/v1/chat
+    |
+    +--> Pre-process (parse date/category hints)
+    |
+    +--> Retrieve (embed question, search ChromaDB with user_id + metadata filters)
+    |
+    +--> Build prompt (4T's template + retrieved transactions)
+    |
+    +--> Generate (Ollama qwen3:1.7b)
+    |
+    v
+Answer + sources
+```
 
-## Current hit rate (baseline from 2026-04-22)
+## Endpoints
 
-- Rule engine: ~77% auto-categorized
-- Fallback: ~23% (N=205)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/ingest` | JWT | Fetch and embed user's transactions into ChromaDB |
+| `POST` | `/api/v1/chat` | JWT | Ask a question about your transactions |
+| `GET` | `/health` | None | Service health check |
 
-See `docs/categorization-baseline.md` for the measurement methodology and decision thresholds.
+## Configuration
 
-## Planned extensions
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama server URL |
+| `LLM_MODEL` | `qwen3:1.7b` | Model for answer generation |
+| `EMBEDDING_MODEL` | `embeddinggemma:latest` | Model for text embeddings |
+| `TRANSACTION_SERVICE_URL` | `http://transaction-service:8002` | Transaction service URL |
+| `CHROMADB_PATH` | `/data/chromadb` | Persistent ChromaDB storage path |
+| `RETRIEVAL_TOP_K` | `30` | Number of transactions to retrieve |
+| `JWT_SECRET` | — | Shared JWT secret (required) |
+| `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins |
 
-- **ML categorizer adapter**: Train on user-confirmed merchants via fastText or BERT-Danish
-- **LLM categorizer adapter**: GPT/Claude for unknown transactions
-- **User-specific rules**: Schema supports `user_id` on rules; API and UI not yet built
+## Models
+
+| Purpose | Model | Size |
+|---------|-------|------|
+| Answer generation | `qwen3:1.7b` | ~1.4 GB |
+| Text embeddings | `embeddinggemma:latest` | ~621 MB |
+
+`qwen3:4b` can be used by overriding `LLM_MODEL`, but local CPU testing showed it was too slow for a reliable live demo on this machine.
+
+## Known Limitations
+
+- Vector search is weak at aggregation queries ("total spent on groceries in April") because it finds *similar* texts, not *all* relevant ones. Metadata filtering helps but does not fully solve this.
+- Date parsing is limited to simple month name + year regex matching.
+- No chat history / multi-turn conversation support in MVP.

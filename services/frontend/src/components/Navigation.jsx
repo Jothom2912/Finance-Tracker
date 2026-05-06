@@ -29,6 +29,7 @@ function Navigation() {
           <li><NavLink to="/categories" end className="nav-link">Kategorier</NavLink></li>
           <li><NavLink to="/budget" end className="nav-link">Budget</NavLink></li>
           <li><NavLink to="/goals" end className="nav-link">Mål</NavLink></li>
+          <li><NavLink to="/chat" end className="nav-link">Finans Chat</NavLink></li>
         </ul>
 
         <div className="navbar-user">

@@ -1,1 +1,1 @@
-# Placeholder for AI application service
+# RAG pipeline service — implemented in Fase 2-3
