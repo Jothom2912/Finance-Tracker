@@ -48,6 +48,29 @@ services:
       retries: 10
       start_period: 30s
 
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  ollama-pull:
+    image: ollama/ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:1.7b && ollama pull embeddinggemma:latest"]
+    restart: "no"
+
   # === Application services ===
 
   monolith:
@@ -94,6 +117,63 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  postgres-goals:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: goal_service
+      POSTGRES_PASSWORD: goal_service_pass
+      POSTGRES_DB: goals
+    ports:
+      - "5438:5432"
+    volumes:
+      - postgres_goals_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goal_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  goal-service:
+    build:
+      context: .
+      dockerfile: services/goal-service/Dockerfile
+    ports:
+      - "8006:8006"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      USER_SERVICE_URL: http://user-service:8001
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      postgres-goals:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  goal-outbox-worker:
+    build:
+      context: .
+      dockerfile: services/goal-service/Dockerfile
+    command: ["python", "-m", "app.workers.outbox_publisher"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      USER_SERVICE_URL: http://user-service:8001
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      goal-service:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
 
@@ -318,6 +398,30 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai-service/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: qwen3:1.7b
+      EMBEDDING_MODEL: embeddinggemma:latest
+      TRANSACTION_SERVICE_URL: http://transaction-service:8002
+      CHROMADB_PATH: /data/chromadb
+      RETRIEVAL_TOP_K: "30"
+      JWT_SECRET: dev-secret-key-change-in-production
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+      ENVIRONMENT: development
+    volumes:
+      - ai_chromadb_data:/data/chromadb
+    depends_on:
+      ollama:
+        condition: service_healthy
+      transaction-service:
+        condition: service_started
+
   # === Placeholder services (uncomment as services are ready) ===
 
   postgres-budget:
@@ -359,7 +463,7 @@ services:
   # analytics-service:
   #   build: ./services/analytics-service
   #   ports:
-  #     - "8004:8000"
+  #     - "8007:8007"
   #   depends_on:
   #     rabbitmq:
   #       condition: service_healthy
@@ -367,7 +471,7 @@ services:
   # notification-service:
   #   build: ./services/notification-service
   #   ports:
-  #     - "8006:8000"
+  #     - "8008:8008"
   #   depends_on:
   #     rabbitmq:
   #       condition: service_healthy
@@ -375,7 +479,10 @@ services:
 volumes:
   mysql_data:
   postgres_data:
+  postgres_goals_data:
   postgres_transactions_data:
   postgres_categorization_data:
   postgres_budget_data:
   rabbitmq_data:
+  ollama_models:
+  ai_chromadb_data:

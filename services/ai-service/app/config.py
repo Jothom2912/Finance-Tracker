@@ -1,13 +1,21 @@
-from pydantic_settings import BaseSettings
+from __future__ import annotations
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    rabbitmq_url: str = ""
-    jwt_secret: str = ""
-    service_name: str = "ai-service"
-    service_port: int = 8000
+    model_config = SettingsConfigDict(env_file=".env")
 
-    model_config = {"env_file": ".env"}
+    OLLAMA_BASE_URL: str = "http://ollama:11434"
+    LLM_MODEL: str = "qwen3:1.7b"
+    EMBEDDING_MODEL: str = "embeddinggemma:latest"
+    TRANSACTION_SERVICE_URL: str = "http://transaction-service:8002"
+    CHROMADB_PATH: str = "/data/chromadb"
+    RETRIEVAL_TOP_K: int = 30
+    JWT_SECRET: str = ""
+    JWT_ALGORITHM: str = "HS256"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+    ENVIRONMENT: str = "development"
 
 
 settings = Settings()

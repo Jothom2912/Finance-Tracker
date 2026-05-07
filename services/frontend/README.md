@@ -1,6 +1,6 @@
 # Finance Tracker Frontend
 
-React 18 SPA built with Vite 5 for personal finance tracking. Connects to the monolith backend (port 8000) for analytics, bank connections, and transaction management via REST and GraphQL.
+React 18 SPA built with Vite 5 for personal finance tracking. Connects to the monolith backend (port 8000) for analytics and bank connections, user-service (port 8001) for authentication, transaction-service (port 8002) for transaction and category CRUD, and goal-service (port 8006) for savings goals. Uses TanStack Query for server-state management on dashboard and transaction pages.
 
 Package manager: npm only. `package-lock.json` is the source of truth for this frontend; do not use Yarn here.
 
@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-App: http://localhost:3001
+App: http://localhost:3000
 
 ## Tech Stack
 
@@ -23,9 +23,12 @@ App: http://localhost:3001
 | React 18 | UI framework |
 | Vite 5 | Build tool and dev server |
 | react-router-dom v7 | Client-side routing |
+| @tanstack/react-query v5 | Server-state management (dashboard, transactions) |
+| @radix-ui/react-dialog | Accessible modal dialogs (focus trap, Esc, aria-modal) |
+| lucide-react | SVG icon library (replaced emojis) |
 | graphql-request | GraphQL client for dashboard reads |
 | Recharts 3 | Charts (pie, bar, area) |
-| Vitest + Testing Library | Unit tests (96 tests) |
+| Vitest + Testing Library | Unit tests (110 tests) |
 | CSS Variables | Design tokens, no Tailwind |
 
 ## Project Structure
@@ -66,12 +69,13 @@ src/
 
 ## Dashboard Architecture
 
-The dashboard uses a **REST for mutations, GraphQL for reads** pattern:
+The dashboard uses a **REST for mutations, GraphQL for reads** pattern with **TanStack Query** for caching and server-state management:
 
-- **GraphQL** (`useDashboardData` hook) fetches all read-only dashboard data in a single query: financial overview, budget summary, goal progress, recent transactions (with `categorizationTier`), and monthly expenses trend.
+- **GraphQL** (`useDashboardData` hook via `useQuery`) fetches all read-only dashboard data in a single query: financial overview, budget summary, goal progress, recent transactions (with `categorizationTier`), and monthly expenses trend.
 - **REST** (`api/bank.jsx`) handles bank sync mutations which have side effects (fetch from external API, categorize, store).
+- **TanStack Query** manages the cache. After a bank sync or transaction mutation, `queryClient.invalidateQueries` triggers a refetch so data stays fresh. Query keys include `account_id` to prevent cross-account cache leaks.
 
-After a bank sync, the dashboard auto-refreshes via a `refreshKey` mechanism so new transactions appear immediately.
+The `useTransactions` hook is also `useQuery`-based with parameterised query keys for filters. Mutations (`remove`, `uploadCsv`) cross-invalidate `['transactions']` and `['dashboard']` on success.
 
 ### Key Dashboard Components
 
@@ -97,7 +101,7 @@ All clients automatically attach `Authorization: Bearer <token>` and `X-Account-
 ## Commands
 
 ```bash
-npm run dev          # Start dev server (port 3001)
+npm run dev          # Start dev server (port 3000)
 npm run build        # Production build
 npm run preview      # Preview production build
 npm test             # Run all tests (vitest run)

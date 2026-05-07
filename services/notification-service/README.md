@@ -7,7 +7,7 @@ This service will handle email and push notifications for budget alerts (80% thr
 ## Planned Port
 
 ```
-8006
+8008
 ```
 
 ## Planned Event Flow

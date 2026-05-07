@@ -25,21 +25,22 @@ export const apiClient = {
   },
 
   async fetch(url, options = {}) {
+    const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
     const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-    const isFormData = options.body instanceof FormData;
+    const isFormData = fetchOptions.body instanceof FormData;
     const authHeaders = this.getAuthHeader(isFormData);
 
-    const userHeaders = { ...options.headers };
+    const userHeaders = { ...fetchOptions.headers };
     if (isFormData) delete userHeaders['Content-Type'];
 
     const headers = { ...authHeaders, ...userHeaders };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(fullUrl, {
-        ...options,
+        ...fetchOptions,
         headers,
         signal: controller.signal,
       });

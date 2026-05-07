@@ -9,7 +9,7 @@ The monolith backend uses hexagonal architecture across all domains with a CQRS 
 
 All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remain at root.
 
-**Note:** The user, transaction, and category domains have been extracted into standalone microservices (`user-service` on port 8001, `transaction-service` on port 8002). The monolith retains local copies of user and category data via event-driven sync. `user-service` is the source of truth for authentication, and `transaction-service` is the source of truth for transactions and categories. See the root `README.md` for the full microservices architecture.
+**Note:** The user, transaction, category, and goal domains have been extracted into standalone microservices (`user-service` on port 8001, `transaction-service` on port 8002, `categorization-service` on port 8005, `goal-service` on port 8006). The monolith retains local copies of user, category, and transaction data via event-driven sync. `user-service` is the source of truth for authentication, `transaction-service` for transactions and categories, `categorization-service` for the categorization pipeline (taxonomy, rules, rule engine), and `goal-service` for savings goals. See the root `README.md` for the full microservices architecture.
 
 ## Runtime Entry Points
 
@@ -21,15 +21,14 @@ All routes are versioned under `/api/v1/`. The `/health` and `/` endpoints remai
 
 ## Active Bounded Contexts (still in monolith)
 
-- `backend/transaction/` — CRUD, CSV import, planned transactions
-- `backend/category/` — CRUD + three-level hierarchy (Category / SubCategory / Merchant) + categorization pipeline (rule engine, ML/LLM ports)
-- `backend/banking/` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync, deduplication, auto-categorization)
+- `backend/category/` — three-level hierarchy (Category / SubCategory / Merchant) read model. Category write ownership lives in `transaction-service`; categorization pipeline logic is in `categorization-service`. This domain reads the projected MySQL copy
+- `backend/banking/` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync). Bank-synced transactions are forwarded to `transaction-service` via HTTP (`POST /api/v1/transactions/bulk`); deduplication and persistence happen there
 - `backend/budget/` — legacy per-category budgets
 - `backend/monthly_budget/` — aggregate-based monthly budgets with budget lines
-- `backend/analytics/` — dashboard overview, GraphQL read gateway
+- `backend/analytics/` — dashboard overview, GraphQL read gateway. Reads the MySQL transaction projection populated by `TransactionSyncConsumer`
 - `backend/account/` — CRUD + account groups
-- `backend/goal/` — CRUD
-- `backend/user/` — registration/login (delegates to monolith MySQL, but user-service is source of truth)
+- `backend/goal/` — legacy goal CRUD (goal-service on port 8006 is the source of truth)
+- `backend/user/` — local user management (user-service on port 8001 is source of truth)
 
 Each context follows the same layout:
 
@@ -86,13 +85,14 @@ backend/category/
 
 ## Event Consumers
 
-The monolith includes three independent RabbitMQ consumers:
+The monolith includes four independent RabbitMQ consumers:
 
 | Consumer | Queue | Routing Key | Responsibility |
 |----------|-------|-------------|---------------|
 | `UserSyncConsumer` | `monolith.user_sync` | `user.created` | Sync user data to MySQL User table |
 | `AccountCreationConsumer` | `monolith.account_creation` | `user.created` | Create default account in MySQL |
 | `CategorySyncConsumer` | `monolith.category_sync` | `category.*` | Sync categories from transaction-service to MySQL |
+| `TransactionSyncConsumer` | `monolith.transaction_sync` | `transaction.*` | Project transaction events into MySQL read model |
 
 All consumers:
 - Inherit from `BaseConsumer` with retry (3 attempts), DLQ, and DB-backed idempotency (`processed_events` table with auto-cleanup after 7 days)
@@ -104,6 +104,7 @@ All consumers:
 python -m backend.consumers.worker --consumer user-sync
 python -m backend.consumers.worker --consumer account-creation
 python -m backend.consumers.worker --consumer category-sync
+python -m backend.consumers.worker --consumer transaction-sync
 
 # Run all consumers
 python -m backend.consumers.worker
@@ -123,11 +124,10 @@ The monolith creates tokens with both `sub` (standard JWT claim) and legacy `use
 
 ## Router Map
 
+Transactions, planned-transactions and categories are owned by `transaction-service` (port 8002). Goals are owned by `goal-service` (port 8006). The monolith only serves its own domains.
+
 | Path | Domain | Protocol |
 |------|--------|----------|
-| `/api/v1/transactions/*` | Transaction | REST |
-| `/api/v1/planned-transactions/*` | Transaction | REST |
-| `/api/v1/categories/*` | Category (local cache) | REST |
 | `/api/v1/bank/*` | Banking (PSD2) | REST |
 | `/api/v1/budgets/*` (CRUD) | Budget (legacy) | REST |
 | `/api/v1/budgets/summary` | Analytics | REST |

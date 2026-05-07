@@ -4,6 +4,36 @@ Ongoing list of known issues and improvements deferred from active work.
 Not a replacement for an issue tracker — these are items not yet
 formalized. Reference entries from commit messages and ADRs as needed.
 
+## ADR-0003 goal allocation status (2026-05-01)
+
+The foundation for automatic virtual savings from budget surplus is in
+place and pushed to `origin/master`:
+
+* `de4e47a` — documents ADR-0003 and locks the event, idempotency,
+  schema, and v1 scope.
+* `8d7c51b` — adds `BudgetMonthClosedEvent` to shared contracts.
+* `980ac09` — adds goal-service schema support for default goals,
+  allocation history, and unallocated surplus.
+* `1a37de4` — links the bank-date follow-up to ADR-0003.
+* `cffab9b` — adds the application-layer budget month close handler.
+* `3cd2622` — adds SQLAlchemy repositories and UoW for the handler.
+
+Verified before push:
+
+* `services/shared/contracts`: `uv run pytest tests -q` and
+  `uvx ruff check/format`.
+* `services/goal-service`: `make check` and `make test` (`30 passed`).
+
+Still missing for the runtime flow:
+
+1. RabbitMQ worker in goal-service that deserializes
+   `budget.month_closed`, calls `BudgetMonthClosedHandler`, and acks
+   idempotent-success statuses including `duplicate`.
+2. Monolith publisher and day-7 scheduled close job for the previous
+   budget month.
+3. Frontend support for selecting a default savings goal and reading
+   allocation history.
+
 ## TanStack Query implicit context leak (2026-04-25, closed 2026-04-25)
 
 The Phase 3 TanStack Query rollout initially missed one security rule:
@@ -155,6 +185,11 @@ stay in WARNING-log territory. Worth tracking across multiple syncs;
 a rising rate would indicate a broader data-quality issue upstream
 at Enable Banking or the specific bank ASPSP.
 
+**Budget close follow-up:** Addressed by ADR-0003 (`de4e47a`),
+pending implementation of the day-7 budget close publisher. The v1
+publisher lives in the monolith; the future budget-service extraction
+must keep publishing the same `BudgetMonthClosedEvent` contract.
+
 ## `start_bank_connection` + `bank_callback` still use catch-all → 502 (2026-04-22, closed 2026-04-22)
 
 Closed by the same-day follow-on commit that introduced
@@ -199,7 +234,7 @@ The frontend `BankCallbackPage` maps short codes to user-friendly
 Danish messages via a local lookup table and never renders URL params
 directly as HTML, avoiding both information leakage and XSS surface.
 
-## Amount encoding consistency sweep (2026-04-24)
+## Amount encoding consistency sweep (2026-04-24, closed 2026-04-29)
 
 Commit `9f8a27d` switched the canonical amount convention used by
 `TransactionForm.jsx` from *signed amount* (negative for expenses) to
@@ -215,38 +250,59 @@ overview). The `amount < 0` fallback in
 `services/frontend/src/components/RecentTransactions/RecentTransactions.jsx`
 was kept and annotated as defensive code for legacy rows.
 
-**Still to verify** (post Modal 2.2 browser verification, before
-shipping to exam):
+### Sweep results (2026-04-29)
 
-1. **CSV import path.** Walk `POST /transactions/import-csv` end-to-end:
-   what does the frontend CSV parser send? If it sends signed amounts,
-   we now have an asymmetry between manual create (positive) and
-   import (signed). Start at `uploadTransactionsCsv` in
-   `services/frontend/src/api/transactions.jsx` and follow into
-   `services/transaction-service/app/application/service.py`
-   (`import_csv` / line 249 `amount = Decimal(row["amount"])`).
-2. **Edit flow.** `TransactionForm` preloads `setAmount(transactionToEdit.amount)`.
-   If historical rows have negative amounts in the DB *and* new rows
-   have positive amounts, the form will show a minus sign for old
-   expenses but not new ones — inconsistent UX. Confirm the preload
-   uses `Math.abs` or verify the DB is already uniformly positive.
-3. **Aggregations.** Grep for any chart/summary code that uses
-   arithmetic on `amount` (sum, reduce, comparison to 0) and confirm
-   it disambiguates via `transaction_type` rather than sign. Known
-   clean: `SummaryCards` (pre-aggregated by monolith),
-   `TransactionsList` (display only). Known defensive:
-   `RecentTransactions` (dual check, already annotated).
-4. **Historical data.** Run a one-off query against the
-   `transactions` table in Postgres: are existing rows uniformly
-   positive, or is there a mix? If mixed, decide: (a) one-shot
-   migration to normalise signs, or (b) leave historical data mixed
-   and rely on `transaction_type` for all new reads. Neither is wrong;
-   the point is that the decision is deliberate and documented.
+Full end-to-end code review and database audit completed. Findings
+per the four-point checklist:
 
-**Priority:** medium. Nothing is broken today — the fix works and
-tests pass. But an exam reviewer may ask "did you check for
-asymmetric behaviour?" and the right answer is "yes, here is the
-sweep I ran", not "I fixed the symptom I saw".
+1. **CSV import path.** Consistent. Frontend sends the file as
+   `multipart/form-data` (no client-side amount transformation).
+   Server-side `import_csv` rejects `amount <= 0` and requires
+   `transaction_type` as `"income"` or `"expense"`. Minor gap: CSV
+   path does not apply Pydantic `AMOUNT_MAX` / `decimal_places=2`
+   (DB `Numeric(12,2)` catches it at persist). Acceptable — the
+   convention is honoured.
+
+2. **Edit flow.** Fixed. `TransactionForm` now loads
+   `Math.abs(transactionToEdit.amount)` on edit, ensuring the input
+   field never shows a minus sign regardless of historical data.
+
+3. **Aggregations.** All safe. Every display path uses
+   `Math.abs(amount)` for magnitude and `transaction_type` / `type`
+   for direction. The monolith analytics service uses `type` as
+   primary signal with a sign-fallback for rows with missing type
+   (`is_income = tx_type == "income" or (tx_type == "" and amount > 0)`).
+   All `abs()` usage is correct and consistent.
+
+4. **Historical data.** Clean. Full-table query on 2026-04-29:
+   - Postgres (source of truth): 232 rows, **0 negative**, all in
+     range 1.00–7512.75. Distribution: 187 expense, 45 income.
+   - MySQL (projection): 458 rows, **0 negative**, same range.
+   No data migration needed.
+
+### Invariant now enforced at DB level
+
+Alembic migration `008_add_positive_amount_check.py` adds
+`CHECK (amount > 0)` on both `transactions` and
+`planned_transactions`. Verified: `INSERT ... amount=-50` returns
+`violates check constraint "ck_transactions_positive_amount"`.
+
+The full amount flow end-to-end:
+
+| Stage | Convention |
+|-------|-----------|
+| Enable Banking adapter | DBIT → negative float (internal only) |
+| `_to_bulk_item()` | `abs(amount)` + `income`/`expense` from sign |
+| Bulk POST to transaction-service | Positive Decimal + enum (validated by DTO `ge=0.01`) |
+| Postgres storage | Positive `Numeric(12,2)` + `CHECK (amount > 0)` |
+| Outbox event | `str(transaction.amount)` — positive string |
+| MySQL projection | `Decimal(event.amount)` — no transformation |
+| Frontend display | `Math.abs(amount)` + sign prefix from `type` |
+| Categorization rule engine | Uses signed `bank_txn.amount` for sign overrides (pre-abs, internal to banking module) |
+
+This item is closed. The convention (unsigned amount + `transaction_type`
+enum) is consistently applied across all entry points, enforced by a
+DB constraint, and verified against historical data.
 
 ## Duplicate transactions in MySQL projection (2026-04-22, cleanup script ready 2026-04-23)
 

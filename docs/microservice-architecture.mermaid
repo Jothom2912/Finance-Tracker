@@ -52,6 +52,18 @@ graph TD
             TS_DB[("PostgreSQL<br/>Transactions<br/>Planned Transactions<br/>Categories")]
             TS_OB[["outbox_events"]]
         end
+
+        subgraph categorizationService ["Categorization Service - port 8005"]
+            CAT["CategorizationService<br/>Rule - ML - LLM fallback<br/>Human-in-the-loop feedback"]
+            CAT_DB[("PostgreSQL<br/>Categorization feedback<br/>Pipeline state")]
+            CAT_OB[["outbox_events"]]
+        end
+
+        subgraph goalService ["Goal Service - port 8006"]
+            GS["GoalService<br/>Savings goals<br/>Goal event publisher"]
+            GS_DB[("PostgreSQL<br/>Goals")]
+            GS_OB[["outbox_events"]]
+        end
     end
 
     %% ──────────────────────────────────────────────
@@ -65,23 +77,14 @@ graph TD
         end
 
         subgraph accountService ["Account Service - port 8004"]
-            ACCS["AccountService<br/>Accounts, Account Groups<br/>Goals<br/>Minimal user data from events"]
-            ACCS_DB[("PostgreSQL<br/>Accounts, Goals<br/>Users - cached from events")]
+            ACCS["AccountService<br/>Accounts, Account Groups<br/>Minimal user data from events"]
+            ACCS_DB[("PostgreSQL<br/>Accounts<br/>Users - cached from events")]
             ACCS_OB[["outbox_events"]]
         end
 
-        subgraph analyticsService ["Analytics BFF - port 8005"]
+        subgraph analyticsService ["Analytics BFF - port 8007"]
             AS["AnalyticsService<br/>Dashboard aggregation<br/>GraphQL read gateway<br/>Hybrid: ES for aggregation + HTTP for lookups"]
             AS_ES[("Elasticsearch<br/>Denormalized read store<br/>Projected from all domain events")]
-        end
-    end
-
-    %% ──────────────────────────────────────────────
-    %% Phase 2: Future services
-    %% ──────────────────────────────────────────────
-    subgraph phase2 ["Phase 2 - Future"]
-        subgraph aiService ["AI Categorization Service"]
-            CAT["CategorizationService<br/>Rule - ML - LLM fallback<br/>Human-in-the-loop feedback"]
         end
     end
 
@@ -91,6 +94,8 @@ graph TD
     subgraph outboxWorkers ["Outbox Workers"]
         UOW["User Outbox Worker<br/>SELECT FOR UPDATE SKIP LOCKED"]
         TOW["Transaction Outbox Worker"]
+        COW["Categorization Outbox Worker"]
+        GOW["Goal Outbox Worker"]
         AOW["Account Outbox Worker"]
         BOW["Budget Outbox Worker"]
     end
@@ -127,6 +132,8 @@ graph TD
     %% ──────────────────────────────────────────────
     US --> US_DB
     TS --> TS_DB
+    CAT --> CAT_DB
+    GS --> GS_DB
     BS --> BS_DB
     ACCS --> ACCS_DB
     AS --> AS_ES
@@ -136,6 +143,8 @@ graph TD
     %% ──────────────────────────────────────────────
     US -.->|"same txn"| US_OB
     TS -.->|"same txn"| TS_OB
+    CAT -.->|"same txn"| CAT_OB
+    GS -.->|"same txn"| GS_OB
     BS -.->|"same txn"| BS_OB
     ACCS -.->|"same txn"| ACCS_OB
 
@@ -146,6 +155,10 @@ graph TD
     UOW -->|"publish"| RMQ
     TOW -->|"poll"| TS_OB
     TOW -->|"publish"| RMQ
+    COW -->|"poll"| CAT_OB
+    COW -->|"publish"| RMQ
+    GOW -->|"poll"| GS_OB
+    GOW -->|"publish"| RMQ
     BOW -->|"poll"| BS_OB
     BOW -->|"publish"| RMQ
     AOW -->|"poll"| ACCS_OB
@@ -163,7 +176,9 @@ graph TD
     RMQ -->|"transaction.created/deleted"| BS
     RMQ -->|"category.created/updated/deleted"| BS
     RMQ -->|"all domain events"| AS
-    RMQ -.->|"transaction.created<br/>Phase 2"| CAT
+    RMQ -->|"transaction.created"| CAT
+    RMQ -->|"transaction.categorized"| TS
+    RMQ -->|"goal.created/updated/deleted"| AS
 
     %% ──────────────────────────────────────────────
     %% JWT auth flow
@@ -180,9 +195,8 @@ graph TD
     classDef outbox fill:#fce4ec,stroke:#c62828
     classDef search fill:#fff9c4,stroke:#f9a825
 
-    class US,TS current
+    class US,TS,CAT,GS current
     class ACCS,BS,AS phase1sty
-    class CAT phase2sty
-    class RMQ,US_DB,TS_DB,ACCS_DB,BS_DB infra
-    class US_OB,TS_OB,ACCS_OB,BS_OB,UOW,TOW,AOW,BOW outbox
+    class RMQ,US_DB,TS_DB,CAT_DB,GS_DB,ACCS_DB,BS_DB infra
+    class US_OB,TS_OB,CAT_OB,GS_OB,ACCS_OB,BS_OB,UOW,TOW,COW,GOW,AOW,BOW outbox
     class AS_ES search
