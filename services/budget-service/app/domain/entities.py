@@ -10,6 +10,7 @@ class Budget:
     budget_date: Optional[date]
     account_id: int
     category_id: int
+    user_id: int
 
     def __post_init__(self) -> None:
         if self.amount < 0:

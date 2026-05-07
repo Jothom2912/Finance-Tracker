@@ -25,10 +25,12 @@ class BudgetService(IBudgetService):
 
     async def get_budget(self, budget_id: int, user_id: int) -> Optional[BudgetResponseDTO]:
         budget = await self._repo.get_by_id(budget_id)
-        return self._to_dto(budget) if budget else None
+        if not budget or budget.user_id != user_id:
+            return None
+        return self._to_dto(budget)
 
-    async def list_budgets(self, account_id: int) -> list[BudgetResponseDTO]:
-        budgets = await self._repo.get_all(account_id=account_id)
+    async def list_budgets(self, account_id: int, user_id: int) -> list[BudgetResponseDTO]:
+        budgets = await self._repo.get_all(account_id=account_id, user_id=user_id)
         return [self._to_dto(b) for b in budgets]
 
     async def create_budget(self, user_id: int, dto: BudgetCreateDTO) -> BudgetResponseDTO:
@@ -49,14 +51,15 @@ class BudgetService(IBudgetService):
             budget_date=budget_date,
             account_id=dto.account_id,
             category_id=dto.category_id,
+            user_id=user_id,
         )
         created = await self._repo.create(budget)
         logger.debug("Budget %s oprettet", created.id)
         return self._to_dto(created)
 
-    async def update_budget(self, budget_id: int, dto: BudgetUpdateDTO) -> Optional[BudgetResponseDTO]:
+    async def update_budget(self, budget_id: int, user_id: int, dto: BudgetUpdateDTO) -> Optional[BudgetResponseDTO]:
         existing = await self._repo.get_by_id(budget_id)
-        if not existing:
+        if not existing or existing.user_id != user_id:
             return None
 
         budget_date = existing.budget_date
@@ -77,11 +80,15 @@ class BudgetService(IBudgetService):
             budget_date=budget_date,
             account_id=existing.account_id,
             category_id=category_id,
+            user_id=existing.user_id,
         )
         result = await self._repo.update(updated)
         return self._to_dto(result)
 
-    async def delete_budget(self, budget_id: int) -> bool:
+    async def delete_budget(self, budget_id: int, user_id: int) -> bool:
+        existing = await self._repo.get_by_id(budget_id)
+        if not existing or existing.user_id != user_id:
+            return False
         return await self._repo.delete(budget_id)
 
     @staticmethod

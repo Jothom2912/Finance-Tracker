@@ -20,8 +20,13 @@ class PostgresBudgetRepository(IBudgetRepository):
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
 
-    async def get_all(self, account_id: int) -> list[Budget]:
-        result = await self._db.execute(select(BudgetModel).where(BudgetModel.account_id == account_id))
+    async def get_all(self, account_id: int, user_id: int) -> list[Budget]:
+        result = await self._db.execute(
+            select(BudgetModel).where(
+                BudgetModel.account_id == account_id,
+                BudgetModel.user_id == user_id,
+            )
+        )
         return [self._to_entity(m) for m in result.scalars().all()]
 
     async def create(self, budget: Budget) -> Budget:
@@ -30,6 +35,7 @@ class PostgresBudgetRepository(IBudgetRepository):
             budget_date=budget.budget_date,
             account_id=budget.account_id,
             category_id=budget.category_id,
+            user_id=budget.user_id,
         )
         self._db.add(model)
         await self._db.commit()
@@ -61,4 +67,5 @@ class PostgresBudgetRepository(IBudgetRepository):
             budget_date=model.budget_date,
             account_id=model.account_id,
             category_id=model.category_id,
+            user_id=model.user_id,
         )

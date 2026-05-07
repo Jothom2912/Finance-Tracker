@@ -4,7 +4,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.adapters.inbound.rest_api import router
 from app.config import settings
@@ -49,3 +49,8 @@ async def category_not_found_handler(_request: Request, exc: CategoryNotFoundFor
 
 
 app.include_router(router, prefix="/api/v1")
+
+
+@app.get("/health", tags=["Health"])
+async def health() -> Response:
+    return Response(status_code=200, content='{"status":"ok"}', media_type="application/json")

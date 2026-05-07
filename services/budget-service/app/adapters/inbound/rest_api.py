@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -20,13 +19,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/budgets", tags=["Budgets"])
 
 
-@router.get("/", response_model=List[BudgetResponseDTO])
+@router.get("/", response_model=list[BudgetResponseDTO])
 async def list_budgets(
     account_id: int,
     service: IBudgetService = Depends(get_budget_service),
     user_id: int = Depends(get_current_user_id),
 ):
-    return await service.list_budgets(account_id=account_id)
+    return await service.list_budgets(account_id=account_id, user_id=user_id)
 
 
 @router.get("/{budget_id}", response_model=BudgetResponseDTO)
@@ -61,7 +60,7 @@ async def update_budget(
     user_id: int = Depends(get_current_user_id),
 ):
     try:
-        result = await service.update_budget(budget_id, dto)
+        result = await service.update_budget(budget_id, user_id, dto)
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
         return result
@@ -75,5 +74,5 @@ async def delete_budget(
     service: IBudgetService = Depends(get_budget_service),
     user_id: int = Depends(get_current_user_id),
 ):
-    if not await service.delete_budget(budget_id):
+    if not await service.delete_budget(budget_id, user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")

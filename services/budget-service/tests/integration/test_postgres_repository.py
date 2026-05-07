@@ -76,7 +76,7 @@ class TestCreateBudget:
     async def test_returns_budget_with_id(self, repo) -> None:
         from app.domain.entities import Budget
 
-        budget = Budget(id=None, amount=1000.0, budget_date=date(2026, 5, 1), account_id=1, category_id=1)
+        budget = Budget(id=None, amount=1000.0, budget_date=date(2026, 5, 1), account_id=1, category_id=1, user_id=1)
         created = await repo.create(budget)
 
         assert created.id is not None
@@ -88,7 +88,7 @@ class TestCreateBudget:
     async def test_amount_stored_correctly(self, repo) -> None:
         from app.domain.entities import Budget
 
-        budget = Budget(id=None, amount=2500.50, budget_date=date(2026, 6, 1), account_id=2, category_id=3)
+        budget = Budget(id=None, amount=2500.50, budget_date=date(2026, 6, 1), account_id=2, category_id=3, user_id=1)
         created = await repo.create(budget)
 
         assert created.amount == 2500.50
@@ -98,7 +98,7 @@ class TestGetBudget:
     async def test_get_by_id_returns_correct_budget(self, repo) -> None:
         from app.domain.entities import Budget
 
-        budget = Budget(id=None, amount=500.0, budget_date=date(2026, 7, 1), account_id=1, category_id=2)
+        budget = Budget(id=None, amount=500.0, budget_date=date(2026, 7, 1), account_id=1, category_id=2, user_id=1)
         created = await repo.create(budget)
 
         fetched = await repo.get_by_id(created.id)
@@ -117,15 +117,15 @@ class TestListBudgets:
 
         # Opret 2 budgets til account 10, 1 til account 11
         for month in [1, 2]:
-            await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, month, 1), account_id=10, category_id=1))
-        await repo.create(Budget(id=None, amount=200.0, budget_date=date(2026, 3, 1), account_id=11, category_id=1))
+            await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, month, 1), account_id=10, category_id=1, user_id=1))
+        await repo.create(Budget(id=None, amount=200.0, budget_date=date(2026, 3, 1), account_id=11, category_id=1, user_id=1))
 
-        result = await repo.get_all(account_id=10)
+        result = await repo.get_all(account_id=10, user_id=1)
         assert len(result) >= 2
         assert all(b.account_id == 10 for b in result)
 
     async def test_get_all_returns_empty_for_unknown_account(self, repo) -> None:
-        result = await repo.get_all(account_id=99999)
+        result = await repo.get_all(account_id=99999, user_id=1)
         assert result == []
 
 
@@ -133,7 +133,7 @@ class TestUpdateBudget:
     async def test_update_amount(self, repo) -> None:
         from app.domain.entities import Budget
 
-        created = await repo.create(Budget(id=None, amount=300.0, budget_date=date(2026, 8, 1), account_id=5, category_id=1))
+        created = await repo.create(Budget(id=None, amount=300.0, budget_date=date(2026, 8, 1), account_id=5, category_id=1, user_id=1))
         created.amount = 999.0
         updated = await repo.update(created)
 
@@ -143,7 +143,7 @@ class TestUpdateBudget:
     async def test_update_category_id(self, repo) -> None:
         from app.domain.entities import Budget
 
-        created = await repo.create(Budget(id=None, amount=400.0, budget_date=date(2026, 9, 1), account_id=6, category_id=1))
+        created = await repo.create(Budget(id=None, amount=400.0, budget_date=date(2026, 9, 1), account_id=6, category_id=1, user_id=1))
         created.category_id = 5
         updated = await repo.update(created)
 
@@ -154,7 +154,7 @@ class TestDeleteBudget:
     async def test_delete_returns_true(self, repo) -> None:
         from app.domain.entities import Budget
 
-        created = await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, 10, 1), account_id=7, category_id=1))
+        created = await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, 10, 1), account_id=7, category_id=1, user_id=1))
         result = await repo.delete(created.id)
 
         assert result is True
@@ -162,7 +162,7 @@ class TestDeleteBudget:
     async def test_deleted_budget_not_found(self, repo) -> None:
         from app.domain.entities import Budget
 
-        created = await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, 11, 1), account_id=8, category_id=1))
+        created = await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, 11, 1), account_id=8, category_id=1, user_id=1))
         await repo.delete(created.id)
 
         fetched = await repo.get_by_id(created.id)

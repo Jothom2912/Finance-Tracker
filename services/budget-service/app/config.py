@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
-    CATEGORY_SERVICE_URL: str = "http://localhost:8003"
+    CATEGORY_SERVICE_URL: str = "http://localhost:8005"
 
 
 settings = Settings()
