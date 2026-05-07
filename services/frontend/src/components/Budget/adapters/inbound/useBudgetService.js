@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { BudgetService } from '../../application/BudgetService';
 import { RestApiBudgetRepository } from '../outbound/RestApiBudgetRepository';
+import { BUDGET_SERVICE_URL } from '../../../../config/serviceUrls';
 import {
   BudgetValidationException,
   BudgetDuplicateException,
@@ -17,7 +18,7 @@ import {
  * @private
  */
 function initializeBudgetService() {
-  const repository = new RestApiBudgetRepository();
+  const repository = new RestApiBudgetRepository(`${BUDGET_SERVICE_URL}/budgets`);
   return new BudgetService(repository);
 }
 
