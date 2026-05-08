@@ -59,18 +59,22 @@ if not DATABASE_URL and not _is_pytest:
 # Opret engine og SessionLocal kun hvis DATABASE_URL er sat
 # I pytest miljøer vil disse være None, men det er OK fordi tests bruger deres egen database
 if DATABASE_URL:
-    logger.info(f"🔗 Database URL: {DATABASE_URL.split('@')[0]}@***")  # Log uden password
+    if "@" in DATABASE_URL:
+        logger.info(f"🔗 Database URL: {DATABASE_URL.split('@')[0]}@***")
+    else:
+        logger.info(f"🔗 Database URL: {DATABASE_URL}")
 
-    engine = create_engine(
-        DATABASE_URL,
-        pool_pre_ping=True,
-        echo=False,
-        pool_timeout=10,
-        pool_size=5,
-        max_overflow=10,
-        pool_recycle=3600,
-    )
+    _engine_kwargs: dict = {"echo": False}
+    if not DATABASE_URL.startswith("sqlite"):
+        _engine_kwargs.update(
+            pool_pre_ping=True,
+            pool_timeout=10,
+            pool_size=5,
+            max_overflow=10,
+            pool_recycle=3600,
+        )
 
+    engine = create_engine(DATABASE_URL, **_engine_kwargs)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 else:
     # I pytest miljøer, sæt disse til None

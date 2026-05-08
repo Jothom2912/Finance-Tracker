@@ -2,7 +2,7 @@
 
 import enum
 #from datetime import datetime  # noqa: F401
-from sqlalchemy import DECIMAL, Column, Integer, String
+from sqlalchemy import DECIMAL, Column, ForeignKey, Integer, String, Table
 
 #from sqlalchemy import (  # noqa: F401
 #    DECIMAL,
@@ -20,6 +20,20 @@ from sqlalchemy import DECIMAL, Column, Integer, String
 #from sqlalchemy.sql import func  # noqa: F401
 
 from app.database import Base  # noqa: F401
+
+
+account_group_user_association = Table(
+    "AccountGroups_has_User",
+    Base.metadata,
+    Column(
+        "AccountGroups_idAccountGroups",
+        Integer,
+        ForeignKey("AccountGroups.idAccountGroups", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("User_idUser", Integer, primary_key=True),
+    extend_existing=True,
+)
 
 
 """ # --- ENUMS ---

@@ -79,6 +79,7 @@ TRANSACTION_SERVICE_TIMEOUT = float(os.getenv("TRANSACTION_SERVICE_TIMEOUT", "10
 
 # Base URL for user-service (used for HTTP calls instead of direct DB access)
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8001")
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
 
 
 # =============================================================================

@@ -8,3 +8,4 @@ passlib[bcrypt]
 httpx
 pydantic
 psycopg2-binary
+alembic

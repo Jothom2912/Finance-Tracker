@@ -89,6 +89,7 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: dev-secret-key-change-in-production
       JWT_EXPIRE_MINUTES: "60"
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
     depends_on:
@@ -279,11 +280,14 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://account_user:account_password@postgres-account:5432/account_db
       JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
       USER_SERVICE_URL: http://user-service:8001
       CORS_ORIGINS: http://localhost:3000,http://localhost:3001
     depends_on:
-      - postgres-account
-      - user-service
+      postgres-account:
+        condition: service_healthy
+      user-service:
+        condition: service_started
 
   postgres-account:
     image: postgres:16
@@ -292,7 +296,15 @@ services:
       POSTGRES_PASSWORD: account_password
       POSTGRES_DB: account_db
     ports:
-      - "5435:5432"
+      - "5436:5432"
+    volumes:
+      - postgres_account_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U account_user"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   transaction-outbox-worker:
     build:
@@ -430,5 +442,6 @@ volumes:
   postgres_data:
   postgres_goals_data:
   postgres_transactions_data:
+  postgres_account_data:
   postgres_categorization_data:
   rabbitmq_data:

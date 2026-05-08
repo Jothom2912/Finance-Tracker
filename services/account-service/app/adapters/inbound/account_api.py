@@ -62,6 +62,7 @@ def create_account(
     data = AccountCreate(
         name=account_data.name,
         saldo=account_data.saldo,
+        budget_start_day=account_data.budget_start_day,
         User_idUser=user_id,
     )
     try:
