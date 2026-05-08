@@ -8,11 +8,11 @@ dependencies for FastAPI's Depends().
 All active domains use hexagonal architecture, including analytics.
 
 Usage in routes:
-    from backend.dependencies import get_account_service
+    from backend.dependencies import get_budget_service
 
     @router.get("/")
-    def list_items(service: AccountService = Depends(get_account_service)):
-        return service.list_accounts(user_id=1)
+    def list_items(service: BudgetService = Depends(get_budget_service)):
+        return service.list_budgets(user_id=1)
 """
 
 import logging
@@ -22,16 +22,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-from backend.account.adapters.outbound.mysql_account_group_repository import (
-    MySQLAccountGroupRepository as HexMySQLAccountGroupRepository,
-)
-from backend.account.adapters.outbound.mysql_account_repository import (
-    MySQLAccountRepository as HexMySQLAccountRepository,
-)
-from backend.account.adapters.outbound.user_adapter import MySQLUserAdapter
-
-# Hexagonal Account domain
-from backend.account.application.service import AccountService as HexAccountService
+# Account domain removed — account-service owns this now (Phase 4 cutover)
 from backend.analytics.adapters.outbound.elasticsearch_repository import (
     ElasticsearchAnalyticsReadRepository,
 )
@@ -198,17 +189,6 @@ def get_goal_service(
     return HexGoalService(
         goal_repository=HexMySQLGoalRepository(db),
         account_port=GoalAccountAdapter(db),
-    )
-
-
-def get_account_service(
-    db: Session = Depends(get_db),
-) -> HexAccountService:
-    """Create hexagonal AccountService with proper repositories."""
-    return HexAccountService(
-        account_repository=HexMySQLAccountRepository(db),
-        account_group_repository=HexMySQLAccountGroupRepository(db),
-        user_port=MySQLUserAdapter(db),
     )
 
 

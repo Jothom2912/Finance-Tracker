@@ -31,7 +31,7 @@ class MySQLAccountRepository(IAccountRepository):
             budget_start_day=account.budget_start_day,
         )
         self._db.add(model)
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(model)
         return self._to_entity(model)
 
@@ -42,7 +42,7 @@ class MySQLAccountRepository(IAccountRepository):
         model.saldo = account.saldo
         model.budget_start_day = account.budget_start_day
 
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(model)
         return self._to_entity(model)
 
@@ -52,7 +52,7 @@ class MySQLAccountRepository(IAccountRepository):
             return False
 
         self._db.delete(model)
-        self._db.commit()
+        self._db.flush()
         return True
 
     def _to_entity(self, model: AccountModel) -> Account:

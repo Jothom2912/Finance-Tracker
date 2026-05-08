@@ -210,20 +210,7 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  account-creation-consumer:
-    build:
-      context: .
-      dockerfile: services/monolith/Dockerfile
-    command: ["python", "-m", "backend.consumers.worker", "--consumer", "account-creation"]
-    environment:
-      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
-      SECRET_KEY: dev-secret-key-change-in-production
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+  # account-creation-consumer: REMOVED — replaced by account-service-consumer (Phase 5)
 
   category-sync-consumer:
     build:
@@ -246,6 +233,22 @@ services:
       context: .
       dockerfile: services/monolith/Dockerfile
     command: ["python", "-m", "backend.consumers.worker", "--consumer", "transaction-sync"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
+      SECRET_KEY: dev-secret-key-change-in-production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  account-sync-consumer:
+    build:
+      context: .
+      dockerfile: services/monolith/Dockerfile
+    command: ["python", "-m", "backend.consumers.worker", "--consumer", "account-sync"]
     restart: unless-stopped
     environment:
       DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
@@ -328,6 +331,39 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+
+  account-outbox-publisher:
+    build:
+      context: .
+      dockerfile: services/account-service/Dockerfile
+    command: ["python", "-m", "app.workers.outbox_publisher"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://account_user:account_password@postgres-account:5432/account_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      postgres-account:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  account-service-consumer:
+    build:
+      context: .
+      dockerfile: services/account-service/Dockerfile
+    command: ["python", "-m", "app.consumers.worker"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg2://account_user:account_password@postgres-account:5432/account_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      USER_SERVICE_URL: http://user-service:8001
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+    depends_on:
+      postgres-account:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      user-service:
+        condition: service_started
 
   transaction-outbox-worker:
     build:
@@ -439,7 +475,7 @@ services:
       context: .
       dockerfile: services/ai-service/Dockerfile
     ports:
-      - "8004:8004"
+      - "8007:8004"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       LLM_MODEL: qwen3:1.7b
@@ -467,7 +503,7 @@ services:
       POSTGRES_PASSWORD: budget_service_pass
       POSTGRES_DB: budget_service
     ports:
-      - "5436:5432"
+      - "5437:5432"
     volumes:
       - postgres_budget_data:/var/lib/postgresql/data
     healthcheck:

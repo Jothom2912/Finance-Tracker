@@ -9,3 +9,5 @@ httpx
 pydantic
 psycopg2-binary
 alembic
+aio-pika
+asyncpg

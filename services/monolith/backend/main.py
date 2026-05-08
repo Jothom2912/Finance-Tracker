@@ -71,8 +71,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 # Hexagonal architecture routers
-from backend.account.adapters.inbound.account_api import router as account_router
-from backend.account.adapters.inbound.account_group_api import router as account_group_router
+# Account routes removed — account-service owns this domain now (Phase 4 cutover)
 from backend.analytics.adapters.inbound.graphql_api import create_graphql_router
 from backend.analytics.adapters.inbound.rest_api import (
     budget_summary_router,
@@ -161,8 +160,6 @@ v1.include_router(budget_router)
 
 v1.include_router(monthly_budget_router)
 
-v1.include_router(account_router)
-v1.include_router(account_group_router)
 v1.include_router(goal_router)
 v1.include_router(user_router)
 

@@ -26,10 +26,6 @@ from aio_pika import DeliveryMode, ExchangeType, Message
 from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
 
 from backend.config import DATABASE_URL, RABBITMQ_URL
-from backend.consumers.account_creation import AccountCreationConsumer
-from backend.consumers.category_sync import CategorySyncConsumer
-from backend.consumers.transaction_sync import TransactionSyncConsumer
-from backend.consumers.user_sync import UserSyncConsumer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -91,6 +87,8 @@ def _build_session_factory():  # type: ignore[no-untyped-def]
 
 async def _run_user_sync(session_factory: object) -> None:
     """Run only the user-sync consumer."""
+    from backend.consumers.user_sync import UserSyncConsumer
+
     consumer = UserSyncConsumer(
         rabbitmq_url=RABBITMQ_URL,
         db_session_factory=session_factory,
@@ -100,6 +98,8 @@ async def _run_user_sync(session_factory: object) -> None:
 
 async def _run_account_creation(session_factory: object, publisher: _WorkerPublisher) -> None:
     """Run only the account-creation consumer."""
+    from backend.consumers.account_creation import AccountCreationConsumer
+
     consumer = AccountCreationConsumer(
         rabbitmq_url=RABBITMQ_URL,
         db_session_factory=session_factory,
@@ -110,6 +110,8 @@ async def _run_account_creation(session_factory: object, publisher: _WorkerPubli
 
 async def _run_category_sync(session_factory: object) -> None:
     """Run only the category-sync consumer."""
+    from backend.consumers.category_sync import CategorySyncConsumer
+
     consumer = CategorySyncConsumer(
         rabbitmq_url=RABBITMQ_URL,
         db_session_factory=session_factory,
@@ -119,7 +121,20 @@ async def _run_category_sync(session_factory: object) -> None:
 
 async def _run_transaction_sync(session_factory: object) -> None:
     """Run only the transaction-sync consumer."""
+    from backend.consumers.transaction_sync import TransactionSyncConsumer
+
     consumer = TransactionSyncConsumer(
+        rabbitmq_url=RABBITMQ_URL,
+        db_session_factory=session_factory,
+    )
+    await consumer.run()
+
+
+async def _run_account_sync(session_factory: object) -> None:
+    """Run only the account-sync consumer."""
+    from backend.consumers.account_sync import AccountSyncConsumer
+
+    consumer = AccountSyncConsumer(
         rabbitmq_url=RABBITMQ_URL,
         db_session_factory=session_factory,
     )
@@ -147,6 +162,9 @@ async def main(consumer_name: str | None = None) -> None:
         elif consumer_name == "transaction-sync":
             logger.info("Running transaction-sync consumer only")
             await _run_transaction_sync(session_factory)
+        elif consumer_name == "account-sync":
+            logger.info("Running account-sync consumer only")
+            await _run_account_sync(session_factory)
         else:
             logger.info("Running all consumers")
             await asyncio.gather(
@@ -154,6 +172,7 @@ async def main(consumer_name: str | None = None) -> None:
                 _run_account_creation(session_factory, publisher),
                 _run_category_sync(session_factory),
                 _run_transaction_sync(session_factory),
+                _run_account_sync(session_factory),
             )
     finally:
         await publisher.close()
@@ -168,6 +187,7 @@ def _parse_args() -> argparse.Namespace:
             "account-creation",
             "category-sync",
             "transaction-sync",
+            "account-sync",
         ],
         default=None,
         help="Run a specific consumer (default: all)",

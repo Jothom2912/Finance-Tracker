@@ -11,6 +11,9 @@ const BUDGET_SERVICE_URL =
   import.meta.env.VITE_BUDGET_SERVICE_URL || 'http://localhost:8003/api/v1';
 
 const AI_SERVICE_URL =
-  import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8004/api/v1';
+  import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8007/api/v1';
 
-export { MONOLITH_URL, USER_SERVICE_URL, TRANSACTION_SERVICE_URL, BUDGET_SERVICE_URL, AI_SERVICE_URL };
+const ACCOUNT_SERVICE_URL =
+  import.meta.env.VITE_ACCOUNT_SERVICE_URL || 'http://localhost:8004/api/v1';
+
+export { MONOLITH_URL, USER_SERVICE_URL, TRANSACTION_SERVICE_URL, BUDGET_SERVICE_URL, AI_SERVICE_URL, ACCOUNT_SERVICE_URL };

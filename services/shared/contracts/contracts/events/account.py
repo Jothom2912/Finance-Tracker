@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from contracts.base import BaseEvent
 
 
@@ -12,6 +14,21 @@ class AccountCreatedEvent(BaseEvent):
     account_id: int
     user_id: int
     account_name: str
+    saldo: str = "0.00"
+    budget_start_day: int = 1
+
+
+class AccountUpdatedEvent(BaseEvent):
+    """Published when an account is updated. Carries full state for self-healing sync."""
+
+    event_type: str = "account.updated"
+    event_version: int = 1
+
+    account_id: int
+    user_id: int
+    name: str
+    saldo: str
+    budget_start_day: int
 
 
 class AccountCreationFailedEvent(BaseEvent):

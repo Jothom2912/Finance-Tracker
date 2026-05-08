@@ -2,8 +2,11 @@
 
 Orchestrates use cases using domain entities and ports."""
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Optional
 
 from app.application.dto import (
     Account as AccountSchema,
@@ -28,6 +31,9 @@ from app.domain.exceptions import (
     UserNotFoundForAccount,
 )
 
+if TYPE_CHECKING:
+    from app.adapters.outbound.outbox_repository import SyncOutboxRepository
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,10 +45,14 @@ class AccountService(IAccountService):
         account_repository: IAccountRepository,
         account_group_repository: IAccountGroupRepository,
         user_port: IUserPort,
+        outbox: Optional[SyncOutboxRepository] = None,
+        commit_fn: Optional[callable] = None,
     ):
         self._account_repo = account_repository
         self._group_repo = account_group_repository
         self._user_port = user_port
+        self._outbox = outbox
+        self._commit = commit_fn
 
     # ------------------------------------------------------------------
     # Account methods
@@ -71,6 +81,27 @@ class AccountService(IAccountService):
         )
 
         created = self._account_repo.create(account)
+
+        if self._outbox:
+            self._outbox.add(
+                event_type="account.created",
+                payload={
+                    "event_type": "account.created",
+                    "event_version": 1,
+                    "account_id": created.id,
+                    "user_id": created.user_id,
+                    "account_name": created.name,
+                    "saldo": str(created.saldo),
+                    "budget_start_day": created.budget_start_day,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                aggregate_type="account",
+                aggregate_id=str(created.id),
+            )
+
+        if self._commit:
+            self._commit()
+
         return self._account_to_dto(created)
 
     def update_account(self, account_id: int, data: AccountBase) -> Optional[AccountSchema]:
@@ -87,6 +118,27 @@ class AccountService(IAccountService):
         )
 
         result = self._account_repo.update(updated_account)
+
+        if self._outbox:
+            self._outbox.add(
+                event_type="account.updated",
+                payload={
+                    "event_type": "account.updated",
+                    "event_version": 1,
+                    "account_id": result.id,
+                    "user_id": result.user_id,
+                    "name": result.name,
+                    "saldo": str(result.saldo),
+                    "budget_start_day": result.budget_start_day,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                aggregate_type="account",
+                aggregate_id=str(result.id),
+            )
+
+        if self._commit:
+            self._commit()
+
         return self._account_to_dto(result)
 
     # ------------------------------------------------------------------
