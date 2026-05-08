@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 REGISTER_URL = "/api/v1/users/register"
 LOGIN_URL = "/api/v1/users/login"
 ME_URL = "/api/v1/users/me"
+INTERNAL_API_KEY = "test-internal-api-key"
 
 VALID_USER = {
     "username": "alice",
@@ -165,6 +166,44 @@ class TestGetMe:
         resp = await client.get(ME_URL, headers={"Authorization": "Bearer garbage.token.here"})
 
         assert resp.status_code == 401
+
+
+class TestInternalUserLookup:
+    @pytest.mark.asyncio()
+    async def test_get_user_by_id_rejects_missing_internal_api_key(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "INTERNAL_API_KEY", INTERNAL_API_KEY)
+        registered = await _register(client)
+        user_id = registered["response"].json()["id"]
+
+        resp = await client.get(f"/api/v1/users/{user_id}")
+
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio()
+    async def test_get_user_by_id_accepts_internal_api_key(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "INTERNAL_API_KEY", INTERNAL_API_KEY)
+        registered = await _register(client)
+        user_id = registered["response"].json()["id"]
+
+        resp = await client.get(
+            f"/api/v1/users/{user_id}",
+            headers={"X-Internal-API-Key": INTERNAL_API_KEY},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["username"] == "alice"
 
 
 # ── Cross-service JWT compatibility ──────────────────────────────

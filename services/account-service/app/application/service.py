@@ -5,25 +5,25 @@ Orchestrates use cases using domain entities and ports."""
 import logging
 from typing import Optional
 
-from backend.account.application.dto import (
+from app.application.dto import (
     Account as AccountSchema,
 )
-from backend.account.application.dto import (
+from app.application.dto import (
     AccountBase,
     AccountCreate,
     AccountGroupsCreate,
 )
-from backend.account.application.dto import (
+from app.application.dto import (
     AccountGroups as AccountGroupSchema,
 )
-from backend.account.application.ports.inbound import IAccountService
-from backend.account.application.ports.outbound import (
+from app.application.ports.inbound import IAccountService
+from app.application.ports.outbound import (
     IAccountGroupRepository,
     IAccountRepository,
     IUserPort,
 )
-from backend.account.domain.entities import Account, AccountGroup
-from backend.account.domain.exceptions import (
+from app.domain.entities import Account, AccountGroup
+from app.domain.exceptions import (
     InvalidUserInGroup,
     UserNotFoundForAccount,
 )

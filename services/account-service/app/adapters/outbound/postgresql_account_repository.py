@@ -4,9 +4,9 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from backend.account.application.ports.outbound import IAccountRepository
-from backend.account.domain.entities import Account
-from backend.models.mysql.account import Account as AccountModel
+from app.application.ports.outbound import IAccountRepository
+from app.domain.entities import Account
+from app.models.account import Account as AccountModel
 
 
 class MySQLAccountRepository(IAccountRepository):

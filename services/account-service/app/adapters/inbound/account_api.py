@@ -2,17 +2,17 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.account.application.dto import (
+from app.application.dto import (
     Account as AccountSchema,
 )
-from backend.account.application.dto import (
+from app.application.dto import (
     AccountBase,
     AccountCreate,
 )
-from backend.account.application.service import AccountService
-from backend.account.domain.exceptions import UserNotFoundForAccount
-from backend.auth import get_current_user_id
-from backend.dependencies import get_account_service
+from app.application.service import AccountService
+from app.domain.exceptions import UserNotFoundForAccount
+from app.auth import get_current_user_id
+from app.dependencies import get_account_service
 
 router = APIRouter(
     prefix="/accounts",
@@ -62,6 +62,7 @@ def create_account(
     data = AccountCreate(
         name=account_data.name,
         saldo=account_data.saldo,
+        budget_start_day=account_data.budget_start_day,
         User_idUser=user_id,
     )
     try:

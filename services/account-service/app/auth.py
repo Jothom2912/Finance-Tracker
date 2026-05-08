@@ -13,9 +13,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
-from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
-from backend.shared.adapters.auth_dependencies import get_account_resolver
-from backend.shared.ports.auth_ports import IAccountResolver
+from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
+
 
 # Validate SECRET_KEY at import time
 if not SECRET_KEY:
@@ -188,41 +187,41 @@ def get_current_user_id(authorization: Optional[str] = Header(None, alias="Autho
 # ============================================================================
 
 
-def get_account_id_from_headers(
-    authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
-    resolver: IAccountResolver = Depends(get_account_resolver),
-) -> Optional[int]:
-    """
-    FastAPI Dependency: Resolves account_id from request headers.
+# def get_account_id_from_headers(
+#     authorization: Optional[str] = Header(None, alias="Authorization"),
+#     x_account_id: Optional[str] = Header(None, alias="X-Account-ID"),
+#     resolver: IAccountResolver = Depends(get_account_resolver),
+# ) -> Optional[int]:
+#     """
+#     FastAPI Dependency: Resolves account_id from request headers.
 
-    Priority:
-    1. X-Account-ID header (explicit account selection)
-    2. First account for the authenticated user (fallback via JWT)
+#     Priority:
+#     1. X-Account-ID header (explicit account selection)
+#     2. First account for the authenticated user (fallback via JWT)
 
-    Returns:
-        account_id if found, None otherwise
-    """
-    token_data: Optional[TokenData] = None
-    if authorization:
-        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        token_data = decode_token(token)
+#     Returns:
+#         account_id if found, None otherwise
+#     """
+#     token_data: Optional[TokenData] = None
+#     if authorization:
+#         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+#         token_data = decode_token(token)
 
-    if x_account_id:
-        try:
-            requested_account_id = int(x_account_id)
-        except ValueError:
-            requested_account_id = None
+#     if x_account_id:
+#         try:
+#             requested_account_id = int(x_account_id)
+#         except ValueError:
+#             requested_account_id = None
 
-        if requested_account_id is not None and token_data:
-            if resolver.verify_account_ownership(token_data.user_id, requested_account_id):
-                return requested_account_id
-        return None
+#         if requested_account_id is not None and token_data:
+#             if resolver.verify_account_ownership(token_data.user_id, requested_account_id):
+#                 return requested_account_id
+#         return None
 
-    if token_data:
-        return resolver.get_account_id_for_user(token_data.user_id)
+#     if token_data:
+#         return resolver.get_account_id_for_user(token_data.user_id)
 
-    return None
+#     return None
 
 
 # ============================================================================
