@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from backend.account.domain.entities import Account
-from backend.consumers.account_creation import AccountCreationConsumer
 from backend.consumers.base import HEADER_RETRY_COUNT, BaseConsumer
 from backend.consumers.user_sync import UserSyncConsumer
 from backend.models.mysql.processed_event import ProcessedEvent
-from contracts.events.account import (
-    AccountCreatedEvent,
-    AccountCreationFailedEvent,
-)
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -31,113 +25,6 @@ def _valid_event_data(
         "correlation_id": correlation_id,
         "timestamp": "2026-01-01T00:00:00+00:00",
     }
-
-
-# ── AccountCreationConsumer ─────────────────────────────────────────
-
-
-def _make_account_consumer(
-    session_factory: MagicMock | None = None,
-    publisher: AsyncMock | None = None,
-) -> AccountCreationConsumer:
-    return AccountCreationConsumer(
-        rabbitmq_url="amqp://guest:guest@localhost:5672/",
-        db_session_factory=session_factory or MagicMock(),
-        publisher=publisher or AsyncMock(),
-    )
-
-
-class TestAccountCreationConsumer:
-    @pytest.mark.asyncio()
-    async def test_uses_own_queue_name(self) -> None:
-        consumer = _make_account_consumer()
-        assert consumer._queue_name == "monolith.account_creation"
-
-    @pytest.mark.asyncio()
-    async def test_creates_default_account(self) -> None:
-        session = MagicMock()
-        factory = MagicMock(return_value=session)
-        publisher = AsyncMock()
-
-        created_account = Account(id=10, name="Default Account", saldo=0.0, user_id=1)
-
-        consumer = _make_account_consumer(factory, publisher)
-
-        with patch("backend.consumers.account_creation.MySQLAccountRepository") as mock_repo_cls:
-            mock_repo_cls.return_value.create.return_value = created_account
-            await consumer.handle(_valid_event_data())
-
-        mock_repo_cls.return_value.create.assert_called_once()
-        call_arg = mock_repo_cls.return_value.create.call_args[0][0]
-        assert call_arg.name == "Default Account"
-        assert call_arg.user_id == 1
-
-    @pytest.mark.asyncio()
-    async def test_publishes_account_created_event(self) -> None:
-        session = MagicMock()
-        factory = MagicMock(return_value=session)
-        publisher = AsyncMock()
-
-        created_account = Account(id=10, name="Default Account", saldo=0.0, user_id=1)
-        consumer = _make_account_consumer(factory, publisher)
-
-        with patch("backend.consumers.account_creation.MySQLAccountRepository") as mock_repo_cls:
-            mock_repo_cls.return_value.create.return_value = created_account
-            await consumer.handle(_valid_event_data())
-
-        assert publisher.publish.await_count == 1
-        event = publisher.publish.call_args[0][0]
-        assert isinstance(event, AccountCreatedEvent)
-        assert event.account_id == 10
-        assert event.user_id == 1
-        assert event.account_name == "Default Account"
-
-    @pytest.mark.asyncio()
-    async def test_propagates_correlation_id(self) -> None:
-        session = MagicMock()
-        factory = MagicMock(return_value=session)
-        publisher = AsyncMock()
-
-        created_account = Account(id=10, name="Default Account", saldo=0.0, user_id=1)
-        consumer = _make_account_consumer(factory, publisher)
-
-        with patch("backend.consumers.account_creation.MySQLAccountRepository") as mock_repo_cls:
-            mock_repo_cls.return_value.create.return_value = created_account
-            await consumer.handle(_valid_event_data(correlation_id="trace-abc-123"))
-
-        event = publisher.publish.call_args[0][0]
-        assert event.correlation_id == "trace-abc-123"
-
-    @pytest.mark.asyncio()
-    async def test_failure_publishes_compensation_event(self) -> None:
-        session = MagicMock()
-        factory = MagicMock(return_value=session)
-        publisher = AsyncMock()
-
-        consumer = _make_account_consumer(factory, publisher)
-
-        with patch("backend.consumers.account_creation.MySQLAccountRepository") as mock_repo_cls:
-            mock_repo_cls.return_value.create.side_effect = RuntimeError("DB down")
-            with pytest.raises(RuntimeError):
-                await consumer.handle(_valid_event_data())
-
-        event = publisher.publish.call_args[0][0]
-        assert isinstance(event, AccountCreationFailedEvent)
-        assert event.user_id == 1
-        assert "DB down" in event.reason
-
-    @pytest.mark.asyncio()
-    async def test_failure_reraises_for_retry(self) -> None:
-        session = MagicMock()
-        factory = MagicMock(return_value=session)
-        publisher = AsyncMock()
-
-        consumer = _make_account_consumer(factory, publisher)
-
-        with patch("backend.consumers.account_creation.MySQLAccountRepository") as mock_repo_cls:
-            mock_repo_cls.return_value.create.side_effect = RuntimeError("fail")
-            with pytest.raises(RuntimeError, match="fail"):
-                await consumer.handle(_valid_event_data())
 
 
 # ── UserSyncConsumer ────────────────────────────────────────────────
@@ -225,22 +112,15 @@ class TestUserSyncConsumer:
         session.close.assert_called_once()
 
 
-# ── Consumers are independent ──────────────────────────────────────
+# ── Consumer queue isolation ──────────────────────────────────────
 
 
 class TestConsumerIndependence:
-    """Both consumers listen on user.created but use different queues,
-    so RabbitMQ delivers the event to both independently."""
+    """Consumers use their own queue names so RabbitMQ delivers independently."""
 
-    def test_different_queue_names(self) -> None:
+    def test_user_sync_has_dedicated_queue(self) -> None:
         sync = _make_sync_consumer()
-        account = _make_account_consumer()
-        assert sync._queue_name != account._queue_name
-
-    def test_same_routing_key(self) -> None:
-        sync = _make_sync_consumer()
-        account = _make_account_consumer()
-        assert sync._routing_key == account._routing_key == "user.created"
+        assert sync._queue_name == "monolith.user_sync"
 
 
 # ── BaseConsumer idempotency (DB-backed) ───────────────────────────
