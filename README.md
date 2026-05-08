@@ -43,21 +43,26 @@ This starts all services:
 | PostgreSQL (users) | 5433 | User-service database |
 | PostgreSQL (transactions) | 5434 | Transaction-service database |
 | PostgreSQL (categorization) | 5435 | Categorization-service database |
+| PostgreSQL (accounts) | 5436 | Account-service database |
 | PostgreSQL (goals) | 5438 | Goal-service database |
 | RabbitMQ | 5672 / 15672 | Event bus + management UI |
-| Monolith | 8000 | Accounts, budgets, analytics, bank sync |
+| Monolith | 8000 | Budgets, analytics, bank sync |
 | User Service | 8001 | Registration, login, JWT issuing |
 | Transaction Service | 8002 | Transaction CRUD, CSV import, planned transactions, categories |
+| Account Service | 8004 | Account CRUD, account groups |
 | Categorization Service | 8005 | Rule/ML/LLM categorization pipeline |
 | Goal Service | 8006 | Savings goals and goal events |
+| AI Service | 8007 | RAG-based financial Q&A (Ollama + ChromaDB) |
 | User Outbox Worker | — | Polls outbox table, publishes user events to RabbitMQ |
 | Transaction Outbox Worker | — | Polls outbox table, publishes transaction events to RabbitMQ |
+| Account Outbox Worker | — | Polls outbox table, publishes account events to RabbitMQ |
 | Goal Outbox Worker | — | Polls outbox table, publishes goal events to RabbitMQ |
 | Categorization Outbox Worker | — | Polls outbox table, publishes categorization events to RabbitMQ |
 | Transaction Categorized Consumer | — | Writes categorization results back to transaction-service |
 | Categorization Category Sync | — | Syncs categories from transaction-service into categorization-service |
 | UserSync Consumer | — | Syncs users from events to MySQL |
-| AccountCreation Consumer | — | Creates default accounts from events |
+| AccountCreation Consumer | — | Creates default accounts in Postgres from user.created events |
+| AccountSync Consumer | — | Syncs account events from Postgres to MySQL read-replica |
 | CategorySync Consumer | — | Syncs categories from transaction-service to MySQL |
 | TransactionSync Consumer | — | Projects transaction events into MySQL read model |
 
@@ -79,8 +84,10 @@ App: http://localhost:3000
 curl http://localhost:8000/health   # Monolith
 curl http://localhost:8001/health   # User Service
 curl http://localhost:8002/health   # Transaction Service
+curl http://localhost:8004/health   # Account Service
 curl http://localhost:8005/health   # Categorization Service
 curl http://localhost:8006/health   # Goal Service
+curl http://localhost:8007/health   # AI Service
 ```
 
 See [INSTALLATION.md](INSTALLATION.md) for detailed setup including database seeding.
@@ -91,17 +98,19 @@ See [INSTALLATION.md](INSTALLATION.md) for detailed setup including database see
 
 ### System Overview
 
-The application is being incrementally extracted from a monolith to microservices. Currently extracted: **user-service**, **transaction-service**, **categorization-service**, and **goal-service**. The monolith handles accounts, budgets, analytics, and bank sync, and receives event-driven updates.
+The application is being incrementally extracted from a monolith to microservices. Currently extracted: **user-service**, **transaction-service**, **categorization-service**, **goal-service**, and **account-service**. The monolith handles budgets, analytics, and bank sync, and receives event-driven updates. The MySQL Account table is a read-replica kept in sync via account events from account-service.
 
 ```mermaid
 graph LR
     FE[React Frontend] -->|register/login| US[User Service<br/>:8001]
     FE -->|transactions| TS[Transaction Service<br/>:8002]
-    FE -->|accounts, budgets,<br/>analytics| MON[Monolith<br/>:8000]
+    FE -->|accounts| AS[Account Service<br/>:8004]
+    FE -->|budgets, analytics| MON[Monolith<br/>:8000]
     FE -->|goals| GS[Goal Service<br/>:8006]
 
     US -->|"write domain data +<br/>outbox event (same tx)"| PG_U[(PostgreSQL<br/>Users + outbox)]
     TS -->|"write domain data +<br/>outbox event (same tx)"| PG_T[(PostgreSQL<br/>Transactions + outbox)]
+    AS -->|"write domain data +<br/>outbox event (same tx)"| PG_A[(PostgreSQL<br/>Accounts + outbox)]
     GS -->|"write domain data +<br/>outbox event (same tx)"| PG_G[(PostgreSQL<br/>Goals + outbox)]
     CS[Categorization Service<br/>:8005] -->|"categorize + outbox event"| PG_C[(PostgreSQL<br/>Categorization)]
 
@@ -109,16 +118,19 @@ graph LR
 
     PG_U -->|poll pending| UOW[User Outbox<br/>Worker]
     PG_T -->|poll pending| TOW[Transaction Outbox<br/>Worker]
+    PG_A -->|poll pending| AOW[Account Outbox<br/>Worker]
     PG_G -->|poll pending| GOW[Goal Outbox<br/>Worker]
     PG_C -->|poll pending| COW[Categorization Outbox<br/>Worker]
 
     UOW -->|publish| RMQ[RabbitMQ]
     TOW -->|publish| RMQ
+    AOW -->|publish| RMQ
     GOW -->|publish| RMQ
     COW -->|publish| RMQ
 
     RMQ -->|user.created| USC[UserSync<br/>Consumer]
     RMQ -->|user.created| ACC[AccountCreation<br/>Consumer]
+    RMQ -->|account.*| ASC[AccountSync<br/>Consumer]
     RMQ -->|category.*| CSC[CategorySync<br/>Consumer]
     RMQ -->|transaction.*| TSC[TransactionSync<br/>Consumer]
     RMQ -->|transaction.created| CS
@@ -126,7 +138,8 @@ graph LR
     RMQ -->|category.*| CCSC[Cat-Service<br/>Category Sync]
 
     USC -->|INSERT User| MYSQL[(MySQL)]
-    ACC -->|INSERT Account| MYSQL
+    ACC -->|INSERT Account| PG_A
+    ASC -->|UPSERT Account| MYSQL
     CSC -->|SYNC Category| MYSQL
     TSC -->|UPSERT Transaction| MYSQL
 
@@ -264,16 +277,20 @@ sequenceDiagram
 
 | Service | Port | Database | Role |
 |---------|------|----------|------|
-| **Monolith** | 8000 | MySQL (3307) | Accounts, budgets, analytics, GraphQL gateway |
+| **Monolith** | 8000 | MySQL (3307) | Budgets, analytics, GraphQL gateway, bank sync |
 | **User Service** | 8001 | PostgreSQL (5433) | User registration, login, JWT issuing (source of truth) |
 | **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions, categories |
+| **Account Service** | 8004 | PostgreSQL (5436) | Account CRUD, account groups (source of truth) |
 | **Categorization Service** | 8005 | PostgreSQL (5435) | Transaction categorization pipeline |
 | **Goal Service** | 8006 | PostgreSQL (5438) | Savings goals and goal events |
+| **AI Service** | 8007 | ChromaDB | RAG-based financial Q&A (Ollama LLM + vector retrieval) |
 | **User Outbox Worker** | — | PostgreSQL (5433) | Polls `outbox_events`, publishes user events to RabbitMQ |
 | **Transaction Outbox Worker** | — | PostgreSQL (5434) | Polls `outbox_events`, publishes transaction events to RabbitMQ |
+| **Account Outbox Worker** | — | PostgreSQL (5436) | Polls `outbox_events`, publishes account events to RabbitMQ |
 | **Goal Outbox Worker** | — | PostgreSQL (5438) | Polls `outbox_events`, publishes goal events to RabbitMQ |
 | **UserSync Consumer** | — | MySQL | Sync user data from events to MySQL User table |
-| **AccountCreation Consumer** | — | MySQL | Create default account from user.created events |
+| **AccountCreation Consumer** | — | PostgreSQL (5436) | Create default account in Postgres from user.created events |
+| **AccountSync Consumer** | — | MySQL | Sync account events from Postgres to MySQL read-replica |
 | **CategorySync Consumer** | — | MySQL | Sync categories from transaction-service to MySQL |
 | **TransactionSync Consumer** | — | MySQL | Project transaction events into MySQL so analytics/budget/dashboard see microservice writes |
 
@@ -282,10 +299,8 @@ sequenceDiagram
 | Service | Planned Port | Description |
 |---------|-------------|-------------|
 | Budget Service | 8003 | Budget management |
-| Account Service | 8004 | Accounts and account groups |
-| Analytics Service | 8007 | GraphQL gateway + Elasticsearch |
+| Analytics Service | 8009 | GraphQL gateway + Elasticsearch |
 | Notification Service | 8008 | Email/push notifications |
-| AI Service | — | ML/LLM categorization adapters (extends categorization-service) |
 | API Gateway | — | Routing, rate limiting, JWT validation |
 
 ---
@@ -307,8 +322,7 @@ finance-tracker/
 │   │   │   ├── budget/              # Legacy budget context
 │   │   │   ├── monthly_budget/      # Aggregate-based monthly budgets
 │   │   │   ├── analytics/           # Dashboard + GraphQL read gateway
-│   │   │   ├── account/             # Account + groups
-│   │   │   ├── goal/                # Goals
+│   │   │   │   ├── goal/                # Goals
 │   │   │   ├── user/                # Local user management
 │   │   │   ├── shared/              # Cross-cutting ports/adapters
 │   │   │   ├── models/mysql/        # SQLAlchemy ORM models
@@ -337,6 +351,14 @@ finance-tracker/
 │   │   │   └── workers/             # Outbox publisher + category sync consumer
 │   │   ├── migrations/              # Alembic migrations (taxonomy + rules)
 │   │   ├── tests/                   # Unit + integration + migration tests
+│   │   └── Dockerfile
+│   │
+│   ├── account-service/              # Account microservice
+│   │   ├── app/                     # FastAPI app (hexagonal)
+│   │   │   ├── workers/             # Outbox publisher worker
+│   │   │   └── consumers/           # Account creation consumer (user.created)
+│   │   ├── alembic/                 # Alembic migrations (outbox + partial unique index)
+│   │   ├── scripts/                 # Data migration from MySQL
 │   │   └── Dockerfile
 │   │
 │   ├── goal-service/                # Goal microservice
@@ -419,16 +441,32 @@ The categorization service also consumes `transaction.created` events for async 
 | `PUT` | `/api/v1/goals/{id}` | Update goal | Yes |
 | `DELETE` | `/api/v1/goals/{id}` | Delete goal | Yes |
 
+### Account Service (port 8004)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `GET` | `/api/v1/accounts/` | List user accounts | Yes |
+| `POST` | `/api/v1/accounts/` | Create account | Yes |
+| `PUT` | `/api/v1/accounts/{id}` | Update account | Yes |
+| `GET` | `/health` | Health check | No |
+
+### AI Service (port 8007)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| `POST` | `/api/v1/ingest` | Embed user's transactions into ChromaDB | Yes |
+| `POST` | `/api/v1/chat` | Ask financial questions (RAG) | Yes |
+| `GET` | `/health` | Health check | No |
+
 ### Monolith (port 8000)
 
-Transactions, planned-transactions and categories are owned by `transaction-service` (port 8002). The monolith keeps a MySQL read-model projection (materialised by `TransactionSyncConsumer`/`CategorySyncConsumer`) but no write endpoints for these resources.
+Transactions, planned-transactions and categories are owned by `transaction-service` (port 8002). Accounts are owned by `account-service` (port 8004). The monolith keeps MySQL read-model projections (materialised by sync consumers) but no write endpoints for these resources.
 
 | Method | Path | Description | Auth |
 |--------|------|-------------|------|
 | `*` | `/api/v1/budgets/*` | Legacy budget CRUD | Yes |
 | `*` | `/api/v1/monthly-budgets/*` | Monthly budget CRUD + copy | Yes |
 | `*` | `/api/v1/dashboard/*` | Analytics | Yes |
-| `*` | `/api/v1/accounts/*` | Account CRUD | Yes |
 | `*` | `/api/v1/goals/*` | Goal CRUD | Yes |
 | `*` | `/api/v1/users/*` | User management | Partial |
 | `POST` | `/api/v1/graphql` | GraphQL read gateway (reads transactions + categories from projection) | Yes |
@@ -478,8 +516,8 @@ sequenceDiagram
         RMQ->>USC: user.created (queue: monolith.user_sync)
         USC->>MYSQL: INSERT INTO User
     and
-        RMQ->>ACC: user.created (queue: monolith.account_creation)
-        ACC->>MYSQL: INSERT INTO Account
+        RMQ->>ACC: user.created (queue: account_service.account_creation)
+        ACC->>PG: INSERT INTO Account (Postgres, source of truth)
     end
 ```
 
@@ -498,8 +536,9 @@ sequenceDiagram
 | `GoalCreatedEvent` | goal-service | Outbox worker | (future consumers) | `goal.created` |
 | `GoalUpdatedEvent` | goal-service | Outbox worker | (future consumers) | `goal.updated` |
 | `GoalDeletedEvent` | goal-service | Outbox worker | (future consumers) | `goal.deleted` |
+| `AccountCreatedEvent` | account-service | Outbox worker | AccountSyncConsumer | `account.created` |
+| `AccountUpdatedEvent` | account-service | Outbox worker | AccountSyncConsumer | `account.updated` |
 | `BudgetMonthClosedEvent` | monolith (planned) | Direct publish | Goal-service consumer (planned) | `budget.month_closed` |
-| `AccountCreatedEvent` | AccountCreationConsumer | Direct publish | (future consumers) | `account.created` |
 
 ### Projecting transactions into MySQL
 
@@ -516,7 +555,7 @@ The script iterates over every row in transaction-service and publishes syntheti
 
 ### Transactional Outbox (Event Publishing)
 
-Both user-service and transaction-service use the **transactional outbox pattern** to avoid the dual-write problem:
+All extracted services (user-service, transaction-service, account-service, goal-service, categorization-service) use the **transactional outbox pattern** to avoid the dual-write problem:
 
 1. Domain data and an `outbox_events` row are written in the **same database transaction**
 2. A standalone **outbox worker** polls the table using `SELECT … FOR UPDATE SKIP LOCKED`
@@ -577,7 +616,7 @@ The project has **620+ tests** across all services, organized following the test
 
 | Service | Unit | Integration | E2E | Total |
 |---------|------|-------------|-----|-------|
-| Monolith | ~290 | 45 | — | 335 |
+| Monolith | ~280 | 81 | — | 361 |
 | Frontend | 110 | — | — | 110 |
 | User Service | 28 | 12 | — | 40 |
 | Transaction Service | 61 | 43 | — | 104 |
@@ -634,7 +673,8 @@ uv run pytest tests/e2e/ -v -m e2e
 
 ```bash
 docker compose up -d
-# All services: http://localhost:8000 (monolith), :8001 (user), :8002 (transaction), :8005 (categorization), :8006 (goal)
+# All services: http://localhost:8000 (monolith), :8001 (user), :8002 (transaction),
+#               :8004 (account), :8005 (categorization), :8006 (goal), :8007 (ai)
 # RabbitMQ UI: http://localhost:15672 (guest/guest)
 # Frontend: http://localhost:3000
 ```
@@ -660,11 +700,17 @@ cd services/categorization-service && make dev
 # Goal service
 cd services/goal-service && make dev
 
+# Account service
+cd services/account-service && make dev
+
 # Consumers (in separate terminals from services/monolith/)
 uv run python -m backend.consumers.worker --consumer user-sync
-uv run python -m backend.consumers.worker --consumer account-creation
+uv run python -m backend.consumers.worker --consumer account-sync
 uv run python -m backend.consumers.worker --consumer category-sync
 uv run python -m backend.consumers.worker --consumer transaction-sync
+
+# Account creation consumer (from services/account-service/)
+python -m app.consumers.worker
 
 # Frontend
 cd services/frontend
@@ -693,7 +739,8 @@ npm install && npm run dev
 | [services/categorization-service/docs/SCHEMA.md](services/categorization-service/docs/SCHEMA.md) | Categorization service database schema design |
 | [services/categorization-service/docs/RETROSPECTIVE.md](services/categorization-service/docs/RETROSPECTIVE.md) | Phase 1 extraction retrospective |
 | [services/goal-service/README.md](services/goal-service/README.md) | Goal service API, events, outbox pattern |
-| [services/ai-service/README.md](services/ai-service/README.md) | Categorization pipeline status and ML/LLM plans |
+| [services/account-service/FOLLOWUPS.md](services/account-service/FOLLOWUPS.md) | Account service follow-ups and migration history |
+| [services/ai-service/README.md](services/ai-service/README.md) | AI service RAG architecture, models, and endpoints |
 | [services/shared/contracts/README.md](services/shared/contracts/README.md) | Shared event contracts (Pydantic models) |
 | [docs/microservice-architecture.mermaid](docs/microservice-architecture.mermaid) | Full architecture diagram (current + future) |
 | [services/monolith/DATABASE_COMPARISON.md](services/monolith/DATABASE_COMPARISON.md) | MySQL vs Elasticsearch vs Neo4j comparison |
@@ -744,6 +791,8 @@ npm install && npm run dev
 - [x] Radix UI Dialog (accessible modals with focus trap)
 - [x] lucide-react icons (replaced emojis with accessible SVG icons)
 - [x] Imperative ConfirmDialog provider (replaced `window.confirm`)
+- [x] Account-service extraction (outbox, read-replica sync, partial unique index for idempotency)
+- [x] AI Service (RAG-based financial Q&A with Ollama + ChromaDB)
 - [ ] ML categorizer adapter (train on user-confirmed merchants)
 - [ ] LLM categorizer adapter (GPT/Claude for unknown transactions)
 - [ ] Budget month close publisher and day-7 scheduled job

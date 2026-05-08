@@ -14,6 +14,7 @@ Or via Docker Compose from the project root:
 
 ```bash
 docker compose up ollama ai-service -d
+# Available at http://localhost:8007
 ```
 
 First-time setup pulls ~2 GB of model data (`qwen3:1.7b` + `embeddinggemma:latest`). This takes 5-15 minutes depending on your connection. The `ollama-pull` init container handles this automatically.
@@ -21,8 +22,10 @@ First-time setup pulls ~2 GB of model data (`qwen3:1.7b` + `embeddinggemma:lates
 ## Port
 
 ```
-8004
+8007 (host) → 8004 (container)
 ```
+
+The host port was moved from 8004 to 8007 to make room for account-service on port 8004. The container still listens on 8004 internally.
 
 ## Architecture
 
