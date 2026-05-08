@@ -185,6 +185,34 @@
     cursor: not-allowed;
 }
 
+.bank-format-select {
+    padding: 0.625rem 0.875rem;
+    border: 1.5px solid var(--color-border-medium);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-base);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    min-width: 8rem;
+    transition: border-color var(--transition-fast);
+}
+
+.bank-format-select:hover {
+    border-color: var(--color-brand-500);
+}
+
+.bank-format-select:focus {
+    outline: none;
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 3px rgba(54, 79, 199, 0.1);
+}
+
+.bank-format-select:disabled {
+    background: var(--color-bg-sunken);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+}
+
 .upload-info {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, UploadFile, status
+from fastapi import APIRouter, Depends, Form, UploadFile, status
 
 from app.application.dto import (
     BulkCreateResultDTO,
@@ -109,9 +109,18 @@ async def import_csv(
     file: UploadFile,
     user_id: int = Depends(get_current_user_id),
     service: ITransactionService = Depends(get_transaction_service),
+    bank_format: str = Form("internal"),
+    account_id: int | None = Form(None),
+    account_name: str | None = Form(None),
 ) -> CSVImportResultDTO:
-    content = (await file.read()).decode("utf-8")
-    return await service.import_csv(user_id, content)
+    content = await file.read()
+    return await service.import_csv(
+        user_id,
+        content,
+        bank_format=bank_format,
+        account_id=account_id,
+        account_name=account_name,
+    )
 
 
 @transaction_router.post(

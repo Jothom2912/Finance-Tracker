@@ -136,7 +136,7 @@ describe('useTransactions', () => {
   });
 
   describe('uploadCsv', () => {
-    it('delegates to API, returns result, and invalidates caches', async () => {
+    it('delegates to API with file and bankFormat, returns result, and invalidates caches', async () => {
       transactionsApi.fetchTransactions.mockResolvedValue([]);
       const uploadResult = { imported_count: 5, message: 'OK' };
       transactionsApi.uploadTransactionsCsv.mockResolvedValue(uploadResult);
@@ -151,13 +151,35 @@ describe('useTransactions', () => {
 
       let returnValue;
       await act(async () => {
-        returnValue = await result.current.uploadCsv(file);
+        returnValue = await result.current.uploadCsv({ file, bankFormat: 'nordea' });
       });
 
-      expect(transactionsApi.uploadTransactionsCsv.mock.calls[0][0]).toBe(file);
+      expect(transactionsApi.uploadTransactionsCsv).toHaveBeenCalledWith({
+        file,
+        bankFormat: 'nordea',
+      });
       expect(returnValue).toEqual(uploadResult);
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['transactions'] });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard'] });
+    });
+
+    it('defaults bankFormat to internal when not specified', async () => {
+      transactionsApi.fetchTransactions.mockResolvedValue([]);
+      transactionsApi.uploadTransactionsCsv.mockResolvedValue({ imported_count: 1 });
+      const file = new File(['csv,data'], 'test.csv');
+
+      const { wrapper } = createQueryClientWrapper();
+      const { result } = renderHook(() => useTransactions(filters), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.uploadCsv({ file, bankFormat: 'internal' });
+      });
+
+      expect(transactionsApi.uploadTransactionsCsv).toHaveBeenCalledWith({
+        file,
+        bankFormat: 'internal',
+      });
     });
   });
 });

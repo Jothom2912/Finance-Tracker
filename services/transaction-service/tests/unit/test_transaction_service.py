@@ -16,6 +16,7 @@ from app.application.dto import (
 from app.application.service import TransactionService
 from app.domain.entities import PlannedTransaction, Transaction, TransactionType
 from app.domain.exceptions import (
+    CSVImportException,
     PlannedTransactionNotFoundException,
     TransactionNotFoundException,
 )
@@ -342,9 +343,9 @@ class TestImportCSV:
         tx = _make_transaction()
         uow.transactions.bulk_create.return_value = [tx]
         csv_content = (
-            "date,amount,transaction_type,account_id,account_name,"
-            "category_id,category_name,description\n"
-            "2026-03-01,49.99,expense,100,Main Account,5,Food,Groceries\n"
+            b"date,amount,transaction_type,account_id,account_name,"
+            b"category_id,category_name,description\n"
+            b"2026-03-01,49.99,expense,100,Main Account,5,Food,Groceries\n"
         )
 
         result = await service.import_csv(user_id=10, csv_content=csv_content)
@@ -366,9 +367,9 @@ class TestImportCSV:
         tx = _make_transaction()
         uow.transactions.bulk_create.return_value = [tx]
         csv_content = (
-            "date,amount,transaction_type,account_id,account_name\n"
-            "2026-03-01,49.99,expense,100,Main Account\n"
-            "2026-03-01,INVALID,expense,100,Main Account\n"
+            b"date,amount,transaction_type,account_id,account_name\n"
+            b"2026-03-01,49.99,expense,100,Main Account\n"
+            b"2026-03-01,INVALID,expense,100,Main Account\n"
         )
 
         result = await service.import_csv(user_id=10, csv_content=csv_content)
@@ -381,7 +382,8 @@ class TestImportCSV:
     async def test_all_invalid_no_outbox(self) -> None:
         service, uow = _build_service()
         csv_content = (
-            "date,amount,transaction_type,account_id,account_name\n2026-03-01,INVALID,expense,100,Main Account\n"
+            b"date,amount,transaction_type,account_id,account_name\n"
+            b"2026-03-01,INVALID,expense,100,Main Account\n"
         )
 
         result = await service.import_csv(user_id=10, csv_content=csv_content)
@@ -390,6 +392,30 @@ class TestImportCSV:
         assert result.skipped == 1
         uow.outbox.add_batch.assert_not_awaited()
         uow.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_unknown_bank_format_raises(self) -> None:
+        service, _uow = _build_service()
+
+        with pytest.raises(CSVImportException, match="Unknown bank format"):
+            await service.import_csv(
+                user_id=10,
+                csv_content=b"irrelevant",
+                bank_format="unknown_bank",
+                account_id=1,
+                account_name="Test",
+            )
+
+    @pytest.mark.asyncio()
+    async def test_non_internal_format_requires_account(self) -> None:
+        service, _uow = _build_service()
+
+        with pytest.raises(CSVImportException, match="account_id and account_name are required"):
+            await service.import_csv(
+                user_id=10,
+                csv_content=b"irrelevant",
+                bank_format="nordea",
+            )
 
 
 def _bulk_item(**overrides) -> BulkCreateTransactionItemDTO:  # type: ignore[no-untyped-def]

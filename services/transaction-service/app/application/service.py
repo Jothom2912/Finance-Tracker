@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import csv
-import io
 import logging
-from datetime import date
-from decimal import Decimal, InvalidOperation
 
 from contracts.events.transaction import (
     TransactionCreatedEvent,
@@ -24,6 +20,7 @@ from app.application.dto import (
     UpdatePlannedTransactionDTO,
     UpdateTransactionDTO,
 )
+from app.application.csv_parsers.registry import get_parser
 from app.application.ports.inbound import ITransactionService
 from app.application.ports.outbound import IUnitOfWork
 from app.domain.entities import PlannedTransaction, Transaction
@@ -34,14 +31,6 @@ from app.domain.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
-
-_CSV_REQUIRED_COLUMNS = {
-    "date",
-    "amount",
-    "transaction_type",
-    "account_id",
-    "account_name",
-}
 
 
 class TransactionService(ITransactionService):
@@ -229,53 +218,35 @@ class TransactionService(ITransactionService):
 
             await self._uow.commit()
 
-    async def import_csv(self, user_id: int, csv_content: str) -> CSVImportResultDTO:
-        reader = csv.DictReader(io.StringIO(csv_content))
+    async def import_csv(
+        self,
+        user_id: int,
+        csv_content: bytes,
+        bank_format: str = "internal",
+        account_id: int | None = None,
+        account_name: str | None = None,
+    ) -> CSVImportResultDTO:
+        if bank_format != "internal" and (account_id is None or not account_name):
+            raise CSVImportException(
+                "account_id and account_name are required for bank format "
+                f"{bank_format!r}"
+            )
 
-        if reader.fieldnames is None:
-            raise CSVImportException("CSV file is empty or has no headers")
+        parser = get_parser(bank_format)
+        parsed = parser.parse(
+            file_content=csv_content,
+            user_id=user_id,
+            account_id=account_id or 0,
+            account_name=account_name or "",
+        )
 
-        present = set(reader.fieldnames)
-        missing = _CSV_REQUIRED_COLUMNS - present
-        if missing:
-            raise CSVImportException(f"CSV missing required columns: {', '.join(sorted(missing))}")
-
-        valid_rows: list[dict] = []
-        errors: list[str] = []
-        skipped = 0
-
-        for row_num, row in enumerate(reader, start=2):
-            try:
-                amount = Decimal(row["amount"])
-                if amount <= 0:
-                    raise ValueError("amount must be positive")
-
-                tx_type = row["transaction_type"].strip().lower()
-                if tx_type not in ("income", "expense"):
-                    raise ValueError(f"invalid transaction_type: {tx_type}")
-
-                valid_rows.append(
-                    {
-                        "user_id": user_id,
-                        "account_id": int(row["account_id"]),
-                        "account_name": row["account_name"].strip(),
-                        "category_id": (int(row["category_id"]) if row.get("category_id") else None),
-                        "category_name": (row.get("category_name", "").strip() or None),
-                        "amount": amount,
-                        "transaction_type": tx_type,
-                        "description": (row.get("description", "").strip() or None),
-                        "tx_date": date.fromisoformat(row["date"].strip()),
-                    }
-                )
-            except (ValueError, KeyError, InvalidOperation) as exc:
-                errors.append(f"Row {row_num}: {exc}")
-                skipped += 1
-
-        if not valid_rows:
-            return CSVImportResultDTO(imported=0, skipped=skipped, errors=errors)
+        if not parsed.rows:
+            return CSVImportResultDTO(
+                imported=0, skipped=parsed.skipped, errors=parsed.errors
+            )
 
         async with self._uow:
-            created = await self._uow.transactions.bulk_create(valid_rows)
+            created = await self._uow.transactions.bulk_create(parsed.rows)
 
             outbox_entries = [
                 (
@@ -303,7 +274,11 @@ class TransactionService(ITransactionService):
 
             await self._uow.commit()
 
-        return CSVImportResultDTO(imported=len(created), skipped=skipped, errors=errors)
+        return CSVImportResultDTO(
+            imported=len(created),
+            skipped=parsed.skipped,
+            errors=parsed.errors,
+        )
 
     async def bulk_import(
         self,

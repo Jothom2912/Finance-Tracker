@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AlertCircle, XCircle } from 'lucide-react';
 import apiClient from '../../../utils/apiClient';
 import { uploadTransactionsCsv } from '../../../api/transactions';
+import { BANK_FORMAT_OPTIONS } from '../../../lib/bankFormats';
 import MessageDisplay from '../../MessageDisplay';
 import BudgetItem from '../BudgetItem/BudgetItem';
 import './BudgetComparison.css';
@@ -21,6 +22,7 @@ function BudgetComparison({
     const [csvFile, setCsvFile] = useState(null);
     const [uploadingCsv, setUploadingCsv] = useState(false);
     const [csvUploadSuccess, setCsvUploadSuccess] = useState(null);
+    const [bankFormat, setBankFormat] = useState('internal');
 
     // Filter state - Initialiser med nuværende måned/år
     const now = new Date();
@@ -252,7 +254,7 @@ function BudgetComparison({
         setLocalError(null);
 
         try {
-            const result = await uploadTransactionsCsv(csvFile);
+            const result = await uploadTransactionsCsv({ file: csvFile, bankFormat });
             setCsvUploadSuccess(result.message);
             setSuccessMessage?.(result.message);
             await fetchData();
@@ -340,6 +342,16 @@ function BudgetComparison({
                 <h3>Upload transaktioner (CSV)</h3>
                 <form onSubmit={handleCsvUpload} className="csv-upload-form">
                     <div className="file-input-group">
+                        <select
+                            value={bankFormat}
+                            onChange={(e) => setBankFormat(e.target.value)}
+                            className="bank-format-select"
+                            disabled={uploadingCsv}
+                        >
+                            {BANK_FORMAT_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
                         <input
                             type="file"
                             accept=".csv"

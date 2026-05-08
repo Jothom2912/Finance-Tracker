@@ -10,6 +10,7 @@ import { useTransactions } from '../hooks/useTransactions';
 import { useNotifications } from '../hooks/useNotifications';
 import { useConfirm } from '../components/ConfirmDialog/ConfirmDialog';
 import { formatLocalISODate } from '../lib/formatters';
+import { BANK_FORMAT_OPTIONS } from '../lib/bankFormats';
 
 import '../components/FilterComponent/FilterComponent.css';
 import './TransactionsPage.css';
@@ -35,6 +36,7 @@ function TransactionsPage() {
 
   const [csvFile, setCsvFile] = useState(null);
   const [uploadingCsv, setUploadingCsv] = useState(false);
+  const [bankFormat, setBankFormat] = useState('internal');
 
   const filters = useMemo(
     () => ({
@@ -100,7 +102,7 @@ function TransactionsPage() {
     setUploadingCsv(true);
     clearMessages();
     try {
-      const result = await uploadCsv(csvFile);
+      const result = await uploadCsv({ file: csvFile, bankFormat });
       showSuccess(result.message || `CSV uploadet! ${result.imported_count || ''} transaktioner importeret.`);
     } catch (err) {
       showError(err.message || 'Fejl ved CSV upload.');
@@ -110,7 +112,7 @@ function TransactionsPage() {
       const fileInput = document.querySelector('.csv-upload-section input[type="file"]');
       if (fileInput) fileInput.value = '';
     }
-  }, [csvFile, uploadCsv, showError, showSuccess, clearMessages]);
+  }, [csvFile, bankFormat, uploadCsv, showError, showSuccess, clearMessages]);
 
   const getCurrentPeriodLabel = () => {
     if (!filterStartDate || !filterEndDate) return 'valgt periode';
@@ -153,6 +155,16 @@ function TransactionsPage() {
         <h3>Upload transaktioner (CSV)</h3>
         <form onSubmit={handleCsvUpload} className="csv-upload-form">
           <div className="file-input-group">
+            <select
+              value={bankFormat}
+              onChange={(e) => setBankFormat(e.target.value)}
+              className="bank-format-select"
+              disabled={uploadingCsv}
+            >
+              {BANK_FORMAT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
             <input
               type="file"
               accept=".csv"

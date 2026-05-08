@@ -25,7 +25,8 @@ export function useTransactions(filters) {
   });
 
   const uploadCsvMutation = useMutation({
-    mutationFn: transactionsApi.uploadTransactionsCsv,
+    mutationFn: ({ file, bankFormat }) =>
+      transactionsApi.uploadTransactionsCsv({ file, bankFormat }),
     onSuccess: invalidateTransactionViews,
   });
 

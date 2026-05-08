@@ -30,9 +30,17 @@ export async function fetchTransactions({ startDate, endDate, categoryId } = {})
   return results.map(fromServiceResponse);
 }
 
-export async function uploadTransactionsCsv(file) {
+export async function uploadTransactionsCsv({ file, bankFormat = 'internal' }) {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('bank_format', bankFormat);
+
+  if (bankFormat !== 'internal') {
+    const accountId = localStorage.getItem('account_id');
+    const accountName = localStorage.getItem('account_name') || 'Default';
+    if (accountId) formData.append('account_id', accountId);
+    formData.append('account_name', accountName);
+  }
 
   const response = await apiClient.fetch(`${TRANSACTION_SERVICE_URL}/transactions/import-csv`, {
     method: 'POST',

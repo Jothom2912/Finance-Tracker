@@ -62,7 +62,14 @@ class ITransactionService(ABC):
     async def delete_transaction(self, transaction_id: int, user_id: int) -> None: ...
 
     @abstractmethod
-    async def import_csv(self, user_id: int, csv_content: str) -> CSVImportResultDTO: ...
+    async def import_csv(
+        self,
+        user_id: int,
+        csv_content: bytes,
+        bank_format: str = "internal",
+        account_id: int | None = None,
+        account_name: str | None = None,
+    ) -> CSVImportResultDTO: ...
 
     @abstractmethod
     async def bulk_import(
