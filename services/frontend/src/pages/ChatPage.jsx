@@ -20,7 +20,9 @@ function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [isAsking, setIsAsking] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
-  const [hasIngested, setHasIngested] = useState(false);
+  const [hasIngested, setHasIngested] = useState(
+    () => localStorage.getItem('rag_ingested') === 'true',
+  );
   const [statusMessage, setStatusMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -36,6 +38,7 @@ function ChatPage() {
     try {
       const result = await ingestTransactionsForRag();
       setHasIngested(true);
+      localStorage.setItem('rag_ingested', 'true');
       setStatusMessage(
         `Vidensbasen er opdateret med ${result.transactions_ingested} transaktioner.`,
       );

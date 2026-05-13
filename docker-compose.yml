@@ -68,7 +68,7 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3.5:9b && ollama pull bge-m3"]
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:4b && ollama pull bge-m3"]
     restart: "no"
 
   # === Application services ===
@@ -474,6 +474,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  categorization-transaction-consumer:
+    build:
+      context: .
+      dockerfile: services/categorization-service/Dockerfile
+    command: ["python", "-m", "app.workers.transaction_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      categorization-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
   ai-service:
     build:
       context: .
@@ -481,12 +498,12 @@ services:
     ports:
       - "8007:8004"
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      LLM_MODEL: qwen3.5:9b
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      LLM_MODEL: qwen3:4b
       EMBEDDING_MODEL: bge-m3
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
       CHROMADB_PATH: /data/chromadb
-      RETRIEVAL_TOP_K: "30"
+      RETRIEVAL_TOP_K: "10"
       JWT_SECRET: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development

@@ -89,6 +89,23 @@ async def ingest_transactions(user_id: int, token: str) -> int:
 
     collection = get_collection()
 
+    # Auto-reset collection if embedding dimensions changed (e.g. model swap)
+    try:
+        sample = embed_texts([documents[0]]) if documents else None
+        if sample:
+            existing = collection.peek(limit=1)
+            if existing["embeddings"] and len(existing["embeddings"][0]) != len(sample[0]):
+                logger.warning(
+                    "Embedding dimension mismatch (stored=%d, new=%d) — recreating collection",
+                    len(existing["embeddings"][0]),
+                    len(sample[0]),
+                )
+                from app.adapters.outbound.vectorstore import get_chroma_client, COLLECTION_NAME
+                get_chroma_client().delete_collection(COLLECTION_NAME)
+                collection = get_collection()
+    except Exception:
+        logger.debug("No existing embeddings to compare — fresh collection")
+
     doc_ids = [_make_doc_id(user_id, t.id) for t in transactions]
     documents = [_format_transaction_text(t) for t in transactions]
     metadatas = [_make_metadata(user_id, t) for t in transactions]
