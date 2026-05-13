@@ -77,6 +77,9 @@ TRANSACTION_SERVICE_URL = os.getenv("TRANSACTION_SERVICE_URL", "http://transacti
 # Timeout for HTTP calls to transaction-service (seconds).
 TRANSACTION_SERVICE_TIMEOUT = float(os.getenv("TRANSACTION_SERVICE_TIMEOUT", "10"))
 
+ACCOUNT_SERVICE_URL = os.getenv("ACCOUNT_SERVICE_URL", "http://account-service:8003/api/v1")
+ACCOUNT_SERVICE_TIMEOUT = float(os.getenv("ACCOUNT_SERVICE_TIMEOUT", "5"))
+
 
 # =============================================================================
 # Application / Observability

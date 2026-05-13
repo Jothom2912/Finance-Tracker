@@ -3,7 +3,8 @@ import apiClient from '../utils/apiClient';
 const BASE = '/bank';
 
 export async function fetchConnections() {
-  const accountId = localStorage.getItem('account_id') || '1';
+  const accountId = localStorage.getItem('account_id');
+  if (!accountId) throw new Error('Ingen konto valgt. Vælg en konto først.');
   const resp = await apiClient.get(`${BASE}/connections?account_id=${accountId}`);
   if (!resp.ok) throw new Error('Kunne ikke hente bankforbindelser');
   return resp.json();
@@ -29,7 +30,8 @@ export async function fetchAvailableBanks(country = 'DK') {
 }
 
 export async function connectBank(bankName, country = 'DK') {
-  const accountId = parseInt(localStorage.getItem('account_id') || '1', 10);
+  const accountId = parseInt(localStorage.getItem('account_id'), 10);
+  if (!accountId) throw new Error('Ingen konto valgt. Vælg en konto først.');
   const resp = await apiClient.post(`${BASE}/connect`, {
     bank_name: bankName,
     country,

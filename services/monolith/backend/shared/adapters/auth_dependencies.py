@@ -6,16 +6,27 @@ Isolated module to avoid circular imports between auth.py and dependencies.py.
 
 from __future__ import annotations
 
-from fastapi import Depends
-from sqlalchemy.orm import Session
+from typing import Optional
 
-from backend.database.mysql import get_db
-from backend.shared.adapters.mysql_account_resolver import MySQLAccountResolver
+from fastapi import Depends, Header
+
+import backend.config as config
+from backend.shared.adapters.http_account_resolver import HttpAccountResolver
 from backend.shared.ports.auth_ports import IAccountResolver
 
 
 def get_account_resolver(
-    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
 ) -> IAccountResolver:
-    """Create IAccountResolver for auth account resolution."""
-    return MySQLAccountResolver(db)
+    """Create IAccountResolver for auth account resolution.
+
+    Uses account-service HTTP API directly to avoid async MySQL sync delays.
+    """
+    token = ""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[len("Bearer "):]
+    return HttpAccountResolver(
+        token=token,
+        base_url=config.ACCOUNT_SERVICE_URL,
+        timeout=config.ACCOUNT_SERVICE_TIMEOUT,
+    )

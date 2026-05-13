@@ -28,7 +28,7 @@ class IGoalRepository(ABC):
 
 class IAccountPort(ABC):
     @abstractmethod
-    async def exists(self, user_id: int) -> bool: ...
+    async def exists(self, account_id: int) -> bool: ...
 
 
 class IGoalSavingsRepository(ABC):

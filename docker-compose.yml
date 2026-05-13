@@ -51,7 +51,7 @@ services:
   ollama:
     image: ollama/ollama
     ports:
-      - "11434:11434"
+      - "11435:11434"
     volumes:
       - ollama_models:/root/.ollama
     healthcheck:
@@ -148,13 +148,17 @@ services:
       DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       USER_SERVICE_URL: http://user-service:8001
+      ACCOUNT_SERVICE_URL: http://account-service:8003
       INTERNAL_API_KEY: dev-internal-api-key-change-in-production
       JWT_SECRET: dev-secret-key-change-in-production
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       ENVIRONMENT: development
     depends_on:
       postgres-goals:
         condition: service_healthy
       user-service:
+        condition: service_started
+      account-service:
         condition: service_started
       rabbitmq:
         condition: service_healthy

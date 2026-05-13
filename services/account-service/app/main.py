@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.inbound.account_api import router as account_router
 from app.adapters.inbound.account_group_api import router as account_group_router
+from app.adapters.inbound.internal_api import router as internal_router
 from app.config import CORS_ORIGINS, DATABASE_URL
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ app.add_middleware(
 
 app.include_router(account_router, prefix="/api/v1")
 app.include_router(account_group_router, prefix="/api/v1")
+app.include_router(internal_router, prefix="/api/v1")
 
 
 @app.get("/health")
