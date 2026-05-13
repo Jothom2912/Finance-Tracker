@@ -227,10 +227,7 @@ class TransactionService(ITransactionService):
         account_name: str | None = None,
     ) -> CSVImportResultDTO:
         if bank_format != "internal" and (account_id is None or not account_name):
-            raise CSVImportException(
-                "account_id and account_name are required for bank format "
-                f"{bank_format!r}"
-            )
+            raise CSVImportException(f"account_id and account_name are required for bank format {bank_format!r}")
 
         parser = get_parser(bank_format)
         parsed = parser.parse(
@@ -241,9 +238,7 @@ class TransactionService(ITransactionService):
         )
 
         if not parsed.rows:
-            return CSVImportResultDTO(
-                imported=0, skipped=parsed.skipped, errors=parsed.errors
-            )
+            return CSVImportResultDTO(imported=0, skipped=parsed.skipped, errors=parsed.errors)
 
         async with self._uow:
             created = await self._uow.transactions.bulk_create(parsed.rows)

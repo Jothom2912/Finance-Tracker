@@ -21,8 +21,5 @@ def get_parser(bank_format: str) -> BankCSVParser:
     parser = _PARSERS.get(bank_format)
     if parser is None:
         supported = ", ".join(sorted(_PARSERS))
-        raise CSVImportException(
-            f"Unknown bank format: {bank_format!r}. "
-            f"Supported formats: {supported}"
-        )
+        raise CSVImportException(f"Unknown bank format: {bank_format!r}. Supported formats: {supported}")
     return parser

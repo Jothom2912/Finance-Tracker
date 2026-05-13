@@ -42,10 +42,7 @@ class NordeaCSVParser:
         if missing:
             from app.domain.exceptions import CSVImportException
 
-            raise CSVImportException(
-                f"Nordea CSV missing required columns: "
-                f"{', '.join(sorted(missing))}"
-            )
+            raise CSVImportException(f"Nordea CSV missing required columns: {', '.join(sorted(missing))}")
 
         result = ParsedCSVResult()
 

@@ -40,10 +40,7 @@ class TestInternalCSVParser:
         assert row["description"] == "Groceries"
 
     def test_parse_minimal_required_columns(self) -> None:
-        content = (
-            b"date,amount,transaction_type,account_id,account_name\n"
-            b"2026-06-15,100.00,income,1,Savings\n"
-        )
+        content = b"date,amount,transaction_type,account_id,account_name\n2026-06-15,100.00,income,1,Savings\n"
 
         result = self.parser.parse(content, user_id=1, account_id=0, account_name="")
 
@@ -80,10 +77,7 @@ class TestInternalCSVParser:
         assert "Row 3" in result.errors[0]
 
     def test_parse_negative_amount_is_error(self) -> None:
-        content = (
-            b"date,amount,transaction_type,account_id,account_name\n"
-            b"2026-03-01,-50.00,expense,100,Acct\n"
-        )
+        content = b"date,amount,transaction_type,account_id,account_name\n2026-03-01,-50.00,expense,100,Acct\n"
 
         result = self.parser.parse(content, user_id=10, account_id=0, account_name="")
 
@@ -92,10 +86,7 @@ class TestInternalCSVParser:
         assert "Row 2" in result.errors[0]
 
     def test_parse_invalid_transaction_type(self) -> None:
-        content = (
-            b"date,amount,transaction_type,account_id,account_name\n"
-            b"2026-03-01,50.00,transfer,100,Acct\n"
-        )
+        content = b"date,amount,transaction_type,account_id,account_name\n2026-03-01,50.00,transfer,100,Acct\n"
 
         result = self.parser.parse(content, user_id=10, account_id=0, account_name="")
 
@@ -124,14 +115,9 @@ class TestInternalCSVParser:
 
     def test_ignores_account_params(self) -> None:
         """Internal format reads account from CSV rows, not from parameters."""
-        content = (
-            b"date,amount,transaction_type,account_id,account_name\n"
-            b"2026-01-01,10.00,expense,42,FromCSV\n"
-        )
+        content = b"date,amount,transaction_type,account_id,account_name\n2026-01-01,10.00,expense,42,FromCSV\n"
 
-        result = self.parser.parse(
-            content, user_id=1, account_id=999, account_name="Ignored"
-        )
+        result = self.parser.parse(content, user_id=1, account_id=999, account_name="Ignored")
 
         assert result.rows[0]["account_id"] == 42
         assert result.rows[0]["account_name"] == "FromCSV"

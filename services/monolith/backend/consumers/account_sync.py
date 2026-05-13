@@ -67,11 +67,7 @@ class AccountSyncConsumer(BaseConsumer):
 
         session = self._session_factory()
         try:
-            existing = (
-                session.query(AccountModel)
-                .filter(AccountModel.idAccount == account_id)
-                .first()
-            )
+            existing = session.query(AccountModel).filter(AccountModel.idAccount == account_id).first()
             if existing is not None:
                 existing.name = name
                 existing.saldo = saldo
@@ -114,11 +110,7 @@ class AccountSyncConsumer(BaseConsumer):
 
         session = self._session_factory()
         try:
-            existing = (
-                session.query(AccountModel)
-                .filter(AccountModel.idAccount == account_id)
-                .first()
-            )
+            existing = session.query(AccountModel).filter(AccountModel.idAccount == account_id).first()
             if existing is not None:
                 existing.name = name
                 existing.saldo = saldo

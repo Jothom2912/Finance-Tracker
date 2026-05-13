@@ -44,10 +44,7 @@ class DanskeBankCSVParser:
         if missing:
             from app.domain.exceptions import CSVImportException
 
-            raise CSVImportException(
-                f"Danske Bank CSV missing required columns: "
-                f"{', '.join(sorted(missing))}"
-            )
+            raise CSVImportException(f"Danske Bank CSV missing required columns: {', '.join(sorted(missing))}")
 
         result = ParsedCSVResult()
 

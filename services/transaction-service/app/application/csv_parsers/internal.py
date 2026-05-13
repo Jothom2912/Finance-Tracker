@@ -42,9 +42,7 @@ class InternalCSVParser:
         if missing:
             from app.domain.exceptions import CSVImportException
 
-            raise CSVImportException(
-                f"CSV missing required columns: {', '.join(sorted(missing))}"
-            )
+            raise CSVImportException(f"CSV missing required columns: {', '.join(sorted(missing))}")
 
         result = ParsedCSVResult()
 
@@ -63,19 +61,11 @@ class InternalCSVParser:
                         "user_id": user_id,
                         "account_id": int(row["account_id"]),
                         "account_name": row["account_name"].strip(),
-                        "category_id": (
-                            int(row["category_id"])
-                            if row.get("category_id")
-                            else None
-                        ),
-                        "category_name": (
-                            row.get("category_name", "").strip() or None
-                        ),
+                        "category_id": (int(row["category_id"]) if row.get("category_id") else None),
+                        "category_name": (row.get("category_name", "").strip() or None),
                         "amount": amount,
                         "transaction_type": tx_type,
-                        "description": (
-                            row.get("description", "").strip() or None
-                        ),
+                        "description": (row.get("description", "").strip() or None),
                         "tx_date": date.fromisoformat(row["date"].strip()),
                     }
                 )

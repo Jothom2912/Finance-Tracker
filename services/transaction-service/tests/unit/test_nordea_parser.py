@@ -24,17 +24,13 @@ class TestNordeaGoldenFile:
         self.content = (FIXTURES / "nordea_sample.csv").read_bytes()
 
     def test_row_count(self) -> None:
-        result = self.parser.parse(
-            self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME
-        )
+        result = self.parser.parse(self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME)
         assert len(result.rows) == 6
         assert result.skipped == 0
         assert result.errors == []
 
     def test_expense_row(self) -> None:
-        result = self.parser.parse(
-            self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME
-        )
+        result = self.parser.parse(self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME)
         row = result.rows[0]
         assert row["tx_date"] == date(2026, 2, 26)
         assert row["amount"] == Decimal("35.00")
@@ -48,9 +44,7 @@ class TestNordeaGoldenFile:
 
     def test_income_row_with_modtager(self) -> None:
         """Row 4: positive amount, Modtager is set, Navn has the MobilePay info."""
-        result = self.parser.parse(
-            self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME
-        )
+        result = self.parser.parse(self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME)
         row = result.rows[2]
         assert row["tx_date"] == date(2026, 2, 23)
         assert row["amount"] == Decimal("200.00")
@@ -59,9 +53,7 @@ class TestNordeaGoldenFile:
 
     def test_income_empty_navn(self) -> None:
         """Row 5: income, Navn is empty, Beskrivelse has 'Fra Opsparing'."""
-        result = self.parser.parse(
-            self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME
-        )
+        result = self.parser.parse(self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME)
         row = result.rows[3]
         assert row["tx_date"] == date(2026, 2, 20)
         assert row["amount"] == Decimal("500.00")
@@ -70,9 +62,7 @@ class TestNordeaGoldenFile:
 
     def test_expense_empty_navn_uses_beskrivelse(self) -> None:
         """Row 6: expense, Navn is empty, Beskrivelse has 'Cph Village'."""
-        result = self.parser.parse(
-            self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME
-        )
+        result = self.parser.parse(self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME)
         row = result.rows[4]
         assert row["tx_date"] == date(2026, 2, 2)
         assert row["amount"] == Decimal("5560.00")
@@ -81,9 +71,7 @@ class TestNordeaGoldenFile:
 
     def test_large_income(self) -> None:
         """Row 7: SU payment of 6281,00."""
-        result = self.parser.parse(
-            self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME
-        )
+        result = self.parser.parse(self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME)
         row = result.rows[5]
         assert row["tx_date"] == date(2026, 1, 30)
         assert row["amount"] == Decimal("6281.00")
@@ -92,9 +80,7 @@ class TestNordeaGoldenFile:
 
     def test_decimal_precision(self) -> None:
         """Row 2 has -145,08 -- verify two-decimal precision survives."""
-        result = self.parser.parse(
-            self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME
-        )
+        result = self.parser.parse(self.content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME)
         row = result.rows[1]
         assert row["amount"] == Decimal("145.08")
 
@@ -186,11 +172,7 @@ class TestNordeaEdgeCases:
 
     def test_empty_rows_between_data(self) -> None:
         header = "Bogføringsdato;Beløb;Afsender;Modtager;Navn;Beskrivelse;Saldo;Valuta;Afstemt;\n"
-        body = (
-            "2026/01/01;-10,00;123;;A;A;990,00;DKK;;\n"
-            "\n"
-            "2026/01/02;-20,00;123;;B;B;970,00;DKK;;\n"
-        )
+        body = "2026/01/01;-10,00;123;;A;A;990,00;DKK;;\n\n2026/01/02;-20,00;123;;B;B;970,00;DKK;;\n"
         content = (header + body).encode("utf-8")
         result = self.parser.parse(content, USER_ID, ACCOUNT_ID, ACCOUNT_NAME)
         assert len(result.rows) == 2

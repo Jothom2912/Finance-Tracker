@@ -382,8 +382,7 @@ class TestImportCSV:
     async def test_all_invalid_no_outbox(self) -> None:
         service, uow = _build_service()
         csv_content = (
-            b"date,amount,transaction_type,account_id,account_name\n"
-            b"2026-03-01,INVALID,expense,100,Main Account\n"
+            b"date,amount,transaction_type,account_id,account_name\n2026-03-01,INVALID,expense,100,Main Account\n"
         )
 
         result = await service.import_csv(user_id=10, csv_content=csv_content)

@@ -24,7 +24,7 @@ def get_account_resolver(
     """
     token = ""
     if authorization and authorization.startswith("Bearer "):
-        token = authorization[len("Bearer "):]
+        token = authorization[len("Bearer ") :]
     return HttpAccountResolver(
         token=token,
         base_url=config.ACCOUNT_SERVICE_URL,
