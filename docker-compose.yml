@@ -68,7 +68,7 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:1.7b && ollama pull embeddinggemma:latest"]
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3.5:9b && ollama pull bge-m3"]
     restart: "no"
 
   # === Application services ===
@@ -482,8 +482,8 @@ services:
       - "8007:8004"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
-      LLM_MODEL: qwen3:1.7b
-      EMBEDDING_MODEL: embeddinggemma:latest
+      LLM_MODEL: qwen3.5:9b
+      EMBEDDING_MODEL: bge-m3
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
       CHROMADB_PATH: /data/chromadb
       RETRIEVAL_TOP_K: "30"
@@ -493,8 +493,8 @@ services:
     volumes:
       - ai_chromadb_data:/data/chromadb
     depends_on:
-      ollama:
-        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
       transaction-service:
         condition: service_started
 
