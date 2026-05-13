@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import Depends, Header
+from fastapi import Header
 
 import backend.config as config
 from backend.shared.adapters.http_account_resolver import HttpAccountResolver

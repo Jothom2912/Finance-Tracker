@@ -8,6 +8,7 @@ from contracts.events.transaction import (
     TransactionUpdatedEvent,
 )
 
+from app.application.csv_parsers.registry import get_parser
 from app.application.dto import (
     BulkCreateResultDTO,
     BulkCreateTransactionDTO,
@@ -20,7 +21,6 @@ from app.application.dto import (
     UpdatePlannedTransactionDTO,
     UpdateTransactionDTO,
 )
-from app.application.csv_parsers.registry import get_parser
 from app.application.ports.inbound import ITransactionService
 from app.application.ports.outbound import IUnitOfWork
 from app.domain.entities import PlannedTransaction, Transaction
