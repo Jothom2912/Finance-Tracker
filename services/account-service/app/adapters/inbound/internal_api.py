@@ -34,3 +34,17 @@ def account_exists(
     repo = MySQLAccountRepository(db)
     account = repo.get_by_id(account_id)
     return {"exists": account is not None}
+
+
+@router.get("/{account_id}/owner")
+def account_owner(
+    account_id: int,
+    _: None = Depends(_verify_internal_key),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return the owning user_id for an account. Used by goal-service for authorization."""
+    repo = MySQLAccountRepository(db)
+    account = repo.get_by_id(account_id)
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+    return {"user_id": account.User_idUser}
