@@ -36,8 +36,7 @@ def create_goal(
 ) -> GoalSchema:
     """Opretter et nyt sparemål."""
     logger.warning(
-        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
-        "method=%s path=%s account=%s",
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. method=%s path=%s account=%s",
         request.method,
         request.url.path,
         request.headers.get("X-Account-ID", "unknown"),
@@ -68,8 +67,7 @@ def list_goals(
 ) -> list[GoalSchema]:
     """Henter alle mål for en given konto."""
     logger.warning(
-        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
-        "method=%s path=%s account=%s",
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. method=%s path=%s account=%s",
         request.method,
         request.url.path,
         request.headers.get("X-Account-ID", "unknown"),
@@ -91,8 +89,7 @@ def get_goal(
 ) -> GoalSchema:
     """Henter et specifikt mål baseret på ID."""
     logger.warning(
-        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
-        "method=%s path=%s account=%s",
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. method=%s path=%s account=%s",
         request.method,
         request.url.path,
         request.headers.get("X-Account-ID", "unknown"),
@@ -115,8 +112,7 @@ def update_goal(
 ) -> GoalSchema:
     """Opdaterer et eksisterende mål."""
     logger.warning(
-        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
-        "method=%s path=%s account=%s",
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. method=%s path=%s account=%s",
         request.method,
         request.url.path,
         request.headers.get("X-Account-ID", "unknown"),
@@ -138,8 +134,7 @@ def delete_goal(
 ) -> None:
     """Sletter et mål."""
     logger.warning(
-        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
-        "method=%s path=%s account=%s",
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. method=%s path=%s account=%s",
         request.method,
         request.url.path,
         request.headers.get("X-Account-ID", "unknown"),
