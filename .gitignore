@@ -49,6 +49,9 @@ dist/
 *.swp
 *.swo
 
+# Claude
+claude.md
+
 # OS
 .DS_Store
 Thumbs.db
