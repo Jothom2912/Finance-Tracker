@@ -158,9 +158,7 @@ class _StubAccountResolver:
 
     def verify_account_ownership(self, user_id: int, account_id: int) -> bool:
         return (
-            self._db.query(Account)
-            .filter(Account.idAccount == account_id, Account.User_idUser == user_id)
-            .first()
+            self._db.query(Account).filter(Account.idAccount == account_id, Account.User_idUser == user_id).first()
             is not None
         )
 
