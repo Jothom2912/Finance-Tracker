@@ -99,6 +99,21 @@ describe('streamChat', () => {
     });
   });
 
+  it('silently skips SSE events with empty data (sse-starlette ping workaround)', async () => {
+    mockFetchEventSource.mockImplementation(async (_url, opts) => {
+      opts.onmessage({ event: 'intent_resolved', data: '{"intent":"largest_expense","period":"2026-04","slots":{}}' });
+      opts.onmessage({ event: '', data: '' });
+      opts.onmessage({ event: 'done', data: '{"metadata":{}}' });
+    });
+
+    const onEvent = vi.fn();
+    await streamChat({ question: 'test', onEvent });
+
+    expect(onEvent).toHaveBeenCalledTimes(2);
+    expect(onEvent).toHaveBeenNthCalledWith(1, expect.objectContaining({ type: 'intent_resolved' }));
+    expect(onEvent).toHaveBeenNthCalledWith(2, expect.objectContaining({ type: 'done' }));
+  });
+
   describe('onopen error handling', () => {
     it('calls handleUnauthorized and throws AuthError on 401', async () => {
       const response = new Response('Unauthorized', { status: 401 });

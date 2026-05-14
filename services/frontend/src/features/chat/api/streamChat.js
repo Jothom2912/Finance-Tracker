@@ -49,8 +49,13 @@ export async function streamChat({ question, onEvent, signal }) {
     },
 
     onmessage(ev) {
+      // sse-starlette sender ping-comments (": ping - <ts>") som keepalive.
+      // @microsoft/fetch-event-source fyrer onmessage for disse med tom data
+      // i stedet for at filtrere dem som spec'en kræver. Vi skipper tomme
+      // events her — det er IKKE den oprindelige fail-loud-strategi, men
+      // det er nødvendigt for at coexistere med standard SSE-keepalives.
+      if (!ev.data) return;
       if (ev.event === 'done') doneReceived = true;
-      // JSON.parse-fejl bobler op til onerror og fejler streamen — bevidst valgt
       onEvent({ type: ev.event, data: JSON.parse(ev.data) });
     },
 
