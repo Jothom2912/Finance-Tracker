@@ -5,6 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.domain.entities import GoalStatus
+
 
 class GoalBase(BaseModel):
     name: Optional[str] = Field(default=None, max_length=45)
@@ -28,7 +30,18 @@ class GoalCreate(GoalBase):
     Account_idAccount: int
 
 
-class Goal(GoalBase):
+class GoalResponse(BaseModel):
     idGoal: Optional[int] = None
+    name: Optional[str] = None
+    target_amount: float
+    current_amount: float
+    target_date: Optional[date] = None
+    status: GoalStatus
+    effective_status: GoalStatus
+    progress_percent: float
     Account_idAccount: int
     model_config = ConfigDict(from_attributes=True)
+
+
+# Keep backward-compatible alias used by existing imports in service/tests.
+Goal = GoalResponse

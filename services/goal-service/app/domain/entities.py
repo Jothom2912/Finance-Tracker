@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass
 from datetime import date, datetime
+
+
+class GoalStatus(str, enum.Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    EXPIRED = "expired"
 
 
 @dataclass
@@ -13,6 +21,26 @@ class Goal:
     target_date: date | None
     status: str | None
     account_id: int
+
+    @property
+    def progress_percent(self) -> float:
+        if self.target_amount == 0:
+            return 100.0
+        return round((self.current_amount / self.target_amount) * 100, 2)
+
+    @property
+    def effective_status(self) -> GoalStatus:
+        if self.current_amount >= self.target_amount and self.target_amount > 0:
+            return GoalStatus.COMPLETED
+        if (
+            self.target_date is not None
+            and self.target_date < date.today()
+            and self.status != GoalStatus.PAUSED
+        ):
+            return GoalStatus.EXPIRED
+        if self.status == GoalStatus.PAUSED:
+            return GoalStatus.PAUSED
+        return GoalStatus.ACTIVE
 
 
 @dataclass

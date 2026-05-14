@@ -4,8 +4,8 @@ from app.application.dto import Goal as GoalDTO
 from app.application.dto import GoalBase, GoalCreate
 from app.application.ports.inbound import IGoalService
 from app.application.ports.outbound import IAccountPort, IUnitOfWork
-from app.domain.entities import Goal
-from app.domain.exceptions import AccountNotFoundForGoal
+from app.domain.entities import Goal, GoalStatus
+from app.domain.exceptions import AccountNotFoundForGoal, NotAccountOwner
 from contracts.events.goal import GoalCreatedEvent, GoalDeletedEvent, GoalUpdatedEvent
 
 
@@ -14,17 +14,30 @@ class GoalService(IGoalService):
         self._uow = uow
         self._account_port = account_port
 
-    async def get_goal(self, goal_id: int) -> GoalDTO | None:
+    async def _verify_ownership(self, account_id: int, user_id: int) -> None:
+        owner_id = await self._account_port.get_owner_user_id(account_id)
+        if owner_id != user_id:
+            raise NotAccountOwner()
+
+    async def get_goal(self, goal_id: int, user_id: int) -> GoalDTO | None:
         async with self._uow:
             goal = await self._uow.goals.get_by_id(goal_id)
-        return self._to_dto(goal) if goal else None
+        if not goal:
+            return None
+        owner_id = await self._account_port.get_owner_user_id(goal.account_id)
+        if owner_id != user_id:
+            return None
+        return self._to_dto(goal)
 
-    async def list_goals(self, account_id: int) -> list[GoalDTO]:
+    async def list_goals(self, account_id: int, user_id: int) -> list[GoalDTO]:
+        await self._verify_ownership(account_id, user_id)
         async with self._uow:
             goals = await self._uow.goals.get_all(account_id=account_id)
         return [self._to_dto(goal) for goal in goals]
 
-    async def create_goal(self, data: GoalCreate) -> GoalDTO:
+    async def create_goal(self, data: GoalCreate, user_id: int) -> GoalDTO:
+        await self._verify_ownership(data.Account_idAccount, user_id)
+
         if not await self._account_port.exists(data.Account_idAccount):
             raise AccountNotFoundForGoal(data.Account_idAccount)
 
@@ -56,10 +69,13 @@ class GoalService(IGoalService):
             await self._uow.commit()
         return self._to_dto(created)
 
-    async def update_goal(self, goal_id: int, data: GoalBase) -> GoalDTO | None:
+    async def update_goal(self, goal_id: int, data: GoalBase, user_id: int) -> GoalDTO | None:
         async with self._uow:
             existing = await self._uow.goals.get_by_id(goal_id)
             if not existing:
+                return None
+            owner_id = await self._account_port.get_owner_user_id(existing.account_id)
+            if owner_id != user_id:
                 return None
             updated = Goal(
                 id=goal_id,
@@ -87,10 +103,13 @@ class GoalService(IGoalService):
             await self._uow.commit()
         return self._to_dto(result)
 
-    async def delete_goal(self, goal_id: int) -> bool:
+    async def delete_goal(self, goal_id: int, user_id: int) -> bool:
         async with self._uow:
             existing = await self._uow.goals.get_by_id(goal_id)
             if not existing:
+                return False
+            owner_id = await self._account_port.get_owner_user_id(existing.account_id)
+            if owner_id != user_id:
                 return False
             deleted = await self._uow.goals.delete(goal_id)
             if not deleted:
@@ -110,6 +129,8 @@ class GoalService(IGoalService):
             target_amount=goal.target_amount,
             current_amount=goal.current_amount,
             target_date=goal.target_date,
-            status=goal.status,
+            status=goal.status or GoalStatus.ACTIVE,
+            effective_status=goal.effective_status,
+            progress_percent=goal.progress_percent,
             Account_idAccount=goal.account_id,
         )
