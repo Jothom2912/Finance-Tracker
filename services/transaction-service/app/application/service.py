@@ -240,8 +240,33 @@ class TransactionService(ITransactionService):
         if not parsed.rows:
             return CSVImportResultDTO(imported=0, skipped=parsed.skipped, errors=parsed.errors)
 
+        duplicates_skipped = 0
+        rows_to_create: list[dict] = []
+
         async with self._uow:
-            created = await self._uow.transactions.bulk_create(parsed.rows)
+            for row in parsed.rows:
+                duplicate = await self._uow.transactions.find_duplicate(
+                    user_id=user_id,
+                    account_id=row["account_id"],
+                    tx_date=row["tx_date"],
+                    amount=row["amount"],
+                    description=row.get("description"),
+                )
+                if duplicate is not None:
+                    duplicates_skipped += 1
+                    continue
+                rows_to_create.append(row)
+
+        if not rows_to_create:
+            return CSVImportResultDTO(
+                imported=0,
+                skipped=parsed.skipped,
+                duplicates_skipped=duplicates_skipped,
+                errors=parsed.errors,
+            )
+
+        async with self._uow:
+            created = await self._uow.transactions.bulk_create(rows_to_create)
 
             outbox_entries = [
                 (
@@ -272,6 +297,7 @@ class TransactionService(ITransactionService):
         return CSVImportResultDTO(
             imported=len(created),
             skipped=parsed.skipped,
+            duplicates_skipped=duplicates_skipped,
             errors=parsed.errors,
         )
 

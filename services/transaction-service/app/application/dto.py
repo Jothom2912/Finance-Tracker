@@ -98,6 +98,7 @@ class TransactionFiltersDTO(BaseModel):
 class CSVImportResultDTO(BaseModel):
     imported: int
     skipped: int
+    duplicates_skipped: int = 0
     errors: list[str]
 
 

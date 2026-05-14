@@ -48,10 +48,14 @@ export async function uploadTransactionsCsv({ file, bankFormat = 'internal' }) {
   });
   if (!response.ok) throw await parseApiError(response);
   const result = await response.json();
+  const parts = [`${result.imported} transaktioner importeret`];
+  if (result.duplicates_skipped) parts.push(`${result.duplicates_skipped} dubletter sprunget over`);
+  if (result.skipped) parts.push(`${result.skipped} rækker sprunget over`);
   return {
-    message: `${result.imported} transaktioner importeret, ${result.skipped} sprunget over.`,
+    message: `${parts.join(', ')}.`,
     imported_count: result.imported,
     skipped: result.skipped,
+    duplicates_skipped: result.duplicates_skipped || 0,
     errors: result.errors,
   };
 }

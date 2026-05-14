@@ -341,6 +341,7 @@ class TestImportCSV:
     async def test_success_uses_add_batch(self) -> None:
         service, uow = _build_service()
         tx = _make_transaction()
+        uow.transactions.find_duplicate.return_value = None
         uow.transactions.bulk_create.return_value = [tx]
         csv_content = (
             b"date,amount,transaction_type,account_id,account_name,"
@@ -352,6 +353,7 @@ class TestImportCSV:
 
         assert result.imported == 1
         assert result.skipped == 0
+        assert result.duplicates_skipped == 0
         assert result.errors == []
         uow.commit.assert_awaited_once()
         uow.outbox.add_batch.assert_awaited_once()
@@ -365,6 +367,7 @@ class TestImportCSV:
     async def test_partial_failure(self) -> None:
         service, uow = _build_service()
         tx = _make_transaction()
+        uow.transactions.find_duplicate.return_value = None
         uow.transactions.bulk_create.return_value = [tx]
         csv_content = (
             b"date,amount,transaction_type,account_id,account_name\n"
@@ -377,6 +380,22 @@ class TestImportCSV:
         assert result.imported == 1
         assert result.skipped == 1
         assert len(result.errors) == 1
+
+    @pytest.mark.asyncio()
+    async def test_duplicates_skipped(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.find_duplicate.return_value = _make_transaction()
+        csv_content = (
+            b"date,amount,transaction_type,account_id,account_name\n"
+            b"2026-03-01,49.99,expense,100,Main Account\n"
+        )
+
+        result = await service.import_csv(user_id=10, csv_content=csv_content)
+
+        assert result.imported == 0
+        assert result.duplicates_skipped == 1
+        uow.transactions.bulk_create.assert_not_awaited()
+        uow.outbox.add_batch.assert_not_awaited()
 
     @pytest.mark.asyncio()
     async def test_all_invalid_no_outbox(self) -> None:
