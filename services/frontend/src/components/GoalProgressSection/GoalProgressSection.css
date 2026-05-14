@@ -48,10 +48,32 @@
 .goal-badge {
   font-size: var(--font-size-xs);
   font-weight: 600;
-  color: var(--color-success-700);
-  background: var(--color-success-100);
   padding: 0.125rem 0.5rem;
   border-radius: var(--radius-sm);
+}
+
+.goal-badge-completed {
+  color: var(--color-success-700);
+  background: var(--color-success-100);
+}
+
+.goal-badge-expired {
+  color: var(--color-error-700, #c53030);
+  background: var(--color-error-100, #fff5f5);
+}
+
+.goal-badge-paused {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-sunken);
+}
+
+.goal-card.goal-expired {
+  border-color: var(--color-error-100, #fed7d7);
+  opacity: 0.85;
+}
+
+.goal-expired .goal-progress-fill {
+  background: var(--color-error-500, #e53e3e);
 }
 
 /* ── Progress bar ── */

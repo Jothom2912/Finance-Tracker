@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { gql } from 'graphql-request';
 import { gqlRequest } from '../../api/graphqlClient';
+import { fetchGoals } from '../../api/goals';
 import { formatAmount, formatDate } from '../../lib/formatters';
 import { CHART_COLORS as COLORS } from '../../lib/chartColors';
 
@@ -43,15 +44,6 @@ const DASHBOARD_QUERY = gql`
       totalRemaining
       overBudgetCount
     }
-    goalProgress {
-      id
-      name
-      targetAmount
-      currentAmount
-      targetDate
-      status
-      percentComplete
-    }
     transactions(limit: 10) {
       id
       amount
@@ -72,6 +64,18 @@ export function dashboardQueryKey(accountId, month, year) {
   return ['dashboard', { accountId, month, year }];
 }
 
+function mapGoalFromRest(g) {
+  return {
+    id: g.idGoal,
+    name: g.name,
+    targetAmount: g.target_amount,
+    currentAmount: g.current_amount,
+    targetDate: g.target_date,
+    status: g.effective_status,
+    percentComplete: g.progress_percent,
+  };
+}
+
 export function useDashboardData() {
   const accountId = localStorage.getItem('account_id');
   const now = new Date();
@@ -83,9 +87,15 @@ export function useDashboardData() {
     queryFn: () => gqlRequest(DASHBOARD_QUERY, { month, year }),
   });
 
+  const { data: goalsData, isLoading: goalsLoading, error: goalsError } = useQuery({
+    queryKey: ['goals', accountId],
+    queryFn: () => fetchGoals(),
+    select: (data) => (data ?? []).map(mapGoalFromRest),
+  });
+
   const overview = data?.currentMonthOverview ?? null;
   const budgetSummary = data?.budgetSummary ?? null;
-  const goals = data?.goalProgress ?? [];
+  const goals = goalsData ?? [];
   const recentTransactions = data?.transactions ?? [];
   const expensesByMonth = data?.expensesByMonth ?? [];
 
@@ -118,8 +128,8 @@ export function useDashboardData() {
     goals,
     recentTransactions,
     expensesByMonth,
-    loading: isLoading,
-    error: error ? error.message || 'Kunne ikke hente dashboard-data.' : null,
+    loading: isLoading || goalsLoading,
+    error: (error || goalsError) ? (error?.message || goalsError?.message || 'Kunne ikke hente dashboard-data.') : null,
     processedCategoryData,
     categoryDataWithPercentages,
     formatAmount,

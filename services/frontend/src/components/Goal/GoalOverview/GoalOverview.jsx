@@ -1,7 +1,6 @@
-// frontend/src/components/Goal/GoalOverview/GoalOverview.js
 import { useState, useEffect, useMemo } from 'react';
 import { Target } from 'lucide-react';
-import apiClient from '../../../utils/apiClient';
+import { fetchGoals } from '../../../api/goals';
 import MessageDisplay from '../../MessageDisplay';
 import GoalItem from '../GoalItem/GoalItem';
 import './GoalOverview.css';
@@ -11,23 +10,14 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
   const [loading, setLoading] = useState(true);
   const [localError, setLocalError] = useState(null);
 
-  // Fetch goals
   useEffect(() => {
-    const fetchGoals = async () => {
+    const loadGoals = async () => {
       setLoading(true);
       setLocalError(null);
       setError?.(null);
 
       try {
-        // Backend henter account_id automatisk fra X-Account-ID header
-        const response = await apiClient.get('/goals/');
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Kunne ikke hente mål');
-        }
-
-        const data = await response.json();
+        const data = await fetchGoals();
         setGoals(data);
       } catch (err) {
         console.error('Fejl ved hentning af mål:', err);
@@ -39,24 +29,17 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
       }
     };
 
-    fetchGoals();
+    loadGoals();
   }, [refreshTrigger, setError]);
 
-  // Beregn statistikker
   const stats = useMemo(() => {
     if (!goals || goals.length === 0) {
-      return {
-        total: 0,
-        completed: 0,
-        active: 0,
-        totalTarget: 0,
-        totalCurrent: 0,
-        totalProgress: 0
-      };
+      return { total: 0, completed: 0, active: 0, expired: 0, totalTarget: 0, totalCurrent: 0, totalProgress: 0 };
     }
 
-    const completed = goals.filter(g => g.status === 'completed' || g.current_amount >= g.target_amount).length;
-    const active = goals.filter(g => g.status !== 'completed' && g.current_amount < g.target_amount).length;
+    const completed = goals.filter(g => g.effective_status === 'completed').length;
+    const expired = goals.filter(g => g.effective_status === 'expired').length;
+    const active = goals.filter(g => g.effective_status === 'active' || g.effective_status === 'paused').length;
     const totalTarget = goals.reduce((sum, g) => sum + (g.target_amount || 0), 0);
     const totalCurrent = goals.reduce((sum, g) => sum + (g.current_amount || 0), 0);
     const totalProgress = totalTarget > 0 ? (totalCurrent / totalTarget) * 100 : 0;
@@ -65,6 +48,7 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
       total: goals.length,
       completed,
       active,
+      expired,
       totalTarget,
       totalCurrent,
       totalProgress: Math.min(totalProgress, 100)
@@ -112,7 +96,7 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
       <div className="goal-overview-header">
         <h2>Mine Mål</h2>
         {goals.length > 0 && (
-          <button 
+          <button
             className="add-goal-button"
             onClick={() => onEditGoal?.(null)}
             title="Opret nyt mål"
@@ -122,15 +106,14 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
         )}
       </div>
 
-      {/* Statistikker */}
       {goals.length > 0 && (
         <div className="goal-stats">
           <div className="stat-card">
             <div className="stat-label">Samlet Fremskridt</div>
             <div className="stat-value-large">{stats.totalProgress.toFixed(1)}%</div>
             <div className="progress-bar-container">
-              <div 
-                className="progress-bar" 
+              <div
+                className="progress-bar"
                 style={{ width: `${stats.totalProgress}%` }}
               ></div>
             </div>
@@ -149,6 +132,13 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
             <div className="stat-value">{stats.completed}</div>
           </div>
 
+          {stats.expired > 0 && (
+            <div className="stat-card stat-card-expired">
+              <div className="stat-label">Udløbne Mål</div>
+              <div className="stat-value">{stats.expired}</div>
+            </div>
+          )}
+
           <div className="stat-card">
             <div className="stat-label">I Alt</div>
             <div className="stat-value">{stats.total}</div>
@@ -156,13 +146,12 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
         </div>
       )}
 
-      {/* Goals Liste */}
       {goals.length === 0 ? (
         <div className="no-goals">
           <div className="no-goals-icon"><Target aria-hidden="true" size={48} /></div>
           <h3>Ingen mål endnu</h3>
           <p>Opret dit første mål for at komme i gang!</p>
-          <button 
+          <button
             className="create-first-goal-button"
             onClick={() => onEditGoal?.(null)}
           >
@@ -187,4 +176,3 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
 }
 
 export default GoalOverview;
-

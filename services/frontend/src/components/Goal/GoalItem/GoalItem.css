@@ -74,6 +74,24 @@
   color: var(--color-success-700);
 }
 
+.goal-status-badge.expired {
+  background: var(--color-error-100, #fff5f5);
+  color: var(--color-error-700, #c53030);
+}
+
+.goal-status-badge.paused {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-secondary);
+}
+
+.goal-item.expired::before {
+  background: var(--color-error-500, #e53e3e);
+}
+
+.goal-item.paused::before {
+  background: var(--color-text-muted);
+}
+
 .edit-goal-button {
   background: none;
   border: none;

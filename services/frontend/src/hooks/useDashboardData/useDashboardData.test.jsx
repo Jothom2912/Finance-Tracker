@@ -7,11 +7,17 @@ vi.mock('../../api/graphqlClient', () => ({
   gqlRequest: vi.fn(),
 }));
 
+vi.mock('../../api/goals', () => ({
+  fetchGoals: vi.fn(),
+}));
+
 import { gqlRequest } from '../../api/graphqlClient';
+import { fetchGoals } from '../../api/goals';
 
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  fetchGoals.mockResolvedValue([]);
 });
 
 const mockGraphQLResponse = {
@@ -47,17 +53,6 @@ const mockGraphQLResponse = {
     totalRemaining: 1000,
     overBudgetCount: 0,
   },
-  goalProgress: [
-    {
-      id: 1,
-      name: 'Ferie',
-      targetAmount: 10000,
-      currentAmount: 3500,
-      targetDate: '2026-09-01',
-      status: 'active',
-      percentComplete: 35.0,
-    },
-  ],
   transactions: [
     {
       id: 1,
@@ -74,6 +69,17 @@ describe('useDashboardData', () => {
   it('fetches all dashboard data via GraphQL on mount', async () => {
     localStorage.setItem('account_id', 'account-1');
     gqlRequest.mockResolvedValue(mockGraphQLResponse);
+    fetchGoals.mockResolvedValue([
+      {
+        idGoal: 1,
+        name: 'Ferie',
+        target_amount: 10000,
+        current_amount: 2500,
+        target_date: '2026-12-01',
+        effective_status: 'active',
+        progress_percent: 25,
+      },
+    ]);
 
     const { wrapper } = createQueryClientWrapper();
     const { result } = renderHook(() => useDashboardData(), { wrapper });
@@ -86,12 +92,22 @@ describe('useDashboardData', () => {
 
     expect(result.current.overview).toEqual(mockGraphQLResponse.currentMonthOverview);
     expect(result.current.budgetSummary).toEqual(mockGraphQLResponse.budgetSummary);
-    expect(result.current.goals).toEqual(mockGraphQLResponse.goalProgress);
+    expect(result.current.goals).toEqual([
+      {
+        id: 1,
+        name: 'Ferie',
+        targetAmount: 10000,
+        currentAmount: 2500,
+        targetDate: '2026-12-01',
+        status: 'active',
+        percentComplete: 25,
+      },
+    ]);
     expect(result.current.recentTransactions).toEqual(mockGraphQLResponse.transactions);
     expect(result.current.error).toBeNull();
   });
 
-  it('refetches instead of reusing cache when account changes', async () => {
+  it('refetches GraphQL when account changes', async () => {
     const accountOneResponse = {
       ...mockGraphQLResponse,
       currentMonthOverview: {

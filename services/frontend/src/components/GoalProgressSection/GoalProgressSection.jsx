@@ -2,15 +2,21 @@
 import { formatAmount, formatDate } from '../../lib/formatters';
 import './GoalProgressSection.css';
 
+const BADGE_CONFIG = {
+  completed: { label: 'Opfyldt', className: 'goal-badge-completed' },
+  expired:   { label: 'Udløbet', className: 'goal-badge-expired' },
+  paused:    { label: 'Pauseret', className: 'goal-badge-paused' },
+};
+
 function GoalCard({ goal }) {
   const pct = Math.min(goal.percentComplete, 100);
-  const isComplete = goal.status === 'completed' || pct >= 100;
+  const badge = BADGE_CONFIG[goal.status];
 
   return (
-    <div className={`goal-card ${isComplete ? 'goal-complete' : ''}`}>
+    <div className={`goal-card ${goal.status === 'completed' ? 'goal-complete' : ''} ${goal.status === 'expired' ? 'goal-expired' : ''}`}>
       <div className="goal-card-header">
         <span className="goal-name">{goal.name || 'Unavngivet mål'}</span>
-        {isComplete && <span className="goal-badge">Nået!</span>}
+        {badge && <span className={`goal-badge ${badge.className}`}>{badge.label}</span>}
       </div>
       <div className="goal-progress-track">
         <div
@@ -43,7 +49,8 @@ function GoalProgressSection({ goals }) {
     );
   }
 
-  const activeGoals = goals.filter((g) => g.status !== 'completed');
+  const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'paused');
+  const expiredGoals = goals.filter((g) => g.status === 'expired');
   const completedGoals = goals.filter((g) => g.status === 'completed');
 
   return (
@@ -51,6 +58,9 @@ function GoalProgressSection({ goals }) {
       <h3>Sparemål</h3>
       <div className="goal-cards-grid">
         {activeGoals.map((goal) => (
+          <GoalCard key={goal.id} goal={goal} />
+        ))}
+        {expiredGoals.map((goal) => (
           <GoalCard key={goal.id} goal={goal} />
         ))}
         {completedGoals.map((goal) => (

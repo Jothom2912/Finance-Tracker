@@ -1,9 +1,15 @@
-// frontend/src/components/Goal/GoalSetup/GoalSetup.js
 import { useState, useEffect, useCallback } from 'react';
 import MessageDisplay from '../../MessageDisplay';
-import apiClient from '../../../utils/apiClient';
+import { fetchGoals as apiFetchGoals, createGoal, updateGoal, deleteGoal } from '../../../api/goals';
 import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
 import './GoalSetup.css';
+
+const STATUS_LABELS = {
+  active: 'Aktiv',
+  paused: 'Pauseret',
+  completed: 'Opfyldt',
+  expired: 'Udløbet',
+};
 
 function GoalSetup({
     onGoalAdded,
@@ -27,7 +33,6 @@ function GoalSetup({
     const [localError, setLocalError] = useState(null);
     const [localSuccessMessage, setLocalSuccessMessage] = useState(null);
 
-    // Reset form når vi skifter mellem editing og create mode
     useEffect(() => {
         if (initialGoal) {
             setGoalName(initialGoal.name || '');
@@ -46,22 +51,11 @@ function GoalSetup({
         setLocalSuccessMessage(null);
     }, [initialGoal]);
 
-    // Hent eksisterende goals
-    const fetchGoals = useCallback(async () => {
+    const loadGoals = useCallback(async () => {
         setLoading(true);
         setLocalError(null);
         try {
-            // Backend henter account_id automatisk fra X-Account-ID header
-            const response = await apiClient.get('/goals/');
-            if (!response.ok) {
-                if (response.status === 404) {
-                    setGoals([]);
-                    return;
-                }
-                const errorDetail = await response.json();
-                throw new Error(`Kunne ikke hente mål: ${errorDetail.detail || 'Ukendt fejl'}`);
-            }
-            const data = await response.json();
+            const data = await apiFetchGoals();
             setGoals(data);
         } catch (err) {
             console.error("Fejl ved hentning af mål:", err);
@@ -74,8 +68,8 @@ function GoalSetup({
     }, [setError]);
 
     useEffect(() => {
-        fetchGoals();
-    }, [fetchGoals]);
+        loadGoals();
+    }, [loadGoals]);
 
     const clearMessages = useCallback(() => {
         setLocalError(null);
@@ -124,7 +118,6 @@ function GoalSetup({
         setIsSubmitting(true);
 
         try {
-            // Hent account_id fra localStorage (samme som apiClient bruger)
             const accountId = localStorage.getItem('account_id');
             if (!accountId) {
                 throw new Error('Account ID mangler. Vælg en konto først.');
@@ -139,46 +132,25 @@ function GoalSetup({
                 Account_idAccount: parseInt(accountId)
             };
 
-            let response;
             if (initialGoal?.idGoal) {
-                // Update existing goal
-                response = await apiClient.put(`/goals/${initialGoal.idGoal}`, goalData);
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    const errorMessage = Array.isArray(errorData.detail)
-                        ? errorData.detail.map(e => e.msg || JSON.stringify(e)).join(', ')
-                        : (typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail)) || 'Kunne ikke opdatere mål';
-                    throw new Error(errorMessage);
-                }
-                await response.json();
+                await updateGoal(initialGoal.idGoal, goalData);
                 setLocalSuccessMessage('Mål opdateret succesfuldt!');
                 setSuccessMessage?.('Mål opdateret succesfuldt!');
                 onGoalUpdated?.();
             } else {
-                // Create new goal
-                response = await apiClient.post('/goals/', goalData);
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    const errorMessage = Array.isArray(errorData.detail)
-                        ? errorData.detail.map(e => e.msg || JSON.stringify(e)).join(', ')
-                        : (typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail)) || 'Kunne ikke oprette mål';
-                    throw new Error(errorMessage);
-                }
-                await response.json();
+                await createGoal(goalData);
                 setLocalSuccessMessage('Mål oprettet succesfuldt!');
                 setSuccessMessage?.('Mål oprettet succesfuldt!');
                 onGoalAdded?.();
             }
 
-            // Reset form
             setGoalName('');
             setTargetAmount('');
             setCurrentAmount('0');
             setTargetDate('');
             setStatus('active');
 
-            // Refresh goals list
-            await fetchGoals();
+            await loadGoals();
         } catch (err) {
             console.error('Fejl ved oprettelse/opdatering af mål:', err);
             const errorMessage = err.message || 'Der opstod en fejl ved oprettelse/opdatering af mål.';
@@ -204,25 +176,19 @@ function GoalSetup({
         setIsSubmitting(true);
 
         try {
-            const response = await apiClient.delete(`/goals/${initialGoal.idGoal}`);
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Kunne ikke slette mål');
-            }
+            await deleteGoal(initialGoal.idGoal);
 
             setLocalSuccessMessage('Mål slettet succesfuldt!');
             setSuccessMessage?.('Mål slettet succesfuldt!');
             onGoalDeleted?.();
 
-            // Reset form
             setGoalName('');
             setTargetAmount('');
             setCurrentAmount('0');
             setTargetDate('');
             setStatus('active');
 
-            // Refresh goals list
-            await fetchGoals();
+            await loadGoals();
         } catch (err) {
             console.error('Fejl ved sletning af mål:', err);
             const errorMessage = err.message || 'Der opstod en fejl ved sletning af mål.';
@@ -301,8 +267,7 @@ function GoalSetup({
                             onChange={(e) => setStatus(e.target.value)}
                         >
                             <option value="active">Aktiv</option>
-                            <option value="completed">Fuldført</option>
-                            <option value="paused">Pauset</option>
+                            <option value="paused">Pauseret</option>
                         </select>
                     </div>
                 </div>
@@ -340,7 +305,6 @@ function GoalSetup({
                 </div>
             </form>
 
-            {/* Eksisterende Goals Liste */}
             {goals.length > 0 && (
                 <div className="existing-goals">
                     <h3>Eksisterende Mål ({goals.length})</h3>
@@ -362,8 +326,8 @@ function GoalSetup({
                                     </div>
                                 </div>
                                 <div className="goal-list-status">
-                                    <span className={`status-badge ${goal.status || 'active'}`}>
-                                        {goal.status || 'active'}
+                                    <span className={`status-badge ${goal.effective_status || 'active'}`}>
+                                        {STATUS_LABELS[goal.effective_status] || goal.effective_status || 'Aktiv'}
                                     </span>
                                 </div>
                             </div>
@@ -376,4 +340,3 @@ function GoalSetup({
 }
 
 export default GoalSetup;
-

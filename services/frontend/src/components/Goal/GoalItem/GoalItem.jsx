@@ -1,43 +1,52 @@
-// frontend/src/components/Goal/GoalItem/GoalItem.js
-
 import { Pencil } from 'lucide-react';
 import './GoalItem.css';
 
+const STATUS_CONFIG = {
+  completed: { label: 'Opfyldt', color: '#48bb78', badgeClass: 'completed' },
+  expired:   { label: 'Udløbet', color: '#e53e3e', badgeClass: 'expired' },
+  paused:    { label: 'Pauseret', color: '#a0aec0', badgeClass: 'paused' },
+  active:    { label: 'Aktiv', color: '#4299e1', badgeClass: 'active' },
+};
+
 function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
-  const progress = goal.target_amount > 0 
-    ? Math.min((goal.current_amount / goal.target_amount) * 100, 100)
-    : 0;
-  
-  const isCompleted = goal.status === 'completed' || goal.current_amount >= goal.target_amount;
+  const progress = goal.progress_percent ?? (
+    goal.target_amount > 0
+      ? Math.min((goal.current_amount / goal.target_amount) * 100, 100)
+      : 0
+  );
+
+  const effectiveStatus = goal.effective_status || goal.status || 'active';
+  const config = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.active;
   const remaining = Math.max(goal.target_amount - goal.current_amount, 0);
-  const daysRemaining = goal.target_date 
+  const daysRemaining = goal.target_date
     ? Math.ceil((new Date(goal.target_date) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
 
-  const getStatusColor = () => {
-    if (isCompleted) return '#48bb78'; // Green
-    if (progress >= 75) return '#38a169'; // Dark green
-    if (progress >= 50) return '#ed8936'; // Orange
-    return '#e53e3e'; // Red
+  const getProgressColor = () => {
+    if (effectiveStatus === 'completed') return '#48bb78';
+    if (effectiveStatus === 'expired') return '#e53e3e';
+    if (progress >= 75) return '#38a169';
+    if (progress >= 50) return '#ed8936';
+    return '#e53e3e';
   };
 
-  const getStatusText = () => {
-    if (isCompleted) return 'Fuldført';
+  const getProgressText = () => {
+    if (effectiveStatus === 'completed') return 'Fuldført';
+    if (effectiveStatus === 'expired') return 'Udløbet';
+    if (effectiveStatus === 'paused') return 'Pauseret';
     if (progress >= 75) return 'Næsten der';
     if (progress >= 50) return 'Godt på vej';
     return 'Tidligt stadie';
   };
 
   return (
-    <div className={`goal-item ${isCompleted ? 'completed' : ''}`}>
+    <div className={`goal-item ${effectiveStatus}`}>
       <div className="goal-item-header">
         <div className="goal-name-section">
           <h3 className="goal-name">{goal.name || 'Unavngivet Mål'}</h3>
-          {goal.status && (
-            <span className={`goal-status-badge ${goal.status}`}>
-              {goal.status}
-            </span>
-          )}
+          <span className={`goal-status-badge ${config.badgeClass}`}>
+            {config.label}
+          </span>
         </div>
         <button
           className="edit-goal-button"
@@ -56,15 +65,15 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
             <span className="separator">/</span>
             <span className="target-amount">{formatAmount(goal.target_amount)}</span>
           </div>
-          <div className="progress-percentage">{progress.toFixed(1)}%</div>
+          <div className="progress-percentage">{Math.min(progress, 100).toFixed(1)}%</div>
         </div>
-        
+
         <div className="progress-bar-container">
-          <div 
-            className="progress-bar" 
-            style={{ 
-              width: `${progress}%`,
-              backgroundColor: getStatusColor()
+          <div
+            className="progress-bar"
+            style={{
+              width: `${Math.min(progress, 100)}%`,
+              backgroundColor: getProgressColor()
             }}
           ></div>
         </div>
@@ -75,7 +84,7 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
           <span className="detail-label">Tilbage:</span>
           <span className="detail-value">{formatAmount(remaining)}</span>
         </div>
-        
+
         {goal.target_date && (
           <div className="detail-item">
             <span className="detail-label">Deadline:</span>
@@ -83,7 +92,7 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
               {formatDate(goal.target_date)}
               {daysRemaining !== null && (
                 <span className="days-remaining">
-                  {daysRemaining < 0 
+                  {daysRemaining < 0
                     ? ` (${Math.abs(daysRemaining)} dage over)`
                     : ` (${daysRemaining} dage tilbage)`
                   }
@@ -95,8 +104,8 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
 
         <div className="detail-item">
           <span className="detail-label">Status:</span>
-          <span className="detail-value" style={{ color: getStatusColor() }}>
-            {getStatusText()}
+          <span className="detail-value" style={{ color: getProgressColor() }}>
+            {getProgressText()}
           </span>
         </div>
       </div>
@@ -105,4 +114,3 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
 }
 
 export default GoalItem;
-
