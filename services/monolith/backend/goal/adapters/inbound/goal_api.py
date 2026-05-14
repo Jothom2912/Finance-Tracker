@@ -2,9 +2,10 @@
 REST API adapter for Goal bounded context.
 """
 
+import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 
 from backend.auth import get_account_id_from_headers
 from backend.dependencies import get_goal_service
@@ -18,6 +19,8 @@ from backend.goal.application.dto import (
 from backend.goal.application.service import GoalService
 from backend.goal.domain.exceptions import AccountNotFoundForGoal
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/goals",
     tags=["Goals"],
@@ -26,11 +29,19 @@ router = APIRouter(
 
 @router.post("/", response_model=GoalSchema, status_code=status.HTTP_201_CREATED)
 def create_goal(
+    request: Request,
     goal_data: Dict[str, Any] = Body(...),
     service: GoalService = Depends(get_goal_service),
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ) -> GoalSchema:
     """Opretter et nyt sparemål."""
+    logger.warning(
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
+        "method=%s path=%s account=%s",
+        request.method,
+        request.url.path,
+        request.headers.get("X-Account-ID", "unknown"),
+    )
     if "Account_idAccount" not in goal_data or goal_data.get("Account_idAccount") is None:
         if not account_id:
             raise HTTPException(
@@ -50,11 +61,19 @@ def create_goal(
 
 @router.get("/", response_model=list[GoalSchema])
 def list_goals(
+    request: Request,
     service: GoalService = Depends(get_goal_service),
     account_id: Optional[int] = Query(None),
     account_id_from_header: Optional[int] = Depends(get_account_id_from_headers),
 ) -> list[GoalSchema]:
     """Henter alle mål for en given konto."""
+    logger.warning(
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
+        "method=%s path=%s account=%s",
+        request.method,
+        request.url.path,
+        request.headers.get("X-Account-ID", "unknown"),
+    )
     final_account_id = account_id or account_id_from_header
     if not final_account_id:
         raise HTTPException(
@@ -66,10 +85,18 @@ def list_goals(
 
 @router.get("/{goal_id}", response_model=GoalSchema)
 def get_goal(
+    request: Request,
     goal_id: int,
     service: GoalService = Depends(get_goal_service),
 ) -> GoalSchema:
     """Henter et specifikt mål baseret på ID."""
+    logger.warning(
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
+        "method=%s path=%s account=%s",
+        request.method,
+        request.url.path,
+        request.headers.get("X-Account-ID", "unknown"),
+    )
     goal = service.get_goal(goal_id)
     if not goal:
         raise HTTPException(
@@ -81,11 +108,19 @@ def get_goal(
 
 @router.put("/{goal_id}", response_model=GoalSchema)
 def update_goal(
+    request: Request,
     goal_id: int,
     goal_data: GoalBase,
     service: GoalService = Depends(get_goal_service),
 ) -> GoalSchema:
     """Opdaterer et eksisterende mål."""
+    logger.warning(
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
+        "method=%s path=%s account=%s",
+        request.method,
+        request.url.path,
+        request.headers.get("X-Account-ID", "unknown"),
+    )
     updated = service.update_goal(goal_id, goal_data)
     if not updated:
         raise HTTPException(
@@ -97,10 +132,18 @@ def update_goal(
 
 @router.delete("/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_goal(
+    request: Request,
     goal_id: int,
     service: GoalService = Depends(get_goal_service),
 ) -> None:
     """Sletter et mål."""
+    logger.warning(
+        "DEPRECATED: monolith goal endpoint hit — use goal-service. "
+        "method=%s path=%s account=%s",
+        request.method,
+        request.url.path,
+        request.headers.get("X-Account-ID", "unknown"),
+    )
     if not service.delete_goal(goal_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
