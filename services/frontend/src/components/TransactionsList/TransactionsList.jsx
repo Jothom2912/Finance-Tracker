@@ -9,7 +9,9 @@ function TransactionsList({
   onCreateTransaction,
   categories = [],
 }) {
-  const getCategoryName = (id) => {
+  const getCategoryName = (transaction) => {
+    if (transaction.category_name) return transaction.category_name;
+    const id = transaction.category_id || transaction.Category_idCategory;
     if (!id) return 'Ukendt';
     const category = categories.find((cat) => cat.id === id || cat.idCategory === id);
     return category ? category.name : 'Ukendt';
@@ -55,7 +57,7 @@ function TransactionsList({
                 </td>
                 <td data-label="Type">{transaction.type === 'expense' ? 'Udgift' : 'Indkomst'}</td>
                 <td data-label="Kategori">
-                  {getCategoryName(transaction.category_id || transaction.Category_idCategory)}
+                  {getCategoryName(transaction)}
                 </td>
                 <td data-label="Handlinger" className="transaction-actions">
                   <button className="button secondary small-button" onClick={() => onEdit(transaction)}>Rediger</button>

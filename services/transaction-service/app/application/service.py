@@ -465,6 +465,9 @@ class TransactionService(ITransactionService):
             description=entity.description,
             date=entity.date,
             created_at=entity.created_at,
+            subcategory_id=entity.subcategory_id,
+            categorization_tier=entity.categorization_tier,
+            categorization_confidence=entity.categorization_confidence,
         )
 
     @staticmethod

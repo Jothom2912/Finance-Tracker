@@ -79,6 +79,7 @@ class TransactionCategorizedEvent(BaseEvent):
     transaction_id: int
     category_id: int
     subcategory_id: int
+    subcategory_name: str = ""
     merchant_id: int | None = None
     tier: str = ""
     confidence: str = ""

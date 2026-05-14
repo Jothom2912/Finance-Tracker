@@ -159,6 +159,11 @@ class TransactionCreatedConsumer:
 
         result = self._categorize(description, amount)
 
+        subcategory_name = ""
+        if result.subcategory_id:
+            stmt = select(SubCategoryModel.name).where(SubCategoryModel.id == result.subcategory_id)
+            subcategory_name = (await session.execute(stmt)).scalar_one_or_none() or ""
+
         result_repo = PostgresCategorizationResultRepository(session)
         outbox_repo = PostgresOutboxRepository(session)
 
@@ -180,6 +185,7 @@ class TransactionCreatedConsumer:
                 transaction_id=transaction_id,
                 category_id=result.category_id,
                 subcategory_id=result.subcategory_id,
+                subcategory_name=subcategory_name,
                 merchant_id=result.merchant_id,
                 tier=result.tier.value,
                 confidence=result.confidence.value,

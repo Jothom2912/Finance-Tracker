@@ -160,11 +160,15 @@ class TransactionCategorizedConsumer:
         new_sub = event_data.get("subcategory_id")
         new_tier = event_data.get("tier", "")
         new_confidence = event_data.get("confidence", "")
+        new_category_id = event_data.get("category_id")
+        new_category_name = event_data.get("subcategory_name", "")
 
         if (
             tx.subcategory_id == new_sub
             and tx.categorization_tier == new_tier
             and tx.categorization_confidence == new_confidence
+            and (not new_category_name or tx.category_name == new_category_name)
+            and (new_category_id is None or tx.category_id == new_category_id)
         ):
             return
 
@@ -181,6 +185,10 @@ class TransactionCategorizedConsumer:
         tx.subcategory_id = new_sub
         tx.categorization_tier = new_tier
         tx.categorization_confidence = new_confidence
+        if new_category_id is not None:
+            tx.category_id = new_category_id
+        if new_category_name:
+            tx.category_name = new_category_name
 
     @staticmethod
     async def _get_transaction(session: AsyncSession, transaction_id: int) -> TransactionModel | None:
