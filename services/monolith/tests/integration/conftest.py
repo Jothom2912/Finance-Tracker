@@ -146,14 +146,37 @@ def mock_repositories(monkeypatch, test_db):
 # ============================================================================
 
 
+class _StubAccountResolver:
+    """In-process account resolver that queries the test DB directly."""
+
+    def __init__(self, db: Session) -> None:
+        self._db = db
+
+    def get_account_id_for_user(self, user_id: int) -> int | None:
+        acc = self._db.query(Account).filter(Account.User_idUser == user_id).first()
+        return acc.idAccount if acc else None
+
+    def verify_account_ownership(self, user_id: int, account_id: int) -> bool:
+        return (
+            self._db.query(Account)
+            .filter(Account.idAccount == account_id, Account.User_idUser == user_id)
+            .first()
+            is not None
+        )
+
+
 @pytest.fixture(scope="function")
 def test_client(test_engine, test_db):
     """FastAPI test client with database dependency override."""
+    from backend.shared.adapters.auth_dependencies import get_account_resolver
 
     def override_get_db():
         yield test_db
 
+    stub_resolver = _StubAccountResolver(test_db)
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_account_resolver] = lambda: stub_resolver
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()
