@@ -1,7 +1,7 @@
 import { createCrudApi } from './crudFactory';
 import { GOAL_SERVICE_URL } from '../config/serviceUrls';
 
-const crud = createCrudApi('/goals', { baseUrl: GOAL_SERVICE_URL, emptyOnNotFound: true });
+const crud = createCrudApi('/goals', { baseUrl: GOAL_SERVICE_URL, emptyOnNotFound: true, trailingSlash: false });
 
 export const fetchGoals = crud.fetchAll;
 export const createGoal = crud.create;

@@ -41,7 +41,7 @@ async def health() -> dict[str, str]:
     return {"status": "healthy", "service": "goal-service"}
 
 
-@app.get("/api/v1/goals/", response_model=list[GoalResponse])
+@app.get("/api/v1/goals", response_model=list[GoalResponse])
 async def list_goals(
     user_id: int = Depends(get_current_user_id),
     service: IGoalService = Depends(get_goal_service),

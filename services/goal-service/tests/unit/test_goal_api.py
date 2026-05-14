@@ -128,7 +128,7 @@ def test_list_goals_returns_200_with_account_header() -> None:
     service.list_goals.return_value = [_goal_response(), _goal_response(idGoal=11, name="Car")]
     client = client_with_service(service)
 
-    response = client.get("/api/v1/goals/", headers={"X-Account-ID": "1"})
+    response = client.get("/api/v1/goals", headers={"X-Account-ID": "1"})
 
     assert response.status_code == 200
     assert len(response.json()) == 2
@@ -140,7 +140,7 @@ def test_list_goals_returns_422_without_account_header() -> None:
     service = DummyService()
     client = client_with_service(service)
 
-    response = client.get("/api/v1/goals/")
+    response = client.get("/api/v1/goals")
 
     assert response.status_code == 422
     app.dependency_overrides.clear()
@@ -150,7 +150,7 @@ def test_list_goals_returns_400_with_invalid_account_header() -> None:
     service = DummyService()
     client = client_with_service(service)
 
-    response = client.get("/api/v1/goals/", headers={"X-Account-ID": "abc"})
+    response = client.get("/api/v1/goals", headers={"X-Account-ID": "abc"})
 
     assert response.status_code == 400
     app.dependency_overrides.clear()
@@ -161,7 +161,7 @@ def test_list_goals_returns_403_for_non_owner() -> None:
     service.list_goals.side_effect = NotAccountOwner()
     client = client_with_service(service)
 
-    response = client.get("/api/v1/goals/", headers={"X-Account-ID": "1"})
+    response = client.get("/api/v1/goals", headers={"X-Account-ID": "1"})
 
     assert response.status_code == 403
     app.dependency_overrides.clear()
