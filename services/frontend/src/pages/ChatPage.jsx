@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { askFinanceQuestion, ingestTransactionsForRag } from '../api/ai';
+import { useState } from 'react';
+import { ingestTransactionsForRag } from '../api/ai';
+import { useChatStream } from '../features/chat/hooks/useChatStream';
+import ChatInput from '../features/chat/components/ChatInput';
+import ChatMessage from '../features/chat/components/ChatMessage';
+import ChatStream from '../features/chat/components/ChatStream';
+import ChatError from '../features/chat/components/ChatError';
 import './ChatPage.css';
 
 const EXAMPLE_QUESTIONS = [
@@ -8,31 +13,19 @@ const EXAMPLE_QUESTIONS = [
   'Har jeg brugt penge på restauranter?',
 ];
 
-const LOADING_STEPS = [
-  'Henter relevante transaktioner...',
-  'Bygger prompt med 4T\'s skabelon...',
-  'Lokal LLM genererer svar — dette kan tage 30-60 sekunder...',
-];
-const STEP_INTERVAL_MS = 4000;
-
 function ChatPage() {
-  const [question, setQuestion] = useState('');
-  const [messages, setMessages] = useState([]);
-  const [isAsking, setIsAsking] = useState(false);
+  const { state, send, cancel, isStreaming } = useChatStream();
+  const isActive = state.phase !== 'idle' && state.phase !== 'done' && state.phase !== 'error';
+
   const [isIngesting, setIsIngesting] = useState(false);
   const [hasIngested, setHasIngested] = useState(
     () => localStorage.getItem('rag_ingested') === 'true',
   );
   const [statusMessage, setStatusMessage] = useState('');
-  const [error, setError] = useState('');
-
-  const canSubmit = useMemo(
-    () => question.trim().length > 0 && !isAsking,
-    [question, isAsking],
-  );
+  const [ingestError, setIngestError] = useState('');
 
   const handleIngest = async () => {
-    setError('');
+    setIngestError('');
     setStatusMessage('');
     setIsIngesting(true);
     try {
@@ -43,50 +36,10 @@ function ChatPage() {
         `Vidensbasen er opdateret med ${result.transactions_ingested} transaktioner.`,
       );
     } catch (err) {
-      setError(err.message || 'Kunne ikke opdatere vidensbasen.');
+      setIngestError(err.message || 'Kunne ikke opdatere vidensbasen.');
     } finally {
       setIsIngesting(false);
     }
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    const trimmed = question.trim();
-    if (!trimmed) return;
-
-    const userMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: trimmed,
-    };
-
-    setMessages((current) => [...current, userMessage]);
-    setQuestion('');
-    setError('');
-    setStatusMessage('');
-    setIsAsking(true);
-
-    try {
-      const response = await askFinanceQuestion(trimmed);
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: response.answer,
-          sources: response.sources || [],
-          sourceCount: response.source_count || 0,
-        },
-      ]);
-    } catch (err) {
-      setError(err.message || 'Kunne ikke hente svar fra AI-servicen.');
-    } finally {
-      setIsAsking(false);
-    }
-  };
-
-  const applyExample = (example) => {
-    setQuestion(example);
   };
 
   return (
@@ -95,7 +48,7 @@ function ChatPage() {
         <div className="chat-header-content">
           <h1>Finans Chat</h1>
           <p className="chat-header-subtitle">
-            Stil spørgsmål om dine transaktioner — svar fra lokal LLM og RAG
+            Stil spørgsmål om dine transaktioner — svar fra lokal LLM med streaming
           </p>
         </div>
         <button
@@ -114,7 +67,8 @@ function ChatPage() {
             key={example}
             type="button"
             className="chat-example-chip"
-            onClick={() => applyExample(example)}
+            onClick={() => send(example)}
+            disabled={isStreaming}
           >
             {example}
           </button>
@@ -122,9 +76,13 @@ function ChatPage() {
       </section>
 
       {statusMessage && <p className="chat-status">{statusMessage}</p>}
-      {error && <p className="chat-error">{error}</p>}
+      {ingestError && <p className="chat-error">{ingestError}</p>}
 
-      {!hasIngested && messages.length === 0 && !isIngesting && (
+      {state.phase === 'error' && state.error && (
+        <ChatError error={state.error} onRetry={() => send(state.history.at(-1)?.content ?? '')} />
+      )}
+
+      {!hasIngested && state.history.length === 0 && !isIngesting && (
         <p className="chat-ingest-hint">
           Vidensbasen er tom. Tryk <strong>Opdater vidensbase</strong> for at
           indeksere dine transaktioner, før du stiller spørgsmål.
@@ -132,7 +90,7 @@ function ChatPage() {
       )}
 
       <section className="chat-panel" aria-label="Chatbeskeder">
-        {messages.length === 0 ? (
+        {state.history.length === 0 && !isActive ? (
           <div className="chat-empty-state">
             <h2>Start med at opdatere vidensbasen</h2>
             <p>
@@ -141,89 +99,28 @@ function ChatPage() {
             </p>
           </div>
         ) : (
-          messages.map((message) => (
-            <ChatMessage key={message.id} message={message} />
-          ))
+          <>
+            {state.history.map((message) => (
+              <ChatMessage key={message.id} message={message} />
+            ))}
+            {isActive && (
+              <ChatStream
+                intent={state.intent}
+                data={state.data}
+                currentProse={state.currentProse}
+              />
+            )}
+          </>
         )}
-        {isAsking && <LoadingIndicator />}
       </section>
 
-      <form className="chat-form" onSubmit={handleSubmit}>
-        <label htmlFor="finance-question">Spørgsmål</label>
-        <div className="chat-input-row">
-          <textarea
-            id="finance-question"
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                if (canSubmit) handleSubmit(event);
-              }
-            }}
-            placeholder="Stil et spørgsmål om dine transaktioner..."
-            rows={1}
-            disabled={isAsking}
-          />
-          <button type="submit" disabled={!canSubmit}>
-            {isAsking ? 'Genererer...' : 'Send'}
-          </button>
-        </div>
-      </form>
+      <ChatInput
+        onSend={send}
+        isStreaming={isStreaming}
+        onCancel={cancel}
+      />
     </div>
   );
-}
-
-function ChatMessage({ message }) {
-  return (
-    <article className={`chat-message ${message.role}`}>
-      <p>{message.content}</p>
-      {message.role === 'assistant' && message.sources?.length > 0 && (
-        <details className="chat-sources">
-          <summary>Baseret på {message.sourceCount} transaktioner</summary>
-          <ul>
-            {message.sources.map((source) => (
-              <li key={`${source.transaction_id}-${source.date}-${source.distance}`}>
-                <span>{source.date}</span>
-                <span>{formatAmount(source.amount)} kr</span>
-                <span>{source.category || 'Ukategoriseret'}</span>
-                <span>{source.description || 'Ingen tekst'}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </article>
-  );
-}
-
-function LoadingIndicator() {
-  const [step, setStep] = useState(0);
-  const timerRef = useRef(null);
-
-  useEffect(() => {
-    timerRef.current = setInterval(() => {
-      setStep((prev) => Math.min(prev + 1, LOADING_STEPS.length - 1));
-    }, STEP_INTERVAL_MS);
-    return () => clearInterval(timerRef.current);
-  }, []);
-
-  return (
-    <div className="chat-message assistant chat-loading" aria-live="polite">
-      <div className="chat-loading-dots" aria-hidden="true">
-        <span /><span /><span />
-      </div>
-      <p>{LOADING_STEPS[step]}</p>
-    </div>
-  );
-}
-
-function formatAmount(amount) {
-  if (typeof amount !== 'number') return '-';
-  return new Intl.NumberFormat('da-DK', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
 }
 
 export default ChatPage;

@@ -166,15 +166,57 @@
   color: var(--color-text-primary);
 }
 
-/* ── Sources ── */
+/* ── Intent Badge ── */
 
-.chat-sources {
+.intent-badge {
+  display: inline-block;
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+  border: 1px solid var(--color-brand-100);
+  border-radius: var(--radius-2xl);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 0.125rem 0.625rem;
+  margin-bottom: 0.5rem;
+  cursor: default;
+}
+
+/* ── Data Stub ── */
+
+.chat-data-stub {
+  background: var(--color-bg-sunken);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  margin: 0.5rem 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: 0.625rem 0.75rem;
+}
+
+/* ── Cancelled Tag ── */
+
+.chat-cancelled-tag {
+  display: inline-block;
+  background: var(--color-warning-50);
+  color: var(--color-warning-600);
+  border-radius: var(--radius-2xl);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 0.125rem 0.625rem;
+  margin-top: 0.375rem;
+}
+
+/* ── Metadata ── */
+
+.chat-metadata {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--color-border-light);
 }
 
-.chat-sources summary {
+.chat-metadata summary {
   cursor: pointer;
   font-weight: 600;
   font-size: var(--font-size-xs);
@@ -183,33 +225,94 @@
   letter-spacing: 0.04em;
 }
 
-.chat-sources ul {
+.chat-metadata-list {
   display: grid;
-  gap: 0.375rem;
-  list-style: none;
-  margin: 0.625rem 0 0;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.25rem 1rem;
+  margin: 0.5rem 0 0;
   padding: 0;
 }
 
-.chat-sources li {
-  display: grid;
-  grid-template-columns: 6.5rem 6.5rem 8rem 1fr;
-  gap: 0.75rem;
+.chat-metadata-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
   font-size: var(--font-size-xs);
-  padding: 0.375rem 0.5rem;
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
-  color: var(--color-text-secondary);
 }
 
-.chat-sources li span:first-child {
-  font-weight: 600;
+.chat-metadata-entry dt {
+  color: var(--color-text-muted);
+}
+
+.chat-metadata-entry dd {
   color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin: 0;
 }
 
-.chat-sources li span:nth-child(2) {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+/* ── Error Banner ── */
+
+.chat-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-error-50);
+  border: 1px solid var(--color-error-100);
+}
+
+.chat-error-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.chat-error-banner-message {
+  color: var(--color-error-700);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  margin: 0;
+}
+
+.chat-error-banner-code {
+  color: var(--color-error-500);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+}
+
+/* ── Streaming Cursor ── */
+
+.chat-streaming .chat-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--color-brand-500);
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  animation: chat-blink 0.8s step-end infinite;
+}
+
+@keyframes chat-blink {
+  50% { opacity: 0; }
+}
+
+/* ── Cancel Button ── */
+
+.chat-cancel-btn {
+  align-self: center;
+  background: transparent;
+  border: 1px solid var(--color-border-medium);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  padding: 0.25rem 0.75rem;
+}
+
+.chat-cancel-btn:hover {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-primary);
 }
 
 /* ── Input Form ── */
