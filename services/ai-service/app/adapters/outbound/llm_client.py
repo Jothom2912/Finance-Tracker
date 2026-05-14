@@ -54,8 +54,8 @@ def generate_answer(prompt: str) -> str:
             options={
                 "temperature": 0.1,
                 "top_p": 0.9,
-                "num_ctx": 1024,
-                "num_predict": 120,
+                "num_ctx": 4096,
+                "num_predict": 512,
             },
         )
         raw = response.message.content.strip()
