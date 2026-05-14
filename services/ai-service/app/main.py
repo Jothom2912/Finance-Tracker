@@ -18,18 +18,28 @@ app = FastAPI(
     "Uses Ollama (local LLM) with ChromaDB vector store.",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if settings.ENVIRONMENT == "development":
+    # Allow any localhost origin with varying ports during local development
+    # (helps when frontend/dev-server runs on different ports)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"http://localhost(:[0-9]+)?",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 app.include_router(ingest_router)
 app.include_router(chat_router)
-
 
 @app.get("/health")
 async def health() -> dict[str, str]:

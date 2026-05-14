@@ -477,7 +477,7 @@ services:
     ports:
       - "8007:8004"
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       LLM_MODEL: qwen3:1.7b
       EMBEDDING_MODEL: embeddinggemma:latest
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
@@ -486,6 +486,8 @@ services:
       JWT_SECRET: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ai_chromadb_data:/data/chromadb
     depends_on:

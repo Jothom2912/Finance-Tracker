@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     OLLAMA_BASE_URL: str = "http://ollama:11434"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
     LLM_MODEL: str = "qwen3:1.7b"
     LLM_MODEL: str = "qwen3:4b"
     EMBEDDING_MODEL: str = "embeddinggemma:latest"

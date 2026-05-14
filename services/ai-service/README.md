@@ -59,7 +59,7 @@ Answer + sources
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama server URL |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL (`docker-compose` overrides to `http://host.docker.internal:11434`) |
 | `LLM_MODEL` | `qwen3:1.7b` | Model for answer generation |
 | `EMBEDDING_MODEL` | `embeddinggemma:latest` | Model for text embeddings |
 | `TRANSACTION_SERVICE_URL` | `http://transaction-service:8002` | Transaction service URL |

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import chromadb
 import ollama
@@ -27,8 +28,10 @@ def get_chroma_client() -> chromadb.ClientAPI:
 
 def get_collection() -> chromadb.Collection:
     client = get_chroma_client()
+    model_slug = re.sub(r"[^a-zA-Z0-9]+", "-", settings.EMBEDDING_MODEL).strip("-").lower()
+    collection_name = f"{COLLECTION_NAME}-{model_slug}" if model_slug else COLLECTION_NAME
     return client.get_or_create_collection(
-        name=COLLECTION_NAME,
+        name=collection_name,
         metadata={"hnsw:space": "cosine"},
     )
 
