@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://ollama:11434"
     LLM_MODEL: str = "qwen3:4b"
     LLM_ROUTER_MODEL: str = "qwen3:4b"
+    LLM_RESPONDER_MODEL: str = "qwen3:4b"
     LLM_RESPONDER_MODEL: str = "qwen3:8b"
     LLM_ROUTER_KEEP_ALIVE: int = -1
     LLM_RESPONDER_KEEP_ALIVE: int = -1
