@@ -21,7 +21,6 @@ from app.domain.models import (
     DataReadyData,
     IntentName,
     ResolvedIntent,
-    SingleValuePayload,
     TransactionListPayload,
 )
 

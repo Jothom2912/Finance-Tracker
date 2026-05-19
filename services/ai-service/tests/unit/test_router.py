@@ -13,9 +13,8 @@ import re
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.adapters.outbound.ollama_router import OllamaRouter
-from app.domain.models import IntentName, ResolvedIntent
+from app.domain.models import IntentName
 
 
 def _mock_ollama_response(content: str) -> MagicMock:

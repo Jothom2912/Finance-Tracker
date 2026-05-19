@@ -11,11 +11,3 @@ export async function ingestTransactionsForRag() {
   if (!response.ok) throw await parseApiError(response);
   return response.json();
 }
-
-export async function askFinanceQuestion(question) {
-  const response = await apiClient.post(`${AI_SERVICE_URL}/chat`, { question }, {
-    timeoutMs: AI_CHAT_TIMEOUT_MS,
-  });
-  if (!response.ok) throw await parseApiError(response);
-  return response.json();
-}

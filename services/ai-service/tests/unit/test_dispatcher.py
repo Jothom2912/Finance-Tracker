@@ -9,18 +9,17 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.application.intent_dispatcher import dispatch
 from app.domain.models import (
+    BudgetStatusItem,
+    BudgetStatusPayload,
+    CategoryBreakdownItem,
     CategoryBreakdownPayload,
     DataKind,
     IntentName,
     ResolvedIntent,
     TransactionItem,
     TransactionListPayload,
-    BudgetStatusPayload,
-    CategoryBreakdownItem,
-    BudgetStatusItem,
 )
 
 

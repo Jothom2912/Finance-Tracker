@@ -6,8 +6,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.adapters.outbound.transaction_client import TransactionDTO
 from app.application.ingest_service import ingest_transactions
 

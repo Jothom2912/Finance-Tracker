@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from app.application.pipeline import run_pipeline
 from app.domain.exceptions import AnalyticsAuthError, AnalyticsServiceUnavailableError
 from app.domain.models import (

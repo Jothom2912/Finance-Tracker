@@ -5,7 +5,6 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.adapters.inbound.chat_api import chat_router
 from app.adapters.inbound.ingest_api import ingest_router
 from app.adapters.inbound.stream_api import stream_router
 from app.config import settings
@@ -29,7 +28,6 @@ app.add_middleware(
 
 
 app.include_router(ingest_router)
-app.include_router(chat_router)
 app.include_router(stream_router)
 
 

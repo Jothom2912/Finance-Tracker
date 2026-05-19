@@ -63,7 +63,6 @@ DoneEvent (med latency metadata)
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/api/v1/chat/stream` | JWT | SSE streaming chat pipeline |
-| `POST` | `/api/v1/chat` | JWT | Deprecated — brug `/chat/stream` |
 | `POST` | `/api/v1/ingest` | JWT | Embed brugerens transaktioner i ChromaDB |
 | `GET` | `/health` | None | Health check |
 

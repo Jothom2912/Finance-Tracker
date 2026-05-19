@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     OLLAMA_BASE_URL: str = "http://ollama:11434"
-    LLM_MODEL: str = "qwen3:4b"
     LLM_ROUTER_MODEL: str = "qwen3:4b"
     LLM_RESPONDER_MODEL: str = "qwen3:8b"
     LLM_ROUTER_KEEP_ALIVE: int = -1
@@ -20,7 +19,6 @@ class Settings(BaseSettings):
     JWT_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
-    ENVIRONMENT: str = "development"
 
 
 settings = Settings()

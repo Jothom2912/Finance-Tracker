@@ -103,7 +103,7 @@ async def ingest_transactions(user_id: int, token: str) -> int:
                 len(existing["embeddings"][0]),
                 len(sample[0]),
             )
-            from app.adapters.outbound.vectorstore import get_chroma_client, COLLECTION_NAME
+            from app.adapters.outbound.vectorstore import COLLECTION_NAME, get_chroma_client
             get_chroma_client().delete_collection(COLLECTION_NAME)
             collection = get_collection()
     except Exception:
