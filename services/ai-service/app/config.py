@@ -6,14 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
-    OLLAMA_BASE_URL: str = "http://ollama:11434/"
+    OLLAMA_BASE_URL: str = "http://ollama:11434"
     LLM_MODEL: str = "qwen3:4b"
     LLM_ROUTER_MODEL: str = "qwen3:4b"
-    LLM_RESPONDER_MODEL: str = "qwen3:4b"
+    LLM_RESPONDER_MODEL: str = "qwen3:8b"
     LLM_ROUTER_KEEP_ALIVE: int = -1
     LLM_RESPONDER_KEEP_ALIVE: int = -1
     EMBEDDING_MODEL: str = "bge-m3"
-    TRANSACTION_SERVICE_URL: str = "http://transaction-service:8002/"
+    TRANSACTION_SERVICE_URL: str = "http://transaction-service:8002"
     MONOLITH_SERVICE_URL: str = "http://monolith:8000"
     CHROMADB_PATH: str = "/data/chromadb"
     RETRIEVAL_TOP_K: int = 10

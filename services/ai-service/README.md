@@ -1,6 +1,6 @@
-# AI Service — Finans Q&A (RAG)
+# AI Service — Finans Q&A (Streaming Pipeline)
 
-RAG-based chat service that lets users ask questions about their financial transactions. Uses a local LLM (Qwen 3 via Ollama) with ChromaDB for vector retrieval and 4T's prompt engineering.
+Streaming chat service der lader brugere stille spørgsmål om deres finansielle transaktioner. Bruger en 3-trins pipeline (router → dispatcher → responder) med lokale LLM'er via Ollama og ChromaDB til semantisk søgning.
 
 ## Quick Start
 
@@ -10,14 +10,14 @@ make install-deps
 make dev
 ```
 
-Or via Docker Compose from the project root:
+Eller via Docker Compose fra projekt-roden:
 
 ```bash
 docker compose up ollama ai-service -d
 # Available at http://localhost:8007
 ```
 
-First-time setup pulls ~2 GB of model data (`qwen3:1.7b` + `embeddinggemma:latest`). This takes 5-15 minutes depending on your connection. The `ollama-pull` init container handles this automatically.
+Forudsætter at Ollama har `qwen3:4b`, `qwen3:8b` og `bge-m3` pulled. `ollama-pull` init containeren håndterer dette automatisk.
 
 ## Port
 
@@ -25,60 +25,74 @@ First-time setup pulls ~2 GB of model data (`qwen3:1.7b` + `embeddinggemma:lates
 8007 (host) → 8004 (container)
 ```
 
-The host port was moved from 8004 to 8007 to make room for account-service on port 8004. The container still listens on 8004 internally.
-
 ## Architecture
 
 ```
 User question
     |
     v
-POST /api/v1/chat
+POST /api/v1/chat/stream (SSE)
     |
-    +--> Pre-process (parse date/category hints)
+    +--> Step 1: Router (qwen3:4b, constrained sampling)
+    |    Klassificerer intent + period + slots
+    |    → yields IntentResolvedEvent
     |
-    +--> Retrieve (embed question, search ChromaDB with user_id + metadata filters)
+    +--> Step 2: Dispatcher
+    |    Henter data fra transaction-service / monolith
+    |    → yields DataReadyEvent
     |
-    +--> Build prompt (4T's template + retrieved transactions)
-    |
-    +--> Generate (Ollama qwen3:1.7b)
+    +--> Step 3: Responder (qwen3:8b, streaming)
+    |    Genererer dansk prose-opsummering
+    |    → yields ProseChunkEvent*N
     |
     v
-Answer + sources
+DoneEvent (med latency metadata)
 ```
+
+### Intents
+
+| Intent | Beskrivelse | Data source |
+|--------|-------------|-------------|
+| `largest_expense` | Største udgift i periode | transaction-service |
+| `category_breakdown` | Udgiftsfordeling per kategori | monolith dashboard |
+| `transaction_search` | Semantisk søgning | ChromaDB |
+| `budget_status` | Budget vs. faktisk forbrug | monolith budgets |
 
 ## Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/v1/ingest` | JWT | Fetch and embed user's transactions into ChromaDB |
-| `POST` | `/api/v1/chat` | JWT | Ask a question about your transactions |
-| `GET` | `/health` | None | Service health check |
+| `POST` | `/api/v1/chat/stream` | JWT | SSE streaming chat pipeline |
+| `POST` | `/api/v1/chat` | JWT | Deprecated — brug `/chat/stream` |
+| `POST` | `/api/v1/ingest` | JWT | Embed brugerens transaktioner i ChromaDB |
+| `GET` | `/health` | None | Health check |
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama server URL |
-| `LLM_MODEL` | `qwen3:1.7b` | Model for answer generation |
-| `EMBEDDING_MODEL` | `embeddinggemma:latest` | Model for text embeddings |
+| `LLM_ROUTER_MODEL` | `qwen3:4b` | Model til intent classification |
+| `LLM_RESPONDER_MODEL` | `qwen3:8b` | Model til prose generation |
+| `EMBEDDING_MODEL` | `bge-m3` | Model til text embeddings |
 | `TRANSACTION_SERVICE_URL` | `http://transaction-service:8002` | Transaction service URL |
+| `MONOLITH_SERVICE_URL` | `http://monolith:8000` | Django monolith URL |
 | `CHROMADB_PATH` | `/data/chromadb` | Persistent ChromaDB storage path |
-| `RETRIEVAL_TOP_K` | `30` | Number of transactions to retrieve |
+| `RETRIEVAL_TOP_K` | `10` | Antal resultater ved semantisk søgning |
 | `JWT_SECRET` | — | Shared JWT secret (required) |
-| `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Allowed CORS origins |
 
 ## Models
 
-| Purpose | Model | Size |
-|---------|-------|------|
-| Answer generation | `qwen3:1.7b` | ~1.4 GB |
-| Text embeddings | `embeddinggemma:latest` | ~621 MB |
-
-`qwen3:4b` can be used by overriding `LLM_MODEL`, but local CPU testing showed it was too slow for a reliable live demo on this machine.
+| Purpose | Model | Config key |
+|---------|-------|------------|
+| Intent routing | `qwen3:4b` | `LLM_ROUTER_MODEL` |
+| Prose generation | `qwen3:8b` | `LLM_RESPONDER_MODEL` |
+| Text embeddings | `bge-m3` | `EMBEDDING_MODEL` |
 
 ## Known Limitations
 
-- Vector search is weak at aggregation queries ("total spent on groceries in April") because it finds *similar* texts, not *all* relevant ones. Metadata filtering helps but does not fully solve this.
-- Date parsing is limited to simple month name + year regex matching.
-- No chat history / multi-turn conversation support in MVP.
+- Semantisk søgning er svag til aggregations-queries ("total brugt på dagligvarer i april") — finder *lignende* tekster, ikke *alle* relevante.
+- Dato-parsing er begrænset til simpel dansk måned + år regex.
+- Ingen chat-historik / multi-turn conversation support.
+- `get_largest_expenses` henter max 200 transaktioner client-side — kræver server-side `sort_by=amount` for at skalere.
