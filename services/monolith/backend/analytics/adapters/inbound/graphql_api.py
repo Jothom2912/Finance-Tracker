@@ -18,8 +18,9 @@ import logging
 from datetime import date
 from typing import Any, Optional
 
+import httpx
 import strawberry
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 from strawberry.fastapi import GraphQLRouter
 from strawberry.types import Info
@@ -27,16 +28,15 @@ from strawberry.types import Info
 from backend.analytics.application.service import AnalyticsService
 from backend.auth import get_account_id_from_headers
 from backend.category.application.service import CategoryService
+from backend.config import BUDGET_SERVICE_TIMEOUT, BUDGET_SERVICE_URL
 from backend.database.mysql import get_db
 from backend.dependencies import (
     get_analytics_service,
     get_category_service,
     get_goal_service,
-    get_monthly_budget_service,
 )
 from backend.goal.application.service import GoalService
 from backend.models.mysql.account import Account as AccountModel
-from backend.monthly_budget.application.service import MonthlyBudgetService
 from backend.shared.budget_period import budget_period, determine_budget_month
 
 logger = logging.getLogger(__name__)
@@ -156,6 +156,7 @@ class TopSpendingCategoryType:
 
 
 async def get_graphql_context(
+    request: Request,
     db: Session = Depends(get_db),
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ) -> dict[str, Any]:
@@ -164,9 +165,9 @@ async def get_graphql_context(
         "analytics_service": get_analytics_service(db),
         "category_service": get_category_service(db),
         "goal_service": get_goal_service(db),
-        "monthly_budget_service": get_monthly_budget_service(db),
         "account_id": account_id,
         "db": db,
+        "auth_header": request.headers.get("authorization", ""),
     }
 
 
@@ -242,38 +243,73 @@ class Query:
         )
         return [MonthlyExpensesType(month=r["month"], total_expenses=r["total_expenses"]) for r in results]
 
-    @strawberry.field(description="Budget summary for a specific month")
+    @strawberry.field(description="Budget summary for a specific month (proxied to budget-service)")
     def budget_summary(
         self,
         info: Info,
         month: int,
         year: int,
-    ) -> BudgetSummaryType:
+    ) -> Optional[BudgetSummaryType]:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        mb_service: MonthlyBudgetService = ctx["monthly_budget_service"]
         start_day = _get_budget_start_day(ctx, account_id)
+        auth_header = ctx.get("auth_header", "")
 
-        result = mb_service.get_summary(account_id=account_id, month=month, year=year, budget_start_day=start_day)
-        return BudgetSummaryType(
-            month=str(result.month).zfill(2),
-            year=str(result.year),
-            items=[
-                BudgetSummaryItemType(
-                    category_id=item.category_id,
-                    category_name=item.category_name,
-                    budget_amount=item.budget_amount,
-                    spent_amount=item.spent_amount,
-                    remaining_amount=item.remaining_amount,
-                    percentage_used=item.percentage_used,
+        try:
+            with httpx.Client(
+                timeout=BUDGET_SERVICE_TIMEOUT,
+                follow_redirects=True,
+            ) as client:
+                resp = client.get(
+                    f"{BUDGET_SERVICE_URL}/api/v1/monthly-budgets/summary",
+                    params={
+                        "account_id": account_id,
+                        "month": month,
+                        "year": year,
+                        "budget_start_day": start_day,
+                    },
+                    headers={"Authorization": auth_header} if auth_header else {},
                 )
-                for item in result.items
-            ],
-            total_budget=result.total_budget,
-            total_spent=result.total_spent,
-            total_remaining=result.total_remaining,
-            over_budget_count=result.over_budget_count,
-        )
+                if resp.status_code == 401:
+                    logger.warning(
+                        "budget-service auth rejected (401) for budget_summary — check token forwarding"
+                    )
+                    return None
+                resp.raise_for_status()
+                data = resp.json()
+
+            return BudgetSummaryType(
+                month=str(data["month"]).zfill(2),
+                year=str(data["year"]),
+                items=[
+                    BudgetSummaryItemType(
+                        category_id=item["category_id"],
+                        category_name=item["category_name"],
+                        budget_amount=item["budget_amount"],
+                        spent_amount=item["spent_amount"],
+                        remaining_amount=item["remaining_amount"],
+                        percentage_used=item["percentage_used"],
+                    )
+                    for item in data.get("items", [])
+                ],
+                total_budget=data["total_budget"],
+                total_spent=data["total_spent"],
+                total_remaining=data["total_remaining"],
+                over_budget_count=data["over_budget_count"],
+            )
+        except httpx.ConnectError as exc:
+            logger.warning("budget-service unreachable for budget_summary: %s", exc)
+        except httpx.TimeoutException as exc:
+            logger.warning("budget-service timeout for budget_summary: %s", exc)
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "budget-service returned %d for budget_summary: %s",
+                exc.response.status_code,
+                exc.response.text[:200],
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("budget-service returned unexpected payload for budget_summary: %s", exc)
+        return None
 
     @strawberry.field(description="Financial overview for the current budget month with trend vs previous month")
     def current_month_overview(self, info: Info) -> CurrentMonthOverviewType:

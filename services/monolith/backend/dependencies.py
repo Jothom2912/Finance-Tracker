@@ -8,11 +8,11 @@ dependencies for FastAPI's Depends().
 All active domains use hexagonal architecture, including analytics.
 
 Usage in routes:
-    from backend.dependencies import get_budget_service
+    from backend.dependencies import get_analytics_service
 
     @router.get("/")
-    def list_items(service: BudgetService = Depends(get_budget_service)):
-        return service.list_budgets(user_id=1)
+    def overview(service: AnalyticsService = Depends(get_analytics_service)):
+        return service.get_financial_overview(...)
 """
 
 import logging
@@ -35,15 +35,6 @@ from backend.analytics.adapters.outbound.neo4j_repository import (
 
 # Hexagonal Analytics domain
 from backend.analytics.application.service import AnalyticsService
-from backend.budget.adapters.outbound.category_adapter import (
-    MySQLCategoryAdapter as BudgetCategoryAdapter,
-)
-from backend.budget.adapters.outbound.mysql_repository import (
-    MySQLBudgetRepository as HexMySQLBudgetRepository,
-)
-
-# Hexagonal Budget domain
-from backend.budget.application.service import BudgetService as HexBudgetService
 from backend.category.adapters.outbound.mysql_repository import (
     MySQLCategoryRepository as HexMySQLCategoryRepository,
 )
@@ -69,20 +60,6 @@ from backend.goal.adapters.outbound.mysql_goal_repository import (
 
 # Hexagonal Goal domain
 from backend.goal.application.service import GoalService as HexGoalService
-from backend.monthly_budget.adapters.outbound.category_adapter import (
-    MySQLCategoryAdapter as MonthlyBudgetCategoryAdapter,
-)
-from backend.monthly_budget.adapters.outbound.mysql_repository import (
-    MySQLMonthlyBudgetRepository,
-)
-from backend.monthly_budget.adapters.outbound.transaction_adapter import (
-    MySQLTransactionAdapter as MonthlyBudgetTransactionAdapter,
-)
-
-# Hexagonal MonthlyBudget domain
-from backend.monthly_budget.application.service import (
-    MonthlyBudgetService,
-)
 from backend.user.adapters.outbound.account_adapter import (
     MySQLAccountAdapter as UserAccountAdapter,
 )
@@ -138,27 +115,6 @@ def get_categorization_service(
         rule_engine=rule_engine,
         fallback_subcategory_id=fallback_ids[0],
         fallback_category_id=fallback_ids[1],
-    )
-
-
-def get_budget_service(
-    db: Session = Depends(get_db),
-) -> HexBudgetService:
-    """Create hexagonal BudgetService with proper repositories."""
-    return HexBudgetService(
-        budget_repo=HexMySQLBudgetRepository(db),
-        category_port=BudgetCategoryAdapter(db),
-    )
-
-
-def get_monthly_budget_service(
-    db: Session = Depends(get_db),
-) -> MonthlyBudgetService:
-    """Create MonthlyBudgetService with proper repositories."""
-    return MonthlyBudgetService(
-        budget_repo=MySQLMonthlyBudgetRepository(db),
-        transaction_port=MonthlyBudgetTransactionAdapter(db),
-        category_port=MonthlyBudgetCategoryAdapter(db),
     )
 
 

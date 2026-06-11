@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import MessageDisplay from '../../MessageDisplay';
 import apiClient from '../../../utils/apiClient';
+import { BUDGET_SERVICE_URL } from '../../../config/serviceUrls';
+import { getAccountId } from '../../../utils/authStorage';
 import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
 import './BudgetSetup.css';
 
@@ -143,8 +145,7 @@ function BudgetSetup({
         setFetchingBudgets(true);
         setLocalError(null);
         try {
-            // Brug den eksisterende route med query parametre
-            const response = await apiClient.get(`/budgets/?year=${year}`);
+            const response = await apiClient.get(`${BUDGET_SERVICE_URL}/budgets/?account_id=${getAccountId()}&year=${year}`);
             if (!response.ok) {
                 if (response.status === 404) {
                     // Hvis der ikke er budgetter for året, er det ok
@@ -279,14 +280,15 @@ function BudgetSetup({
             category_id: categoryId,
             amount: parseFloat(budgetAmountInput),
             month: budgetMonth,
-            year: budgetYear
+            year: budgetYear,
+            account_id: parseInt(getAccountId(), 10),
         };
 
         try {
             const isEditing = !!editingBudget;
             const response = isEditing
-                ? await apiClient.put(`/budgets/${editingBudget.id}`, budgetData)
-                : await apiClient.post('/budgets/', budgetData);
+                ? await apiClient.put(`${BUDGET_SERVICE_URL}/budgets/${editingBudget.id}`, budgetData)
+                : await apiClient.post(`${BUDGET_SERVICE_URL}/budgets/`, budgetData);
 
             const data = await response.json();
 
@@ -335,7 +337,7 @@ function BudgetSetup({
 
         setIsSubmitting(true);
         try {
-            const response = await apiClient.delete(`/budgets/${budgetId}`);
+            const response = await apiClient.delete(`${BUDGET_SERVICE_URL}/budgets/${budgetId}`);
 
             if (!response.ok) {
                 const errorData = await response.json();

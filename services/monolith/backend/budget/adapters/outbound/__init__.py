@@ -1,1 +1,0 @@
-# Budget outbound adapters (repositories)

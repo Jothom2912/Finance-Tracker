@@ -3,3 +3,7 @@ const AUTH_KEYS = ['access_token', 'user_id', 'username', 'account_id', 'account
 export function clearAuthStorage() {
   AUTH_KEYS.forEach((key) => localStorage.removeItem(key));
 }
+
+export function getAccountId() {
+  return localStorage.getItem('account_id');
+}

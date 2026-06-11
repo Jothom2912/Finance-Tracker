@@ -86,6 +86,7 @@ services:
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
+      BUDGET_SERVICE_URL: http://budget-service:8003
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_APP_ID}
       ENABLE_BANKING_KEY_PATH: /app/enablebanking-privat.pem

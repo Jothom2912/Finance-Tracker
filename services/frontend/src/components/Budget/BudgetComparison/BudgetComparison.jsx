@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AlertCircle, XCircle } from 'lucide-react';
 import apiClient from '../../../utils/apiClient';
+import { BUDGET_SERVICE_URL } from '../../../config/serviceUrls';
+import { getAccountId } from '../../../utils/authStorage';
 import { uploadTransactionsCsv } from '../../../api/transactions';
 import { BANK_FORMAT_OPTIONS } from '../../../lib/bankFormats';
 import MessageDisplay from '../../MessageDisplay';
@@ -83,7 +85,7 @@ function BudgetComparison({
         try {
             // Backend accepterer month og year som strings og konverterer dem til integers
             // Send dem direkte i URL'en - JavaScript konverterer automatisk til strings i URL
-            const response = await apiClient.get(`/budgets/summary?month=${month}&year=${year}`);
+            const response = await apiClient.get(`${BUDGET_SERVICE_URL}/monthly-budgets/summary?account_id=${getAccountId()}&month=${month}&year=${year}`);
             if (!response.ok) {
                 let errorMessage = 'Ukendt fejl';
                 try {

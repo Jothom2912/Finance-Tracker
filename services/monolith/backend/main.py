@@ -74,15 +74,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 # Account routes removed — account-service owns this domain now (Phase 4 cutover)
 # User/Goal REST routes removed — user-service (8001) and goal-service (8006) own these
 from backend.analytics.adapters.inbound.graphql_api import create_graphql_router
-from backend.analytics.adapters.inbound.rest_api import (
-    budget_summary_router,
-    dashboard_router,
-)
+from backend.analytics.adapters.inbound.rest_api import dashboard_router
 from backend.banking.presentation.rest_api import router as bank_router
-from backend.budget.adapters.inbound.rest_api import router as budget_router
-from backend.monthly_budget.adapters.inbound.rest_api import (
-    router as monthly_budget_router,
-)
 
 
 @asynccontextmanager
@@ -151,13 +144,6 @@ v1 = APIRouter(prefix="/api/v1")
 # Transaction and planned-transaction CRUD now owned by
 # transaction-service (port 8002).  The monolith reads from the
 # MySQL projection (see TransactionSyncConsumer) but never writes.
-
-# Budget summary MUST be included BEFORE CRUD to avoid
-# /budgets/summary being matched by /budgets/{budget_id}
-v1.include_router(budget_summary_router)
-v1.include_router(budget_router)
-
-v1.include_router(monthly_budget_router)
 
 v1.include_router(bank_router)
 v1.include_router(dashboard_router)

@@ -80,6 +80,9 @@ TRANSACTION_SERVICE_TIMEOUT = float(os.getenv("TRANSACTION_SERVICE_TIMEOUT", "10
 ACCOUNT_SERVICE_URL = os.getenv("ACCOUNT_SERVICE_URL", "http://account-service:8003/api/v1")
 ACCOUNT_SERVICE_TIMEOUT = float(os.getenv("ACCOUNT_SERVICE_TIMEOUT", "5"))
 
+BUDGET_SERVICE_URL = os.getenv("BUDGET_SERVICE_URL", "http://budget-service:8003")
+BUDGET_SERVICE_TIMEOUT = float(os.getenv("BUDGET_SERVICE_TIMEOUT", "10"))
+
 
 # =============================================================================
 # Application / Observability
