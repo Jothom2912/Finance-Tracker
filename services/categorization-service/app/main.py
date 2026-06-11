@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound.categorize_api import categorize_router
+from app.adapters.inbound.category_api import category_router
 from app.config import settings
 from app.domain.exceptions import (
     CategoryNotFound,
@@ -60,11 +61,7 @@ async def subcategory_not_found_handler(_request: Request, exc: SubCategoryNotFo
 
 
 app.include_router(categorize_router)
-
-# Category CRUD endpoints (category_router) are intentionally NOT registered.
-# Transaction-service is the current authority for categories CRUD.
-# Cat-service keeps a read copy via CategorySyncConsumer.
-# See docs/ADR-002-categories-ownership-deferred.md.
+app.include_router(category_router)
 
 
 @app.get("/health")
