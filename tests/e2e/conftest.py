@@ -7,6 +7,9 @@ _HEALTH_ENDPOINTS = [
     "http://localhost:8000/health",
     "http://localhost:8001/health",
     "http://localhost:8002/health",
+    "http://localhost:8003/health",
+    "http://localhost:8004/health",
+    "http://localhost:8006/health",
 ]
 
 
