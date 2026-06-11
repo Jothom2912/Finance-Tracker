@@ -620,3 +620,9 @@ volumes:
   rabbitmq_data:
   ollama_models:
   ai_chromadb_data:
+
+redis:
+  image: redis:7
+  container_name: redis
+  ports:
+    - "6379:6379"
