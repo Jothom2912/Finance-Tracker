@@ -29,8 +29,11 @@ class MonthlyBudgetException(Exception):
 
 
 class MonthlyBudgetNotFound(MonthlyBudgetException):
-    def __init__(self, budget_id: int):
-        super().__init__(f"Monthly budget with ID {budget_id} not found")
+    def __init__(self, budget_id: int = 0, *, month: int = 0, year: int = 0):
+        if month and year:
+            super().__init__(f"Ingen budget fundet for {month:02d}/{year}.")
+        else:
+            super().__init__(f"Monthly budget with ID {budget_id} not found")
 
 
 class MonthlyBudgetAlreadyExists(MonthlyBudgetException):
@@ -51,3 +54,8 @@ class AccountRequiredForMonthlyBudget(MonthlyBudgetException):
 class NoBudgetToCopy(MonthlyBudgetException):
     def __init__(self, month: int, year: int):
         super().__init__(f"Ingen budget fundet for {month:02d}/{year} at kopiere fra.")
+
+
+class MonthlyBudgetAlreadyClosed(MonthlyBudgetException):
+    def __init__(self, month: int, year: int):
+        super().__init__(f"Budget for {month:02d}/{year} er allerede lukket.")

@@ -5,12 +5,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.category_port import CategoryPort
 from app.adapters.outbound.postgres_budget_repository import PostgresBudgetRepository
+from app.adapters.outbound.postgres_monthly_budget_repository import (
+    PostgresMonthlyBudgetRepository,
+)
+from app.adapters.outbound.transaction_port import TransactionPort
+from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
+from app.application.monthly_budget_service import MonthlyBudgetService
 from app.application.ports.inbound import IBudgetService
 from app.application.service import BudgetService
-from app.database import get_db
+from app.database import async_session_factory, get_db
 
 
 async def get_budget_service(db: AsyncSession = Depends(get_db)) -> IBudgetService:
     repo = PostgresBudgetRepository(db)
     category_port = CategoryPort()
     return BudgetService(repo=repo, category_port=category_port)
+
+
+async def get_monthly_budget_service(
+    db: AsyncSession = Depends(get_db),
+) -> MonthlyBudgetService:
+    uow = SQLAlchemyUnitOfWork(db)
+    category_port = CategoryPort()
+    transaction_port = TransactionPort()
+    return MonthlyBudgetService(
+        uow=uow,
+        transaction_port=transaction_port,
+        category_port=category_port,
+    )

@@ -45,6 +45,7 @@ class MonthlyBudget:
     user_id: int
     lines: list[BudgetLine] = field(default_factory=list)
     created_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.month <= 12:
@@ -57,3 +58,7 @@ class MonthlyBudget:
     @property
     def total_budget(self) -> float:
         return sum(line.amount for line in self.lines)
+
+    @property
+    def is_closed(self) -> bool:
+        return self.closed_at is not None

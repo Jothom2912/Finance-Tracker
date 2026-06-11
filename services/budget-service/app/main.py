@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
+from app.adapters.inbound.monthly_budget_api import router as monthly_budget_router
 from app.adapters.inbound.rest_api import router
 from app.config import settings
 from app.domain.exceptions import (
@@ -13,6 +14,10 @@ from app.domain.exceptions import (
     BudgetNotFound,
     CategoryNotFoundForBudget,
     CategoryRequiredForBudget,
+    MonthlyBudgetAlreadyClosed,
+    MonthlyBudgetAlreadyExists,
+    MonthlyBudgetException,
+    MonthlyBudgetNotFound,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,7 +53,28 @@ async def category_not_found_handler(_request: Request, exc: CategoryNotFoundFor
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
+@app.exception_handler(MonthlyBudgetNotFound)
+async def monthly_budget_not_found_handler(_request: Request, exc: MonthlyBudgetNotFound) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(MonthlyBudgetAlreadyExists)
+async def monthly_budget_exists_handler(_request: Request, exc: MonthlyBudgetAlreadyExists) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(MonthlyBudgetAlreadyClosed)
+async def monthly_budget_closed_handler(_request: Request, exc: MonthlyBudgetAlreadyClosed) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(MonthlyBudgetException)
+async def monthly_budget_generic_handler(_request: Request, exc: MonthlyBudgetException) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
 app.include_router(router, prefix="/api/v1")
+app.include_router(monthly_budget_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["Health"])

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import Optional
+from typing import Optional, Self
+
+from contracts.base import BaseEvent
 
 from app.domain.entities import Budget, MonthlyBudget
 
@@ -54,6 +56,16 @@ class IMonthlyBudgetRepository(ABC):
     @abstractmethod
     async def delete(self, budget_id: int, account_id: int) -> bool: ...
 
+    @abstractmethod
+    async def mark_closed(self, budget_id: int) -> bool:
+        """Atomic conditional UPDATE: SET closed_at WHERE closed_at IS NULL.
+
+        Returns True if the row was updated (budget closed now),
+        False if already closed (rowcount 0). The caller must NOT
+        read is_closed first — this method IS the guard.
+        """
+        ...
+
 
 class ITransactionPort(ABC):
 
@@ -66,4 +78,28 @@ class ITransactionPort(ABC):
 class IOutboxRepository(ABC):
 
     @abstractmethod
-    async def add(self, event: object, aggregate_type: str, aggregate_id: str) -> None: ...
+    async def add(self, event: BaseEvent, aggregate_type: str, aggregate_id: str) -> None: ...
+
+
+class IUnitOfWork(ABC):
+    """Repos share one DB session; flush() in repos, commit() here."""
+
+    monthly_budgets: IMonthlyBudgetRepository
+    outbox: IOutboxRepository
+
+    @abstractmethod
+    async def __aenter__(self) -> Self: ...
+
+    @abstractmethod
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None: ...
+
+    @abstractmethod
+    async def commit(self) -> None: ...
+
+    @abstractmethod
+    async def rollback(self) -> None: ...

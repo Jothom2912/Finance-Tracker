@@ -30,6 +30,7 @@ class MonthlyBudgetModel(Base):
     account_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    closed_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     lines: Mapped[list[BudgetLineModel]] = relationship(
         "BudgetLineModel",
