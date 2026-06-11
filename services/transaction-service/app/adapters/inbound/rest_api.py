@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from fastapi_cache.decorator import cache
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, UploadFile, status
@@ -49,6 +49,7 @@ async def create_transaction(
 
 
 @transaction_router.get("/", response_model=list[TransactionResponse])
+@cache(expire=60)
 async def list_transactions(
     user_id: int = Depends(get_current_user_id),
     service: ITransactionService = Depends(get_transaction_service),
