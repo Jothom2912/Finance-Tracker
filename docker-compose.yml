@@ -566,7 +566,7 @@ services:
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       CATEGORY_SERVICE_URL: http://categorization-service:8005
-      TRANSACTION_SERVICE_URL: http://transaction-service:8003
+      TRANSACTION_SERVICE_URL: http://transaction-service:8002
     depends_on:
       postgres-budget:
         condition: service_healthy
@@ -584,7 +584,7 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: dev-secret-key-change-in-production
       CATEGORY_SERVICE_URL: http://categorization-service:8005
-      TRANSACTION_SERVICE_URL: http://transaction-service:8003
+      TRANSACTION_SERVICE_URL: http://transaction-service:8002
       ENVIRONMENT: development
     depends_on:
       budget-service:
