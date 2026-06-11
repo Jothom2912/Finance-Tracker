@@ -16,6 +16,11 @@ services:
       timeout: 3s
       retries: 10
       start_period: 30s
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
 
   postgres:
     image: postgres:16
@@ -310,6 +315,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
       JWT_SECRET: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
@@ -320,6 +326,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_started
 
   account-service:
     build:
@@ -563,6 +571,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379
       JWT_SECRET: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
@@ -573,6 +582,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_started
 
   budget-outbox-worker:
     build:
@@ -620,9 +631,3 @@ volumes:
   rabbitmq_data:
   ollama_models:
   ai_chromadb_data:
-
-redis:
-  image: redis:7
-  container_name: redis
-  ports:
-    - "6379:6379"
