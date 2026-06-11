@@ -19,11 +19,29 @@ from app.domain.exceptions import (
     MonthlyBudgetException,
     MonthlyBudgetNotFound,
 )
+from contextlib import asynccontextmanager
+from redis import asyncio as aioredis
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Budget Service", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    redis = aioredis.from_url("redis://redis:6379")
 
+    FastAPICache.init(
+        RedisBackend(redis),
+        prefix="budget-service",
+    )
+
+    yield
+
+app = FastAPI(
+    title="Budget Service",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
