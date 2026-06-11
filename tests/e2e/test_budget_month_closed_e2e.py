@@ -25,13 +25,15 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
+import pytest_asyncio
 from jose import jwt
 
 USER_SERVICE = "http://localhost:8001/api/v1/users"
-ACCOUNT_SERVICE = "http://localhost:8004/api/v1/accounts"
+ACCOUNT_SERVICE = "http://localhost:8004/api/v1/accounts/"
 GOAL_SERVICE = "http://localhost:8006/api/v1"
 TRANSACTION_SERVICE = "http://localhost:8002/api/v1"
 BUDGET_SERVICE = "http://localhost:8003/api/v1"
+CATEGORIZATION_SERVICE = "http://localhost:8005/api/v1"
 RABBITMQ_API = "http://localhost:15672/api"
 
 JWT_SECRET = "dev-secret-key-change-in-production"
@@ -88,18 +90,11 @@ def _psql_goals(sql: str) -> str:
     return result.stdout.strip()
 
 
-@pytest.fixture(scope="module")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def test_context():
     """Seed all required test data: user, account, goal, category, transactions, budget."""
     uid = uuid.uuid4().hex[:8]
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
         # 1. Register user
         resp = await client.post(
             f"{USER_SERVICE}/register",
@@ -147,15 +142,17 @@ async def test_context():
             f'UPDATE goals SET is_default_savings_goal = TRUE WHERE "idGoal" = {goal_id};'
         )
 
-        # 5. Create category (via transaction-service, which owns category CRUD)
-        resp = await client.post(
-            f"{TRANSACTION_SERVICE}/categories",
+        # 5. Use a seeded expense category (exists in both categorization-service
+        #    and transaction-service via category sync events)
+        resp = await client.get(
+            f"{CATEGORIZATION_SERVICE}/categories",
             headers=headers,
-            json={"name": f"E2E Cat {uid}", "type": "expense"},
         )
-        assert resp.status_code == 201, f"Category creation failed: {resp.text}"
-        category_id = resp.json()["id"]
-        category_name = resp.json()["name"]
+        assert resp.status_code == 200, f"Category list failed: {resp.text}"
+        expense_cats = [c for c in resp.json() if c["type"] == "expense"]
+        assert expense_cats, "No expense categories found in categorization-service"
+        category_id = expense_cats[0]["id"]
+        category_name = expense_cats[0]["name"]
 
         # 6. Create transactions (total 3000 in expenses)
         for i, amount in enumerate([1000.0, 1200.0, 800.0]):
@@ -202,13 +199,13 @@ async def test_context():
 class TestBudgetMonthClosedE2E:
     """Tests run in order — happy path first, then idempotency."""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_1_happy_path_close_month_allocates_surplus(self, test_context):
         """close_month → event → goal allocation = expected surplus."""
         ctx = test_context
         headers = _auth(ctx["token"])
 
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
             # Close the month (budgeted=5000, spent=3000 → surplus=2000)
             resp = await client.post(
                 f"{BUDGET_SERVICE}/monthly-budgets/close"
@@ -250,7 +247,7 @@ class TestBudgetMonthClosedE2E:
         )
         assert closed_at and closed_at != "", f"closed_at not set on budget {ctx['budget_id']}"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_2a_closed_at_guard_rejects_duplicate_close(self, test_context):
         """Second close_month → 409, no new event, allocation unchanged."""
         ctx = test_context
@@ -261,7 +258,7 @@ class TestBudgetMonthClosedE2E:
             f"WHERE event_type = 'budget.month_closed' AND aggregate_id = '{ctx['budget_id']}';"
         ))
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             resp = await client.post(
                 f"{BUDGET_SERVICE}/monthly-budgets/close"
                 f"?account_id={ctx['account_id']}&month=6&year=2026&budget_start_day=1",
@@ -290,7 +287,7 @@ class TestBudgetMonthClosedE2E:
             f"Outbox rows increased from {count_before} to {count_after} despite 409"
         )
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio(loop_scope="module")
     async def test_2b_consumer_dedup_handles_redelivery(self, test_context):
         """Manually republish same event → consumer deduplicates, no double allocation."""
         ctx = test_context
@@ -305,7 +302,7 @@ class TestBudgetMonthClosedE2E:
 
         # Publish the same event directly to RabbitMQ via management API
         rabbitmq_auth = base64.b64encode(b"guest:guest").decode()
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             resp = await client.post(
                 f"{RABBITMQ_API}/exchanges/%2F/finans_tracker.events/publish",
                 headers={"Authorization": f"Basic {rabbitmq_auth}"},
@@ -325,7 +322,7 @@ class TestBudgetMonthClosedE2E:
         await asyncio.sleep(5)
 
         # Verify goal allocation is STILL the same (not doubled)
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             resp = await client.get(
                 f"{GOAL_SERVICE}/goals/{ctx['goal_id']}",
                 headers=headers,
