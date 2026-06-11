@@ -182,6 +182,25 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  goal-budget-consumer:
+    build:
+      context: .
+      dockerfile: services/goal-service/Dockerfile
+    command: ["python", "-m", "app.workers.budget_month_closed_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      USER_SERVICE_URL: http://user-service:8001
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      goal-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
   user-outbox-worker:
     build:
       context: .
@@ -547,9 +566,29 @@ services:
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       CATEGORY_SERVICE_URL: http://categorization-service:8005
+      TRANSACTION_SERVICE_URL: http://transaction-service:8003
     depends_on:
       postgres-budget:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  budget-outbox-worker:
+    build:
+      context: .
+      dockerfile: services/budget-service/Dockerfile
+    command: ["python", "-m", "app.workers.outbox_publisher"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      CATEGORY_SERVICE_URL: http://categorization-service:8005
+      TRANSACTION_SERVICE_URL: http://transaction-service:8003
+      ENVIRONMENT: development
+    depends_on:
+      budget-service:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
 
