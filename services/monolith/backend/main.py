@@ -72,6 +72,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 # Hexagonal architecture routers
 # Account routes removed — account-service owns this domain now (Phase 4 cutover)
+# User/Goal REST routes removed — user-service (8001) and goal-service (8006) own these
 from backend.analytics.adapters.inbound.graphql_api import create_graphql_router
 from backend.analytics.adapters.inbound.rest_api import (
     budget_summary_router,
@@ -79,11 +80,9 @@ from backend.analytics.adapters.inbound.rest_api import (
 )
 from backend.banking.presentation.rest_api import router as bank_router
 from backend.budget.adapters.inbound.rest_api import router as budget_router
-from backend.goal.adapters.inbound.goal_api import router as goal_router
 from backend.monthly_budget.adapters.inbound.rest_api import (
     router as monthly_budget_router,
 )
-from backend.user.adapters.inbound.user_api import router as user_router
 
 
 @asynccontextmanager
@@ -159,9 +158,6 @@ v1.include_router(budget_summary_router)
 v1.include_router(budget_router)
 
 v1.include_router(monthly_budget_router)
-
-v1.include_router(goal_router)
-v1.include_router(user_router)
 
 v1.include_router(bank_router)
 v1.include_router(dashboard_router)
