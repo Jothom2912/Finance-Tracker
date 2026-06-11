@@ -6,6 +6,7 @@ from datetime import date
 import httpx
 
 from app.application.ports.outbound import ITransactionPort
+from app.auth import make_service_auth_header
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ class TransactionPort(ITransactionPort):
     """HTTP adapter til transaction-service."""
 
     async def get_expenses_by_category(
-        self, account_id: int, start_date: date, end_date: date,
+        self, account_id: int, start_date: date, end_date: date, user_id: int = 0,
     ) -> dict[int, float]:
         url = (
             f"{settings.TRANSACTION_SERVICE_URL}/api/v1/transactions"
@@ -24,8 +25,8 @@ class TransactionPort(ITransactionPort):
             f"&end_date={end_date.isoformat()}"
         )
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(url)
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                response = await client.get(url, headers=make_service_auth_header(user_id))
                 if response.status_code != 200:
                     logger.warning(
                         "transaction_port: got %s from transaction-service",

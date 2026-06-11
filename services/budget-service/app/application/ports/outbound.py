@@ -71,7 +71,7 @@ class ITransactionPort(ABC):
 
     @abstractmethod
     async def get_expenses_by_category(
-        self, account_id: int, start_date: date, end_date: date,
+        self, account_id: int, start_date: date, end_date: date, user_id: int = 0,
     ) -> dict[int, float]: ...
 
 

@@ -67,6 +67,7 @@ class MonthlyBudgetService:
         month: int,
         year: int,
         budget_start_day: int = 1,
+        user_id: int = 0,
     ) -> MonthlyBudgetSummary:
         if not account_id:
             raise AccountRequiredForMonthlyBudget()
@@ -76,7 +77,7 @@ class MonthlyBudgetService:
         )
         start_date, end_date = budget_period(year, month, budget_start_day)
         expenses = await self._transaction_port.get_expenses_by_category(
-            account_id, start_date, end_date,
+            account_id, start_date, end_date, user_id=user_id,
         )
         category_names = await self._category_port.get_all_names()
 
@@ -236,6 +237,7 @@ class MonthlyBudgetService:
         year: int,
         month: int,
         budget_start_day: int = 1,
+        user_id: int = 0,
     ) -> None:
         # --- Reads + HTTP call — outside the write transaction ----------------
         budget = await self._uow.monthly_budgets.get_by_account_and_period(
@@ -246,7 +248,7 @@ class MonthlyBudgetService:
 
         start_date, end_date = budget_period(year, month, budget_start_day)
         expenses = await self._transaction_port.get_expenses_by_category(
-            account_id, start_date, end_date,
+            account_id, start_date, end_date, user_id=user_id,
         )
 
         budgeted = Decimal(str(budget.total_budget))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -7,6 +9,17 @@ from jose import JWTError, jwt
 from app.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/login")
+
+
+def make_service_auth_header(user_id: int = 0) -> dict[str, str]:
+    """Generate a short-lived JWT for service-to-service HTTP calls."""
+    payload = {
+        "sub": str(user_id),
+        "user_id": user_id,
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+    }
+    token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:

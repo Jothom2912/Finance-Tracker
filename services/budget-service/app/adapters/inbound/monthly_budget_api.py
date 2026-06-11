@@ -48,10 +48,10 @@ async def get_monthly_budget_summary(
     year: int = Query(..., ge=2000),
     budget_start_day: int = Query(1, ge=1, le=28),
     service: MonthlyBudgetService = Depends(get_monthly_budget_service),
-    _user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
 ):
     try:
-        return await service.get_summary(account_id, month, year, budget_start_day)
+        return await service.get_summary(account_id, month, year, budget_start_day, user_id=user_id)
     except AccountRequiredForMonthlyBudget as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -124,10 +124,10 @@ async def close_month(
     year: int = Query(..., ge=2000),
     budget_start_day: int = Query(1, ge=1, le=28),
     service: MonthlyBudgetService = Depends(get_monthly_budget_service),
-    _user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
 ):
     try:
-        await service.close_month(account_id, year, month, budget_start_day)
+        await service.close_month(account_id, year, month, budget_start_day, user_id=user_id)
     except MonthlyBudgetNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except MonthlyBudgetAlreadyClosed as e:
