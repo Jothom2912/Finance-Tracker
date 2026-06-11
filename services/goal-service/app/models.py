@@ -41,7 +41,7 @@ class GoalAllocationHistoryModel(Base):
     goal_id: Mapped[int] = mapped_column(Integer, ForeignKey("goals.idGoal"), nullable=False)
     account_id: Mapped[int] = mapped_column(Integer, nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    correlation_id: Mapped[str | None] = mapped_column(sa.Uuid(as_uuid=False), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (
@@ -60,7 +60,7 @@ class UnallocatedBudgetSurplusModel(Base):
     account_id: Mapped[int] = mapped_column(Integer, nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     reason: Mapped[str] = mapped_column(String(50), nullable=False)
-    correlation_id: Mapped[str | None] = mapped_column(sa.Uuid(as_uuid=False), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     __table_args__ = (
