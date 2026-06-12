@@ -15,33 +15,36 @@ help:
 	@printf '  clean            Remove generated artifacts\n'
 
 install-deps:
-	pip install -r requirements.txt
+	uv sync --dev
 
 dev:
-	uvicorn app.main:app --reload --port 8003
-
-test:
-	pytest tests/unit/ -v
-	pytest tests/integration/ -v
-
-test-unit:
-	pytest tests/unit/ -v
-
-test-integration:
-	pytest tests/integration/ -v
+	uv run uvicorn app.main:app --reload --port 8003
 
 lint:
-	ruff check .
+	uv run ruff check .
 
 format:
-	ruff format .
-	ruff check --fix .
+	uv run ruff check . --fix
+	uv run ruff format .
+
+format-check:
+	uv run ruff format . --check
+
+test:
+	uv run pytest tests/unit/ -v
+	uv run pytest tests/integration/ -v
+
+test-unit:
+	uv run pytest tests/unit/ -v
+
+test-integration:
+	uv run pytest tests/integration/ -v
 
 migrate:
-	alembic upgrade head
+	uv run alembic upgrade head
 
 migrate-down:
-	alembic downgrade -1
+	uv run alembic downgrade -1
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
