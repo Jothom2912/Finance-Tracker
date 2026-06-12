@@ -271,9 +271,7 @@ class Query:
                     headers={"Authorization": auth_header} if auth_header else {},
                 )
                 if resp.status_code == 401:
-                    logger.warning(
-                        "budget-service auth rejected (401) for budget_summary — check token forwarding"
-                    )
+                    logger.warning("budget-service auth rejected (401) for budget_summary — check token forwarding")
                     return None
                 resp.raise_for_status()
                 data = resp.json()
