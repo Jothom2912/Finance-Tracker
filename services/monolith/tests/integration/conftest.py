@@ -23,9 +23,10 @@ from sqlalchemy.pool import StaticPool
 # Force MySQL for tests - set ACTIVE_DB before importing anything that uses it
 os.environ["ACTIVE_DB"] = "mysql"
 
-from backend.database import get_db
 from backend.database.mysql import Base
 from backend.main import app
+
+from backend.database import get_db
 from backend.models.mysql import (
     Account,
     Budget,

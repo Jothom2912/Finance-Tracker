@@ -200,9 +200,13 @@ class TransactionSyncConsumer(BaseConsumer):
         """
         category_id = event.category_id
         if category_id is not None:
-            exists = session.query(CategoryModel.idCategory).filter(
-                CategoryModel.idCategory == category_id,
-            ).first()
+            exists = (
+                session.query(CategoryModel.idCategory)
+                .filter(
+                    CategoryModel.idCategory == category_id,
+                )
+                .first()
+            )
             if exists is None:
                 logger.warning(
                     "Category %d missing in MySQL projection for transaction %d — omitting FK",
@@ -213,9 +217,13 @@ class TransactionSyncConsumer(BaseConsumer):
 
         subcategory_id = event.subcategory_id
         if subcategory_id is not None:
-            exists = session.query(SubCategoryModel.id).filter(
-                SubCategoryModel.id == subcategory_id,
-            ).first()
+            exists = (
+                session.query(SubCategoryModel.id)
+                .filter(
+                    SubCategoryModel.id == subcategory_id,
+                )
+                .first()
+            )
             if exists is None:
                 logger.warning(
                     "SubCategory %d missing in MySQL projection for transaction %d — omitting FK",

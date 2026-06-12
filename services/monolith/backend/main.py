@@ -75,6 +75,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 # User/Goal REST routes removed — user-service (8001) and goal-service (8006) own these
 from backend.analytics.adapters.inbound.graphql_api import create_graphql_router
 from backend.analytics.adapters.inbound.rest_api import dashboard_router
+
 # Banking routes owned by banking-service (port 8009) after extraction cutover.
 
 
