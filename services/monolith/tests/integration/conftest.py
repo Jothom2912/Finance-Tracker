@@ -25,7 +25,6 @@ os.environ["ACTIVE_DB"] = "mysql"
 
 from backend.database.mysql import Base
 from backend.main import app
-
 from backend.database import get_db
 from backend.models.mysql import (
     Account,
