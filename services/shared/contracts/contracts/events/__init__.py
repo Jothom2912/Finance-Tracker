@@ -4,6 +4,11 @@ from contracts.events.account import (
     AccountCreatedEvent,
     AccountCreationFailedEvent,
 )
+from contracts.events.bank import (
+    BankConnectionCreatedEvent,
+    BankConnectionDisconnectedEvent,
+    BankSyncCompletedEvent,
+)
 from contracts.events.budget import (
     BudgetMonthClosedEvent,
     make_budget_month_closed_source_key,
@@ -29,6 +34,9 @@ from contracts.events.user import UserCreatedEvent
 __all__ = [
     "AccountCreatedEvent",
     "AccountCreationFailedEvent",
+    "BankConnectionCreatedEvent",
+    "BankConnectionDisconnectedEvent",
+    "BankSyncCompletedEvent",
     "BudgetMonthClosedEvent",
     "CategoryCreatedEvent",
     "CategoryDeletedEvent",
