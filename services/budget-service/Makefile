@@ -30,14 +30,14 @@ format-check:
 	uv run ruff format . --check
 
 test:
-	uv run pytest tests/unit/ -v
-	uv run pytest tests/integration/ -v
+	PYTHONPATH=../../services/shared/contracts uv run pytest tests/unit/ -v
+	PYTHONPATH=../../services/shared/contracts uv run pytest tests/integration/ -v
 
 test-unit:
-	uv run pytest tests/unit/ -v
+	PYTHONPATH=../../services/shared/contracts uv run pytest tests/unit/ -v
 
 test-integration:
-	uv run pytest tests/integration/ -v
+	PYTHONPATH=../../services/shared/contracts uv run pytest tests/integration/ -v
 
 migrate:
 	uv run alembic upgrade head
