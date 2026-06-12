@@ -635,13 +635,12 @@ services:
       ENVIRONMENT: development
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
       ACCOUNT_SERVICE_URL: http://account-service:8003
-      ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_APP_ID:-}
-      ENABLE_BANKING_KEY_PATH: /app/enablebanking-privat.pem
-      ENABLE_BANKING_REDIRECT_URI: ${ENABLE_BANKING_REDIRECT_URI:-http://localhost:8009/api/v1/bank/callback}
-      ENABLE_BANKING_ENVIRONMENT: ${ENABLE_BANKING_ENVIRONMENT:-production}
+      ENABLE_BANKING_APP_ID: 4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7
+      ENABLE_BANKING_KEY_PATH: /app/enablebanking-sandbox.pem
+      ENABLE_BANKING_REDIRECT_URI: http://localhost:8009/api/v1/bank/callback
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     volumes:
-      - ./enablebanking-privat.pem:/app/enablebanking-privat.pem:ro
+      - ./enablebanking-sandbox.pem:/app/enablebanking-sandbox.pem:ro
     depends_on:
       postgres-banking:
         condition: service_healthy

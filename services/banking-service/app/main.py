@@ -55,6 +55,11 @@ async def pending_auth_not_found_handler(_request: Request, exc: PendingAuthoriz
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
+from app.adapters.inbound.bank_api import router as bank_router
+
+app.include_router(bank_router, prefix="/api/v1/bank")
+
+
 @app.get("/health", tags=["Health"])
 async def health() -> Response:
     return Response(status_code=200, content='{"status":"ok"}', media_type="application/json")

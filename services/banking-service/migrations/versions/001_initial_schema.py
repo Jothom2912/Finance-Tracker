@@ -44,6 +44,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer, nullable=False),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
         sa.Column("expires_at", sa.DateTime, nullable=False),
+        sa.Column("consumed_at", sa.DateTime, nullable=True),
     )
 
     op.create_table(

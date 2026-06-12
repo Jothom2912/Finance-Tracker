@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     ENABLE_BANKING_APP_ID: str = ""
     ENABLE_BANKING_KEY_PATH: str = ""
     ENABLE_BANKING_REDIRECT_URI: str = ""
-    ENABLE_BANKING_ENVIRONMENT: str = "sandbox"
 
     FRONTEND_URL: str = "http://localhost:3000"
 

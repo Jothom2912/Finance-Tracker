@@ -65,7 +65,7 @@ class BankingService:
     ) -> list[dict[str, Any]]:
         await self._pending_auth.cleanup_expired()
 
-        auth = await self._pending_auth.pop(state)
+        auth = await self._pending_auth.consume(state)
         if auth is None:
             raise PendingAuthorizationNotFound(state)
         account_id, user_id = auth
@@ -79,7 +79,7 @@ class BankingService:
             uid = bank_account.get("uid", "")
             iban = bank_account.get("account_id", {}).get("iban", "")
 
-            existing = await self._connections.get_by_uid(uid)
+            existing = await self._connections.get_active_by_uid(uid, account_id)
             if existing is not None:
                 await self._connections.update_status(existing.id, "active")
                 created.append({
@@ -101,14 +101,15 @@ class BankingService:
                 bank_account_iban=iban,
                 status="active",
             )
-            saved = await self._connections.save(conn)
+            await self._connections.save(conn)
             created.append({
-                "id": str(saved.id),
+                "id": str(conn.id),
                 "bank_account_uid": uid,
                 "iban": iban,
                 "status": "new",
             })
 
+        await self._connections.commit()
         logger.info(
             "Connected %d bank accounts (session=%s)", len(created), session_id,
         )
