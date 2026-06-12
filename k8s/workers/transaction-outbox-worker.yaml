@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-outbox-worker
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: transaction-outbox-worker }
+  template:
+    metadata:
+      labels: { app: transaction-outbox-worker }
+    spec:
+      containers:
+        - name: transaction-outbox-worker
+          image: finance-tracker/transaction-service:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.workers.outbox_publisher"]
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: DATABASE_URL_TRANSACTION

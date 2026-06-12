@@ -97,4 +97,4 @@ app.include_router(monthly_budget_router, prefix="/api/v1")
 
 @app.get("/health", tags=["Health"])
 async def health() -> Response:
-    return Response(status_code=200, content='{"status":"ok"}', media_type="application/json")
+    return Response(status_code=200, content='{"status":"healthy", "service":"budget-service"}', media_type="application/json")

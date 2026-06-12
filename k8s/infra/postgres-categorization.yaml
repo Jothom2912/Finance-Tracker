@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-categorization
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres-categorization }
+  template:
+    metadata:
+      labels: { app: postgres-categorization }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - name: POSTGRES_USER
+              value: categorization_service
+            - name: POSTGRES_PASSWORD
+              value: categorization_service_pass
+            - name: POSTGRES_DB
+              value: categorization
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-categorization-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-categorization-data
+  namespace: finance-tracker
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-categorization
+  namespace: finance-tracker
+spec:
+  selector: { app: postgres-categorization }
+  ports:
+    - port: 5432
+      targetPort: 5432

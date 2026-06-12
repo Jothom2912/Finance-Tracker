@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goal-budget-consumer
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: goal-budget-consumer }
+  template:
+    metadata:
+      labels: { app: goal-budget-consumer }
+    spec:
+      containers:
+        - name: goal-budget-consumer
+          image: finance-tracker/goal-service:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.workers.budget_month_closed_consumer"]
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: DATABASE_URL_GOAL

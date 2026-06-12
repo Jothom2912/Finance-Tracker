@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-goals
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres-goals }
+  template:
+    metadata:
+      labels: { app: postgres-goals }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - name: POSTGRES_USER
+              value: goal_service
+            - name: POSTGRES_PASSWORD
+              value: goal_service_pass
+            - name: POSTGRES_DB
+              value: goals
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-goals-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-goals-data
+  namespace: finance-tracker
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-goals
+  namespace: finance-tracker
+spec:
+  selector: { app: postgres-goals }
+  ports:
+    - port: 5432
+      targetPort: 5432

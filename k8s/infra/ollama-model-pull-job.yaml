@@ -1,0 +1,16 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ollama-pull-qwen3
+  namespace: finance-tracker
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: ollama-pull
+          image: ollama/ollama
+          env:
+            - name: OLLAMA_HOST
+              value: http://ollama:11434
+          command: ["sh", "-c", "ollama pull qwen3:4b || true"]

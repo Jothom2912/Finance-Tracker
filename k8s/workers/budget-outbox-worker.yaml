@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: budget-outbox-worker
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: budget-outbox-worker }
+  template:
+    metadata:
+      labels: { app: budget-outbox-worker }
+    spec:
+      containers:
+        - name: budget-outbox-worker
+          image: finance-tracker/budget-service:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.workers.outbox_publisher"]
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: DATABASE_URL_BUDGET

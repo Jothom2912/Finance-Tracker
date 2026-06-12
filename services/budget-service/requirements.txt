@@ -9,3 +9,5 @@ alembic==1.14.0
 httpx==0.27.2
 python-jose[cryptography]==3.3.0
 aio-pika
+redis>=5.0.0
+fastapi-cache2>=0.2.2

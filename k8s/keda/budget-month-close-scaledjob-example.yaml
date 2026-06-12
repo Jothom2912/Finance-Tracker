@@ -1,0 +1,54 @@
+# Optional KEDA example for the serverless requirement.
+# Requires KEDA installed in the cluster first.
+# This is a starter and may need to be adjusted to your exact RabbitMQ queue name and command.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: rabbitmq-trigger-auth
+  namespace: finance-tracker
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: finance-tracker-secrets
+      key: RABBITMQ_URL
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: budget-month-close-scaledjob
+  namespace: finance-tracker
+spec:
+  jobTargetRef:
+    template:
+      spec:
+        restartPolicy: Never
+        containers:
+          - name: budget-month-close-job
+            image: finance-tracker/budget-service:local
+            imagePullPolicy: Never
+            # Replace this with a real one-shot command in your service.
+            command: ["python", "-m", "app.jobs.month_close_job"]
+            envFrom:
+              - configMapRef:
+                  name: finance-tracker-config
+              - secretRef:
+                  name: finance-tracker-secrets
+            env:
+              - name: DATABASE_URL
+                valueFrom:
+                  secretKeyRef:
+                    name: finance-tracker-secrets
+                    key: DATABASE_URL_BUDGET
+  pollingInterval: 10
+  maxReplicaCount: 3
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: budget.month.close.requests
+        mode: QueueLength
+        value: "1"
+      authenticationRef:
+        name: rabbitmq-trigger-auth
