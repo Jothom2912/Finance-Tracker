@@ -2,7 +2,6 @@ from datetime import date
 from unittest.mock import AsyncMock
 
 import pytest
-
 from app.application.dto import BudgetCreateDTO, BudgetUpdateDTO
 from app.application.service import BudgetService
 from app.domain.entities import Budget
