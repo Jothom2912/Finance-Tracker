@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from fastapi_cache.decorator import cache 
 from app.application.dto import (
     CopyBudgetRequest,
     MonthlyBudgetCreate,
@@ -42,6 +41,7 @@ async def get_monthly_budget(
 
 
 @router.get("/summary", response_model=MonthlyBudgetSummary)
+@cache(expire=60)
 async def get_monthly_budget_summary(
     account_id: int = Query(...),
     month: int = Query(..., ge=1, le=12),

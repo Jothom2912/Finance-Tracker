@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import logging
 
 from fastapi import FastAPI, Request
@@ -19,7 +20,24 @@ from app.domain.exceptions import (
     TransactionNotFoundException,
 )
 
+from contextlib import asynccontextmanager
+
+from redis import asyncio as aioredis
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+
 logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    redis = aioredis.from_url("redis://redis:6379")
+
+    FastAPICache.init(
+        RedisBackend(redis),
+        prefix="transaction-service",
+    )
+
+    yield
 
 app = FastAPI(
     title="Transaction Service",
@@ -27,6 +45,7 @@ app = FastAPI(
     description="Handles financial transactions and planned transactions. "
     "Domain events are persisted via transactional outbox and "
     "published by a separate worker process.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
