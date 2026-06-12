@@ -1,8 +1,9 @@
 from __future__ import annotations
-from fastapi_cache.decorator import cache
+
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, UploadFile, status
+from fastapi_cache.decorator import cache
 
 from app.application.dto import (
     BulkCreateResultDTO,
