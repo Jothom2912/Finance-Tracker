@@ -1,6 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev test test-unit test-integration lint format migrate migrate-down clean
-
+.PHONY: help install-deps dev test test-unit test-integration lint format format-check migrate migrate-down clean
 help:
 	@printf 'Available targets:\n'
 	@printf '  install-deps     Install all dependencies\n'
