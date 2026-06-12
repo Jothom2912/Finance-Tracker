@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 
 class MonthlyBudgetService:
-
     def __init__(
         self,
         uow: IUnitOfWork,
@@ -52,10 +51,15 @@ class MonthlyBudgetService:
     # -- Queries ---------------------------------------------------------------
 
     async def get_or_none(
-        self, account_id: int, month: int, year: int,
+        self,
+        account_id: int,
+        month: int,
+        year: int,
     ) -> Optional[MonthlyBudgetResponse]:
         budget = await self._uow.monthly_budgets.get_by_account_and_period(
-            account_id, month, year,
+            account_id,
+            month,
+            year,
         )
         if not budget:
             return None
@@ -73,11 +77,16 @@ class MonthlyBudgetService:
             raise AccountRequiredForMonthlyBudget()
 
         budget = await self._uow.monthly_budgets.get_by_account_and_period(
-            account_id, month, year,
+            account_id,
+            month,
+            year,
         )
         start_date, end_date = budget_period(year, month, budget_start_day)
         expenses = await self._transaction_port.get_expenses_by_category(
-            account_id, start_date, end_date, user_id=user_id,
+            account_id,
+            start_date,
+            end_date,
+            user_id=user_id,
         )
         category_names = await self._category_port.get_all_names()
 
@@ -140,13 +149,18 @@ class MonthlyBudgetService:
     # -- Commands --------------------------------------------------------------
 
     async def create(
-        self, account_id: int, user_id: int, dto: MonthlyBudgetCreate,
+        self,
+        account_id: int,
+        user_id: int,
+        dto: MonthlyBudgetCreate,
     ) -> MonthlyBudgetResponse:
         if not account_id:
             raise AccountRequiredForMonthlyBudget()
 
         existing = await self._uow.monthly_budgets.get_by_account_and_period(
-            account_id, dto.month, dto.year,
+            account_id,
+            dto.month,
+            dto.year,
         )
         if existing:
             raise MonthlyBudgetAlreadyExists(dto.month, dto.year)
@@ -159,10 +173,7 @@ class MonthlyBudgetService:
             year=dto.year,
             account_id=account_id,
             user_id=user_id,
-            lines=[
-                BudgetLine(id=None, category_id=l.category_id, amount=l.amount)
-                for l in dto.lines
-            ],
+            lines=[BudgetLine(id=None, category_id=l.category_id, amount=l.amount) for l in dto.lines],
         )
 
         created = await self._uow.monthly_budgets.create(budget)
@@ -171,7 +182,10 @@ class MonthlyBudgetService:
         return await self._to_response(created)
 
     async def update(
-        self, budget_id: int, account_id: int, dto: MonthlyBudgetUpdate,
+        self,
+        budget_id: int,
+        account_id: int,
+        dto: MonthlyBudgetUpdate,
     ) -> MonthlyBudgetResponse:
         existing = await self._uow.monthly_budgets.get_by_id_for_account(budget_id, account_id)
         if not existing:
@@ -179,10 +193,7 @@ class MonthlyBudgetService:
 
         await self._validate_categories([line.category_id for line in dto.lines])
 
-        existing.lines = [
-            BudgetLine(id=None, category_id=l.category_id, amount=l.amount)
-            for l in dto.lines
-        ]
+        existing.lines = [BudgetLine(id=None, category_id=l.category_id, amount=l.amount) for l in dto.lines]
 
         updated = await self._uow.monthly_budgets.update(existing)
         await self._uow.commit()
@@ -194,19 +205,26 @@ class MonthlyBudgetService:
         return result
 
     async def copy_to_month(
-        self, account_id: int, user_id: int, dto: CopyBudgetRequest,
+        self,
+        account_id: int,
+        user_id: int,
+        dto: CopyBudgetRequest,
     ) -> MonthlyBudgetResponse:
         if not account_id:
             raise AccountRequiredForMonthlyBudget()
 
         source = await self._uow.monthly_budgets.get_by_account_and_period(
-            account_id, dto.source_month, dto.source_year,
+            account_id,
+            dto.source_month,
+            dto.source_year,
         )
         if not source or not source.lines:
             raise NoBudgetToCopy(dto.source_month, dto.source_year)
 
         existing_target = await self._uow.monthly_budgets.get_by_account_and_period(
-            account_id, dto.target_month, dto.target_year,
+            account_id,
+            dto.target_month,
+            dto.target_year,
         )
         if existing_target:
             raise MonthlyBudgetAlreadyExists(dto.target_month, dto.target_year)
@@ -217,17 +235,17 @@ class MonthlyBudgetService:
             year=dto.target_year,
             account_id=account_id,
             user_id=user_id,
-            lines=[
-                BudgetLine(id=None, category_id=l.category_id, amount=l.amount)
-                for l in source.lines
-            ],
+            lines=[BudgetLine(id=None, category_id=l.category_id, amount=l.amount) for l in source.lines],
         )
 
         created = await self._uow.monthly_budgets.create(new_budget)
         await self._uow.commit()
         logger.debug(
             "Copied budget from %02d/%d to %02d/%d",
-            dto.source_month, dto.source_year, dto.target_month, dto.target_year,
+            dto.source_month,
+            dto.source_year,
+            dto.target_month,
+            dto.target_year,
         )
         return await self._to_response(created)
 
@@ -241,14 +259,19 @@ class MonthlyBudgetService:
     ) -> None:
         # --- Reads + HTTP call — outside the write transaction ----------------
         budget = await self._uow.monthly_budgets.get_by_account_and_period(
-            account_id, month, year,
+            account_id,
+            month,
+            year,
         )
         if not budget:
             raise MonthlyBudgetNotFound(month=month, year=year)
 
         start_date, end_date = budget_period(year, month, budget_start_day)
         expenses = await self._transaction_port.get_expenses_by_category(
-            account_id, start_date, end_date, user_id=user_id,
+            account_id,
+            start_date,
+            end_date,
+            user_id=user_id,
         )
 
         budgeted = Decimal(str(budget.total_budget))
@@ -276,7 +299,10 @@ class MonthlyBudgetService:
 
         logger.info(
             "Month %02d/%d closed for account %s — surplus %s",
-            month, year, account_id, surplus,
+            month,
+            year,
+            account_id,
+            surplus,
         )
 
     # -- Helpers ---------------------------------------------------------------

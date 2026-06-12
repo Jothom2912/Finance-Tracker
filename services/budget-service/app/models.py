@@ -39,9 +39,7 @@ class MonthlyBudgetModel(Base):
         lazy="selectin",
     )
 
-    __table_args__ = (
-        UniqueConstraint("account_id", "month", "year", name="uq_monthly_budget_account_period"),
-    )
+    __table_args__ = (UniqueConstraint("account_id", "month", "year", name="uq_monthly_budget_account_period"),)
 
 
 class BudgetLineModel(Base):
@@ -49,16 +47,16 @@ class BudgetLineModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     monthly_budget_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("monthly_budgets.id", ondelete="CASCADE"), nullable=False,
+        Integer,
+        ForeignKey("monthly_budgets.id", ondelete="CASCADE"),
+        nullable=False,
     )
     category_id: Mapped[int] = mapped_column(Integer, nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
 
     monthly_budget: Mapped[MonthlyBudgetModel] = relationship(back_populates="lines")
 
-    __table_args__ = (
-        UniqueConstraint("monthly_budget_id", "category_id", name="uq_budget_line_budget_category"),
-    )
+    __table_args__ = (UniqueConstraint("monthly_budget_id", "category_id", name="uq_budget_line_budget_category"),)
 
 
 class OutboxEventModel(Base):
@@ -76,6 +74,4 @@ class OutboxEventModel(Base):
     published_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    __table_args__ = (
-        Index("ix_outbox_pending_poll", "status", "next_attempt_at", "created_at"),
-    )
+    __table_args__ = (Index("ix_outbox_pending_poll", "status", "next_attempt_at", "created_at"),)

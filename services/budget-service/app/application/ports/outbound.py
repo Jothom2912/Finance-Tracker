@@ -10,7 +10,6 @@ from app.domain.entities import Budget, MonthlyBudget
 
 
 class IBudgetRepository(ABC):
-
     @abstractmethod
     async def get_by_id(self, budget_id: int) -> Optional[Budget]: ...
 
@@ -28,7 +27,6 @@ class IBudgetRepository(ABC):
 
 
 class ICategoryPort(ABC):
-
     @abstractmethod
     async def exists(self, category_id: int) -> bool: ...
 
@@ -40,7 +38,6 @@ class ICategoryPort(ABC):
 
 
 class IMonthlyBudgetRepository(ABC):
-
     @abstractmethod
     async def get_by_id_for_account(self, budget_id: int, account_id: int) -> Optional[MonthlyBudget]: ...
 
@@ -68,15 +65,17 @@ class IMonthlyBudgetRepository(ABC):
 
 
 class ITransactionPort(ABC):
-
     @abstractmethod
     async def get_expenses_by_category(
-        self, account_id: int, start_date: date, end_date: date, user_id: int = 0,
+        self,
+        account_id: int,
+        start_date: date,
+        end_date: date,
+        user_id: int = 0,
     ) -> dict[int, float]: ...
 
 
 class IOutboxRepository(ABC):
-
     @abstractmethod
     async def add(self, event: BaseEvent, aggregate_type: str, aggregate_id: str) -> None: ...
 

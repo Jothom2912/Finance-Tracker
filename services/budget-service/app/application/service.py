@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class BudgetService(IBudgetService):
-
     def __init__(self, repo: IBudgetRepository, category_port: ICategoryPort):
         self._repo = repo
         self._category_port = category_port

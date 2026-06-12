@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis
 
 from app.adapters.inbound.monthly_budget_api import router as monthly_budget_router
 from app.adapters.inbound.rest_api import router
@@ -19,12 +23,9 @@ from app.domain.exceptions import (
     MonthlyBudgetException,
     MonthlyBudgetNotFound,
 )
-from contextlib import asynccontextmanager
-from redis import asyncio as aioredis
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
 
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
     )
 
     yield
+
 
 app = FastAPI(
     title="Budget Service",

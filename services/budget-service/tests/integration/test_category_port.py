@@ -25,15 +25,18 @@ os.environ.setdefault("JWT_SECRET", "test-secret")
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def category_port():
     from app.adapters.outbound.category_port import CategoryPort
+
     return CategoryPort()
 
 
 # ---------------------------------------------------------------------------
 # Tests: Kategori eksisterer
 # ---------------------------------------------------------------------------
+
 
 class TestCategoryExists:
     @respx.mock
@@ -65,12 +68,16 @@ class TestCategoryExists:
 # Tests: Fail-open (service nede)
 # ---------------------------------------------------------------------------
 
+
 class TestCategoryPortFailOpen:
     @respx.mock
     async def test_returns_true_when_service_is_unreachable(self, category_port) -> None:
         """Når category-service er nede, skal vi fail-open (True) for ikke at blokere budgets."""
         import httpx
-        respx.get("http://localhost:8005/api/v1/categories/5").mock(side_effect=httpx.ConnectError("Connection refused"))
+
+        respx.get("http://localhost:8005/api/v1/categories/5").mock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
 
         result = await category_port.exists(5)
 
@@ -79,6 +86,7 @@ class TestCategoryPortFailOpen:
     @respx.mock
     async def test_returns_true_on_timeout(self, category_port) -> None:
         import httpx
+
         respx.get("http://localhost:8005/api/v1/categories/7").mock(side_effect=httpx.TimeoutException("Timeout"))
 
         result = await category_port.exists(7)
@@ -89,6 +97,7 @@ class TestCategoryPortFailOpen:
 # ---------------------------------------------------------------------------
 # Tests: Korrekt URL bygges
 # ---------------------------------------------------------------------------
+
 
 class TestCategoryPortUrl:
     @respx.mock

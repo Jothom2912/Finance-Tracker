@@ -12,12 +12,13 @@ from app.models import BudgetLineModel, MonthlyBudgetModel
 
 
 class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
-
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def get_by_id_for_account(
-        self, budget_id: int, account_id: int,
+        self,
+        budget_id: int,
+        account_id: int,
     ) -> Optional[MonthlyBudget]:
         result = await self._session.execute(
             select(MonthlyBudgetModel).where(
@@ -29,7 +30,10 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
         return self._to_entity(model) if model else None
 
     async def get_by_account_and_period(
-        self, account_id: int, month: int, year: int,
+        self,
+        account_id: int,
+        month: int,
+        year: int,
     ) -> Optional[MonthlyBudget]:
         result = await self._session.execute(
             select(MonthlyBudgetModel).where(
@@ -47,10 +51,7 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
             year=budget.year,
             account_id=budget.account_id,
             user_id=budget.user_id,
-            lines=[
-                BudgetLineModel(category_id=line.category_id, amount=line.amount)
-                for line in budget.lines
-            ],
+            lines=[BudgetLineModel(category_id=line.category_id, amount=line.amount) for line in budget.lines],
         )
         self._session.add(model)
         await self._session.flush()
