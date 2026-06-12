@@ -21,6 +21,7 @@ from app.auth import get_current_user_id
 from app.config import settings
 from app.dependencies import get_banking_service
 from app.domain.exceptions import (
+    BankAccountNotOwned,
     BankConnectionInactive,
     BankConnectionNotFound,
     PendingAuthorizationNotFound,
@@ -104,6 +105,8 @@ async def start_bank_connection(
             account_id=req.account_id,
             user_id=user_id,
         )
+    except BankAccountNotOwned as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     except BankConfigError as exc:
         logger.exception("Enable Banking misconfigured while starting connect")
         raise HTTPException(status_code=500, detail=f"Bank adapter misconfigured: {exc}")

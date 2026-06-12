@@ -66,7 +66,9 @@ class AnalyticsService:
                 category_id = transaction.get("Category_idCategory")
                 if category_id:
                     category_name = category_id_to_name.get(category_id, "Ukategoriseret")
-                    category_expenses[category_name] = category_expenses.get(category_name, 0.0) + abs(amount)
+                else:
+                    category_name = "Ukategoriseret"
+                category_expenses[category_name] = category_expenses.get(category_name, 0.0) + abs(amount)
             else:
                 current_account_balance += amount
 

@@ -631,6 +631,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
@@ -647,6 +648,44 @@ services:
       rabbitmq:
         condition: service_healthy
       transaction-service:
+        condition: service_started
+      account-service:
+        condition: service_started
+
+  banking-outbox-worker:
+    build:
+      context: .
+      dockerfile: services/banking-service/Dockerfile
+    command: ["python", "-m", "app.workers.outbox_publisher"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      banking-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  banking-account-projection-consumer:
+    build:
+      context: .
+      dockerfile: services/banking-service/Dockerfile
+    command: ["python", "-m", "app.consumers.account_projection_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      banking-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      account-outbox-publisher:
         condition: service_started
 
   # analytics-service:

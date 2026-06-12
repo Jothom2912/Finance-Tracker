@@ -26,6 +26,8 @@ from contracts.events.transaction import (
 )
 
 from backend.consumers.base import BaseConsumer
+from backend.models.mysql.category import Category as CategoryModel
+from backend.models.mysql.subcategory import SubCategory as SubCategoryModel
 from backend.models.mysql.transaction import Transaction as TransactionModel
 
 logger = logging.getLogger(__name__)
@@ -79,9 +81,9 @@ class TransactionSyncConsumer(BaseConsumer):
                     "Transaction %d already exists, treating as replay",
                     event.transaction_id,
                 )
-                self._apply_fields(existing, event)
+                self._apply_fields(session, existing, event)
             else:
-                session.add(self._build_model(event))
+                session.add(self._build_model(session, event))
 
             session.commit()
             logger.info(
@@ -108,9 +110,9 @@ class TransactionSyncConsumer(BaseConsumer):
                     "Transaction %d not found for update, upserting from event",
                     event.transaction_id,
                 )
-                session.add(self._build_model(event))
+                session.add(self._build_model(session, event))
             else:
-                self._apply_fields(model, event)
+                self._apply_fields(session, model, event)
 
             session.commit()
             logger.info(
@@ -149,38 +151,80 @@ class TransactionSyncConsumer(BaseConsumer):
 
     # ── mapping helpers ─────────────────────────────────────────────
 
-    @staticmethod
     def _build_model(
+        self,
+        session: object,
         event: TransactionCreatedEvent | TransactionUpdatedEvent,
     ) -> TransactionModel:
+        category_id, subcategory_id = self._resolve_category_fks(session, event)
         return TransactionModel(
             idTransaction=event.transaction_id,
             amount=_to_decimal(event.amount),
             description=event.description or None,
             date=_to_datetime(event.tx_date),
             type=event.transaction_type,
-            Category_idCategory=event.category_id,
+            Category_idCategory=category_id,
             Account_idAccount=event.account_id,
             created_at=datetime.utcnow(),
-            subcategory_id=event.subcategory_id,
+            subcategory_id=subcategory_id,
             categorization_tier=event.categorization_tier,
             categorization_confidence=event.categorization_confidence,
         )
 
-    @staticmethod
     def _apply_fields(
+        self,
+        session: object,
         model: TransactionModel,
         event: TransactionCreatedEvent | TransactionUpdatedEvent,
     ) -> None:
+        category_id, subcategory_id = self._resolve_category_fks(session, event)
         model.amount = _to_decimal(event.amount)
         model.description = event.description or None
         model.date = _to_datetime(event.tx_date)
         model.type = event.transaction_type
-        model.Category_idCategory = event.category_id
+        model.Category_idCategory = category_id
         model.Account_idAccount = event.account_id
-        model.subcategory_id = event.subcategory_id
+        model.subcategory_id = subcategory_id
         model.categorization_tier = event.categorization_tier
         model.categorization_confidence = event.categorization_confidence
+
+    @staticmethod
+    def _resolve_category_fks(
+        session: object,
+        event: TransactionCreatedEvent | TransactionUpdatedEvent,
+    ) -> tuple[int | None, int | None]:
+        """Only set category/subcategory FKs that exist in the MySQL read model.
+
+        Categorization-service IDs are not replicated to monolith SubCategory
+        yet, so blind FK assignment fails the whole projection insert.
+        """
+        category_id = event.category_id
+        if category_id is not None:
+            exists = session.query(CategoryModel.idCategory).filter(
+                CategoryModel.idCategory == category_id,
+            ).first()
+            if exists is None:
+                logger.warning(
+                    "Category %d missing in MySQL projection for transaction %d — omitting FK",
+                    category_id,
+                    event.transaction_id,
+                )
+                category_id = None
+
+        subcategory_id = event.subcategory_id
+        if subcategory_id is not None:
+            exists = session.query(SubCategoryModel.id).filter(
+                SubCategoryModel.id == subcategory_id,
+            ).first()
+            if exists is None:
+                logger.warning(
+                    "SubCategory %d missing in MySQL projection for transaction %d — omitting FK",
+                    subcategory_id,
+                    event.transaction_id,
+                )
+                subcategory_id = None
+
+        return category_id, subcategory_id
 
 
 def _to_decimal(raw: str) -> Decimal:

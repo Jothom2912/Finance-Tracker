@@ -3,20 +3,13 @@ from __future__ import annotations
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.outbound.account_adapter import AccountServiceAdapter
 from app.adapters.outbound.enable_banking_client import (
     EnableBankingClient,
     EnableBankingConfig,
 )
-from app.adapters.outbound.postgres_account_projection_repository import (
-    PostgresAccountProjectionRepository,
-)
-from app.adapters.outbound.postgres_bank_connection_repository import (
-    PostgresBankConnectionRepository,
-)
-from app.adapters.outbound.postgres_pending_auth_repository import (
-    PostgresPendingAuthRepository,
-)
 from app.adapters.outbound.transaction_service_client import TransactionServiceClient
+from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.application.service import BankingService
 from app.config import settings
 from app.database import get_db
@@ -39,10 +32,15 @@ def _get_banking_client() -> EnableBankingClient:
 async def get_banking_service(
     session: AsyncSession = Depends(get_db),
 ) -> BankingService:
+    uow = SQLAlchemyUnitOfWork(session)
+    account_port = AccountServiceAdapter(
+        base_url=settings.ACCOUNT_SERVICE_URL,
+        api_key=settings.INTERNAL_API_KEY,
+        timeout=settings.ACCOUNT_SERVICE_TIMEOUT,
+    )
     return BankingService(
-        bank_connection_repo=PostgresBankConnectionRepository(session),
-        pending_auth_repo=PostgresPendingAuthRepository(session),
-        account_projection=PostgresAccountProjectionRepository(session),
+        uow=uow,
+        account_port=account_port,
         banking_client=_get_banking_client(),
         transaction_importer=TransactionServiceClient(),
     )

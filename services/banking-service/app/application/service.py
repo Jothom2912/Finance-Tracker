@@ -5,19 +5,26 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
+from contracts.events.bank import (
+    BankConnectionCreatedEvent,
+    BankConnectionDisconnectedEvent,
+    BankSyncCompletedEvent,
+)
+
 from app.application.ports.outbound import (
-    IAccountProjection,
-    IBankConnectionRepository,
     IBankingApiClient,
-    IPendingAuthorizationRepository,
+    IAccountPort,
     ITransactionImporter,
+    IUnitOfWork,
 )
 from app.config import settings
 from app.domain.entities import BankConnection, SyncResult
 from app.domain.exceptions import (
+    BankAccountNotOwned,
     BankConnectionInactive,
     BankConnectionNotFound,
     PendingAuthorizationNotFound,
+    ProjectionIntegrityError,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,17 +33,38 @@ logger = logging.getLogger(__name__)
 class BankingService:
     def __init__(
         self,
-        bank_connection_repo: IBankConnectionRepository,
-        pending_auth_repo: IPendingAuthorizationRepository,
-        account_projection: IAccountProjection,
+        uow: IUnitOfWork,
+        account_port: IAccountPort,
         banking_client: IBankingApiClient,
         transaction_importer: ITransactionImporter,
     ) -> None:
-        self._connections = bank_connection_repo
-        self._pending_auth = pending_auth_repo
-        self._accounts = account_projection
+        self._uow = uow
+        self._account_port = account_port
         self._client = banking_client
         self._tx_importer = transaction_importer
+
+    async def _verify_account_access(self, account_id: int, user_id: int) -> None:
+        async with self._uow:
+            projection = await self._uow.accounts.get_projection(account_id)
+        if projection is not None:
+            owner_id, _ = projection
+            if owner_id != user_id:
+                raise BankAccountNotOwned(account_id)
+            return
+        owner_id = await self._account_port.get_owner_user_id(account_id)
+        if owner_id != user_id:
+            raise BankAccountNotOwned(account_id)
+
+    async def _resolve_account_name(self, account_id: int) -> str:
+        async with self._uow:
+            projection = await self._uow.accounts.get_projection(account_id)
+        if projection is not None:
+            return projection[1]
+        user_id, account_name = await self._account_port.get_account_info(account_id)
+        async with self._uow:
+            await self._uow.accounts.upsert(account_id, user_id, account_name)
+            await self._uow.commit()
+        return account_name
 
     async def list_banks(self, country: str = "DK") -> list[dict[str, Any]]:
         return self._client.get_available_banks(country)
@@ -48,14 +76,17 @@ class BankingService:
         account_id: int,
         user_id: int,
     ) -> dict[str, str]:
+        await self._verify_account_access(account_id, user_id)
         result = self._client.start_authorization(bank_name=bank_name, country=country)
         expires_at = datetime.utcnow() + timedelta(minutes=settings.PENDING_AUTH_TTL_MINUTES)
-        await self._pending_auth.save(
-            state=result["state"],
-            account_id=account_id,
-            user_id=user_id,
-            expires_at=expires_at,
-        )
+        async with self._uow:
+            await self._uow.pending_auth.save(
+                state=result["state"],
+                account_id=account_id,
+                user_id=user_id,
+                expires_at=expires_at,
+            )
+            await self._uow.commit()
         return result
 
     async def complete_connect(
@@ -63,60 +94,76 @@ class BankingService:
         auth_code: str,
         state: str,
     ) -> list[dict[str, Any]]:
-        await self._pending_auth.cleanup_expired()
-
-        auth = await self._pending_auth.consume(state)
-        if auth is None:
-            raise PendingAuthorizationNotFound(state)
-        account_id, user_id = auth
+        async with self._uow:
+            await self._uow.pending_auth.cleanup_expired()
+            auth = await self._uow.pending_auth.consume(state)
+            if auth is None:
+                raise PendingAuthorizationNotFound(state)
+            account_id, user_id = auth
+            await self._uow.commit()
 
         session = self._client.create_session(auth_code)
         session_id = session["session_id"]
         accounts = session.get("accounts", [])
 
         created: list[dict[str, Any]] = []
-        for bank_account in accounts:
-            uid = bank_account.get("uid", "")
-            iban = bank_account.get("account_id", {}).get("iban", "")
+        async with self._uow:
+            for bank_account in accounts:
+                uid = bank_account.get("uid", "")
+                iban = bank_account.get("account_id", {}).get("iban", "")
 
-            existing = await self._connections.get_active_by_uid(uid, account_id)
-            if existing is not None:
-                await self._connections.update_status(existing.id, "active")
+                existing = await self._uow.connections.get_active_by_uid(uid, account_id)
+                if existing is not None:
+                    await self._uow.connections.update_status(existing.id, "active")
+                    connection_id = str(existing.id)
+                    status = "reconnected"
+                    bank_name = existing.bank_name
+                else:
+                    conn = BankConnection(
+                        id=uuid4(),
+                        account_id=account_id,
+                        user_id=user_id,
+                        session_id=session_id,
+                        bank_name=session.get("aspsp", {}).get("name", "Unknown"),
+                        bank_country=session.get("aspsp", {}).get("country", "DK"),
+                        bank_account_uid=uid,
+                        bank_account_iban=iban,
+                        status="active",
+                    )
+                    await self._uow.connections.save(conn)
+                    connection_id = str(conn.id)
+                    status = "new"
+                    bank_name = conn.bank_name
+
+                await self._uow.outbox.add(
+                    event=BankConnectionCreatedEvent(
+                        connection_id=connection_id,
+                        account_id=account_id,
+                        user_id=user_id,
+                        bank_name=bank_name,
+                        iban=iban or None,
+                        status=status,
+                    ),
+                    aggregate_type="bank_connection",
+                    aggregate_id=connection_id,
+                )
                 created.append({
-                    "id": str(existing.id),
+                    "id": connection_id,
                     "bank_account_uid": uid,
                     "iban": iban,
-                    "status": "reconnected",
+                    "status": status,
                 })
-                continue
 
-            conn = BankConnection(
-                id=uuid4(),
-                account_id=account_id,
-                user_id=user_id,
-                session_id=session_id,
-                bank_name=session.get("aspsp", {}).get("name", "Unknown"),
-                bank_country=session.get("aspsp", {}).get("country", "DK"),
-                bank_account_uid=uid,
-                bank_account_iban=iban,
-                status="active",
-            )
-            await self._connections.save(conn)
-            created.append({
-                "id": str(conn.id),
-                "bank_account_uid": uid,
-                "iban": iban,
-                "status": "new",
-            })
+            await self._uow.commit()
 
-        await self._connections.commit()
         logger.info(
             "Connected %d bank accounts (session=%s)", len(created), session_id,
         )
         return created
 
     async def list_connections(self, account_id: int) -> list[dict[str, Any]]:
-        connections = await self._connections.list_by_account(account_id)
+        async with self._uow:
+            connections = await self._uow.connections.list_by_account(account_id)
         return [
             {
                 "id": str(c.id),
@@ -136,15 +183,19 @@ class BankingService:
         user_id: int,
         date_from: Optional[str] = None,
     ) -> SyncResult:
-        conn = await self._connections.get_by_id(connection_id)
+        async with self._uow:
+            conn = await self._uow.connections.get_by_id(connection_id)
         if conn is None:
             raise BankConnectionNotFound(connection_id)
         if not conn.is_active:
             raise BankConnectionInactive(connection_id, conn.status)
+        if conn.user_id != user_id:
+            raise BankAccountNotOwned(conn.account_id)
 
-        account_name = await self._accounts.get_account_name(conn.account_id)
-        if account_name is None:
-            account_name = "Bank Account"
+        try:
+            account_name = await self._resolve_account_name(conn.account_id)
+        except BankAccountNotOwned:
+            raise ProjectionIntegrityError(conn.account_id)
 
         bank_transactions, parse_skipped = self._client.get_transactions(
             account_uid=conn.bank_account_uid,
@@ -178,7 +229,9 @@ class BankingService:
                 "transaction-service rejected bulk import (connection=%s)",
                 connection_id,
             )
-            await self._connections.update_last_synced(connection_id, datetime.utcnow())
+            async with self._uow:
+                await self._uow.connections.update_last_synced(connection_id, datetime.utcnow())
+                await self._uow.commit()
             return SyncResult(
                 total_fetched=len(bank_transactions),
                 new_imported=0,
@@ -187,8 +240,6 @@ class BankingService:
                 parse_skipped=parse_skipped,
             )
 
-        await self._connections.update_last_synced(connection_id, datetime.utcnow())
-
         result = SyncResult(
             total_fetched=len(bank_transactions),
             new_imported=remote.imported,
@@ -196,6 +247,25 @@ class BankingService:
             errors=errors + remote.errors,
             parse_skipped=parse_skipped,
         )
+
+        async with self._uow:
+            await self._uow.connections.update_last_synced(connection_id, datetime.utcnow())
+            await self._uow.outbox.add(
+                event=BankSyncCompletedEvent(
+                    connection_id=str(connection_id),
+                    account_id=conn.account_id,
+                    user_id=user_id,
+                    total_fetched=result.total_fetched,
+                    new_imported=result.new_imported,
+                    duplicates_skipped=result.duplicates_skipped,
+                    errors=result.errors,
+                    parse_skipped=result.parse_skipped,
+                ),
+                aggregate_type="bank_connection",
+                aggregate_id=str(connection_id),
+            )
+            await self._uow.commit()
+
         logger.info(
             "Sync complete for connection %s: %d fetched, %d new, %d dupes, %d errors, %d parse-skipped",
             connection_id,
@@ -208,12 +278,27 @@ class BankingService:
         return result
 
     async def disconnect(self, connection_id: UUID) -> bool:
-        conn = await self._connections.get_by_id(connection_id)
+        async with self._uow:
+            conn = await self._uow.connections.get_by_id(connection_id)
         if conn is None:
             return False
         try:
             self._client.delete_session(conn.session_id)
         except Exception:
             logger.warning("Failed to delete remote session %s", conn.session_id)
-        await self._connections.update_status(connection_id, "disconnected")
+
+        async with self._uow:
+            await self._uow.connections.update_status(connection_id, "disconnected")
+            await self._uow.outbox.add(
+                event=BankConnectionDisconnectedEvent(
+                    connection_id=str(connection_id),
+                    account_id=conn.account_id,
+                    user_id=conn.user_id,
+                    bank_name=conn.bank_name,
+                    iban=conn.bank_account_iban,
+                ),
+                aggregate_type="bank_connection",
+                aggregate_id=str(connection_id),
+            )
+            await self._uow.commit()
         return True

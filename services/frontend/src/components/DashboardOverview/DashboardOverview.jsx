@@ -15,10 +15,16 @@ import './DashboardOverview.css';
 
 function DashboardOverview() {
   const queryClient = useQueryClient();
-  const forceRefresh = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-    [queryClient],
-  );
+  const forceRefresh = useCallback(async () => {
+    const refresh = () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    };
+    refresh();
+    // MySQL projection lags transaction-service via outbox + consumer (~2–5s).
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    refresh();
+  }, [queryClient]);
 
   const {
     overview,

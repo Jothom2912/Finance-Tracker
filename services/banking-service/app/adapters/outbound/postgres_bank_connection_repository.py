@@ -33,9 +33,6 @@ class PostgresBankConnectionRepository:
         connection.created_at = row.created_at
         return connection
 
-    async def commit(self) -> None:
-        await self._session.commit()
-
     async def get_by_id(self, connection_id: UUID) -> Optional[BankConnection]:
         result = await self._session.execute(
             select(BankConnectionModel).where(BankConnectionModel.id == str(connection_id))

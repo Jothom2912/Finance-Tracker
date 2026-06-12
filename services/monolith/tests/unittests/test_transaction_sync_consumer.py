@@ -8,6 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 from backend.consumers.transaction_sync import TransactionSyncConsumer
+from backend.models.mysql.category import Category as CategoryModel
+from backend.models.mysql.subcategory import SubCategory as SubCategoryModel
+from backend.models.mysql.transaction import Transaction as TransactionModel
 
 
 def _event_data(event_type: str = "transaction.created", **overrides: object) -> dict:
@@ -53,6 +56,28 @@ def _make_consumer(session_factory: MagicMock | None = None) -> TransactionSyncC
     )
 
 
+def _mock_session_for_created(
+    existing: MagicMock | None = None,
+    *,
+    category_exists: bool = True,
+    subcategory_exists: bool = True,
+) -> MagicMock:
+    session = MagicMock()
+
+    def query_side_effect(target: object) -> MagicMock:
+        q = MagicMock()
+        if target is TransactionModel:
+            q.filter.return_value.first.return_value = existing
+        elif target is CategoryModel.idCategory:
+            q.filter.return_value.first.return_value = (1,) if category_exists else None
+        elif target is SubCategoryModel.id:
+            q.filter.return_value.first.return_value = (1,) if subcategory_exists else None
+        return q
+
+    session.query.side_effect = query_side_effect
+    return session
+
+
 class TestQueueRouting:
     @pytest.mark.asyncio()
     async def test_uses_own_queue_name(self) -> None:
@@ -68,8 +93,7 @@ class TestQueueRouting:
 class TestTransactionCreated:
     @pytest.mark.asyncio()
     async def test_inserts_new_transaction(self) -> None:
-        session = MagicMock()
-        session.query.return_value.filter.return_value.first.return_value = None
+        session = _mock_session_for_created()
         factory = MagicMock(return_value=session)
 
         consumer = _make_consumer(factory)
@@ -91,8 +115,7 @@ class TestTransactionCreated:
         existing_model = MagicMock()
         existing_model.idTransaction = 42
 
-        session = MagicMock()
-        session.query.return_value.filter.return_value.first.return_value = existing_model
+        session = _mock_session_for_created(existing=existing_model)
         factory = MagicMock(return_value=session)
 
         consumer = _make_consumer(factory)
@@ -107,8 +130,7 @@ class TestTransactionCreated:
         """Tier/confidence/subcategory_id from the event must land on
         the MySQL row — this is the last link in the tier-badge chain.
         """
-        session = MagicMock()
-        session.query.return_value.filter.return_value.first.return_value = None
+        session = _mock_session_for_created()
         factory = MagicMock(return_value=session)
 
         consumer = _make_consumer(factory)
@@ -126,9 +148,20 @@ class TestTransactionCreated:
         assert model.categorization_confidence == "high"
 
     @pytest.mark.asyncio()
+    async def test_omits_subcategory_fk_when_not_in_mysql(self) -> None:
+        session = _mock_session_for_created(subcategory_exists=False)
+        factory = MagicMock(return_value=session)
+
+        consumer = _make_consumer(factory)
+        await consumer.handle(_event_data(subcategory_id=38))
+
+        model = session.add.call_args[0][0]
+        assert model.subcategory_id is None
+        session.commit.assert_called_once()
+
+    @pytest.mark.asyncio()
     async def test_parses_tx_date_as_iso(self) -> None:
-        session = MagicMock()
-        session.query.return_value.filter.return_value.first.return_value = None
+        session = _mock_session_for_created()
         factory = MagicMock(return_value=session)
 
         consumer = _make_consumer(factory)
@@ -139,8 +172,7 @@ class TestTransactionCreated:
 
     @pytest.mark.asyncio()
     async def test_rollback_on_error(self) -> None:
-        session = MagicMock()
-        session.query.return_value.filter.return_value.first.return_value = None
+        session = _mock_session_for_created()
         session.commit.side_effect = RuntimeError("DB error")
         factory = MagicMock(return_value=session)
 
@@ -158,8 +190,7 @@ class TestTransactionUpdated:
         existing = MagicMock()
         existing.idTransaction = 42
 
-        session = MagicMock()
-        session.query.return_value.filter.return_value.first.return_value = existing
+        session = _mock_session_for_created(existing=existing)
         factory = MagicMock(return_value=session)
 
         consumer = _make_consumer(factory)
@@ -174,8 +205,7 @@ class TestTransactionUpdated:
     @pytest.mark.asyncio()
     async def test_inserts_when_missing(self) -> None:
         """Update before create is race-safe: falls back to insert."""
-        session = MagicMock()
-        session.query.return_value.filter.return_value.first.return_value = None
+        session = _mock_session_for_created()
         factory = MagicMock(return_value=session)
 
         consumer = _make_consumer(factory)
@@ -229,8 +259,7 @@ class TestUnknownEvents:
 class TestSessionLifecycle:
     @pytest.mark.asyncio()
     async def test_always_closes_session(self) -> None:
-        session = MagicMock()
-        session.query.return_value.filter.return_value.first.return_value = None
+        session = _mock_session_for_created()
         factory = MagicMock(return_value=session)
 
         consumer = _make_consumer(factory)

@@ -1,12 +1,15 @@
-"""Add consumed_at column to pending_authorizations.
+"""No-op placeholder — consumed_at already exists in 001.
 
 Revision ID: 002
 Revises: 001
 Create Date: 2026-06-12
+
+Existing dev databases may already be stamped at 002. Keep this revision
+so Alembic can resolve the chain; fresh installs run this after 001 with
+no schema change.
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 revision = "002"
 down_revision = "001"
@@ -15,11 +18,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "pending_authorizations",
-        sa.Column("consumed_at", sa.DateTime, nullable=True),
-    )
+    pass
 
 
 def downgrade() -> None:
-    op.drop_column("pending_authorizations", "consumed_at")
+    pass

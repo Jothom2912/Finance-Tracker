@@ -14,7 +14,9 @@ class Settings(BaseSettings):
 
     TRANSACTION_SERVICE_URL: str = "http://transaction-service:8002"
     TRANSACTION_SERVICE_TIMEOUT: float = 10.0
-    ACCOUNT_SERVICE_URL: str = "http://account-service:8006"
+    ACCOUNT_SERVICE_URL: str = "http://account-service:8003"
+    ACCOUNT_SERVICE_TIMEOUT: float = 2.0
+    INTERNAL_API_KEY: str = "dev-internal-api-key-change-in-production"
 
     ENABLE_BANKING_APP_ID: str = ""
     ENABLE_BANKING_KEY_PATH: str = ""

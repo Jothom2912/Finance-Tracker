@@ -6,6 +6,9 @@ import pytest
 from contracts import (
     AccountCreatedEvent,
     AccountCreationFailedEvent,
+    BankConnectionCreatedEvent,
+    BankConnectionDisconnectedEvent,
+    BankSyncCompletedEvent,
     BudgetMonthClosedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
@@ -318,6 +321,76 @@ class TestTransactionDeletedEvent:
 
         with pytest.raises(ValidationError):
             event.transaction_id = 999  # type: ignore[misc]
+
+
+class TestBankConnectionCreatedEvent:
+    def test_serialization_roundtrip(self) -> None:
+        event = BankConnectionCreatedEvent(
+            connection_id="abc-123",
+            account_id=1,
+            user_id=2,
+            bank_name="Nordea",
+            iban="DK123",
+            status="new",
+        )
+
+        restored = BankConnectionCreatedEvent.from_json(event.to_json())
+
+        assert restored.connection_id == "abc-123"
+        assert restored.account_id == 1
+        assert restored.user_id == 2
+        assert restored.bank_name == "Nordea"
+        assert restored.iban == "DK123"
+        assert restored.status == "new"
+
+    def test_event_type_correctness(self) -> None:
+        event = BankConnectionCreatedEvent(
+            connection_id="abc-123",
+            account_id=1,
+            user_id=2,
+            bank_name="Nordea",
+        )
+
+        assert event.event_type == "bank.connection.created"
+        assert event.event_version == 1
+
+
+class TestBankConnectionDisconnectedEvent:
+    def test_serialization_roundtrip(self) -> None:
+        event = BankConnectionDisconnectedEvent(
+            connection_id="abc-123",
+            account_id=1,
+            user_id=2,
+            bank_name="Nordea",
+            iban="DK123",
+        )
+
+        restored = BankConnectionDisconnectedEvent.from_json(event.to_json())
+
+        assert restored.connection_id == "abc-123"
+        assert restored.event_type == "bank.connection.disconnected"
+
+
+class TestBankSyncCompletedEvent:
+    def test_serialization_roundtrip(self) -> None:
+        event = BankSyncCompletedEvent(
+            connection_id="abc-123",
+            account_id=1,
+            user_id=2,
+            total_fetched=10,
+            new_imported=3,
+            duplicates_skipped=7,
+            errors=0,
+            parse_skipped=1,
+        )
+
+        restored = BankSyncCompletedEvent.from_json(event.to_json())
+
+        assert restored.total_fetched == 10
+        assert restored.new_imported == 3
+        assert restored.duplicates_skipped == 7
+        assert restored.parse_skipped == 1
+        assert restored.event_type == "bank.sync.completed"
 
 
 class TestBaseEvent:

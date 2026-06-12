@@ -1,23 +1,27 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Any, Optional, Protocol
+from abc import ABC, abstractmethod
+from datetime import datetime
+from typing import Any, Optional, Protocol, Self
 from uuid import UUID
 
-from app.domain.entities import BankConnection
+from contracts.base import BaseEvent
+
+from app.domain.entities import BankConnection, OutboxEntry
 
 
 class IBankConnectionRepository(Protocol):
     async def save(self, connection: BankConnection) -> BankConnection:
-        """Add to session (flush, no commit). Call commit() after batch."""
+        """Add to session (flush, no commit)."""
         ...
-    async def commit(self) -> None: ...
+
     async def get_by_id(self, connection_id: UUID) -> Optional[BankConnection]: ...
     async def get_active_by_uid(
         self, bank_account_uid: str, account_id: int,
     ) -> Optional[BankConnection]:
         """Find non-disconnected connection for this uid+account."""
         ...
+
     async def list_by_account(self, account_id: int) -> list[BankConnection]: ...
     async def update_status(self, connection_id: UUID, status: str) -> None: ...
     async def update_last_synced(self, connection_id: UUID, synced_at: datetime) -> None: ...
@@ -25,31 +29,21 @@ class IBankConnectionRepository(Protocol):
 
 class IPendingAuthorizationRepository(Protocol):
     async def save(self, state: str, account_id: int, user_id: int, expires_at: datetime) -> None:
-        """Persist a new pending authorization. Must commit before returning."""
+        """Persist a new pending authorization (flush, no commit)."""
         ...
+
     async def consume(self, state: str) -> Optional[tuple[int, int]]:
-        """Atomically mark state as consumed and return (account_id, user_id).
-
-        Uses UPDATE ... SET consumed_at=now() WHERE state=S AND consumed_at IS NULL
-        AND expires_at > now() RETURNING account_id, user_id. Returns None if state
-        is unknown, already consumed, or expired. Exactly one concurrent caller wins
-        the row lock — replay-safe. Row is preserved for audit (not deleted).
-
-        Called BEFORE the external Enable Banking call. If that call fails, the state
-        is consumed and the user must restart the connect flow. This is acceptable
-        because auth_codes are single-use — a retry with the same code would fail
-        at Enable Banking regardless.
-        """
+        """Atomically mark state as consumed and return (account_id, user_id)."""
         ...
+
     async def cleanup_expired(self) -> int:
-        """Delete entries that are either expired (never used) or consumed
-        more than 24h ago (audit window passed). Returns count deleted.
-        """
+        """Delete expired or stale consumed entries (flush, no commit)."""
         ...
 
 
 class IAccountProjection(Protocol):
     async def get_account_name(self, account_id: int) -> Optional[str]: ...
+    async def get_projection(self, account_id: int) -> Optional[tuple[int, str]]: ...
     async def upsert(self, account_id: int, user_id: int, account_name: str) -> None: ...
 
 
@@ -72,3 +66,44 @@ class ITransactionImporter(Protocol):
         items: list[Any],
         skip_duplicates: bool = True,
     ) -> Any: ...
+
+
+class IOutboxRepository(ABC):
+    @abstractmethod
+    async def add(self, event: BaseEvent, aggregate_type: str, aggregate_id: str) -> None: ...
+
+    @abstractmethod
+    async def fetch_pending(self, batch_size: int = 10) -> list[OutboxEntry]: ...
+
+    @abstractmethod
+    async def mark_published(self, event_id: str) -> None: ...
+
+    @abstractmethod
+    async def mark_failed(self, event_id: str, next_attempt_at: datetime) -> None: ...
+
+
+class IUnitOfWork(ABC):
+    connections: IBankConnectionRepository
+    pending_auth: IPendingAuthorizationRepository
+    accounts: IAccountProjection
+    outbox: IOutboxRepository
+
+    @abstractmethod
+    async def __aenter__(self) -> Self: ...
+
+    @abstractmethod
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None: ...
+
+    @abstractmethod
+    async def commit(self) -> None: ...
+
+    @abstractmethod
+    async def rollback(self) -> None: ...
+
+
+class IAccountPort(ABC):
+    @abstractmethod
+    async def get_owner_user_id(self, account_id: int) -> int: ...
+
+    @abstractmethod
+    async def get_account_info(self, account_id: int) -> tuple[int, str]: ...

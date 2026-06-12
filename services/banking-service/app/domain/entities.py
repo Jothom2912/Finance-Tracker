@@ -39,3 +39,17 @@ class SyncResult:
     duplicates_skipped: int
     errors: int
     parse_skipped: int = 0
+
+
+@dataclass
+class OutboxEntry:
+    id: str
+    aggregate_type: str
+    aggregate_id: str
+    event_type: str
+    payload_json: str
+    correlation_id: str | None
+    status: str
+    attempts: int
+    next_attempt_at: datetime
+    created_at: datetime

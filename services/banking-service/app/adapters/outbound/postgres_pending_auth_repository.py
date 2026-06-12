@@ -29,7 +29,7 @@ class PostgresPendingAuthRepository:
             expires_at=expires_at,
         )
         self._session.add(row)
-        await self._session.commit()
+        await self._session.flush()
 
     async def consume(self, state: str) -> Optional[tuple[int, int]]:
         result = await self._session.execute(
@@ -46,7 +46,7 @@ class PostgresPendingAuthRepository:
         row = result.fetchone()
         if row is None:
             return None
-        await self._session.commit()
+        await self._session.flush()
         return (row.account_id, row.user_id)
 
     async def cleanup_expired(self) -> int:
@@ -58,5 +58,5 @@ class PostgresPendingAuthRepository:
                 | (PendingAuthorizationModel.consumed_at < audit_cutoff)
             )
         )
-        await self._session.commit()
+        await self._session.flush()
         return result.rowcount

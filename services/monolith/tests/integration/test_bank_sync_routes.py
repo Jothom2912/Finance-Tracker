@@ -1,19 +1,6 @@
-"""Route-level tests for the banking router.
+"""Route-level tests for the legacy monolith banking router (skipped after cutover).
 
-Focus is the exception-to-HTTP-status mapping: each known typed
-exception — domain (``BankConnectionNotFound`` etc.) or adapter
-(``BankConfigError``, ``BankApiUnavailable``, ``BankAuthorizationError``)
-— must map to its intended status, and *any* unclassified error must
-propagate to FastAPI's default 500 handler rather than be laundered
-into a misleading 404 or 502.  The positive-control tests on
-``RuntimeError`` are deliberately present so a future reviewer who
-adds a catch-all ``except Exception`` will break this test and think
-twice.
-
-Coverage spans three routes:
-  POST /api/v1/bank/connect             - start_bank_connection
-  GET  /api/v1/bank/callback            - bank_callback
-  POST /api/v1/bank/connections/{id}/sync - sync_transactions
+Banking routes were extracted to banking-service (port 8009).
 """
 
 from __future__ import annotations
@@ -21,6 +8,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Banking extracted to banking-service — monolith no longer mounts /api/v1/bank/*",
+)
 from backend.banking.adapters.outbound.enable_banking_client import (
     BankApiUnavailable,
     BankAuthorizationError,
