@@ -25,6 +25,7 @@ from app.domain.exceptions import (
 
 logger = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     redis = aioredis.from_url("redis://redis:6379")
@@ -35,6 +36,7 @@ async def lifespan(app: FastAPI):
     )
 
     yield
+
 
 app = FastAPI(
     title="Transaction Service",
