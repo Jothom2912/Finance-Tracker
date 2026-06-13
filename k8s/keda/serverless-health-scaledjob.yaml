@@ -1,0 +1,39 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: serverless-health-scaledjob
+  namespace: finance-tracker
+spec:
+  pollingInterval: 5
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  maxReplicaCount: 5
+  jobTargetRef:
+    backoffLimit: 1
+    template:
+      spec:
+        restartPolicy: Never
+        containers:
+          - name: serverless-health-job
+            image: finance-tracker/serverless-health-job:local
+            imagePullPolicy: Never
+            command: ["python", "-m", "app.main", "run"]
+            envFrom:
+              - secretRef:
+                  name: finance-tracker-secrets
+            env:
+              - name: QUEUE_NAME
+                value: serverless.health.requests
+              - name: SERVICE_HEALTH_URLS
+                value: "http://user-service:8001/health,http://transaction-service:8002/health,http://account-service:8003/health,http://categorization-service:8005/health,http://budget-service:8003/health,http://goal-service:8006/health,http://monolith:8000/health"
+              - name: REQUEST_TIMEOUT_SECONDS
+                value: "5"
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: serverless.health.requests
+        mode: QueueLength
+        value: "1"
+      authenticationRef:
+        name: rabbitmq-trigger-auth

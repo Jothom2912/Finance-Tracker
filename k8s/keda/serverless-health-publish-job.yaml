@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: serverless-health-publish
+  namespace: finance-tracker
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: serverless-health-publish
+          image: finance-tracker/serverless-health-job:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.main", "publish", "5"]
+          envFrom:
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: QUEUE_NAME
+              value: serverless.health.requests

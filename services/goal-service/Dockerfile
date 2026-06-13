@@ -8,6 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    PYTHONPATH="/app" \
     PATH="/app/.venv/bin:$PATH"
 
 COPY services/shared/contracts /shared/contracts
@@ -23,4 +24,4 @@ USER appuser
 
 EXPOSE 8006
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8006"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8006"]

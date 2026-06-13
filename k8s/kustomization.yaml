@@ -1,0 +1,61 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Base namespace, config and secrets
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+
+  # Infrastructure
+  - infra/mysql.yaml
+  - infra/rabbitmq.yaml
+  - infra/redis.yaml
+  - infra/postgres-user.yaml
+  - infra/postgres-transactions.yaml
+  - infra/postgres-account.yaml
+  - infra/postgres-categorization.yaml
+  - infra/postgres-budget.yaml
+  - infra/postgres-goals.yaml
+  - infra/ollama.yaml
+  - infra/ollama-model-pull-job.yaml
+
+  # Persistent volumes for app data
+  - apps/ai-chromadb-pvc.yaml
+
+  # Backend/API applications
+  - apps/user-service.yaml
+  - apps/transaction-service.yaml
+  - apps/account-service.yaml
+  - apps/categorization-service.yaml
+  - apps/budget-service.yaml
+  - apps/goal-service.yaml
+  - apps/ai-service.yaml
+  - apps/monolith.yaml
+
+  # Frontend
+  - apps/frontend.yaml
+
+  # Long-running workers / consumers
+  - workers/user-outbox-worker.yaml
+  - workers/transaction-outbox-worker.yaml
+  - workers/account-outbox-publisher.yaml
+  - workers/budget-outbox-worker.yaml
+  - workers/categorization-outbox-worker.yaml
+  - workers/goal-outbox-worker.yaml
+  - workers/account-service-consumer.yaml
+  - workers/account-sync-consumer.yaml
+  - workers/user-sync-consumer.yaml
+  - workers/category-sync-consumer.yaml
+  - workers/transaction-sync-consumer.yaml
+  - workers/categorization-category-sync.yaml
+  - workers/categorization-transaction-consumer.yaml
+  - workers/transaction-categorized-consumer.yaml
+  - workers/goal-budget-consumer.yaml
+
+  # KEDA serverless setup.
+  # Note: KEDA itself must be installed first with Helm before this can be applied.
+  - keda/keda-rabbitmq-secret.yaml
+  - keda/serverless-health-trigger-auth.yaml
+  - keda/serverless-health-scaledjob.yaml
+  - keda/serverless-health-init-job.yaml
