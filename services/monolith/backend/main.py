@@ -75,7 +75,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 # User/Goal REST routes removed — user-service (8001) and goal-service (8006) own these
 from backend.analytics.adapters.inbound.graphql_api import create_graphql_router
 from backend.analytics.adapters.inbound.rest_api import dashboard_router
-from backend.banking.presentation.rest_api import router as bank_router
+
+# Banking routes owned by banking-service (port 8009) after extraction cutover.
 
 
 @asynccontextmanager
@@ -96,15 +97,6 @@ async def lifespan(app: FastAPI):
         from backend.database.mysql import create_db_tables
 
         create_db_tables()
-
-    if not os.environ.get("PYTEST_CURRENT_TEST"):
-        from backend.banking.adapters.outbound.enable_banking_client import BankConfigError
-        from backend.banking.presentation.rest_api import validate_banking_config
-
-        try:
-            validate_banking_config()
-        except BankConfigError as exc:
-            logger.error("Banking misconfigured, bank routes will fail: %s", exc)
 
     yield
     logger.info("Stopping FastAPI application...")
@@ -145,7 +137,6 @@ v1 = APIRouter(prefix="/api/v1")
 # transaction-service (port 8002).  The monolith reads from the
 # MySQL projection (see TransactionSyncConsumer) but never writes.
 
-v1.include_router(bank_router)
 v1.include_router(dashboard_router)
 v1.include_router(create_graphql_router(), prefix="/graphql")
 

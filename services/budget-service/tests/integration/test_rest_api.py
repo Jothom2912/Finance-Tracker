@@ -11,7 +11,6 @@ Kræver Docker kørende.
 from __future__ import annotations
 
 import os
-from datetime import date
 from unittest.mock import AsyncMock
 
 import pytest
@@ -20,7 +19,6 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 from testcontainers.postgres import PostgresContainer
 
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
@@ -36,6 +34,7 @@ def _make_token(user_id: int = 1) -> str:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def postgres():
@@ -67,6 +66,7 @@ def async_db_url(postgres, _migrated_db):
 def clean_db(postgres, _migrated_db):
     """Tøm budgets-tabellen før hver test via synkron psycopg2 (undgår event-loop konflikter)."""
     import psycopg2
+
     # get_connection_url() kan returnere postgresql+psycopg2://... — strip dialekt-prefix
     raw_url = postgres.get_connection_url().replace("postgresql+psycopg2://", "postgresql://")
     conn = psycopg2.connect(raw_url)
@@ -121,6 +121,7 @@ def auth_headers():
 # Tests: Autentificering
 # ---------------------------------------------------------------------------
 
+
 class TestAuthentication:
     def test_get_budgets_without_token_returns_401(self, client) -> None:
         response = client.get("/api/v1/budgets/", params={"account_id": 1})
@@ -143,6 +144,7 @@ class TestAuthentication:
 # Tests: Liste budgets
 # ---------------------------------------------------------------------------
 
+
 class TestListBudgets:
     def test_empty_list_for_new_account(self, client, auth_headers) -> None:
         response = client.get("/api/v1/budgets/", params={"account_id": 42}, headers=auth_headers)
@@ -151,9 +153,21 @@ class TestListBudgets:
 
     def test_returns_only_budgets_for_given_account(self, client, auth_headers) -> None:
         # Opret 2 budgets til account 1, 1 til account 2
-        client.post("/api/v1/budgets/", json={"amount": 100, "month": 1, "year": 2026, "account_id": 1, "category_id": 1}, headers=auth_headers)
-        client.post("/api/v1/budgets/", json={"amount": 200, "month": 2, "year": 2026, "account_id": 1, "category_id": 1}, headers=auth_headers)
-        client.post("/api/v1/budgets/", json={"amount": 300, "month": 3, "year": 2026, "account_id": 2, "category_id": 1}, headers=auth_headers)
+        client.post(
+            "/api/v1/budgets/",
+            json={"amount": 100, "month": 1, "year": 2026, "account_id": 1, "category_id": 1},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/v1/budgets/",
+            json={"amount": 200, "month": 2, "year": 2026, "account_id": 1, "category_id": 1},
+            headers=auth_headers,
+        )
+        client.post(
+            "/api/v1/budgets/",
+            json={"amount": 300, "month": 3, "year": 2026, "account_id": 2, "category_id": 1},
+            headers=auth_headers,
+        )
 
         response = client.get("/api/v1/budgets/", params={"account_id": 1}, headers=auth_headers)
         assert response.status_code == 200
@@ -165,6 +179,7 @@ class TestListBudgets:
 # ---------------------------------------------------------------------------
 # Tests: Opret budget
 # ---------------------------------------------------------------------------
+
 
 class TestCreateBudget:
     def test_create_returns_201_with_id(self, client, auth_headers) -> None:
@@ -219,6 +234,7 @@ class TestCreateBudget:
 # Tests: Hent specifikt budget
 # ---------------------------------------------------------------------------
 
+
 class TestGetBudget:
     def test_get_existing_budget_returns_200(self, client, auth_headers) -> None:
         created = client.post(
@@ -239,6 +255,7 @@ class TestGetBudget:
 # ---------------------------------------------------------------------------
 # Tests: Opdater budget
 # ---------------------------------------------------------------------------
+
 
 class TestUpdateBudget:
     def test_update_amount_returns_200(self, client, auth_headers) -> None:
@@ -268,6 +285,7 @@ class TestUpdateBudget:
 # ---------------------------------------------------------------------------
 # Tests: Slet budget
 # ---------------------------------------------------------------------------
+
 
 class TestDeleteBudget:
     def test_delete_existing_budget_returns_204(self, client, auth_headers) -> None:

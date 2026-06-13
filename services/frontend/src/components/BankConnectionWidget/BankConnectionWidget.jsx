@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Check, X } from 'lucide-react';
-import { fetchConnections, syncConnection } from '../../api/bank';
+import { Check, X, Plus } from 'lucide-react';
+import {
+  fetchConnections,
+  syncConnection,
+  fetchAvailableBanks,
+  connectBank,
+} from '../../api/bank';
 import './BankConnectionWidget.css';
 
 function formatTimeAgo(isoString) {
@@ -20,6 +25,11 @@ function BankConnectionWidget({ onSyncComplete }) {
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState(null);
   const [syncResult, setSyncResult] = useState(null);
+  const [showBankPicker, setShowBankPicker] = useState(false);
+  const [availableBanks, setAvailableBanks] = useState([]);
+  const [banksLoading, setBanksLoading] = useState(false);
+  const [connectingBank, setConnectingBank] = useState(null);
+  const [connectError, setConnectError] = useState(null);
 
   const loadConnections = useCallback(async () => {
     try {
@@ -41,6 +51,34 @@ function BankConnectionWidget({ onSyncComplete }) {
     const timer = setTimeout(() => setSyncResult(null), 8000);
     return () => clearTimeout(timer);
   }, [syncResult]);
+
+  async function handleOpenBankPicker() {
+    setConnectError(null);
+    setShowBankPicker(true);
+    if (availableBanks.length > 0) return;
+    setBanksLoading(true);
+    try {
+      const banks = await fetchAvailableBanks('DK');
+      setAvailableBanks(banks);
+    } catch (err) {
+      setConnectError(err.message || 'Kunne ikke hente banker');
+    } finally {
+      setBanksLoading(false);
+    }
+  }
+
+  async function handleConnect(bankName) {
+    if (connectingBank) return;
+    setConnectingBank(bankName);
+    setConnectError(null);
+    try {
+      const { authorization_url } = await connectBank(bankName, 'DK');
+      window.location.href = authorization_url;
+    } catch (err) {
+      setConnectError(err.message || 'Kunne ikke starte bankforbindelse');
+      setConnectingBank(null);
+    }
+  }
 
   async function handleSync(connectionId) {
     if (syncingId) return;
@@ -89,7 +127,55 @@ function BankConnectionWidget({ onSyncComplete }) {
     <div className="bank-widget">
       <div className="bank-widget-header">
         <h3>Bankforbindelser</h3>
+        <button
+          type="button"
+          className="bank-connect-btn"
+          onClick={handleOpenBankPicker}
+          disabled={connectingBank !== null}
+        >
+          <Plus aria-hidden="true" size={14} />
+          Tilslut bank
+        </button>
       </div>
+
+      {showBankPicker && (
+        <div className="bank-picker">
+          <div className="bank-picker-header">
+            <span>Vælg bank</span>
+            <button
+              type="button"
+              className="bank-picker-close"
+              onClick={() => setShowBankPicker(false)}
+              aria-label="Luk"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          {banksLoading ? (
+            <div className="bank-empty-state">
+              <span className="bank-spinner" />
+            </div>
+          ) : (
+            <ul className="bank-picker-list">
+              {availableBanks.map((bank) => (
+                <li key={bank.name || bank.bank_name}>
+                  <button
+                    type="button"
+                    className="bank-picker-item"
+                    onClick={() => handleConnect(bank.name || bank.bank_name)}
+                    disabled={connectingBank !== null}
+                  >
+                    {bank.name || bank.bank_name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {connectError && (
+            <p className="bank-connect-error">{connectError}</p>
+          )}
+        </div>
+      )}
 
       {activeConnections.length === 0 ? (
         <div className="bank-empty-state">

@@ -37,7 +37,6 @@ MAX_BACKOFF_S = 300
 
 
 class OutboxPublisherWorker:
-
     def __init__(
         self,
         publisher: RabbitMQPublisher,
@@ -80,7 +79,7 @@ class OutboxPublisherWorker:
             await self._publisher.publish_raw(message, routing_key=entry.event_type)
             await repo.mark_published(entry.id)
         except Exception:
-            backoff = min(2 ** entry.attempts * 5, MAX_BACKOFF_S)
+            backoff = min(2**entry.attempts * 5, MAX_BACKOFF_S)
             next_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=backoff)
             await repo.mark_failed(entry.id, next_at)
             logger.warning(

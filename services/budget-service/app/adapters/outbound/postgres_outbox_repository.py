@@ -28,11 +28,11 @@ class OutboxEntry:
 
 def _utcnow_naive() -> datetime:
     from datetime import timezone
+
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class PostgresOutboxRepository(IOutboxRepository):
-
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 

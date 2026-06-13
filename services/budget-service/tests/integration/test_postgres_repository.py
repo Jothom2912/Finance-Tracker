@@ -19,7 +19,6 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 from testcontainers.postgres import PostgresContainer
 
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
@@ -28,6 +27,7 @@ os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def postgres():
@@ -65,12 +65,14 @@ async def session(postgres, _migrated_db):
 @pytest.fixture()
 def repo(session):
     from app.adapters.outbound.postgres_budget_repository import PostgresBudgetRepository
+
     return PostgresBudgetRepository(session)
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestCreateBudget:
     async def test_returns_budget_with_id(self, repo) -> None:
@@ -117,8 +119,12 @@ class TestListBudgets:
 
         # Opret 2 budgets til account 10, 1 til account 11
         for month in [1, 2]:
-            await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, month, 1), account_id=10, category_id=1, user_id=1))
-        await repo.create(Budget(id=None, amount=200.0, budget_date=date(2026, 3, 1), account_id=11, category_id=1, user_id=1))
+            await repo.create(
+                Budget(id=None, amount=100.0, budget_date=date(2026, month, 1), account_id=10, category_id=1, user_id=1)
+            )
+        await repo.create(
+            Budget(id=None, amount=200.0, budget_date=date(2026, 3, 1), account_id=11, category_id=1, user_id=1)
+        )
 
         result = await repo.get_all(account_id=10, user_id=1)
         assert len(result) >= 2
@@ -133,7 +139,9 @@ class TestUpdateBudget:
     async def test_update_amount(self, repo) -> None:
         from app.domain.entities import Budget
 
-        created = await repo.create(Budget(id=None, amount=300.0, budget_date=date(2026, 8, 1), account_id=5, category_id=1, user_id=1))
+        created = await repo.create(
+            Budget(id=None, amount=300.0, budget_date=date(2026, 8, 1), account_id=5, category_id=1, user_id=1)
+        )
         created.amount = 999.0
         updated = await repo.update(created)
 
@@ -143,7 +151,9 @@ class TestUpdateBudget:
     async def test_update_category_id(self, repo) -> None:
         from app.domain.entities import Budget
 
-        created = await repo.create(Budget(id=None, amount=400.0, budget_date=date(2026, 9, 1), account_id=6, category_id=1, user_id=1))
+        created = await repo.create(
+            Budget(id=None, amount=400.0, budget_date=date(2026, 9, 1), account_id=6, category_id=1, user_id=1)
+        )
         created.category_id = 5
         updated = await repo.update(created)
 
@@ -154,7 +164,9 @@ class TestDeleteBudget:
     async def test_delete_returns_true(self, repo) -> None:
         from app.domain.entities import Budget
 
-        created = await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, 10, 1), account_id=7, category_id=1, user_id=1))
+        created = await repo.create(
+            Budget(id=None, amount=100.0, budget_date=date(2026, 10, 1), account_id=7, category_id=1, user_id=1)
+        )
         result = await repo.delete(created.id)
 
         assert result is True
@@ -162,7 +174,9 @@ class TestDeleteBudget:
     async def test_deleted_budget_not_found(self, repo) -> None:
         from app.domain.entities import Budget
 
-        created = await repo.create(Budget(id=None, amount=100.0, budget_date=date(2026, 11, 1), account_id=8, category_id=1, user_id=1))
+        created = await repo.create(
+            Budget(id=None, amount=100.0, budget_date=date(2026, 11, 1), account_id=8, category_id=1, user_id=1)
+        )
         await repo.delete(created.id)
 
         fetched = await repo.get_by_id(created.id)

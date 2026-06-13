@@ -47,4 +47,4 @@ def account_owner(
     account = repo.get_by_id(account_id)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
-    return {"user_id": account.user_id}
+    return {"user_id": account.user_id, "account_name": account.name}

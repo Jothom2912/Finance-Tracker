@@ -604,6 +604,90 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  postgres-banking:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: banking_service
+      POSTGRES_PASSWORD: banking_service_pass
+      POSTGRES_DB: banking_db
+    ports:
+      - "5439:5432"
+    volumes:
+      - postgres_banking_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U banking_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  banking-service:
+    build:
+      context: .
+      dockerfile: services/banking-service/Dockerfile
+    ports:
+      - "8009:8009"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+      ENVIRONMENT: development
+      TRANSACTION_SERVICE_URL: http://transaction-service:8002
+      ACCOUNT_SERVICE_URL: http://account-service:8003
+      ENABLE_BANKING_APP_ID: 4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7
+      ENABLE_BANKING_KEY_PATH: /app/enablebanking-sandbox.pem
+      ENABLE_BANKING_REDIRECT_URI: http://localhost:8009/api/v1/bank/callback
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    volumes:
+      - ./enablebanking-sandbox.pem:/app/enablebanking-sandbox.pem:ro
+    depends_on:
+      postgres-banking:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      transaction-service:
+        condition: service_started
+      account-service:
+        condition: service_started
+
+  banking-outbox-worker:
+    build:
+      context: .
+      dockerfile: services/banking-service/Dockerfile
+    command: ["python", "-m", "app.workers.outbox_publisher"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      banking-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  banking-account-projection-consumer:
+    build:
+      context: .
+      dockerfile: services/banking-service/Dockerfile
+    command: ["python", "-m", "app.consumers.account_projection_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      banking-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      account-outbox-publisher:
+        condition: service_started
+
   # analytics-service:
   #   build: ./services/analytics-service
   #   ports:
@@ -631,3 +715,4 @@ volumes:
   rabbitmq_data:
   ollama_models:
   ai_chromadb_data:
+  postgres_banking_data:

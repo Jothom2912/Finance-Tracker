@@ -59,7 +59,7 @@ See `docs/STRUCTURE.md` for the full structure map.
 ### Active domains (still in monolith)
 
 - `category` — three-level hierarchy (Category / SubCategory / Merchant). Category write ownership lives in `transaction-service`; this domain reads the projected MySQL copy. The categorization pipeline now runs in `categorization-service` (port 8005); the monolith retains a local rule engine for bank sync pre-categorization (results are overwritten by the async pipeline)
-- `banking` — PSD2 bank integration via Enable Banking (OAuth flow, transaction sync). Bank-synced transactions are forwarded to `transaction-service` via HTTP (`POST /api/v1/transactions/bulk`); deduplication and persistence happen there, and the MySQL projection is populated via events
+- `banking` (legacy code) — PSD2 integration extracted to `banking-service` (port 8009). Monolith no longer mounts `/api/v1/bank/*`; frontend calls banking-service directly
 - `budget` — legacy per-category budget CRUD + summary analytics
 - `monthly_budget` — aggregate-based monthly budgets with budget lines, summary, and copy
 - `analytics` — dashboard overview, expenses-by-month, budget summary, GraphQL read gateway. Reads the MySQL transaction projection populated by `TransactionSyncConsumer`
@@ -88,7 +88,7 @@ All consumers run independently with retry (3 attempts), DLQ, and DB-backed idem
 
 | Path | Domain | Protocol |
 |------|--------|----------|
-| `/api/v1/bank/*` | Banking (PSD2) | REST |
+| `/api/v1/bank/*` | Banking (PSD2) | REST — **moved to banking-service :8009** |
 | `/api/v1/budgets/*` | Budget (legacy) | REST |
 | `/api/v1/monthly-budgets/*` | Monthly Budget | REST |
 | `/api/v1/dashboard/*` | Analytics | REST |
@@ -102,14 +102,7 @@ Transactions, planned-transactions and categories are owned by `transaction-serv
 
 ### Banking endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/bank/available-banks?country=DK` | List available banks |
-| `POST` | `/api/v1/bank/connect` | Start OAuth authorization flow |
-| `GET` | `/api/v1/bank/callback` | OAuth callback (bank redirects here) |
-| `GET` | `/api/v1/bank/connections?account_id=1` | List connected bank accounts |
-| `POST` | `/api/v1/bank/connections/{id}/sync` | Sync transactions from bank |
-| `DELETE` | `/api/v1/bank/connections/{id}` | Disconnect a bank |
+Banking REST lives on **banking-service** (`http://localhost:8009/api/v1/bank/*`). See `services/banking-service` for OAuth connect, callback, sync, and disconnect.
 
 ### Categorization pipeline
 

@@ -11,7 +11,6 @@ from app.models import BudgetModel
 
 
 class PostgresBudgetRepository(IBudgetRepository):
-
     def __init__(self, db: AsyncSession):
         self._db = db
 

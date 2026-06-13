@@ -16,7 +16,11 @@ class TransactionPort(ITransactionPort):
     """HTTP adapter til transaction-service."""
 
     async def get_expenses_by_category(
-        self, account_id: int, start_date: date, end_date: date, user_id: int = 0,
+        self,
+        account_id: int,
+        start_date: date,
+        end_date: date,
+        user_id: int = 0,
     ) -> dict[int, float]:
         url = (
             f"{settings.TRANSACTION_SERVICE_URL}/api/v1/transactions"

@@ -7,7 +7,6 @@ from app.application.dto import BudgetCreateDTO, BudgetResponseDTO, BudgetUpdate
 
 
 class IBudgetService(ABC):
-
     @abstractmethod
     async def get_budget(self, budget_id: int, user_id: int) -> Optional[BudgetResponseDTO]: ...
 
@@ -18,7 +17,9 @@ class IBudgetService(ABC):
     async def create_budget(self, user_id: int, dto: BudgetCreateDTO) -> BudgetResponseDTO: ...
 
     @abstractmethod
-    async def update_budget(self, budget_id: int, user_id: int, dto: BudgetUpdateDTO) -> Optional[BudgetResponseDTO]: ...
+    async def update_budget(
+        self, budget_id: int, user_id: int, dto: BudgetUpdateDTO
+    ) -> Optional[BudgetResponseDTO]: ...
 
     @abstractmethod
     async def delete_budget(self, budget_id: int, user_id: int) -> bool: ...

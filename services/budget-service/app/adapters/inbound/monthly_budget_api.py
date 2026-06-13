@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi_cache.decorator import cache 
+from fastapi_cache.decorator import cache
+
 from app.application.dto import (
     CopyBudgetRequest,
     MonthlyBudgetCreate,
@@ -13,7 +14,6 @@ from app.application.dto import (
 )
 from app.application.monthly_budget_service import MonthlyBudgetService
 from app.auth import get_current_user_id
-from app.database import get_db
 from app.dependencies import get_monthly_budget_service
 from app.domain.exceptions import (
     AccountRequiredForMonthlyBudget,
