@@ -13,6 +13,7 @@ resources:
   - infra/postgres-user.yaml
   - infra/postgres-transactions.yaml
   - infra/postgres-account.yaml
+  - infra/postgres-banking.yaml
   - infra/postgres-categorization.yaml
   - infra/postgres-budget.yaml
   - infra/postgres-goals.yaml
@@ -26,6 +27,7 @@ resources:
   - apps/user-service.yaml
   - apps/transaction-service.yaml
   - apps/account-service.yaml
+  - apps/banking-service.yaml
   - apps/categorization-service.yaml
   - apps/budget-service.yaml
   - apps/goal-service.yaml
@@ -41,11 +43,13 @@ resources:
   - workers/budget-outbox-worker.yaml
   - workers/categorization-outbox-worker.yaml
   - workers/goal-outbox-worker.yaml
+  - workers/banking-outbox-worker.yaml
   - workers/account-service-consumer.yaml
   - workers/categorization-category-sync.yaml
   - workers/categorization-transaction-consumer.yaml
   - workers/transaction-categorized-consumer.yaml
   - workers/goal-budget-consumer.yaml
+  - workers/banking-account-projection-consumer.yaml
 
   # KEDA serverless setup.
   # Note: KEDA itself must be installed first with Helm before this can be applied.
