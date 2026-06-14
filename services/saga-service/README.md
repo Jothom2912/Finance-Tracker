@@ -36,6 +36,10 @@ curl http://localhost:8011/health
 Poll saga status (after starting a bank sync from banking-service):
 
 ```bash
+# Via gateway (browser / frontend — requires JWT)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8010/api/v1/sagas/{saga_id}
+
+# Direct to saga-service (internal / debugging only)
 curl http://localhost:8011/api/v1/sagas/{saga_id}
 ```
 

@@ -1,7 +1,7 @@
 import apiClient from '../utils/apiClient';
-import { SAGA_SERVICE_URL } from '../config/serviceUrls';
+import { GATEWAY_SERVICE_URL } from '../config/serviceUrls';
 
-const BASE = `${SAGA_SERVICE_URL}/sagas`;
+const BASE = `${GATEWAY_SERVICE_URL}/sagas`;
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'timed_out']);
 

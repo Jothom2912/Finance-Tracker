@@ -650,6 +650,7 @@ services:
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
       ACCOUNT_SERVICE_URL: http://account-service:8003
       BUDGET_SERVICE_URL: http://budget-service:8003
+      SAGA_SERVICE_URL: http://saga-service:8011
       SECRET_KEY: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
@@ -659,6 +660,8 @@ services:
       account-service:
         condition: service_started
       budget-service:
+        condition: service_started
+      saga-service:
         condition: service_started
 
   # analytics-service:

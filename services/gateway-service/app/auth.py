@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 import httpx
-from fastapi import Header
+from fastapi import Header, HTTPException, status
 from jose import JWTError, jwt
 
 from app.config import (
@@ -29,6 +29,24 @@ def _decode_token(token: str) -> Optional[int]:
         return user_id
     except (JWTError, ValueError, TypeError):
         return None
+
+
+def get_user_id_from_headers(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+) -> int:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    token = authorization[len("Bearer ") :]
+    user_id = _decode_token(token)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+    return user_id
 
 
 def get_account_id_from_headers(
