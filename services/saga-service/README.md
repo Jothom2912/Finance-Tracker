@@ -116,4 +116,4 @@ See `example.env` for all options.
 make test
 ```
 
-Unit tests cover the orchestrator (advance, compensate, timeouts) and saga start event parsing.
+Unit tests cover the orchestrator (advance, compensate, timeouts), bank sync compensation paths (import failure, rollback after mark_sync failure), and saga start event parsing.
