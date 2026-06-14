@@ -51,15 +51,6 @@ from backend.category.application.service import CategoryService
 from backend.category.domain.taxonomy import SEED_MERCHANT_MAPPINGS
 from backend.config import ANALYTICS_DB, DatabaseType
 from backend.database.mysql import get_db
-from backend.goal.adapters.outbound.account_adapter import (
-    MySQLAccountAdapter as GoalAccountAdapter,
-)
-from backend.goal.adapters.outbound.mysql_goal_repository import (
-    MySQLGoalRepository as HexMySQLGoalRepository,
-)
-
-# Hexagonal Goal domain
-from backend.goal.application.service import GoalService as HexGoalService
 from backend.user.adapters.outbound.account_adapter import (
     MySQLAccountAdapter as UserAccountAdapter,
 )
@@ -135,16 +126,6 @@ def get_category_service(
     """Create CategoryService with hexagonal architecture repository."""
     return CategoryService(
         category_repo=HexMySQLCategoryRepository(db),
-    )
-
-
-def get_goal_service(
-    db: Session = Depends(get_db),
-) -> HexGoalService:
-    """Create hexagonal GoalService with proper repositories."""
-    return HexGoalService(
-        goal_repository=HexMySQLGoalRepository(db),
-        account_port=GoalAccountAdapter(db),
     )
 
 

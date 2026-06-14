@@ -3,7 +3,7 @@ GraphQL Read Gateway adapter.
 
 This adapter functions as a cross-domain read gateway, aggregating
 read-only data from multiple bounded contexts (analytics, transactions,
-categories, goals) through a single GraphQL query interface.
+categories) through a single GraphQL query interface.
 
 Architectural decision: This is a deliberate CQRS pattern where REST
 handles commands (write) and GraphQL handles queries (read) across
@@ -33,9 +33,7 @@ from backend.database.mysql import get_db
 from backend.dependencies import (
     get_analytics_service,
     get_category_service,
-    get_goal_service,
 )
-from backend.goal.application.service import GoalService
 from backend.models.mysql.account import Account as AccountModel
 from backend.shared.budget_period import budget_period, determine_budget_month
 
@@ -132,17 +130,6 @@ class CurrentMonthOverviewType:
     trend: Optional[TrendType] = None
 
 
-@strawberry.type(description="Goal progress read projection")
-class GoalProgressType:
-    id: int
-    name: Optional[str]
-    target_amount: float
-    current_amount: float
-    target_date: Optional[date]
-    status: Optional[str]
-    percent_complete: float
-
-
 @strawberry.type(description="Top spending category for a given period")
 class TopSpendingCategoryType:
     category_name: str
@@ -164,7 +151,6 @@ async def get_graphql_context(
     return {
         "analytics_service": get_analytics_service(db),
         "category_service": get_category_service(db),
-        "goal_service": get_goal_service(db),
         "account_id": account_id,
         "db": db,
         "auth_header": request.headers.get("authorization", ""),
@@ -363,28 +349,6 @@ class Query:
             average_monthly_expenses=result.average_monthly_expenses,
             trend=trend,
         )
-
-    @strawberry.field(description="Progress for all goals on the active account")
-    def goal_progress(self, info: Info) -> list[GoalProgressType]:
-        ctx = info.context
-        account_id = _require_account_id(ctx)
-        goal_service: GoalService = ctx["goal_service"]
-
-        goals = goal_service.list_goals(account_id=account_id)
-        return [
-            GoalProgressType(
-                id=g.idGoal,
-                name=g.name,
-                target_amount=g.target_amount,
-                current_amount=g.current_amount,
-                target_date=g.target_date,
-                status=g.status,
-                percent_complete=(
-                    round((g.current_amount / g.target_amount) * 100, 1) if g.target_amount > 0 else 100.0
-                ),
-            )
-            for g in goals
-        ]
 
     @strawberry.field(description="Top spending categories for a month")
     def top_spending_categories(
