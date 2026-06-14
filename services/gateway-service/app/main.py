@@ -1,7 +1,7 @@
 import logging
 
 import uvicorn
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.inbound.graphql_api import create_graphql_router
@@ -35,11 +35,8 @@ def health():
     return {"status": "ok", "service": "gateway-service"}
 
 
-v1 = APIRouter(prefix="/api/v1")
-v1.include_router(dashboard_router)
-v1.include_router(saga_router)
-v1.include_router(create_graphql_router(), prefix="/graphql")
-app.include_router(v1)
+app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(create_graphql_router(), prefix="/api/v1/graphql")
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8010, reload=ENVIRONMENT == "development")
