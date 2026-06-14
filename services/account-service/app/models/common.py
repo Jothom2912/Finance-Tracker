@@ -1,8 +1,10 @@
 # backend/models/common.py
 
 # from datetime import datetime  # noqa: F401
-from sqlalchemy import DECIMAL, Column, ForeignKey, Integer, String, Table
-# from sqlalchemy import (  # noqa: F401
+from sqlalchemy import Column, ForeignKey, Integer, Table
+
+from app.database import Base  # noqa: F401# from sqlalchemy import (  # noqa: F401
+
 #    DECIMAL,
 #    Column,
 #    Date,
@@ -16,7 +18,6 @@ from sqlalchemy import DECIMAL, Column, ForeignKey, Integer, String, Table
 # )
 # from sqlalchemy.orm import relationship  # noqa: F401
 # from sqlalchemy.sql import func  # noqa: F401
-from app.database import Base  # noqa: F401
 
 account_group_user_association = Table(
     "AccountGroups_has_User",

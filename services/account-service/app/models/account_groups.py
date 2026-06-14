@@ -1,18 +1,9 @@
 # app/models/account_groups.py
 
+from sqlalchemy import String
+
 from app.database import Base
-
-from .common import (
-    Column,
-    Integer,
-    String,
-    # IMPORTER NU ASSOCIATIONSTABELLEN DIREKTE FRA COMMON.PY:
-    # account_group_user_association,
-    # relationship,
-)
-
-# FJERN DEN GAMLE LINJE:
-# from .__init__ import ( ... )
+from app.models.common import Column, Integer
 
 
 class AccountGroups(Base):

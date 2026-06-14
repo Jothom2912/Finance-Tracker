@@ -1,9 +1,10 @@
 # backend/models/account.py
 
 # Importér fra det fælles .common modul for at få adgang til Base, Column, osv.
-from app.database import Base
+from sqlalchemy import DECIMAL, String
 
-from .common import DECIMAL, Column, Integer, String
+from app.database import Base
+from app.models.common import Column, Integer
 
 
 class Account(Base):
