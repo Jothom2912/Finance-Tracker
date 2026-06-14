@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from logging.config import fileConfig
+import os
 
 from alembic import context
 from app.config import settings
@@ -17,16 +18,18 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-existing_url = config.get_main_option("sqlalchemy.url")
-
-if existing_url and "placeholder" not in existing_url:
-    sync_url = existing_url
-else:
-    sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
-
-config.set_main_option("sqlalchemy.url", sync_url)
 
 target_metadata = Base.metadata
+
+database_url = (
+    os.getenv("DATABASE_URL_SYNC")
+    or os.getenv("SYNC_DATABASE_URL")
+    or os.getenv("DATABASE_URL")
+)
+
+if database_url:
+    database_url = database_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
+    config.set_main_option("sqlalchemy.url", database_url)
 
 
 def run_migrations_offline() -> None:
