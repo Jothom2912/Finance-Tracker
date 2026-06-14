@@ -67,5 +67,8 @@ resources:
   - keda/serverless-health-scaledjob.yaml
   - keda/serverless-health-init-job.yaml
 
+  # Autoscaling for long-running API services
+  - autoscaling/hpa.yaml
+
   # Monitoring and logging stack running inside Kubernetes
   - monitoring

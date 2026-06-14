@@ -22,6 +22,31 @@ kubectl rollout status deployment/keda-operator -n keda --timeout=180s
 kubectl rollout status deployment/keda-admission-webhooks -n keda --timeout=180s
 kubectl rollout status deployment/keda-operator-metrics-apiserver -n keda --timeout=180s
 
+
+Write-Host "Installing/upgrading metrics-server..." -ForegroundColor Cyan
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+Write-Host "Patching metrics-server for Docker Desktop..." -ForegroundColor Cyan
+
+$metricsArgs = kubectl get deployment metrics-server -n kube-system -o jsonpath="{.spec.template.spec.containers[0].args}" 2>$null
+
+if ($metricsArgs -notlike "*--kubelet-insecure-tls*") {
+  @'
+[
+  {
+    "op": "add",
+    "path": "/spec/template/spec/containers/0/args/-",
+    "value": "--kubelet-insecure-tls"
+  }
+]
+'@ | Set-Content metrics-server-patch.json
+
+  kubectl patch deployment metrics-server -n kube-system --type=json --patch-file metrics-server-patch.json
+  Remove-Item metrics-server-patch.json -ErrorAction SilentlyContinue
+}
+
+kubectl rollout status deployment/metrics-server -n kube-system --timeout=180s
+
 Write-Host "Building all local Docker images..." -ForegroundColor Cyan
 .\scripts\build-k8s-images.ps1
 
