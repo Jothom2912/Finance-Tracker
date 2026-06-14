@@ -30,7 +30,7 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}/services/shared/contracts:${{ github.workspace }}/services/shared:${{ github.workspace }}/services/${{ matrix.service }}:${{ github.workspace }}
       TESTING: "1"
-      JWT_SECRET: test-secret-key
+      JWT_SECRET: test-secret
       INTERNAL_API_KEY: test-api-key
 
     steps:
