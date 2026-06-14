@@ -10,3 +10,7 @@ kubectl get svc -n finance-tracker
 Write-Host "\nKEDA" -ForegroundColor Cyan
 kubectl get pods -n keda
 kubectl get scaledjob -n finance-tracker
+
+
+Write-Host "\nFinance Tracker monitoring" -ForegroundColor Cyan
+kubectl get deploy,ds,svc -n finance-tracker -l 'app in (prometheus,grafana,loki,promtail,cadvisor,blackbox-exporter)'
