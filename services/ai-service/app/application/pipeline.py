@@ -45,13 +45,7 @@ from app.domain.models import (
 
 logger = logging.getLogger(__name__)
 
-PipelineEvent: TypeAlias = (
-    IntentResolvedEvent
-    | DataReadyEvent
-    | ProseChunkEvent
-    | DoneEvent
-    | ErrorEvent
-)
+PipelineEvent: TypeAlias = IntentResolvedEvent | DataReadyEvent | ProseChunkEvent | DoneEvent | ErrorEvent
 
 
 async def run_pipeline(
@@ -115,7 +109,11 @@ async def run_pipeline(
         return
     except AnalyticsServiceUnavailableError as exc:
         logger.error("Service unavailable in pipeline: %s", exc)
-        yield ErrorEvent(data=ErrorData(code="service_unavailable", message="En bagvedliggende tjeneste er midlertidigt utilgængelig."))
+        yield ErrorEvent(
+            data=ErrorData(
+                code="service_unavailable", message="En bagvedliggende tjeneste er midlertidigt utilgængelig."
+            )
+        )
         return
     except AnalyticsError as exc:
         logger.error("Analytics error in pipeline: %s", exc)

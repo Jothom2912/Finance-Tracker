@@ -56,8 +56,11 @@ def _make_data_ready() -> DataReadyData:
         payload=TransactionListPayload(
             items=[
                 TransactionItem(
-                    id=1, date="2026-04-27", amount=288.0,
-                    category="Anden", description="TAXI 4X27",
+                    id=1,
+                    date="2026-04-27",
+                    amount=288.0,
+                    category="Anden",
+                    description="TAXI 4X27",
                 ),
             ],
             highlight_id=1,

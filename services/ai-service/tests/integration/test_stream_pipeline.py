@@ -85,10 +85,21 @@ async def test_largest_expense_end_to_end(
     mock_httpx.return_value = mock_client_instance
 
     # Responder streams prose
-    stream_chunks = _mock_ollama_stream_chunks([
-        "Din ", "største ", "udgift ", "i ", "april ", "var ",
-        "TAXI ", "4X27 ", "på ", "288,00 ", "kr.",
-    ])
+    stream_chunks = _mock_ollama_stream_chunks(
+        [
+            "Din ",
+            "største ",
+            "udgift ",
+            "i ",
+            "april ",
+            "var ",
+            "TAXI ",
+            "4X27 ",
+            "på ",
+            "288,00 ",
+            "kr.",
+        ]
+    )
     mock_responder_ollama.return_value.chat.return_value = iter(stream_chunks)
 
     events = []
