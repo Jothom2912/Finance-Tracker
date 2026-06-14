@@ -13,20 +13,8 @@ data:
   CATEGORIZATION_SERVICE_URL: "http://categorization-service:8005"
   CATEGORY_SERVICE_URL: "http://categorization-service:8005"
   BUDGET_SERVICE_URL: "http://budget-service:8003"
-<<<<<<< HEAD
-<<<<<<< HEAD
-  FRONTEND_URL: "http://localhost:5173"
-=======
-  GATEWAY_SERVICE_URL: "http://gateway-service:8010"
-  BANKING_SERVICE_URL: "http://banking-service:8009"
-  FRONTEND_URL: "http://localhost:3000"
->>>>>>> origin/master
-=======
   FRONTEND_URL: "http://localhost:5173"
   GATEWAY_SERVICE_URL: "http://gateway-service:8010"
-  BANKING_SERVICE_URL: "http://banking-service:8009"
-  FRONTEND_URL: "http://localhost:3000"
->>>>>>> d01fc4595e038fd694df3b484896c83be9662bc1
   REDIS_URL: "redis://redis:6379"
   OLLAMA_BASE_URL: "http://ollama:11434"
   LLM_MODEL: "qwen3:4b"
