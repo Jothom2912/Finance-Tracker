@@ -6,10 +6,12 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: gateway-service }
+    matchLabels:
+      app: gateway-service
   template:
     metadata:
-      labels: { app: gateway-service }
+      labels:
+        app: gateway-service
     spec:
       containers:
         - name: gateway-service
@@ -26,7 +28,7 @@ spec:
             httpGet:
               path: /health
               port: 8010
-            initialDelaySeconds: 15
+            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
@@ -41,7 +43,8 @@ metadata:
   name: gateway-service
   namespace: finance-tracker
 spec:
-  selector: { app: gateway-service }
+  selector:
+    app: gateway-service
   ports:
     - port: 8010
       targetPort: 8010
