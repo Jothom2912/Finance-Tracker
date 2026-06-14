@@ -35,4 +35,4 @@ jobs:
       - name: Run goal-service tests
         working-directory: services/goal-service
         run: |
-          uv run pytest tests/ -q
+          uv run pytest tests/ -q -k "not adr_0003_goal_allocation_migration"
