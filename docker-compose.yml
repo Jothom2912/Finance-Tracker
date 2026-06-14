@@ -1,21 +1,10 @@
 services:
   # === Infrastructure ===
 
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: finans_tracker
-    ports:
-      - "3307:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+  # mysql: REMOVED — no service reads from finans_tracker projections after
+  #   monolith + sync consumers were removed. Data in mysql_data volume is
+  #   preserved until the volume is explicitly deleted (docker volume rm).
+
   redis:
     image: redis:7
     container_name: redis
@@ -643,7 +632,7 @@ services:
   #       condition: service_healthy
 
 volumes:
-  mysql_data:
+  # mysql_data: preserved but unused — delete with: docker volume rm finance-tracker_mysql_data
   postgres_data:
   postgres_goals_data:
   postgres_transactions_data:
