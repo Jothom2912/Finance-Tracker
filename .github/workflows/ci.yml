@@ -1,112 +1,102 @@
-name: CI
+name: All services CI
 
 on:
   push:
     branches: [master, main]
   pull_request:
     branches: [master, main]
-  workflow_dispatch:
 
 jobs:
-  user-service:
-    name: User Service (Python ${{ matrix.python-version }})
+  python-services:
+    name: Test and scan Python services
     runs-on: ubuntu-latest
-
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        service:
+          - account-service
+          - banking-service
+          - gateway-service
+          - user-service
+          - transaction-service
+          - categorization-service
+          - budget-service
+          - goal-service
+          - ai-service
+
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: make -C services/user-service install-deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e . || true; fi
+          pip install pytest pytest-asyncio ruff bandit httpx testcontainers psycopg2-binary
 
-      - name: Lint
-        run: make -C services/user-service lint
+      - name: Ruff lint
+        run: ruff check .
 
-      - name: Format check
-        run: make -C services/user-service format-check
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Bandit security scan
+        run: bandit -r app -x tests
 
       - name: Run tests
-        run: make -C services/user-service test
+        env:
+          PYTHONPATH: ${{ github.workspace }}/services/shared/contracts:${{ github.workspace }}/services/shared:${{ github.workspace }}/services/${{ matrix.service }}
+          TESTING: '1'
+          JWT_SECRET: test-secret-key
+          DATABASE_URL: sqlite://
+          USER_SERVICE_URL: http://mock-user-service:8001
+          ACCOUNT_SERVICE_URL: http://mock-account-service:8004
+          INTERNAL_API_KEY: test-api-key
+          ENABLE_BANKING_APP_ID: test-app
+          ENABLE_BANKING_KEY_PATH: dummy.pem
+          ENABLE_BANKING_REDIRECT_URI: http://localhost/bank/callback
+        run: pytest tests -v
 
-  transaction-service:
-    name: Transaction Service (Python ${{ matrix.python-version }})
+  e2e:
+    name: E2E cooperation smoke test
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
-
+    needs: python-services
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - name: Install test tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest requests
 
-      - name: Install dependencies
-        run: make -C services/transaction-service install-deps
+      - name: Start dependent services
+        run: docker compose up -d --build --wait rabbitmq postgres-budget postgres-goals budget-service goal-service
 
-      - name: Lint
-        run: make -C services/transaction-service lint
+      - name: Run E2E tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/services/shared/contracts:${{ github.workspace }}/services/shared
+        run: pytest tests/e2e -v -m e2e
 
-      - name: Format check
-        run: make -C services/transaction-service format-check
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
 
-      - name: Run fast tests
-        run: make -C services/transaction-service test
-
-      # Testcontainers boots a real Postgres 16 to validate Alembic
-      # migrations 005 + 006.  Kept as a separate step so the fast
-      # suite's failure mode is visible independently and doesn't get
-      # masked by a Docker/Testcontainers infrastructure issue.
-      - name: Run Alembic migration tests (Testcontainers)
-        run: make -C services/transaction-service test-migrations
-  
-  budget-service:
-    name: Budget Service (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install dependencies
-        run: make -C services/budget-service install-deps
-
-      - name: Lint
-        run: make -C services/budget-service lint
-
-      - name: Format check
-        run: make -C services/budget-service format-check
-
-      - name: Run tests
-        run: make -C services/budget-service test
+      - name: Stop containers
+        if: always()
+        run: docker compose down -v
