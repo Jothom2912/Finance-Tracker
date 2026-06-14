@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-docker build -t finance-tracker/monolith:local -f services/monolith/Dockerfile .
 docker build -t finance-tracker/user-service:local -f services/user-service/Dockerfile .
 docker build -t finance-tracker/transaction-service:local -f services/transaction-service/Dockerfile .
 docker build -t finance-tracker/account-service:local -f services/account-service/Dockerfile .
@@ -9,6 +8,7 @@ docker build -t finance-tracker/categorization-service:local -f services/categor
 docker build -t finance-tracker/budget-service:local -f services/budget-service/Dockerfile .
 docker build -t finance-tracker/goal-service:local -f services/goal-service/Dockerfile .
 docker build -t finance-tracker/ai-service:local -f services/ai-service/Dockerfile .
+docker build -t finance-tracker/gateway-service:local -f services/gateway-service/Dockerfile .
 docker build -t finance-tracker/banking-service:local -f services/banking-service/Dockerfile .
 docker build -t finance-tracker/serverless-health-job:local -f services/serverless-health-job/Dockerfile .
 

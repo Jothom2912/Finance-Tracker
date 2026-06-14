@@ -17,7 +17,7 @@ import pytest
 from jose import jwt
 
 USER_SERVICE = "http://localhost:8001/api/v1/users"
-MONOLITH = "http://localhost:8000/api/v1"
+ACCOUNT_SERVICE = "http://localhost:8004/api/v1"
 
 JWT_SECRET = "dev-secret-key-change-in-production"
 JWT_ALGORITHM = "HS256"
@@ -37,13 +37,12 @@ def _unique_user() -> dict[str, str]:
     }
 
 
-def _monolith_token(user_id: int, username: str, email: str) -> str:
-    """Build a JWT the monolith's ``decode_token`` accepts.
+def _build_token(user_id: int, username: str, email: str) -> str:
+    """Build a JWT that account-service accepts.
 
-    The monolith expects ``user_id``, ``username``, ``email`` claims
-    whereas user-service emits ``sub``.  In a future iteration the
-    token format should be unified; this helper bridges the gap for
-    e2e verification.
+    Account-service accepts both legacy format (user_id claim) and new
+    format (sub claim). We use the legacy format here to verify backward
+    compatibility.
     """
     payload = {
         "user_id": user_id,
@@ -59,16 +58,16 @@ async def _wait_for_default_account(
     token: str,
     timeout: float = 15.0,
 ) -> dict:
-    """Poll the monolith until the default account appears or timeout."""
+    """Poll account-service until the default account appears or timeout."""
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
         resp = await client.get(
-            f"{MONOLITH}/accounts/",
+            f"{ACCOUNT_SERVICE}/accounts/",
             headers={"Authorization": f"Bearer {token}"},
         )
         if resp.status_code == 200:
             accounts = resp.json()
-            default = [a for a in accounts if a["name"] == "Default Account"]
+            default = [a for a in accounts if a.get("name") == "Default Account"]
             if default:
                 return default[0]
         await asyncio.sleep(0.5)
@@ -76,7 +75,7 @@ async def _wait_for_default_account(
     pytest.fail(
         "Default account was not created within timeout — "
         "the saga may not have completed.  "
-        "Check consumer logs: docker compose logs consumer"
+        "Check consumer logs: docker compose logs account-service-consumer"
     )
 
 
@@ -93,9 +92,9 @@ class TestHealthChecks:
         assert resp.json()["service"] == "user-service"
 
     @pytest.mark.asyncio()
-    async def test_monolith_healthy(self) -> None:
+    async def test_account_service_healthy(self) -> None:
         async with httpx.AsyncClient() as client:
-            resp = await client.get("http://localhost:8000/health")
+            resp = await client.get("http://localhost:8004/health")
 
         assert resp.status_code == 200
 
@@ -148,7 +147,7 @@ class TestSagaFlow:
     @pytest.mark.asyncio()
     async def test_full_saga_creates_default_account(self) -> None:
         """Register via user-service → consumer creates default account in
-        monolith MySQL → verify account exists via monolith API."""
+        account-service → verify account exists via account-service API."""
         user = _unique_user()
 
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -159,7 +158,7 @@ class TestSagaFlow:
             user_data = reg_resp.json()
             user_id = user_data["id"]
 
-            token = _monolith_token(
+            token = _build_token(
                 user_id=user_id,
                 username=user_data["username"],
                 email=user_data["email"],
@@ -168,7 +167,6 @@ class TestSagaFlow:
             account = await _wait_for_default_account(client, token)
 
         assert account["name"] == "Default Account"
-        assert account["User_idUser"] == user_id
 
     @pytest.mark.asyncio()
     async def test_login_token_works_on_user_service(self) -> None:

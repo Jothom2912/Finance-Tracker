@@ -114,9 +114,9 @@ This opens separate PowerShell windows for the required port-forwards.
 Important URLs:
 
 ```text
-Frontend:  http://localhost:5173
-GraphQL:   http://localhost:8000/api/v1/graphql
-RabbitMQ:  http://localhost:15672  guest / guest
+Frontend:     http://localhost:5173
+Gateway/GQL:  http://localhost:8010/api/v1/graphql
+RabbitMQ:     http://localhost:15672  guest / guest
 ```
 
 Useful forwarded backend ports:
@@ -129,7 +129,8 @@ account-service:          http://localhost:8004/health
 categorization-service:   http://localhost:8005/health
 goal-service:             http://localhost:8006/health
 ai-service:               http://localhost:8007/health
-monolith/read gateway:    http://localhost:8000/health
+banking-service:          http://localhost:8009/health
+gateway-service:          http://localhost:8010/health
 ```
 
 Stop port-forwarding by closing the opened PowerShell windows or pressing `CTRL+C` in each window.

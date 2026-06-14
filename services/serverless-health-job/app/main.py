@@ -20,7 +20,8 @@ SERVICE_HEALTH_URLS = [
         "http://categorization-service:8005/health,"
         "http://budget-service:8003/health,"
         "http://goal-service:8006/health,"
-        "http://monolith:8000/health",
+        "http://gateway-service:8010/health,"
+        "http://banking-service:8009/health",
     ).split(",")
     if url.strip()
 ]

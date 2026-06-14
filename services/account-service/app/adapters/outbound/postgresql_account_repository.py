@@ -1,4 +1,4 @@
-"""MySQL adapter for Account repository."""
+"""PostgreSQL adapter for Account repository."""
 
 from typing import Optional
 
@@ -9,8 +9,8 @@ from app.domain.entities import Account
 from app.models.account import Account as AccountModel
 
 
-class MySQLAccountRepository(IAccountRepository):
-    """MySQL implementation of account repository."""
+class PostgresAccountRepository(IAccountRepository):
+    """PostgreSQL implementation of account repository."""
 
     def __init__(self, db: Session):
         self._db = db

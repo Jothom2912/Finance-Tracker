@@ -75,7 +75,8 @@ DoneEvent (med latency metadata)
 | `LLM_RESPONDER_MODEL` | `qwen3:8b` | Model til prose generation |
 | `EMBEDDING_MODEL` | `bge-m3` | Model til text embeddings |
 | `TRANSACTION_SERVICE_URL` | `http://transaction-service:8002` | Transaction service URL |
-| `MONOLITH_SERVICE_URL` | `http://monolith:8000` | Django monolith URL |
+| `GATEWAY_SERVICE_URL` | `http://gateway-service:8010` | Gateway service URL (dashboard data) |
+| `BUDGET_SERVICE_URL` | `http://budget-service:8003` | Budget service URL |
 | `CHROMADB_PATH` | `/data/chromadb` | Persistent ChromaDB storage path |
 | `RETRIEVAL_TOP_K` | `10` | Antal resultater ved semantisk søgning |
 | `JWT_SECRET` | — | Shared JWT secret (required) |
