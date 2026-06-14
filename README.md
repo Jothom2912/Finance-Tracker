@@ -490,7 +490,7 @@ The full application can be deployed to a local Kubernetes cluster (Docker Deskt
 kubectl apply -k k8s
 
 # Check status
-kubectl get pods -n finans-tracker
+kubectl get pods -n finance-tracker
 ```
 
 ### Cluster layout
@@ -507,7 +507,7 @@ k8s/
 
 ### KEDA Serverless Health Job
 
-A KEDA `ScaledJob` monitors service health via a RabbitMQ trigger. When a health-check message is published to the `health-check-queue`, KEDA scales a one-shot Kubernetes Job that runs the health check and exits. This demonstrates event-driven serverless workloads on Kubernetes without a permanently running pod.
+A KEDA `ScaledJob` monitors service health via a RabbitMQ trigger. When a health-check message is published to the `serverless.health.request`, KEDA scales a one-shot Kubernetes Job that runs the health check and exits. This demonstrates event-driven serverless workloads on Kubernetes without a permanently running pod.
 
 See [`KUBERNETES_GUIDE.md`](KUBERNETES_GUIDE.md) for full prerequisites, step-by-step instructions, and KEDA demo.
 

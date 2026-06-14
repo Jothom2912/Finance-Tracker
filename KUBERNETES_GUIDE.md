@@ -59,9 +59,11 @@ The script will:
 
 1. Check that Kubernetes is running
 2. Install/upgrade KEDA with Helm
-3. Build all required local Docker images
-4. Apply the full Kubernetes setup with `kubectl apply -k k8s`
-5. Show the current pod status
+3. Install and patch metrics-server for Docker Desktop
+4. Build all required local Docker images
+5. Apply the full Kubernetes setup with `kubectl apply -k k8s`
+6. Create Kubernetes resources for monitoring, KEDA serverless jobs and HPA autoscaling
+7. Show the current pod status
 
 Wait until the pods are ready:
 
@@ -190,7 +192,10 @@ The log should show a JSON health report for services such as:
 - categorization-service
 - budget-service
 - goal-service
-- monolith/read gateway
+- ai-service
+- banking-service
+- gateway-service
+- saga-service
 
 RabbitMQ UI can also show the queue:
 
@@ -199,6 +204,31 @@ serverless.health.requests
 ```
 
 After the KEDA jobs process the messages, the queue should return to `Ready: 0`.
+
+
+Horizontal Pod Autoscaler is configured for user-service and transaction-service. HPA uses metrics-server to monitor CPU utilization and automatically adjusts the number of replicas between 1 and 3 pods. The target CPU utilization is set to 70%.
+
+KEDA and HPA are used for different autoscaling scenarios:
+
+HPA scales long-running API services based on CPU usage.
+KEDA ScaledJob scales serverless background jobs based on RabbitMQ queue length.
+
+You can verify that HPA and metrics-server are working with:
+
+```powershell
+kubectl get hpa -n finance-tracker
+kubectl top pods -n finance-tracker
+
+Expected HPA output should show CPU targets:
+user-service-hpa          cpu: 2%/70%
+transaction-service-hpa   cpu: 2%/70%
+
+Useful commands:
+
+kubectl top pods -n finance-tracker
+kubectl get hpa -n finance-tracker
+kubectl describe hpa user-service-hpa -n finance-tracker
+kubectl describe hpa transaction-service-hpa -n finance-tracker
 
 ## 7. Useful Kubernetes commands
 
