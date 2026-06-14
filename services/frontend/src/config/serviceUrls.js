@@ -22,6 +22,9 @@ const GOAL_SERVICE_URL =
 const BANKING_SERVICE_URL =
   import.meta.env.VITE_BANKING_SERVICE_URL || 'http://localhost:8009/api/v1';
 
+const SAGA_SERVICE_URL =
+  import.meta.env.VITE_SAGA_SERVICE_URL || 'http://localhost:8011/api/v1';
+
 export {
   GATEWAY_SERVICE_URL,
   USER_SERVICE_URL,
@@ -31,4 +34,5 @@ export {
   ACCOUNT_SERVICE_URL,
   GOAL_SERVICE_URL,
   BANKING_SERVICE_URL,
+  SAGA_SERVICE_URL,
 };

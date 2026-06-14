@@ -10,6 +10,7 @@ from app.application.service import BankingService
 from app.domain.entities import BankConnection
 from app.domain.exceptions import BankAccountNotOwned
 from contracts.events.bank import BankConnectionCreatedEvent, BankSyncCompletedEvent
+from contracts.events.saga import BankSyncSagaStartEvent
 
 
 @pytest.fixture
@@ -108,6 +109,35 @@ async def test_complete_connect_emits_outbox_event(
     event = uow.outbox.add.await_args.kwargs["event"]
     assert isinstance(event, BankConnectionCreatedEvent)
     assert event.bank_name == "Nordea"
+    uow.commit.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_start_sync_saga_emits_bank_sync_start_event(
+    service: BankingService,
+    uow: MagicMock,
+) -> None:
+    connection_id = uuid4()
+    conn = BankConnection(
+        id=connection_id,
+        account_id=1,
+        user_id=2,
+        session_id="sess-1",
+        bank_name="Nordea",
+        bank_country="DK",
+        bank_account_uid="uid-1",
+    )
+    uow.connections.get_by_id.return_value = conn
+    uow.accounts.get_projection.return_value = (2, "Main Account")
+
+    saga_id = await service.start_sync_saga(connection_id, user_id=2)
+
+    assert saga_id
+    uow.outbox.add.assert_awaited_once()
+    event = uow.outbox.add.await_args.kwargs["event"]
+    assert isinstance(event, BankSyncSagaStartEvent)
+    assert event.correlation_id == saga_id
+    assert event.connection_id == str(connection_id)
     uow.commit.assert_awaited()
 
 

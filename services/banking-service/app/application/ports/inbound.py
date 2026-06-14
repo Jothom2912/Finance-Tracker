@@ -19,6 +19,10 @@ class IBankingService(Protocol):
 
     async def list_connections(self, account_id: int) -> list[dict[str, Any]]: ...
 
+    async def start_sync_saga(
+        self, connection_id: UUID, user_id: int, date_from: Optional[str] = None,
+    ) -> str: ...
+
     async def sync_transactions(
         self, connection_id: UUID, user_id: int, date_from: Optional[str] = None,
     ) -> SyncResult: ...

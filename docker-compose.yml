@@ -339,6 +339,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  transaction-saga-command-consumer:
+    build:
+      context: .
+      dockerfile: services/transaction-service/Dockerfile
+    command: ["python", "-m", "app.workers.saga_command_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      transaction-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
   postgres-categorization:
     image: postgres:16
     environment:
@@ -600,6 +617,29 @@ services:
       account-outbox-publisher:
         condition: service_started
 
+  banking-saga-command-consumer:
+    build:
+      context: .
+      dockerfile: services/banking-service/Dockerfile
+    command: ["python", "-m", "app.workers.saga_command_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      # Must match banking-service — wrong APP_ID causes Enable Banking 401 "Wrong signature"
+      ENABLE_BANKING_APP_ID: 4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7
+      ENABLE_BANKING_KEY_PATH: /app/enablebanking-sandbox.pem
+      ENABLE_BANKING_REDIRECT_URI: http://localhost:8009/api/v1/bank/callback
+      ENVIRONMENT: development
+    depends_on:
+      banking-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./enablebanking-sandbox.pem:/app/enablebanking-sandbox.pem:ro
+
   gateway-service:
     build:
       context: .
@@ -637,6 +677,91 @@ services:
   #     rabbitmq:
   #       condition: service_healthy
 
+  # ── Saga Service ─────────────────────────────────────────────────
+
+  postgres-saga:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: saga_service
+      POSTGRES_PASSWORD: saga_service_pass
+      POSTGRES_DB: saga
+    ports:
+      - "5440:5432"
+    volumes:
+      - postgres_saga_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saga_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  saga-service:
+    build:
+      context: .
+      dockerfile: services/saga-service/Dockerfile
+    ports:
+      - "8011:8011"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+      ENVIRONMENT: development
+      SAGA_TIMEOUT_SECONDS: 300
+    depends_on:
+      postgres-saga:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  saga-outbox-worker:
+    build:
+      context: .
+      dockerfile: services/saga-service/Dockerfile
+    command: ["python", "-m", "app.workers.outbox_publisher"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ENVIRONMENT: development
+    depends_on:
+      saga-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  saga-reply-consumer:
+    build:
+      context: .
+      dockerfile: services/saga-service/Dockerfile
+    command: ["python", "-m", "app.workers.saga_reply_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ENVIRONMENT: development
+    depends_on:
+      saga-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  saga-start-consumer:
+    build:
+      context: .
+      dockerfile: services/saga-service/Dockerfile
+    command: ["python", "-m", "app.workers.saga_start_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ENVIRONMENT: development
+    depends_on:
+      saga-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   # mysql_data: preserved but unused — delete with: docker volume rm finance-tracker_mysql_data
   postgres_data:
@@ -649,3 +774,4 @@ volumes:
   ollama_models:
   ai_chromadb_data:
   postgres_banking_data:
+  postgres_saga_data:

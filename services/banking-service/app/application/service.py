@@ -10,6 +10,7 @@ from contracts.events.bank import (
     BankConnectionDisconnectedEvent,
     BankSyncCompletedEvent,
 )
+from contracts.events.saga import BankSyncSagaStartEvent
 
 from app.application.ports.outbound import (
     IBankingApiClient,
@@ -176,6 +177,55 @@ class BankingService:
             }
             for c in connections
         ]
+
+    async def start_sync_saga(
+        self,
+        connection_id: UUID,
+        user_id: int,
+        date_from: Optional[str] = None,
+    ) -> str:
+        """Start an async bank-sync saga via outbox event.
+
+        Returns the saga_id (same as correlation_id) for frontend polling.
+        """
+        async with self._uow:
+            conn = await self._uow.connections.get_by_id(connection_id)
+        if conn is None:
+            raise BankConnectionNotFound(connection_id)
+        if not conn.is_active:
+            raise BankConnectionInactive(connection_id, conn.status)
+        if conn.user_id != user_id:
+            raise BankAccountNotOwned(conn.account_id)
+
+        try:
+            account_name = await self._resolve_account_name(conn.account_id)
+        except BankAccountNotOwned:
+            raise ProjectionIntegrityError(conn.account_id)
+
+        saga_id = str(uuid4())
+        async with self._uow:
+            await self._uow.outbox.add(
+                event=BankSyncSagaStartEvent(
+                    correlation_id=saga_id,
+                    connection_id=str(connection_id),
+                    user_id=user_id,
+                    account_id=conn.account_id,
+                    account_name=account_name,
+                    bank_account_uid=conn.bank_account_uid,
+                    date_from=date_from,
+                ),
+                aggregate_type="bank_connection",
+                aggregate_id=str(connection_id),
+            )
+            await self._uow.commit()
+
+        logger.info(
+            "Bank sync saga started: saga_id=%s connection=%s user=%s",
+            saga_id,
+            connection_id,
+            user_id,
+        )
+        return saga_id
 
     async def sync_transactions(
         self,

@@ -15,7 +15,6 @@ from app.adapters.outbound.enable_banking_client import (
     BankAuthorizationError,
     BankConfigError,
 )
-from app.adapters.outbound.transaction_service_client import TransactionServiceError
 from app.application.service import BankingService
 from app.auth import get_current_user_id
 from app.config import settings
@@ -25,6 +24,7 @@ from app.domain.exceptions import (
     BankConnectionInactive,
     BankConnectionNotFound,
     PendingAuthorizationNotFound,
+    ProjectionIntegrityError,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,11 @@ class SyncResponse(BaseModel):
     duplicates_skipped: int
     errors: int
     parse_skipped: int = 0
+
+
+class SyncSagaResponse(BaseModel):
+    saga_id: str
+    status: str = "started"
 
 
 def _callback_redirect(
@@ -195,16 +200,20 @@ async def list_connections(
     return await service.list_connections(account_id)
 
 
-@router.post("/connections/{connection_id}/sync", response_model=SyncResponse)
+@router.post(
+    "/connections/{connection_id}/sync",
+    status_code=202,
+    response_model=SyncSagaResponse,
+)
 async def sync_transactions(
     connection_id: UUID,
     req: SyncRequest | None = None,
     user_id: int = Depends(get_current_user_id),
     service: BankingService = Depends(get_banking_service),
-) -> SyncResponse:
+) -> SyncSagaResponse:
     date_from = req.date_from if req else None
     try:
-        result = await service.sync_transactions(
+        saga_id = await service.start_sync_saga(
             connection_id=connection_id,
             user_id=user_id,
             date_from=date_from,
@@ -213,22 +222,13 @@ async def sync_transactions(
         raise HTTPException(status_code=404, detail=str(exc))
     except BankConnectionInactive as exc:
         raise HTTPException(status_code=409, detail=str(exc))
-    except TransactionServiceError as exc:
+    except ProjectionIntegrityError as exc:
         logger.exception(
-            "transaction-service unavailable during sync (connection=%s)",
+            "Account projection missing during sync start (connection=%s)",
             connection_id,
         )
-        raise HTTPException(
-            status_code=502,
-            detail=f"Upstream transaction-service error: {exc}",
-        )
-    return SyncResponse(
-        total_fetched=result.total_fetched,
-        new_imported=result.new_imported,
-        duplicates_skipped=result.duplicates_skipped,
-        errors=result.errors,
-        parse_skipped=result.parse_skipped,
-    )
+        raise HTTPException(status_code=500, detail=str(exc))
+    return SyncSagaResponse(saga_id=saga_id, status="started")
 
 
 @router.delete("/connections/{connection_id}")
