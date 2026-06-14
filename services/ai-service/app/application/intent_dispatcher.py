@@ -56,7 +56,8 @@ async def _dispatch_largest_expense(
 ) -> tuple[DataReadyData, float]:
     category = intent.slots.get("category")
     items, elapsed_ms = await analytics.get_largest_expenses(
-        intent.period, category=category,
+        intent.period,
+        category=category,
     )
 
     highlight_id = items[0].id if items else None

@@ -10,9 +10,18 @@ from app.adapters.outbound.vectorstore import embed_texts, get_collection
 logger = logging.getLogger(__name__)
 
 DANISH_MONTHS = {
-    1: "januar", 2: "februar", 3: "marts", 4: "april",
-    5: "maj", 6: "juni", 7: "juli", 8: "august",
-    9: "september", 10: "oktober", 11: "november", 12: "december",
+    1: "januar",
+    2: "februar",
+    3: "marts",
+    4: "april",
+    5: "maj",
+    6: "juni",
+    7: "juli",
+    8: "august",
+    9: "september",
+    10: "oktober",
+    11: "november",
+    12: "december",
 }
 
 CATEGORY_SYNONYMS = {
@@ -53,10 +62,7 @@ def _format_transaction_text(txn: TransactionDTO) -> str:
     if txn.description:
         desc_part = f" hos {txn.description}"
 
-    return (
-        f"{type_label} paa {amount_abs:.2f} kr{desc_part} "
-        f"den {date_str}.{category_part}"
-    )
+    return f"{type_label} paa {amount_abs:.2f} kr{desc_part} den {date_str}.{category_part}"
 
 
 def _make_doc_id(user_id: int, transaction_id: int) -> str:
@@ -104,6 +110,7 @@ async def ingest_transactions(user_id: int, token: str) -> int:
                 len(sample[0]),
             )
             from app.adapters.outbound.vectorstore import COLLECTION_NAME, get_chroma_client
+
             get_chroma_client().delete_collection(COLLECTION_NAME)
             collection = get_collection()
     except Exception:

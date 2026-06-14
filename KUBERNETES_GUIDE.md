@@ -279,3 +279,51 @@ Short explanation:
 KEDA explanation:
 
 > The serverless health job is not a long-running worker. It scales from zero when RabbitMQ receives messages in `serverless.health.requests`. KEDA creates Kubernetes Jobs, each job processes a message, performs health checks against the services, logs a report and exits again.
+
+## 9. Kubernetes monitoring and logging
+
+The monitoring stack is deployed inside the `finance-tracker` namespace. It is included in `kubectl apply -k k8s`, but it can also be redeployed separately:
+
+```powershell
+kubectl apply -k k8s/monitoring
+```
+
+Or with the helper script:
+
+```powershell
+.\scripts\monitoring-up.ps1
+```
+
+Monitoring components:
+
+- Prometheus probes Kubernetes Services through Blackbox Exporter.
+- Grafana shows service health, response times, pod CPU/memory and logs.
+- Loki stores Kubernetes pod logs.
+- Promtail runs as a DaemonSet and reads pod logs from the Kubernetes node.
+- cAdvisor runs as a DaemonSet and exposes container/pod metrics.
+
+Open Grafana and Prometheus with port-forwarding:
+
+```powershell
+kubectl -n finance-tracker port-forward svc/grafana 3001:3000
+kubectl -n finance-tracker port-forward svc/prometheus 9090:9090
+```
+
+URLs:
+
+```text
+Grafana:    http://localhost:3001  admin / admin
+Prometheus: http://localhost:9090
+```
+
+Useful Prometheus query:
+
+```promql
+probe_success{job="finance-http-health"}
+```
+
+Useful Loki query in Grafana:
+
+```logql
+{job="kubernetes-pods", namespace="finance-tracker"}
+```

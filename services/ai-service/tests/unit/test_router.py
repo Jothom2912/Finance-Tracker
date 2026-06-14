@@ -114,9 +114,7 @@ async def test_system_prompt_contains_current_period(
     router: OllamaRouter,
 ) -> None:
     """Verify system prompt is templated with current month, not hardcoded."""
-    mock_response = _mock_ollama_response(
-        '{"intent": "largest_expense", "period": "2026-05", "slots": {}}'
-    )
+    mock_response = _mock_ollama_response('{"intent": "largest_expense", "period": "2026-05", "slots": {}}')
 
     with patch("app.adapters.outbound.ollama_router.get_ollama_client") as mock_client:
         mock_client.return_value.chat.return_value = mock_response

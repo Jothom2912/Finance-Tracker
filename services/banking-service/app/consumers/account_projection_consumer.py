@@ -1,7 +1,7 @@
 """Consumer that keeps accounts_projection in sync with account-service events.
 
 Listens on account.created and account.updated, upserts into accounts_projection.
-This projection is used by sync_transactions for account_name enrichment.
+This projection is used by start_sync_saga for account_name enrichment.
 
 Normalizes the field name inconsistency between events:
   - AccountCreatedEvent has ``account_name``

@@ -63,6 +63,7 @@ class OllamaResponder:
 
         async def _produce() -> None:
             try:
+
                 def _stream_sync() -> None:
                     stream = get_ollama_client().chat(
                         model=settings.LLM_RESPONDER_MODEL,
@@ -70,10 +71,7 @@ class OllamaResponder:
                             {"role": "system", "content": _RESPONDER_SYSTEM_PROMPT},
                             {
                                 "role": "user",
-                                "content": (
-                                    f"DATA:\n{data_context}\n\n"
-                                    f"BRUGERENS SPØRGSMÅL:\n{question}"
-                                ),
+                                "content": (f"DATA:\n{data_context}\n\nBRUGERENS SPØRGSMÅL:\n{question}"),
                             },
                         ],
                         think=True,

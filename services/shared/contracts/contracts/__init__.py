@@ -30,6 +30,16 @@ from contracts.events.transaction import (
     TransactionDeletedEvent,
     TransactionUpdatedEvent,
 )
+from contracts.events.saga import (
+    BankFetchTransactionsCommand,
+    BankSyncSagaCompletedEvent,
+    BankSyncSagaStartEvent,
+    BulkImportTransactionsCommand,
+    MarkSyncCompleteCommand,
+    RollbackImportCommand,
+    SagaCommand,
+    SagaReply,
+)
 from contracts.events.user import UserCreatedEvent
 
 __all__ = [
@@ -50,6 +60,14 @@ __all__ = [
     "TransactionCreatedEvent",
     "TransactionDeletedEvent",
     "TransactionUpdatedEvent",
+    "BankFetchTransactionsCommand",
+    "BankSyncSagaCompletedEvent",
+    "BankSyncSagaStartEvent",
+    "BulkImportTransactionsCommand",
+    "MarkSyncCompleteCommand",
+    "RollbackImportCommand",
+    "SagaCommand",
+    "SagaReply",
     "UserCreatedEvent",
     "make_budget_month_closed_source_key",
 ]

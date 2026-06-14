@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.inbound.graphql_api import create_graphql_router
 from app.adapters.inbound.rest_api import dashboard_router
+from app.adapters.inbound.saga_api import saga_router
 from app.config import CORS_ORIGINS, ENVIRONMENT, LOG_LEVEL
 
 _log_level = getattr(logging, LOG_LEVEL, logging.INFO)

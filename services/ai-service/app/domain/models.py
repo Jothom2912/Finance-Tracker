@@ -103,12 +103,7 @@ class StreamMetadata(BaseModel):
 
 class DataReadyData(BaseModel):
     kind: DataKind
-    payload: (
-        TransactionListPayload
-        | CategoryBreakdownPayload
-        | SingleValuePayload
-        | BudgetStatusPayload
-    )
+    payload: TransactionListPayload | CategoryBreakdownPayload | SingleValuePayload | BudgetStatusPayload
 
 
 class ProseChunkData(BaseModel):
@@ -153,10 +148,6 @@ class ErrorEvent(BaseModel):
 
 
 ChatStreamEvent = Annotated[
-    IntentResolvedEvent
-    | DataReadyEvent
-    | ProseChunkEvent
-    | DoneEvent
-    | ErrorEvent,
+    IntentResolvedEvent | DataReadyEvent | ProseChunkEvent | DoneEvent | ErrorEvent,
     Field(discriminator="event"),
 ]

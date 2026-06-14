@@ -59,15 +59,6 @@ class IBankingApiClient(Protocol):
     ) -> tuple[list[Any], int]: ...
 
 
-class ITransactionImporter(Protocol):
-    def bulk_import(
-        self,
-        user_id: int,
-        items: list[Any],
-        skip_duplicates: bool = True,
-    ) -> Any: ...
-
-
 class IOutboxRepository(ABC):
     @abstractmethod
     async def add(self, event: BaseEvent, aggregate_type: str, aggregate_id: str) -> None: ...

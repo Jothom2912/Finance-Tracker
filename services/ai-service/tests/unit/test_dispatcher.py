@@ -26,8 +26,11 @@ from app.domain.models import (
 def _make_items(n: int = 3) -> list[TransactionItem]:
     return [
         TransactionItem(
-            id=i, date=f"2026-04-{i:02d}", amount=100.0 * i,
-            category="Test", description=f"Item {i}",
+            id=i,
+            date=f"2026-04-{i:02d}",
+            amount=100.0 * i,
+            category="Test",
+            description=f"Item {i}",
         )
         for i in range(1, n + 1)
     ]
@@ -37,11 +40,16 @@ def _make_budget() -> BudgetStatusPayload:
     return BudgetStatusPayload(
         items=[
             BudgetStatusItem(
-                category_name="Dagligvarer", budget_amount=3000,
-                spent_amount=2500, remaining_amount=500, percentage_used=83.3,
+                category_name="Dagligvarer",
+                budget_amount=3000,
+                spent_amount=2500,
+                remaining_amount=500,
+                percentage_used=83.3,
             ),
         ],
-        total_budget=3000, total_spent=2500, total_remaining=500,
+        total_budget=3000,
+        total_spent=2500,
+        total_remaining=500,
         over_budget_count=0,
     )
 
@@ -77,21 +85,25 @@ async def test_dispatch_largest_expense(analytics: AsyncMock, search: MagicMock)
 
 
 async def test_dispatch_largest_expense_with_category(
-    analytics: AsyncMock, search: MagicMock,
+    analytics: AsyncMock,
+    search: MagicMock,
 ) -> None:
     intent = ResolvedIntent(
-        intent=IntentName.LARGEST_EXPENSE, period="2026-04",
+        intent=IntentName.LARGEST_EXPENSE,
+        period="2026-04",
         slots={"category": "dagligvarer"},
     )
     data, elapsed = await dispatch(intent, analytics, search)
 
     analytics.get_largest_expenses.assert_awaited_once_with(
-        "2026-04", category="dagligvarer",
+        "2026-04",
+        category="dagligvarer",
     )
 
 
 async def test_dispatch_category_breakdown(
-    analytics: AsyncMock, search: MagicMock,
+    analytics: AsyncMock,
+    search: MagicMock,
 ) -> None:
     intent = ResolvedIntent(intent=IntentName.CATEGORY_BREAKDOWN, period="2026-04")
     data, elapsed = await dispatch(intent, analytics, search)
@@ -103,10 +115,12 @@ async def test_dispatch_category_breakdown(
 
 
 async def test_dispatch_transaction_search(
-    analytics: AsyncMock, search: MagicMock,
+    analytics: AsyncMock,
+    search: MagicMock,
 ) -> None:
     intent = ResolvedIntent(
-        intent=IntentName.TRANSACTION_SEARCH, period="2026-04",
+        intent=IntentName.TRANSACTION_SEARCH,
+        period="2026-04",
         slots={"query": "kaffe"},
     )
     data, elapsed = await dispatch(intent, analytics, search)
@@ -116,7 +130,8 @@ async def test_dispatch_transaction_search(
 
 
 async def test_dispatch_budget_status(
-    analytics: AsyncMock, search: MagicMock,
+    analytics: AsyncMock,
+    search: MagicMock,
 ) -> None:
     intent = ResolvedIntent(intent=IntentName.BUDGET_STATUS, period="2026-03")
     data, elapsed = await dispatch(intent, analytics, search)
@@ -128,7 +143,8 @@ async def test_dispatch_budget_status(
 
 
 async def test_dispatch_unknown_intent_raises(
-    analytics: AsyncMock, search: MagicMock,
+    analytics: AsyncMock,
+    search: MagicMock,
 ) -> None:
     intent = MagicMock(spec=ResolvedIntent)
     intent.intent = "future_unsupported_intent"

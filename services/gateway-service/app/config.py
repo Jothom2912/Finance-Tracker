@@ -35,3 +35,6 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 TRANSACTION_PAGE_SIZE = 200
+
+SAGA_SERVICE_URL = os.getenv("SAGA_SERVICE_URL", "http://saga-service:8011")
+SAGA_SERVICE_TIMEOUT = float(os.getenv("SAGA_SERVICE_TIMEOUT", "5"))

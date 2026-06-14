@@ -8,17 +8,16 @@ from uuid import UUID, uuid4
 from contracts.events.bank import (
     BankConnectionCreatedEvent,
     BankConnectionDisconnectedEvent,
-    BankSyncCompletedEvent,
 )
+from contracts.events.saga import BankSyncSagaStartEvent
 
 from app.application.ports.outbound import (
     IBankingApiClient,
     IAccountPort,
-    ITransactionImporter,
     IUnitOfWork,
 )
 from app.config import settings
-from app.domain.entities import BankConnection, SyncResult
+from app.domain.entities import BankConnection
 from app.domain.exceptions import (
     BankAccountNotOwned,
     BankConnectionInactive,
@@ -36,12 +35,10 @@ class BankingService:
         uow: IUnitOfWork,
         account_port: IAccountPort,
         banking_client: IBankingApiClient,
-        transaction_importer: ITransactionImporter,
     ) -> None:
         self._uow = uow
         self._account_port = account_port
         self._client = banking_client
-        self._tx_importer = transaction_importer
 
     async def _verify_account_access(self, account_id: int, user_id: int) -> None:
         async with self._uow:
@@ -177,12 +174,16 @@ class BankingService:
             for c in connections
         ]
 
-    async def sync_transactions(
+    async def start_sync_saga(
         self,
         connection_id: UUID,
         user_id: int,
         date_from: Optional[str] = None,
-    ) -> SyncResult:
+    ) -> str:
+        """Start an async bank-sync saga via outbox event.
+
+        Returns the saga_id (same as correlation_id) for frontend polling.
+        """
         async with self._uow:
             conn = await self._uow.connections.get_by_id(connection_id)
         if conn is None:
@@ -197,69 +198,17 @@ class BankingService:
         except BankAccountNotOwned:
             raise ProjectionIntegrityError(conn.account_id)
 
-        bank_transactions, parse_skipped = self._client.get_transactions(
-            account_uid=conn.bank_account_uid,
-            date_from=date_from,
-        )
-
-        items = []
-        errors = 0
-        for bank_txn in bank_transactions:
-            try:
-                tx_type = "income" if bank_txn.amount >= 0 else "expense"
-                items.append({
-                    "account_id": conn.account_id,
-                    "account_name": account_name,
-                    "amount": str(abs(bank_txn.amount)),
-                    "transaction_type": tx_type,
-                    "date": bank_txn.date.isoformat(),
-                    "description": bank_txn.description,
-                })
-            except Exception:
-                logger.exception(
-                    "Error preparing transaction %s for bulk import",
-                    getattr(bank_txn, "transaction_id", "<unknown>"),
-                )
-                errors += 1
-
-        try:
-            remote = self._tx_importer.bulk_import(user_id=user_id, items=items)
-        except Exception:
-            logger.exception(
-                "transaction-service rejected bulk import (connection=%s)",
-                connection_id,
-            )
-            async with self._uow:
-                await self._uow.connections.update_last_synced(connection_id, datetime.utcnow())
-                await self._uow.commit()
-            return SyncResult(
-                total_fetched=len(bank_transactions),
-                new_imported=0,
-                duplicates_skipped=0,
-                errors=len(bank_transactions) + errors,
-                parse_skipped=parse_skipped,
-            )
-
-        result = SyncResult(
-            total_fetched=len(bank_transactions),
-            new_imported=remote.imported,
-            duplicates_skipped=remote.duplicates_skipped,
-            errors=errors + remote.errors,
-            parse_skipped=parse_skipped,
-        )
-
+        saga_id = str(uuid4())
         async with self._uow:
-            await self._uow.connections.update_last_synced(connection_id, datetime.utcnow())
             await self._uow.outbox.add(
-                event=BankSyncCompletedEvent(
+                event=BankSyncSagaStartEvent(
+                    correlation_id=saga_id,
                     connection_id=str(connection_id),
-                    account_id=conn.account_id,
                     user_id=user_id,
-                    total_fetched=result.total_fetched,
-                    new_imported=result.new_imported,
-                    duplicates_skipped=result.duplicates_skipped,
-                    errors=result.errors,
-                    parse_skipped=result.parse_skipped,
+                    account_id=conn.account_id,
+                    account_name=account_name,
+                    bank_account_uid=conn.bank_account_uid,
+                    date_from=date_from,
                 ),
                 aggregate_type="bank_connection",
                 aggregate_id=str(connection_id),
@@ -267,15 +216,12 @@ class BankingService:
             await self._uow.commit()
 
         logger.info(
-            "Sync complete for connection %s: %d fetched, %d new, %d dupes, %d errors, %d parse-skipped",
+            "Bank sync saga started: saga_id=%s connection=%s user=%s",
+            saga_id,
             connection_id,
-            result.total_fetched,
-            result.new_imported,
-            result.duplicates_skipped,
-            result.errors,
-            result.parse_skipped,
+            user_id,
         )
-        return result
+        return saga_id
 
     async def disconnect(self, connection_id: UUID) -> bool:
         async with self._uow:

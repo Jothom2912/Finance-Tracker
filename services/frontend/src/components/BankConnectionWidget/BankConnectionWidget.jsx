@@ -6,6 +6,11 @@ import {
   fetchAvailableBanks,
   connectBank,
 } from '../../api/bank';
+import {
+  pollSagaUntilComplete,
+  getSagaProgressLabel,
+  buildBankSyncResultMessage,
+} from '../../api/saga';
 import './BankConnectionWidget.css';
 
 function formatTimeAgo(isoString) {
@@ -24,6 +29,7 @@ function BankConnectionWidget({ onSyncComplete }) {
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState(null);
+  const [syncProgress, setSyncProgress] = useState('');
   const [syncResult, setSyncResult] = useState(null);
   const [showBankPicker, setShowBankPicker] = useState(false);
   const [availableBanks, setAvailableBanks] = useState([]);
@@ -83,18 +89,34 @@ function BankConnectionWidget({ onSyncComplete }) {
   async function handleSync(connectionId) {
     if (syncingId) return;
     setSyncingId(connectionId);
+    setSyncProgress('Starter sync...');
     setSyncResult(null);
 
     try {
-      const result = await syncConnection(connectionId);
-      setSyncResult({
-        connectionId,
-        type: 'success',
-        message: `${result.new_imported} nye, ${result.duplicates_skipped} duplikater`,
-        detail: result.total_fetched > 0
-          ? `${result.total_fetched} transaktioner hentet`
-          : 'Ingen nye transaktioner',
+      const start = await syncConnection(connectionId);
+
+      const saga = await pollSagaUntilComplete(start.sagaId, {
+        onProgress: (current) => {
+          setSyncProgress(getSagaProgressLabel(current));
+        },
       });
+
+      if (saga.status === 'completed') {
+        const { message, detail } = buildBankSyncResultMessage(saga);
+        setSyncResult({
+          connectionId,
+          type: 'success',
+          message,
+          detail,
+        });
+      } else {
+        setSyncResult({
+          connectionId,
+          type: 'error',
+          message: saga.error_detail || 'Sync fejlede',
+        });
+      }
+
       await loadConnections();
       if (onSyncComplete) await onSyncComplete();
     } catch (err) {
@@ -105,6 +127,7 @@ function BankConnectionWidget({ onSyncComplete }) {
       });
     } finally {
       setSyncingId(null);
+      setSyncProgress('');
     }
   }
 
@@ -216,7 +239,7 @@ function BankConnectionWidget({ onSyncComplete }) {
                   {syncingId === conn.id ? (
                     <>
                       <span className="bank-spinner" />
-                      Synkroniserer...
+                      {syncProgress || 'Synkroniserer...'}
                     </>
                   ) : (
                     'Sync nu'

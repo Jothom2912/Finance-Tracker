@@ -12,8 +12,6 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
 
-    TRANSACTION_SERVICE_URL: str = "http://transaction-service:8002"
-    TRANSACTION_SERVICE_TIMEOUT: float = 10.0
     ACCOUNT_SERVICE_URL: str = "http://account-service:8003"
     ACCOUNT_SERVICE_TIMEOUT: float = 2.0
     INTERNAL_API_KEY: str = "dev-internal-api-key-change-in-production"

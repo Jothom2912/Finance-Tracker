@@ -58,3 +58,6 @@ resources:
   - keda/serverless-health-trigger-auth.yaml
   - keda/serverless-health-scaledjob.yaml
   - keda/serverless-health-init-job.yaml
+
+  # Monitoring and logging stack running inside Kubernetes
+  - monitoring

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import httpx
-
 from app.domain.exceptions import AccountNotFoundForGoal, UpstreamServiceUnavailable
 
 

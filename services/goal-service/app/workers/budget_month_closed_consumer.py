@@ -28,13 +28,12 @@ import logging
 import aio_pika
 from aio_pika import ExchangeType
 from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractIncomingMessage
-from contracts.events.budget import BudgetMonthClosedEvent
-from sqlalchemy.exc import IntegrityError
-
 from app.adapters.outbound.unit_of_work import SQLAlchemyBudgetMonthClosedUnitOfWork
 from app.application.budget_month_closed_handler import BudgetMonthClosedHandler
 from app.config import settings
 from app.database import async_session_factory
+from contracts.events.budget import BudgetMonthClosedEvent
+from sqlalchemy.exc import IntegrityError
 
 logging.basicConfig(
     level=logging.INFO,

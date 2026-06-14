@@ -43,18 +43,22 @@ def _raise_for_status(resp: httpx.Response) -> None:
     body = resp.text[:200]
     if code in (401, 403):
         raise AnalyticsAuthError(
-            f"Auth failed ({code}): {body}", status_code=code,
+            f"Auth failed ({code}): {body}",
+            status_code=code,
         )
     if code == 404:
         raise AnalyticsNotFoundError(
-            f"Not found ({code}): {body}", status_code=code,
+            f"Not found ({code}): {body}",
+            status_code=code,
         )
     if code >= 500:
         raise AnalyticsServiceUnavailableError(
-            f"Service error ({code}): {body}", status_code=code,
+            f"Service error ({code}): {body}",
+            status_code=code,
         )
     raise AnalyticsError(
-        f"Unexpected HTTP {code}: {body}", status_code=code,
+        f"Unexpected HTTP {code}: {body}",
+        status_code=code,
     )
 
 
@@ -167,9 +171,7 @@ class AnalyticsClient:
                 amount=amt,
                 percentage=round(amt / total * 100, 1),
             )
-            for cat, amt in sorted(
-                expenses_by_cat.items(), key=lambda x: x[1], reverse=True
-            )
+            for cat, amt in sorted(expenses_by_cat.items(), key=lambda x: x[1], reverse=True)
         ]
 
         elapsed_ms = (time.monotonic() - t0) * 1000

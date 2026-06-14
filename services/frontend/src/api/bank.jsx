@@ -20,13 +20,15 @@ export async function syncConnection(connectionId, dateFrom = null) {
     {
       method: 'POST',
       body: JSON.stringify(body),
+      timeoutMs: 15_000,
     },
   );
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err.detail || 'Sync fejlede');
   }
-  return resp.json();
+  const data = await resp.json();
+  return { sagaId: data.saga_id, status: data.status || 'started' };
 }
 
 export async function fetchAvailableBanks(country = 'DK') {
