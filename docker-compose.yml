@@ -78,34 +78,9 @@ services:
 
   # === Application services ===
 
-  monolith:
-    build:
-      context: .
-      dockerfile: services/monolith/Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
-      SECRET_KEY: dev-secret-key-change-in-production
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
-      ENVIRONMENT: development
-      TRANSACTION_SERVICE_URL: http://transaction-service:8002
-      BUDGET_SERVICE_URL: http://budget-service:8003
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_APP_ID}
-      ENABLE_BANKING_KEY_PATH: /app/enablebanking-privat.pem
-      ENABLE_BANKING_REDIRECT_URI: ${ENABLE_BANKING_REDIRECT_URI:-http://localhost:8000/api/v1/bank/callback}
-      ENABLE_BANKING_ENVIRONMENT: ${ENABLE_BANKING_ENVIRONMENT:-production}
-    volumes:
-      - ./enablebanking-privat.pem:/app/enablebanking-privat.pem:ro
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      transaction-service:
-        condition: service_started
+  # monolith: REMOVED — gateway-service (port 8010) serves all read queries.
+  #   Frontend cut over in 9b9ca782. Zero DEPRECATED warnings confirmed.
+  #   Auth already independent (LoginPage/RegisterPage use user-service directly).
 
   user-service:
     build:
@@ -224,70 +199,12 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  user-sync-consumer:
-    build:
-      context: .
-      dockerfile: services/monolith/Dockerfile
-    command: ["python", "-m", "backend.consumers.worker", "--consumer", "user-sync"]
-    environment:
-      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
-      SECRET_KEY: dev-secret-key-change-in-production
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-
-  # account-creation-consumer: REMOVED — replaced by account-service-consumer (Phase 5)
-
-  category-sync-consumer:
-    build:
-      context: .
-      dockerfile: services/monolith/Dockerfile
-    command: ["python", "-m", "backend.consumers.worker", "--consumer", "category-sync"]
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
-      SECRET_KEY: dev-secret-key-change-in-production
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-
-  transaction-sync-consumer:
-    build:
-      context: .
-      dockerfile: services/monolith/Dockerfile
-    command: ["python", "-m", "backend.consumers.worker", "--consumer", "transaction-sync"]
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
-      SECRET_KEY: dev-secret-key-change-in-production
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-
-  account-sync-consumer:
-    build:
-      context: .
-      dockerfile: services/monolith/Dockerfile
-    command: ["python", "-m", "backend.consumers.worker", "--consumer", "account-sync"]
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: mysql+pymysql://root:root@mysql:3306/finans_tracker
-      SECRET_KEY: dev-secret-key-change-in-production
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+  # user-sync-consumer: REMOVED — wrote to MySQL User projection, no readers remain.
+  # category-sync-consumer: REMOVED — wrote to MySQL Category projection, no readers remain.
+  # transaction-sync-consumer: REMOVED — wrote to MySQL Transaction projection, no readers remain.
+  #   (account 1's 247 bulk-imported txs never reached this consumer — confirmed stale.)
+  # account-sync-consumer: REMOVED — wrote to MySQL Account projection, no readers remain.
+  # account-creation-consumer: REMOVED earlier — replaced by account-service-consumer (Phase 5).
 
   postgres-transactions:
     image: postgres:16
