@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: banking-account-projection-consumer
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: banking-account-projection-consumer }
+  template:
+    metadata:
+      labels: { app: banking-account-projection-consumer }
+    spec:
+      containers:
+        - name: banking-account-projection-consumer
+          image: finance-tracker/banking-service:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.consumers.account_projection_consumer"]
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: DATABASE_URL_BANKING
