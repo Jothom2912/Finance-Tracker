@@ -20,6 +20,7 @@ class _AccountPortStub:
     async def exists(self, account_id: int) -> bool:
         return True
 
+
 @pytest.mark.asyncio()
 async def test_goal_api_round_trip_persists_through_service_and_repository() -> None:
     engine = create_async_engine(
