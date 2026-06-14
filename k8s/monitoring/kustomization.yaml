@@ -10,6 +10,7 @@ resources:
   - loki.yaml
   - promtail-rbac.yaml
   - promtail.yaml
+  - cadvisor.yaml
 
 configMapGenerator:
   - name: prometheus-config

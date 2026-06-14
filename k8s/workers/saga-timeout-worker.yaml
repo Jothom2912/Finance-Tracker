@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: saga-timeout-worker
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: saga-timeout-worker
+  template:
+    metadata:
+      labels:
+        app: saga-timeout-worker
+    spec:
+      containers:
+        - name: saga-timeout-worker
+          image: finance-tracker/saga-service:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.workers.saga_timeout_worker"]
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: DATABASE_URL_SAGA

@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: saga-service
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: saga-service
+  template:
+    metadata:
+      labels:
+        app: saga-service
+    spec:
+      containers:
+        - name: saga-service
+          image: finance-tracker/saga-service:local
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: DATABASE_URL_SAGA
+          ports:
+            - containerPort: 8011
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8011
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8011
+            initialDelaySeconds: 40
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: saga-service
+  namespace: finance-tracker
+spec:
+  selector:
+    app: saga-service
+  ports:
+    - port: 8011
+      targetPort: 8011

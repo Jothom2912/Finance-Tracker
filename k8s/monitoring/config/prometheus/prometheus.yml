@@ -9,6 +9,9 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ["prometheus:9090"]
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
 
   # Application availability monitoring inside the Kubernetes cluster.
   # Blackbox Exporter probes Kubernetes Services via cluster DNS.

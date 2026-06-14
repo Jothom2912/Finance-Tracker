@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: banking-saga-command-consumer
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: banking-saga-command-consumer
+  template:
+    metadata:
+      labels:
+        app: banking-saga-command-consumer
+    spec:
+      containers:
+        - name: banking-saga-command-consumer
+          image: finance-tracker/banking-service:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.workers.saga_command_consumer"]
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: DATABASE_URL_BANKING

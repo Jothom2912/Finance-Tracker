@@ -17,6 +17,7 @@ resources:
   - infra/postgres-categorization.yaml
   - infra/postgres-budget.yaml
   - infra/postgres-goals.yaml
+  - infra/postgres-saga.yaml
   - infra/ollama.yaml
   - infra/ollama-model-pull-job.yaml
 
@@ -33,6 +34,7 @@ resources:
   - apps/goal-service.yaml
   - apps/ai-service.yaml
   - apps/gateway-service.yaml
+  - apps/saga-service.yaml
 
   # Frontend
   - apps/frontend.yaml
@@ -51,6 +53,12 @@ resources:
   - workers/transaction-categorized-consumer.yaml
   - workers/goal-budget-consumer.yaml
   - workers/banking-account-projection-consumer.yaml
+  - workers/saga-outbox-worker.yaml
+  - workers/saga-start-consumer.yaml
+  - workers/saga-reply-consumer.yaml
+  - workers/saga-timeout-worker.yaml
+  - workers/transaction-saga-command-consumer.yaml
+  - workers/banking-saga-command-consumer.yaml
 
   # KEDA serverless setup.
   # Note: KEDA itself must be installed first with Helm before this can be applied.

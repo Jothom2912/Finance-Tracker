@@ -10,6 +10,7 @@ spec:
     metadata:
       labels: { app: cadvisor }
     spec:
+      automountServiceAccountToken: false 
       containers:
         - name: cadvisor
           image: gcr.io/cadvisor/cadvisor:v0.49.1
@@ -30,9 +31,7 @@ spec:
             - name: docker
               mountPath: /var/lib/docker
               readOnly: true
-            - name: disk
-              mountPath: /dev/disk
-              readOnly: true
+            
       volumes:
         - name: rootfs
           hostPath:
@@ -47,10 +46,7 @@ spec:
           hostPath:
             path: /var/lib/docker
             type: DirectoryOrCreate
-        - name: disk
-          hostPath:
-            path: /dev/disk
-            type: DirectoryOrCreate
+        
 ---
 apiVersion: v1
 kind: Service
