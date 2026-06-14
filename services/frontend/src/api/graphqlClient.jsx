@@ -1,8 +1,8 @@
 import { GraphQLClient } from 'graphql-request';
 import { handleUnauthorized } from '../utils/handleUnauthorized';
+import { GATEWAY_SERVICE_URL } from '../config/serviceUrls';
 
-const GRAPHQL_URL =
-  (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1') + '/graphql';
+const GRAPHQL_URL = `${GATEWAY_SERVICE_URL}/graphql`;
 
 function getHeaders() {
   const headers = { 'Content-Type': 'application/json' };

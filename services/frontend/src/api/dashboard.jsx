@@ -1,5 +1,6 @@
 import apiClient from '../utils/apiClient';
 import { parseApiError } from './errors';
+import { GATEWAY_SERVICE_URL } from '../config/serviceUrls';
 
 export async function fetchDashboardOverview({ startDate, endDate } = {}) {
   const params = new URLSearchParams();
@@ -7,7 +8,7 @@ export async function fetchDashboardOverview({ startDate, endDate } = {}) {
   if (endDate) params.set('end_date', endDate);
 
   const query = params.toString();
-  const url = `/dashboard/overview/${query ? `?${query}` : ''}`;
+  const url = `${GATEWAY_SERVICE_URL}/dashboard/overview/${query ? `?${query}` : ''}`;
 
   const response = await apiClient.get(url);
   if (!response.ok) throw await parseApiError(response);

@@ -1,6 +1,9 @@
 const MONOLITH_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
+const GATEWAY_SERVICE_URL =
+  import.meta.env.VITE_GATEWAY_SERVICE_URL || 'http://localhost:8010/api/v1';
+
 const USER_SERVICE_URL =
   import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:8001/api/v1/users';
 
@@ -24,6 +27,7 @@ const BANKING_SERVICE_URL =
 
 export {
   MONOLITH_URL,
+  GATEWAY_SERVICE_URL,
   USER_SERVICE_URL,
   TRANSACTION_SERVICE_URL,
   BUDGET_SERVICE_URL,
