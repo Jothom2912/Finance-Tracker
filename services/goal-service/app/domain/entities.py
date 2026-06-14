@@ -32,11 +32,7 @@ class Goal:
     def effective_status(self) -> GoalStatus:
         if self.current_amount >= self.target_amount and self.target_amount > 0:
             return GoalStatus.COMPLETED
-        if (
-            self.target_date is not None
-            and self.target_date < date.today()
-            and self.status != GoalStatus.PAUSED
-        ):
+        if self.target_date is not None and self.target_date < date.today() and self.status != GoalStatus.PAUSED:
             return GoalStatus.EXPIRED
         if self.status == GoalStatus.PAUSED:
             return GoalStatus.PAUSED

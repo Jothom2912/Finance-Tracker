@@ -48,7 +48,6 @@ MAX_RETRIES = 3
 
 
 class BudgetMonthClosedConsumer:
-
     def __init__(self) -> None:
         self._connection: AbstractConnection | None = None
         self._channel: AbstractChannel | None = None

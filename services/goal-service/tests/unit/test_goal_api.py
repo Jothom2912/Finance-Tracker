@@ -21,9 +21,15 @@ class DummyService:
 
 def _goal_response(**overrides) -> GoalResponse:
     defaults = dict(
-        idGoal=10, name="Vacation", target_amount=5000, current_amount=1000,
-        target_date=None, status=GoalStatus.ACTIVE, effective_status=GoalStatus.ACTIVE,
-        progress_percent=20.0, Account_idAccount=1,
+        idGoal=10,
+        name="Vacation",
+        target_amount=5000,
+        current_amount=1000,
+        target_date=None,
+        status=GoalStatus.ACTIVE,
+        effective_status=GoalStatus.ACTIVE,
+        progress_percent=20.0,
+        Account_idAccount=1,
     )
     defaults.update(overrides)
     return GoalResponse(**defaults)
@@ -86,8 +92,12 @@ def test_create_goal_returns_201() -> None:
     response = client.post(
         "/api/v1/goals",
         json={
-            "name": "Vacation", "target_amount": 5000, "current_amount": 1000,
-            "target_date": None, "status": "active", "Account_idAccount": 1,
+            "name": "Vacation",
+            "target_amount": 5000,
+            "current_amount": 1000,
+            "target_date": None,
+            "status": "active",
+            "Account_idAccount": 1,
         },
     )
 
@@ -101,8 +111,11 @@ def test_create_goal_returns_201() -> None:
 def test_update_goal_and_delete_goal_routes() -> None:
     service = DummyService()
     service.update_goal.return_value = _goal_response(
-        name="Vacation 2", target_amount=7000, current_amount=1500,
-        status=GoalStatus.PAUSED, effective_status=GoalStatus.PAUSED,
+        name="Vacation 2",
+        target_amount=7000,
+        current_amount=1500,
+        status=GoalStatus.PAUSED,
+        effective_status=GoalStatus.PAUSED,
         progress_percent=21.43,
     )
     service.delete_goal.return_value = True
@@ -111,8 +124,11 @@ def test_update_goal_and_delete_goal_routes() -> None:
     update_response = client.put(
         "/api/v1/goals/10",
         json={
-            "name": "Vacation 2", "target_amount": 7000, "current_amount": 1500,
-            "target_date": None, "status": "paused",
+            "name": "Vacation 2",
+            "target_amount": 7000,
+            "current_amount": 1500,
+            "target_date": None,
+            "status": "paused",
         },
     )
     delete_response = client.delete("/api/v1/goals/10")

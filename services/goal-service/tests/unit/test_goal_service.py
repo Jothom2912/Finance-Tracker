@@ -44,8 +44,13 @@ def service(uow: MagicMock, account_port: AsyncMock) -> GoalService:
 
 def _active_goal(**overrides) -> Goal:
     defaults = dict(
-        id=10, name="Vacation", target_amount=5000, current_amount=1000,
-        target_date=None, status="active", account_id=1,
+        id=10,
+        name="Vacation",
+        target_amount=5000,
+        current_amount=1000,
+        target_date=None,
+        status="active",
+        account_id=1,
     )
     defaults.update(overrides)
     return Goal(**defaults)
@@ -53,14 +58,19 @@ def _active_goal(**overrides) -> Goal:
 
 # --- Create ---
 
+
 @pytest.mark.asyncio()
 async def test_create_goal_persists_goal_and_outbox(service: GoalService, uow: MagicMock) -> None:
     uow.goals.create.return_value = _active_goal()
 
     result = await service.create_goal(
         GoalCreate(
-            name="Vacation", target_amount=5000, current_amount=1000,
-            target_date=None, status="active", Account_idAccount=1,
+            name="Vacation",
+            target_amount=5000,
+            current_amount=1000,
+            target_date=None,
+            status="active",
+            Account_idAccount=1,
         ),
         user_id=OWNER_USER_ID,
     )
@@ -80,8 +90,12 @@ async def test_create_goal_rejects_unknown_account(
     with pytest.raises(AccountNotFoundForGoal):
         await service.create_goal(
             GoalCreate(
-                name="Vacation", target_amount=5000, current_amount=1000,
-                target_date=None, status="active", Account_idAccount=99,
+                name="Vacation",
+                target_amount=5000,
+                current_amount=1000,
+                target_date=None,
+                status="active",
+                Account_idAccount=99,
             ),
             user_id=OWNER_USER_ID,
         )
@@ -92,13 +106,18 @@ async def test_create_goal_rejects_unknown_account(
 
 @pytest.mark.asyncio()
 async def test_create_goal_rejects_non_owner(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     with pytest.raises(NotAccountOwner):
         await service.create_goal(
             GoalCreate(
-                name="Vacation", target_amount=5000, current_amount=1000,
-                target_date=None, status="active", Account_idAccount=1,
+                name="Vacation",
+                target_amount=5000,
+                current_amount=1000,
+                target_date=None,
+                status="active",
+                Account_idAccount=1,
             ),
             user_id=OTHER_USER_ID,
         )
@@ -108,9 +127,11 @@ async def test_create_goal_rejects_non_owner(
 
 # --- Get ---
 
+
 @pytest.mark.asyncio()
 async def test_get_goal_returns_none_for_non_owner(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     uow.goals.get_by_id.return_value = _active_goal()
 
@@ -121,7 +142,8 @@ async def test_get_goal_returns_none_for_non_owner(
 
 @pytest.mark.asyncio()
 async def test_get_goal_returns_dto_for_owner(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     uow.goals.get_by_id.return_value = _active_goal()
 
@@ -132,6 +154,7 @@ async def test_get_goal_returns_dto_for_owner(
 
 
 # --- Update ---
+
 
 @pytest.mark.asyncio()
 async def test_update_goal_returns_none_when_missing(service: GoalService, uow: MagicMock) -> None:
@@ -150,7 +173,8 @@ async def test_update_goal_returns_none_when_missing(service: GoalService, uow: 
 
 @pytest.mark.asyncio()
 async def test_update_goal_returns_none_for_non_owner(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     uow.goals.get_by_id.return_value = _active_goal()
 
@@ -165,6 +189,7 @@ async def test_update_goal_returns_none_for_non_owner(
 
 
 # --- Delete ---
+
 
 @pytest.mark.asyncio()
 async def test_delete_goal_persists_outbox_when_found(service: GoalService, uow: MagicMock) -> None:
@@ -181,7 +206,8 @@ async def test_delete_goal_persists_outbox_when_found(service: GoalService, uow:
 
 @pytest.mark.asyncio()
 async def test_delete_goal_returns_false_for_non_owner(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     uow.goals.get_by_id.return_value = _active_goal()
 
@@ -193,9 +219,11 @@ async def test_delete_goal_returns_false_for_non_owner(
 
 # --- List ---
 
+
 @pytest.mark.asyncio()
 async def test_list_goals_returns_goals_for_owner(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     uow.goals.get_all.return_value = [_active_goal(), _active_goal(id=11, name="Car")]
 
@@ -207,7 +235,8 @@ async def test_list_goals_returns_goals_for_owner(
 
 @pytest.mark.asyncio()
 async def test_list_goals_rejects_non_owner(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     with pytest.raises(NotAccountOwner):
         await service.list_goals(account_id=1, user_id=OTHER_USER_ID)
@@ -217,12 +246,15 @@ async def test_list_goals_rejects_non_owner(
 
 # --- effective_status in DTO ---
 
+
 @pytest.mark.asyncio()
 async def test_dto_includes_effective_status_completed(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     uow.goals.get_by_id.return_value = _active_goal(
-        target_amount=1000, current_amount=1000,
+        target_amount=1000,
+        current_amount=1000,
     )
 
     result = await service.get_goal(10, user_id=OWNER_USER_ID)
@@ -234,7 +266,8 @@ async def test_dto_includes_effective_status_completed(
 
 @pytest.mark.asyncio()
 async def test_dto_includes_effective_status_expired(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     uow.goals.get_by_id.return_value = _active_goal(
         target_date=date.today() - timedelta(days=1),
@@ -249,10 +282,12 @@ async def test_dto_includes_effective_status_expired(
 
 @pytest.mark.asyncio()
 async def test_dto_includes_progress_percent(
-    service: GoalService, uow: MagicMock,
+    service: GoalService,
+    uow: MagicMock,
 ) -> None:
     uow.goals.get_by_id.return_value = _active_goal(
-        target_amount=200, current_amount=50,
+        target_amount=200,
+        current_amount=50,
     )
 
     result = await service.get_goal(10, user_id=OWNER_USER_ID)
