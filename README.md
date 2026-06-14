@@ -17,9 +17,13 @@ The legacy Django/MySQL monolith (`services/monolith/`) is no longer part of the
 - [API Reference](#api-reference)
 - [Event-Driven Architecture](#event-driven-architecture)
 - [Configuration](#configuration)
+- [Kubernetes Deployment](#kubernetes-deployment)
+- [CI/CD Pipeline](#cicd-pipeline)
 - [Monitoring](#monitoring)
 - [Testing](#testing)
 - [Development](#development)
+- [Helper Scripts](#helper-scripts)
+- [Documentation](#documentation)
 
 ---
 
@@ -29,7 +33,7 @@ The legacy Django/MySQL monolith (`services/monolith/`) is no longer part of the
 
 - Python 3.11+
 - `uv` (Python package manager)
-- Node.js 18+ and `yarn` (for frontend)
+- Node.js 18+ and `npm` (for frontend)
 - Docker Desktop
 
 ### Start everything
@@ -70,8 +74,8 @@ This starts all services:
 
 ```bash
 cd services/frontend
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 App: http://localhost:3000
@@ -329,8 +333,20 @@ See `services/ai-service/README.md` for model configuration and intent types.
 
 | Service | Port | Status |
 |---------|------|--------|
-| **Analytics Service** | 8007 (reserved) | Stub — reads handled by gateway-service |
+| **Analytics Service** | — | Stub — reads handled by gateway-service |
 | **Notification Service** | 8008 | Planned — budget threshold and goal event notifications |
+
+### Removed Components (June 2026)
+
+The following components have been retired and are no longer part of the runtime stack:
+
+| Component | Replaced by |
+|-----------|-------------|
+| Django monolith (`services/monolith/`) | gateway-service (BFF reads), domain services (writes) |
+| MySQL database | PostgreSQL database-per-service |
+| 4 sync consumers (user, category, transaction, account) | Event-driven consumers on domain services |
+
+The monolith source remains in `services/monolith/` for reference but is excluded from `docker-compose.yml`.
 
 ### Workers & Consumers
 
@@ -448,7 +464,9 @@ See `example.env` for all available options.
 | `ENABLE_BANKING_KEY_PATH` | For banking | — | Path to PEM private key |
 | `SAGA_SERVICE_URL` | Gateway | `http://saga-service:8011` | Saga service URL |
 | `SAGA_TIMEOUT_SECONDS` | No | 300 | Max saga duration before timeout |
+| `TIMEOUT_CHECK_INTERVAL_SECONDS` | Saga | 30 | Saga timeout worker poll interval |
 | `OLLAMA_BASE_URL` | AI service | `http://ollama:11434` | Ollama server URL |
+| `GATEWAY_SERVICE_URL` | AI service | `http://gateway-service:8010` | Gateway URL for analytics data |
 
 Each service reads its own `DATABASE_URL` from the environment (set in `docker-compose.yml`).
 
@@ -460,7 +478,86 @@ cp example.env .env
 
 ---
 
+## Kubernetes Deployment
+
+The full application can be deployed to a local Kubernetes cluster (Docker Desktop) using Kustomize. The `k8s/` directory contains manifests for all services, databases, workers, and monitoring.
+
+```bash
+# Build all service images locally
+./scripts/build-k8s-images.sh
+
+# Deploy to Kubernetes
+kubectl apply -k k8s
+
+# Check status
+kubectl get pods -n finans-tracker
+```
+
+### Cluster layout
+
+```text
+k8s/
+├── apps/           # Service deployments (user, transaction, account, banking, etc.)
+├── infra/          # PostgreSQL instances, RabbitMQ, Redis, Ollama
+├── workers/        # Outbox workers, event consumers, saga workers
+├── keda/           # KEDA ScaledJob (serverless health-check)
+├── monitoring/     # Prometheus, Grafana, Loki, Promtail, cAdvisor
+└── kustomization.yaml
+```
+
+### KEDA Serverless Health Job
+
+A KEDA `ScaledJob` monitors service health via a RabbitMQ trigger. When a health-check message is published to the `health-check-queue`, KEDA scales a one-shot Kubernetes Job that runs the health check and exits. This demonstrates event-driven serverless workloads on Kubernetes without a permanently running pod.
+
+See [`KUBERNETES_GUIDE.md`](KUBERNETES_GUIDE.md) for full prerequisites, step-by-step instructions, and KEDA demo.
+
+---
+
+## CI/CD Pipeline
+
+### GitHub Actions (current)
+
+The project uses GitHub Actions for continuous integration. The pipeline runs on every push and pull request to `master`/`main`:
+
+```mermaid
+flowchart LR
+    subgraph trigger [Trigger]
+        Push["Push to master"]
+        PR["Pull Request"]
+    end
+
+    subgraph matrix ["Matrix (9 services)"]
+        Lint["Ruff lint"]
+        Format["Ruff format check"]
+        Bandit["Bandit security scan"]
+        Test["pytest"]
+    end
+
+    Push --> matrix
+    PR --> matrix
+```
+
+| Service | Lint | Format | Security | Tests |
+|---------|------|--------|----------|-------|
+| user-service | ruff | ruff format | bandit | pytest |
+| transaction-service | ruff | ruff format | bandit | pytest |
+| account-service | ruff | ruff format | bandit | pytest |
+| budget-service | ruff | ruff format | bandit | pytest |
+| goal-service | ruff | ruff format | bandit | pytest |
+| categorization-service | ruff | ruff format | bandit | pytest |
+| banking-service | ruff | ruff format | bandit | pytest |
+| gateway-service | ruff | ruff format | bandit | pytest |
+| ai-service | ruff | ruff format | bandit | pytest |
+
+All services run against Python 3.11. The pipeline uses `uv` for dependency management and sets test environment variables (`TESTING=1`, `JWT_SECRET`, `INTERNAL_API_KEY`).
+
+E2E tests are run locally via `make test-e2e` (requires Docker Compose) and are not part of the CI pipeline.
+
+---
+
 ## Monitoring
+
+### Local (Docker Compose overlay)
 
 An optional local monitoring stack (Prometheus, Grafana, Loki, Promtail) is available via compose overlay:
 
@@ -474,7 +571,23 @@ docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 | Grafana | 3001 | Dashboards (admin/admin) |
 | Loki | 3100 | Log aggregation |
 
-Production-style manifests with the same stack live under `k8s/monitoring/`.
+### Kubernetes (in-cluster)
+
+The Kubernetes deployment includes a full monitoring stack under `k8s/monitoring/`:
+
+- **Prometheus** — scrapes `/metrics` from all services
+- **Grafana** — pre-configured dashboards for service health
+- **Loki + Promtail** — centralized log aggregation (Promtail as DaemonSet)
+- **cAdvisor** — container-level resource metrics (DaemonSet)
+- **Blackbox Exporter** — HTTP probe-based availability monitoring
+
+Deploy monitoring with:
+
+```bash
+./scripts/monitoring-up.sh
+```
+
+See [`docs/MONITORING.md`](docs/MONITORING.md) for detailed setup and dashboard configuration.
 
 ---
 
@@ -513,6 +626,7 @@ The project has 650+ automated tests (~490 Python across microservices and e2e, 
 | `make lint` | Run ruff on all Python services |
 | `make format` | Auto-format all Python services |
 | `make check` | Run all quality checks |
+| `make clean-test-containers` | Remove orphaned Testcontainers |
 
 Per-service development (infra must be running via `make dev` or `docker compose up -d`):
 
@@ -526,12 +640,14 @@ Per-service development (infra must be running via `make dev` or `docker compose
 | `make dev-goal-service` | 8006 |
 | `make dev-frontend` | 3000 |
 
+Banking-service (8009), gateway-service (8010), saga-service (8011), and ai-service (8007) are developed via Docker (`docker compose up -d`) or their per-service Makefiles directly. They are not yet wired into the root `make dev-*` targets.
+
 ### Frontend development
 
 ```bash
 cd services/frontend
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 ### Adding a new service
@@ -541,4 +657,39 @@ yarn dev
 3. Add outbox worker if the service publishes events
 4. Add shared event contracts to `services/shared/contracts/`
 5. Add K8s manifest to `k8s/apps/` and workers to `k8s/workers/`
-6. Bootstrap from an existing service (e.g. account-service) — match env.py, config, and Docker setup patterns
+6. Add the service to the CI matrix in `.github/workflows/ci.yml`
+7. Bootstrap from an existing service (e.g. account-service) — match env.py, config, and Docker setup patterns
+
+---
+
+## Helper Scripts
+
+Utility scripts for development, deployment, and operations live in `scripts/`:
+
+| Script | Description |
+|--------|-------------|
+| `build-k8s-images.sh` / `.ps1` | Build all Docker images for Kubernetes (local registry) |
+| `build-keda-image.sh` / `.ps1` | Build the KEDA serverless health-job image |
+| `k8s-up.sh` / `.ps1` | Apply all Kubernetes manifests |
+| `k8s-down.ps1` | Tear down the Kubernetes deployment |
+| `k8s-port-forward.ps1` | Port-forward services for local access |
+| `k8s-status.ps1` | Check pod and service status |
+| `monitoring-up.sh` / `.ps1` | Deploy monitoring stack to Kubernetes |
+| `keda-demo.ps1` | Demonstrate KEDA ScaledJob with health-check message |
+| `e2e-test.sh` | Run E2E test suite |
+| `backfill_category_names.py` | Backfill denormalized category names on transactions |
+| `cleanup_pg_duplicates.py` | Remove duplicate transactions (maintenance) |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`README.md`](README.md) | This file — project overview and architecture |
+| [`INSTALLATION.md`](INSTALLATION.md) | Detailed setup and installation guide |
+| [`KUBERNETES_GUIDE.md`](KUBERNETES_GUIDE.md) | Full Kubernetes + KEDA deployment walkthrough |
+| [`docs/MONITORING.md`](docs/MONITORING.md) | Monitoring stack setup and dashboards |
+| [`docs/MANDATORY_ASSIGNMENT_1_REPORT.md`](docs/MANDATORY_ASSIGNMENT_1_REPORT.md) | Course assignment report |
+| [`docs/adr/`](docs/adr/) | Architecture Decision Records |
+| Service-level READMEs | Each service has its own README with API docs and domain details |
