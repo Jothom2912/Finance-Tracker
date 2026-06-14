@@ -1,8 +1,7 @@
 # backend/models/common.py
 
 # from datetime import datetime  # noqa: F401
-from sqlalchemy import Column, ForeignKey, Integer, Table
-
+from sqlalchemy import DECIMAL, Column, ForeignKey, Integer, String, Table
 # from sqlalchemy import (  # noqa: F401
 #    DECIMAL,
 #    Column,
