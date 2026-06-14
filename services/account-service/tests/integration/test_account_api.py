@@ -1,6 +1,5 @@
 """Integration tests for Account API endpoints."""
 
-import pytest
 from unittest.mock import patch
 
 from tests.conftest import _make_auth_header
@@ -110,7 +109,9 @@ class TestAccountCRUD:
 
 class TestAccountGroupCRUD:
     def test_create_group(self, client):
-        with patch("app.adapters.outbound.user_adapter.UserServiceAdapter.get_users_by_ids", return_value=[(1, "alice")]):
+        with patch(
+            "app.adapters.outbound.user_adapter.UserServiceAdapter.get_users_by_ids", return_value=[(1, "alice")]
+        ):
             resp = client.post(
                 "/api/v1/account-groups/",
                 json={"name": "Familie", "max_users": 5, "user_ids": [1]},

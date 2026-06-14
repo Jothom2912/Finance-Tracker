@@ -138,7 +138,6 @@ def create_db_tables():
             from app.models import (  # noqa: F401
                 account,
                 account_groups,
-                
             )
 
             logger.info("✅ Alle models importeret succesfuldt")
@@ -159,9 +158,7 @@ def create_db_tables():
 
         # Step 4: Verificer at tabeller blev oprettet
         with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'")
-            )
+            result = conn.execute(text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"))
             table_count = result.fetchone()[0]
             logger.info(f"✅ Database indeholder {table_count} tabeller")
 

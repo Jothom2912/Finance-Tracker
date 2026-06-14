@@ -8,13 +8,12 @@ os.environ.setdefault("JWT_SECRET", "test-secret-key")
 os.environ.setdefault("USER_SERVICE_URL", "http://mock-user-service:8001")
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import StaticPool, create_engine, event
-from sqlalchemy.orm import sessionmaker
-
 from app.database import Base, get_db
 from app.models import account, account_groups  # noqa: F401
 from app.models.common import account_group_user_association  # noqa: F401
+from fastapi.testclient import TestClient
+from sqlalchemy import StaticPool, create_engine, event
+from sqlalchemy.orm import sessionmaker
 
 engine = create_engine(
     "sqlite://",

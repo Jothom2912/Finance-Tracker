@@ -55,9 +55,7 @@ class AccountCreationConsumer:
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=1)
 
-        exchange = await channel.declare_exchange(
-            EXCHANGE_NAME, ExchangeType.TOPIC, durable=True
-        )
+        exchange = await channel.declare_exchange(EXCHANGE_NAME, ExchangeType.TOPIC, durable=True)
 
         queue = await channel.declare_queue(QUEUE_NAME, durable=True)
         await queue.bind(exchange, routing_key=ROUTING_KEY)

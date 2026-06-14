@@ -8,13 +8,12 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Header, HTTPException, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
-
 
 # Validate SECRET_KEY at import time
 if not SECRET_KEY:

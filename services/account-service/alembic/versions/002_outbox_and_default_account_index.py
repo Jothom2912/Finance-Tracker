@@ -7,8 +7,8 @@ Create Date: 2026-05-08
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "002"
 down_revision: str = "001"
@@ -53,11 +53,7 @@ def upgrade() -> None:
         ["status", "next_attempt_at", "created_at"],
     )
 
-    op.execute(
-        'CREATE UNIQUE INDEX one_default_per_user '
-        'ON "Account" ("User_idUser") '
-        "WHERE name = 'Default Account'"
-    )
+    op.execute('CREATE UNIQUE INDEX one_default_per_user ON "Account" ("User_idUser") WHERE name = \'Default Account\'')
 
 
 def downgrade() -> None:

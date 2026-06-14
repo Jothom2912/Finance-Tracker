@@ -10,9 +10,9 @@ from app.application.dto import (
     AccountCreate,
 )
 from app.application.service import AccountService
-from app.domain.exceptions import UserNotFoundForAccount
 from app.auth import get_current_user_id
 from app.dependencies import get_account_service
+from app.domain.exceptions import UserNotFoundForAccount
 
 router = APIRouter(
     prefix="/accounts",

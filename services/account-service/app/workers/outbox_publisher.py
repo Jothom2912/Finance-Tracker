@@ -64,15 +64,11 @@ class OutboxPublisherWorker:
 
     async def connect(self) -> None:
         self._engine = create_async_engine(self._database_url, pool_size=2)
-        self._session_factory = sessionmaker(
-            self._engine, class_=AsyncSession, expire_on_commit=False
-        )
+        self._session_factory = sessionmaker(self._engine, class_=AsyncSession, expire_on_commit=False)
 
         self._connection = await aio_pika.connect_robust(self._rabbitmq_url)
         self._channel = await self._connection.channel()
-        self._exchange = await self._channel.declare_exchange(
-            EXCHANGE_NAME, ExchangeType.TOPIC, durable=True
-        )
+        self._exchange = await self._channel.declare_exchange(EXCHANGE_NAME, ExchangeType.TOPIC, durable=True)
         logger.info("Connected to RabbitMQ exchange=%s", EXCHANGE_NAME)
 
     async def close(self) -> None:
@@ -129,10 +125,7 @@ class OutboxPublisherWorker:
             await self._exchange.publish(message, routing_key=event_type)
 
             await session.execute(
-                text(
-                    "UPDATE outbox_events SET status = 'published', published_at = :now "
-                    "WHERE id = :id"
-                ),
+                text("UPDATE outbox_events SET status = 'published', published_at = :now WHERE id = :id"),
                 {"now": _utcnow(), "id": event_id},
             )
             logger.info(
@@ -142,7 +135,7 @@ class OutboxPublisherWorker:
                 correlation_id,
             )
         except Exception:
-            backoff = min(2 ** attempts * 5, MAX_BACKOFF_S)
+            backoff = min(2**attempts * 5, MAX_BACKOFF_S)
             next_at = _utcnow() + timedelta(seconds=backoff)
             await session.execute(
                 text(

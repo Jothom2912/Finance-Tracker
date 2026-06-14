@@ -5,11 +5,11 @@ from typing import Optional
 from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import Session
 
+from app.adapters.outbound.user_adapter import UserServiceAdapter
 from app.application.ports.outbound import IAccountGroupRepository
 from app.domain.entities import AccountGroup, AccountGroupUser
-from app.models.common import account_group_user_association
 from app.models.account_groups import AccountGroups as AccountGroupModel
-from app.adapters.outbound.user_adapter import UserServiceAdapter
+from app.models.common import account_group_user_association
 
 
 class PostgresAccountGroupRepository(IAccountGroupRepository):

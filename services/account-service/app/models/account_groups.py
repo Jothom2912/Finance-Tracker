@@ -1,18 +1,19 @@
 # app/models/account_groups.py
 
+from app.database import Base
+
 from .common import (
     Column,
     Integer,
     String,
     # IMPORTER NU ASSOCIATIONSTABELLEN DIREKTE FRA COMMON.PY:
-    #account_group_user_association,
-    #relationship,
+    # account_group_user_association,
+    # relationship,
 )
-
-from app.database import Base
 
 # FJERN DEN GAMLE LINJE:
 # from .__init__ import ( ... )
+
 
 class AccountGroups(Base):
     __tablename__ = "AccountGroups"
@@ -25,9 +26,7 @@ class AccountGroups(Base):
         return f"<AccountGroups(idAccountGroups={self.idAccountGroups}, name='{self.name}')>"
 
 
-
-
-#class AccountGroups(Base):
+# class AccountGroups(Base):
 #    """Kontogruppe model - Bruges til at gruppere konti (f.eks. familiebudget)"""
 #
 #   __tablename__ = "AccountGroups"

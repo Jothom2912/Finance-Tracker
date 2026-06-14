@@ -9,8 +9,8 @@ from app.application.dto import (
     AccountGroupsCreate,
 )
 from app.application.service import AccountService
-from app.domain.exceptions import InvalidUserInGroup
 from app.dependencies import get_account_service
+from app.domain.exceptions import InvalidUserInGroup
 
 router = APIRouter(
     prefix="/account-groups",
