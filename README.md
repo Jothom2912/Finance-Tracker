@@ -575,7 +575,7 @@ docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 
 The Kubernetes deployment includes a full monitoring stack under `k8s/monitoring/`:
 
-- **Prometheus** — scrapes `/metrics` from all services
+- **Prometheus** — collects monitoring data and uses Blackbox Exporter to probe service `/health` endpoints
 - **Grafana** — pre-configured dashboards for service health
 - **Loki + Promtail** — centralized log aggregation (Promtail as DaemonSet)
 - **cAdvisor** — container-level resource metrics (DaemonSet)

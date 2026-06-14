@@ -205,19 +205,21 @@ serverless.health.requests
 
 After the KEDA jobs process the messages, the queue should return to `Ready: 0`.
 
+## Horizontal Pod Autoscaler
 
 Horizontal Pod Autoscaler is configured for user-service and transaction-service. HPA uses metrics-server to monitor CPU utilization and automatically adjusts the number of replicas between 1 and 3 pods. The target CPU utilization is set to 70%.
 
 KEDA and HPA are used for different autoscaling scenarios:
 
-HPA scales long-running API services based on CPU usage.
-KEDA ScaledJob scales serverless background jobs based on RabbitMQ queue length.
+- HPA scales long-running API services based on CPU usage.
+- KEDA ScaledJob scales serverless background jobs based on RabbitMQ queue length.
 
 You can verify that HPA and metrics-server are working with:
 
 ```powershell
 kubectl get hpa -n finance-tracker
 kubectl top pods -n finance-tracker
+```
 
 Expected HPA output should show CPU targets:
 user-service-hpa          cpu: 2%/70%
