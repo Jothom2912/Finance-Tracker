@@ -16,6 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         service:
+          - account-service
+          - banking-service
+          - gateway-service
           - user-service
           - transaction-service
           - categorization-service
