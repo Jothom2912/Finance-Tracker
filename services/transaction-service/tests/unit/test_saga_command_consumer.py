@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.workers.saga_command_consumer import TransactionSagaCommandConsumer
 
 
