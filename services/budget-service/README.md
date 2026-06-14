@@ -1,17 +1,36 @@
-# Budget Service (Planned)
+# Budget Service
 
-**Status: Not yet implemented.** Budget management is currently handled by the monolith on port 8000.
+Budget management microservice handling budgets and monthly budget summaries.
 
-This service will manage budgets, monthly budgets, and budget lines when extracted.
-
-## Planned Port
+## Port
 
 ```
-8003
+8003 (host) → 8003 (container)
 ```
 
-## Current Location
+## Quick Start
 
-Budget logic currently lives in:
-- `services/monolith/backend/budget/` — legacy per-category budgets
-- `services/monolith/backend/monthly_budget/` — aggregate-based monthly budgets with budget lines
+```bash
+cd services/budget-service
+make install-deps
+make dev
+```
+
+Or via Docker Compose:
+
+```bash
+docker compose up budget-service -d
+```
+
+## Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/budgets/` | JWT | List budgets for account |
+| `POST` | `/api/v1/budgets/` | JWT | Create budget |
+| `GET` | `/api/v1/monthly-budgets/summary` | JWT | Monthly budget summary |
+| `GET` | `/health` | None | Health check |
+
+## Database
+
+PostgreSQL on port 5437 (`budget_service` / `budget_service`).

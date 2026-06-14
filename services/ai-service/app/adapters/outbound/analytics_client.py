@@ -1,15 +1,8 @@
-"""Analytics HTTP client — fetches structured data from transaction-service and monolith.
+"""Analytics HTTP client — fetches structured data from gateway-service and budget-service.
 
 Receives token and account_id per-request (constructor injection) so the port
 interface stays clean of HTTP/auth concerns. Each method maps to one backend
 endpoint and returns typed domain models.
-
-Uses REST endpoints rather than monolith GraphQL because: (1) the REST responses
-already contain exactly the fields we need (expenses_by_category dict, budget
-summary items), (2) GraphQL would require an additional client library dependency
-(gql/graphql-request) for single-field extractions where the overhead difference
-vs. REST is negligible compared to network roundtrip, and (3) REST endpoints have
-stable response shapes tied to their own versioned API contract.
 
 TODO: inject a shared httpx.AsyncClient via constructor instead of creating one
 per call — reduces connection overhead when multiple intents fire in sequence.
@@ -146,7 +139,7 @@ class AnalyticsClient:
         self,
         period: str,
     ) -> tuple[list[CategoryBreakdownItem], float]:
-        """Fetch expense breakdown by category from monolith dashboard.
+        """Fetch expense breakdown by category from gateway-service dashboard.
 
         Returns (items, elapsed_ms).
         """
@@ -154,11 +147,11 @@ class AnalyticsClient:
         start_date, end_date = _period_to_date_range(period)
 
         async with httpx.AsyncClient(
-            base_url=settings.MONOLITH_SERVICE_URL,
+            base_url=settings.GATEWAY_SERVICE_URL,
             timeout=15.0,
         ) as client:
             resp = await client.get(
-                "/api/v1/dashboard/overview",
+                "/api/v1/dashboard/overview/",
                 params={"start_date": start_date, "end_date": end_date},
                 headers=self._headers,
             )
@@ -191,7 +184,7 @@ class AnalyticsClient:
         self,
         period: str,
     ) -> tuple[BudgetStatusPayload, float]:
-        """Fetch budget vs actual from monolith monthly-budgets summary.
+        """Fetch budget vs actual from budget-service monthly-budgets summary.
 
         Returns (payload, elapsed_ms).
         """
@@ -199,7 +192,7 @@ class AnalyticsClient:
         year, month = period.split("-")
 
         async with httpx.AsyncClient(
-            base_url=settings.MONOLITH_SERVICE_URL,
+            base_url=settings.BUDGET_SERVICE_URL,
             timeout=15.0,
         ) as client:
             resp = await client.get(

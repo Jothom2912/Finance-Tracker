@@ -11,11 +11,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env - search upward: services/monolith/ → project root
-_monolith_root = Path(__file__).parent.parent
-_project_root = _monolith_root.parent.parent
+# Load .env - search upward: services/account-service/ → project root
+_service_root = Path(__file__).parent.parent
+_project_root = _service_root.parent.parent
 
-for _candidate in [_monolith_root / ".env", _project_root / ".env"]:
+for _candidate in [_service_root / ".env", _project_root / ".env"]:
     if _candidate.exists():
         load_dotenv(dotenv_path=_candidate)
         break

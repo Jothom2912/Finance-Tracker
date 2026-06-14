@@ -8,7 +8,6 @@ resources:
   - secrets.yaml
 
   # Infrastructure
-  - infra/mysql.yaml
   - infra/rabbitmq.yaml
   - infra/redis.yaml
   - infra/postgres-user.yaml
@@ -31,7 +30,6 @@ resources:
   - apps/budget-service.yaml
   - apps/goal-service.yaml
   - apps/ai-service.yaml
-  - apps/monolith.yaml
 
   # Frontend
   - apps/frontend.yaml
@@ -44,10 +42,6 @@ resources:
   - workers/categorization-outbox-worker.yaml
   - workers/goal-outbox-worker.yaml
   - workers/account-service-consumer.yaml
-  - workers/account-sync-consumer.yaml
-  - workers/user-sync-consumer.yaml
-  - workers/category-sync-consumer.yaml
-  - workers/transaction-sync-consumer.yaml
   - workers/categorization-category-sync.yaml
   - workers/categorization-transaction-consumer.yaml
   - workers/transaction-categorized-consumer.yaml

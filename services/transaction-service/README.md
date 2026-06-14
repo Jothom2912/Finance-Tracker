@@ -2,7 +2,7 @@
 
 Standalone microservice for financial transaction management, category ownership, CSV import, and planned transactions. Uses PostgreSQL with `NUMERIC(12,2)` for exact decimal arithmetic.
 
-This service **validates** JWT tokens but does **not issue** them — users authenticate via user-service and use that token here. Categories are owned by this service and synced to the monolith via RabbitMQ events.
+This service **validates** JWT tokens but does **not issue** them — users authenticate via user-service and use that token here. Categories are owned by this service and synced to categorization-service via RabbitMQ events.
 
 ## Quick Start
 
@@ -75,7 +75,7 @@ app/
 
 - **Unit of Work pattern**: All repositories share the same `AsyncSession` via `SQLAlchemyUnitOfWork`. Domain writes and outbox events are committed atomically, eliminating the dual-write problem.
 - **Transactional outbox**: Events are written to `outbox_events` in the same DB transaction as domain data. A standalone worker polls the table with `SELECT ... FOR UPDATE SKIP LOCKED` and publishes to RabbitMQ. Guarantees at-least-once delivery.
-- **Category ownership**: This service is the source of truth for categories. Changes are published as `category.created/updated/deleted` events, consumed by `CategorySyncConsumer` in the monolith.
+- **Category ownership**: This service is the source of truth for categories. Changes are published as `category.created/updated/deleted` events, consumed by categorization-service's category sync consumer.
 - **Denormalized names**: `account_name` and `category_name` are stored alongside IDs. No cross-service database calls.
 - **No foreign keys**: `user_id`, `account_id` are plain integers — no FK constraints to other services' databases.
 - **Data isolation**: Every transaction query filters by `user_id` for multi-tenant security.
@@ -140,9 +140,9 @@ On transaction and category mutations, events are written to the `outbox_events`
 
 | Event | Routing Key | Consumer |
 |-------|-------------|----------|
-| `CategoryCreatedEvent` | `category.created` | CategorySyncConsumer (monolith) |
-| `CategoryUpdatedEvent` | `category.updated` | CategorySyncConsumer (monolith) |
-| `CategoryDeletedEvent` | `category.deleted` | CategorySyncConsumer (monolith) |
+| `CategoryCreatedEvent` | `category.created` | categorization-category-sync |
+| `CategoryUpdatedEvent` | `category.updated` | categorization-category-sync |
+| `CategoryDeletedEvent` | `category.deleted` | categorization-category-sync |
 
 ### Inbound Events (consumed)
 

@@ -9,7 +9,7 @@ services:
     image: redis:7
     container_name: redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
 
   postgres:
     image: postgres:16
@@ -436,6 +436,8 @@ services:
       LLM_MODEL: qwen3:4b
       EMBEDDING_MODEL: bge-m3
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
+      GATEWAY_SERVICE_URL: http://gateway-service:8010
+      BUDGET_SERVICE_URL: http://budget-service:8003
       CHROMADB_PATH: /data/chromadb
       RETRIEVAL_TOP_K: "10"
       JWT_SECRET: dev-secret-key-change-in-production
@@ -447,6 +449,10 @@ services:
       ollama-pull:
         condition: service_completed_successfully
       transaction-service:
+        condition: service_started
+      gateway-service:
+        condition: service_started
+      budget-service:
         condition: service_started
 
   # === Placeholder services (uncomment as services are ready) ===

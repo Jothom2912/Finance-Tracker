@@ -1,16 +1,10 @@
 # Analytics Service (Planned)
 
-**Status: Not yet implemented.** Analytics and the GraphQL read gateway are currently handled by the monolith on port 8000.
+**Status: Stub.** Analytics and the GraphQL read gateway are handled by gateway-service on port 8010.
 
-This service will provide dashboard analytics, reporting, data aggregation, and the GraphQL gateway when extracted. Planned to use Elasticsearch for denormalized read views.
+This service is reserved for future Elasticsearch-backed denormalized read views and reporting. Currently only exposes a health endpoint.
 
-## Planned Port
+## Current Alternative
 
-```
-8007
-```
-
-## Current Location
-
-Analytics logic currently lives in:
-- `services/monolith/backend/analytics/` — dashboard overview, expenses-by-month, GraphQL read gateway
+Analytics/dashboard reads are served by:
+- `services/gateway-service/` — REST dashboard + GraphQL on port 8010

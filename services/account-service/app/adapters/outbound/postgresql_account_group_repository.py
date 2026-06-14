@@ -1,4 +1,4 @@
-"""MySQL adapter for AccountGroup repository."""
+"""PostgreSQL adapter for AccountGroup repository."""
 
 from typing import Optional
 
@@ -12,8 +12,8 @@ from app.models.account_groups import AccountGroups as AccountGroupModel
 from app.adapters.outbound.user_adapter import UserServiceAdapter
 
 
-class MySQLAccountGroupRepository(IAccountGroupRepository):
-    """MySQL implementation of account group repository."""
+class PostgresAccountGroupRepository(IAccountGroupRepository):
+    """PostgreSQL implementation of account group repository."""
 
     def __init__(self, db: Session):
         self._db = db

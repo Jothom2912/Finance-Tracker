@@ -24,10 +24,10 @@ from sqlalchemy.orm import sessionmaker
 
 from app.adapters.outbound.outbox_repository import SyncOutboxRepository
 from app.adapters.outbound.postgresql_account_group_repository import (
-    MySQLAccountGroupRepository,
+    PostgresAccountGroupRepository,
 )
 from app.adapters.outbound.postgresql_account_repository import (
-    MySQLAccountRepository,
+    PostgresAccountRepository,
 )
 from app.adapters.outbound.user_adapter import UserServiceAdapter
 from app.application.dto import AccountCreate
@@ -98,7 +98,7 @@ class AccountCreationConsumer:
     def _handle_user_created(self, user_id: int) -> None:
         session = self._session_factory()
         try:
-            account_repo = MySQLAccountRepository(session)
+            account_repo = PostgresAccountRepository(session)
 
             # Fast-path: skip if user already has accounts
             existing = account_repo.get_all(user_id)
@@ -113,7 +113,7 @@ class AccountCreationConsumer:
             outbox = SyncOutboxRepository(session)
             service = AccountService(
                 account_repository=account_repo,
-                account_group_repository=MySQLAccountGroupRepository(session),
+                account_group_repository=PostgresAccountGroupRepository(session),
                 user_port=UserServiceAdapter(),
                 outbox=outbox,
                 commit_fn=session.commit,

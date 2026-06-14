@@ -2,8 +2,7 @@
 
 Always overwrites the transaction's denormalized categorization fields
 with cat-service's result.  Logs to stdout if the new result diverges
-from an existing categorization (e.g. from the monolith's rule engine
-during dual-run).
+from an existing categorization (e.g. from a previous categorization run).
 
 Atomicity: transaction update + inbox row committed in one DB transaction.
 Idempotency: inbox pattern on (message_id, consumer_name) with UNIQUE constraint.
