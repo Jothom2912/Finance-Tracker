@@ -4,6 +4,7 @@ Handles:
 - saga.cmd.bulk_import_transactions: bulk import transactions
 - saga.cmd.rollback_import: soft-delete previously imported transactions (compensation)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -86,10 +87,14 @@ class TransactionSagaCommandConsumer:
                 retry_count = int(retry_count)
             if retry_count >= MAX_RETRIES:
                 logger.error("Max retries for %s saga=%s — sending failure reply", event_type, saga_id, exc_info=True)
-                await self._publish_reply(saga_id, step_name, {
-                    "success": False,
-                    "error_message": str(exc),
-                })
+                await self._publish_reply(
+                    saga_id,
+                    step_name,
+                    {
+                        "success": False,
+                        "error_message": str(exc),
+                    },
+                )
                 await message.ack()
             else:
                 logger.warning("Retrying %s saga=%s (attempt %d)", event_type, saga_id, retry_count + 1, exc_info=True)
