@@ -1,1 +1,0 @@
-# Category adapters layer
