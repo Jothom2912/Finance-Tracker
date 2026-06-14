@@ -7,11 +7,13 @@ Requires Docker to be running (testcontainers spins up a Postgres).
 from __future__ import annotations
 
 import os
+import time
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import OperationalError
 from testcontainers.postgres import PostgresContainer
 
 
@@ -29,11 +31,24 @@ def engine(postgres):
 
     eng = create_engine(url)
 
+    for _ in range(30):
+        try:
+            with eng.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            break
+        except OperationalError:
+            time.sleep(1)
+    else:
+        raise RuntimeError("Postgres Testcontainer did not become ready in time")
+
     alembic_cfg = Config("alembic.ini")
     alembic_cfg.set_main_option("sqlalchemy.url", url)
     command.upgrade(alembic_cfg, "head")
 
-    return eng
+    try:
+        yield eng
+    finally:
+        eng.dispose()
 
 
 class TestTablesExist:
