@@ -95,37 +95,25 @@ function BankConnectionWidget({ onSyncComplete }) {
     try {
       const start = await syncConnection(connectionId);
 
-      if (start.sagaId) {
-        const saga = await pollSagaUntilComplete(start.sagaId, {
-          onProgress: (current) => {
-            setSyncProgress(getSagaProgressLabel(current));
-          },
-        });
+      const saga = await pollSagaUntilComplete(start.sagaId, {
+        onProgress: (current) => {
+          setSyncProgress(getSagaProgressLabel(current));
+        },
+      });
 
-        if (saga.status === 'completed') {
-          const { message, detail } = buildBankSyncResultMessage(saga);
-          setSyncResult({
-            connectionId,
-            type: 'success',
-            message,
-            detail,
-          });
-        } else {
-          setSyncResult({
-            connectionId,
-            type: 'error',
-            message: saga.error_detail || 'Sync fejlede',
-          });
-        }
-      } else if (start.legacyResult) {
-        const result = start.legacyResult;
+      if (saga.status === 'completed') {
+        const { message, detail } = buildBankSyncResultMessage(saga);
         setSyncResult({
           connectionId,
           type: 'success',
-          message: `${result.new_imported} nye, ${result.duplicates_skipped} duplikater`,
-          detail: result.total_fetched > 0
-            ? `${result.total_fetched} transaktioner hentet`
-            : 'Ingen nye transaktioner',
+          message,
+          detail,
+        });
+      } else {
+        setSyncResult({
+          connectionId,
+          type: 'error',
+          message: saga.error_detail || 'Sync fejlede',
         });
       }
 

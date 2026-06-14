@@ -1,3 +1,11 @@
+x-enable-banking-env: &enable-banking-env
+  ENABLE_BANKING_APP_ID: 4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7
+  ENABLE_BANKING_KEY_PATH: /app/enablebanking-sandbox.pem
+  ENABLE_BANKING_REDIRECT_URI: http://localhost:8009/api/v1/bank/callback
+
+x-enable-banking-volumes: &enable-banking-volumes
+  - ./enablebanking-sandbox.pem:/app/enablebanking-sandbox.pem:ro
+
 services:
   # === Infrastructure ===
 
@@ -563,14 +571,10 @@ services:
       INTERNAL_API_KEY: dev-internal-api-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
-      TRANSACTION_SERVICE_URL: http://transaction-service:8002
       ACCOUNT_SERVICE_URL: http://account-service:8003
-      ENABLE_BANKING_APP_ID: 4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7
-      ENABLE_BANKING_KEY_PATH: /app/enablebanking-sandbox.pem
-      ENABLE_BANKING_REDIRECT_URI: http://localhost:8009/api/v1/bank/callback
+      <<: *enable-banking-env
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-    volumes:
-      - ./enablebanking-sandbox.pem:/app/enablebanking-sandbox.pem:ro
+    volumes: *enable-banking-volumes
     depends_on:
       postgres-banking:
         condition: service_healthy
@@ -627,18 +631,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: dev-secret-key-change-in-production
-      # Must match banking-service — wrong APP_ID causes Enable Banking 401 "Wrong signature"
-      ENABLE_BANKING_APP_ID: 4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7
-      ENABLE_BANKING_KEY_PATH: /app/enablebanking-sandbox.pem
-      ENABLE_BANKING_REDIRECT_URI: http://localhost:8009/api/v1/bank/callback
+      <<: *enable-banking-env
       ENVIRONMENT: development
     depends_on:
       banking-service:
         condition: service_started
       rabbitmq:
         condition: service_healthy
-    volumes:
-      - ./enablebanking-sandbox.pem:/app/enablebanking-sandbox.pem:ro
+    volumes: *enable-banking-volumes
 
   gateway-service:
     build:
@@ -761,6 +761,22 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+
+  saga-timeout-worker:
+    build:
+      context: .
+      dockerfile: services/saga-service/Dockerfile
+    command: ["python", "-m", "app.workers.saga_timeout_worker"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ENVIRONMENT: development
+      SAGA_TIMEOUT_SECONDS: 300
+      TIMEOUT_CHECK_INTERVAL_SECONDS: 30
+    depends_on:
+      saga-service:
+        condition: service_started
 
 volumes:
   # mysql_data: preserved but unused — delete with: docker volume rm finance-tracker_mysql_data

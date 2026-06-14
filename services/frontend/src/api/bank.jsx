@@ -28,10 +28,7 @@ export async function syncConnection(connectionId, dateFrom = null) {
     throw new Error(err.detail || 'Sync fejlede');
   }
   const data = await resp.json();
-  if (resp.status === 202 && data.saga_id) {
-    return { sagaId: data.saga_id, status: data.status || 'started' };
-  }
-  return { sagaId: null, status: 'completed', legacyResult: data };
+  return { sagaId: data.saga_id, status: data.status || 'started' };
 }
 
 export async function fetchAvailableBanks(country = 'DK') {

@@ -47,14 +47,6 @@ class SyncRequest(BaseModel):
     date_from: Optional[str] = None
 
 
-class SyncResponse(BaseModel):
-    total_fetched: int
-    new_imported: int
-    duplicates_skipped: int
-    errors: int
-    parse_skipped: int = 0
-
-
 class SyncSagaResponse(BaseModel):
     saga_id: str
     status: str = "started"

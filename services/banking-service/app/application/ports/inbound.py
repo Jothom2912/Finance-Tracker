@@ -3,8 +3,6 @@ from __future__ import annotations
 from typing import Any, Optional, Protocol
 from uuid import UUID
 
-from app.domain.entities import SyncResult
-
 
 class IBankingService(Protocol):
     async def list_banks(self, country: str = "DK") -> list[dict[str, Any]]: ...
@@ -22,9 +20,5 @@ class IBankingService(Protocol):
     async def start_sync_saga(
         self, connection_id: UUID, user_id: int, date_from: Optional[str] = None,
     ) -> str: ...
-
-    async def sync_transactions(
-        self, connection_id: UUID, user_id: int, date_from: Optional[str] = None,
-    ) -> SyncResult: ...
 
     async def disconnect(self, connection_id: UUID) -> bool: ...

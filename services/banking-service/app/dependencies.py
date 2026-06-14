@@ -8,7 +8,6 @@ from app.adapters.outbound.enable_banking_client import (
     EnableBankingClient,
     EnableBankingConfig,
 )
-from app.adapters.outbound.transaction_service_client import TransactionServiceClient
 from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.application.service import BankingService
 from app.config import settings
@@ -42,5 +41,4 @@ async def get_banking_service(
         uow=uow,
         account_port=account_port,
         banking_client=_get_banking_client(),
-        transaction_importer=TransactionServiceClient(),
     )

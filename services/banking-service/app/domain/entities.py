@@ -33,15 +33,6 @@ class BankConnection:
 
 
 @dataclass
-class SyncResult:
-    total_fetched: int
-    new_imported: int
-    duplicates_skipped: int
-    errors: int
-    parse_skipped: int = 0
-
-
-@dataclass
 class OutboxEntry:
     id: str
     aggregate_type: str

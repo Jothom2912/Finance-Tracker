@@ -13,6 +13,7 @@ help:
 	@printf '  check            Run formatting and lint checks\n'
 	@printf '  migrate          Run database migrations\n'
 	@printf '  migrate-down     Roll back one migration\n'
+	@printf '  timeout-worker   Run saga timeout scanner\n'
 	@printf '  clean            Remove generated artifacts\n'
 
 install-deps:
@@ -41,6 +42,9 @@ migrate:
 
 migrate-down:
 	uv run alembic downgrade -1
+
+timeout-worker:
+	uv run python -m app.workers.saga_timeout_worker
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

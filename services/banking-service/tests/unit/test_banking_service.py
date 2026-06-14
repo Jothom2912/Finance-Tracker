@@ -9,7 +9,7 @@ import pytest
 from app.application.service import BankingService
 from app.domain.entities import BankConnection
 from app.domain.exceptions import BankAccountNotOwned
-from contracts.events.bank import BankConnectionCreatedEvent, BankSyncCompletedEvent
+from contracts.events.bank import BankConnectionCreatedEvent
 from contracts.events.saga import BankSyncSagaStartEvent
 
 
@@ -39,22 +39,15 @@ def banking_client() -> MagicMock:
 
 
 @pytest.fixture
-def transaction_importer() -> MagicMock:
-    return MagicMock()
-
-
-@pytest.fixture
 def service(
     uow: MagicMock,
     account_port: AsyncMock,
     banking_client: MagicMock,
-    transaction_importer: MagicMock,
 ) -> BankingService:
     return BankingService(
         uow=uow,
         account_port=account_port,
         banking_client=banking_client,
-        transaction_importer=transaction_importer,
     )
 
 
@@ -138,36 +131,4 @@ async def test_start_sync_saga_emits_bank_sync_start_event(
     assert isinstance(event, BankSyncSagaStartEvent)
     assert event.correlation_id == saga_id
     assert event.connection_id == str(connection_id)
-    uow.commit.assert_awaited()
-
-
-@pytest.mark.asyncio
-async def test_sync_transactions_emits_sync_completed_event(
-    service: BankingService,
-    uow: MagicMock,
-    banking_client: MagicMock,
-    transaction_importer: MagicMock,
-) -> None:
-    connection_id = uuid4()
-    conn = BankConnection(
-        id=connection_id,
-        account_id=1,
-        user_id=2,
-        session_id="sess-1",
-        bank_name="Nordea",
-        bank_country="DK",
-        bank_account_uid="uid-1",
-    )
-    uow.connections.get_by_id.return_value = conn
-    uow.accounts.get_projection.return_value = (2, "Main Account")
-    banking_client.get_transactions.return_value = ([], 0)
-    transaction_importer.bulk_import.return_value = MagicMock(
-        imported=0, duplicates_skipped=0, errors=0,
-    )
-
-    await service.sync_transactions(connection_id, user_id=2)
-
-    uow.outbox.add.assert_awaited_once()
-    event = uow.outbox.add.await_args.kwargs["event"]
-    assert isinstance(event, BankSyncCompletedEvent)
     uow.commit.assert_awaited()
