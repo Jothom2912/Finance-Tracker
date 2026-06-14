@@ -1,0 +1,20 @@
+groups:
+  - name: finance-tracker-alerts
+    rules:
+      - alert: FinanceTrackerServiceDown
+        expr: probe_success{job="finance-http-health"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Finance Tracker service is down"
+          description: "{{ $labels.instance }} has failed the HTTP health check for more than 1 minute."
+
+      - alert: FinanceTrackerInfrastructureDown
+        expr: probe_success{job="finance-tcp-health"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Finance Tracker infrastructure component is unreachable"
+          description: "{{ $labels.instance }} has failed the TCP connectivity check for more than 1 minute."
