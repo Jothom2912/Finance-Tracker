@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.adapters.outbound.outbox_repository import SyncOutboxRepository
 from app.adapters.outbound.postgresql_account_repository import (
-    MySQLAccountRepository as AccountRepository,
+    PostgresAccountRepository as AccountRepository,
 )
 
 

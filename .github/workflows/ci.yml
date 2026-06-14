@@ -8,50 +8,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  backend:
-    name: Backend (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install dependencies
-        run: make -C services/monolith install-deps
-
-      - name: Lint
-        run: make -C services/monolith lint
-
-      - name: Format check
-        run: make -C services/monolith format-check
-
-      - name: Run tests
-        run: |
-          cd services/monolith && uv run pytest tests/ -v --cov=backend --cov-report=xml --cov-report=term
-        env:
-          ACTIVE_DB: mysql
-          SECRET_KEY: test-secret-key-for-ci
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          file: ./services/monolith/coverage.xml
-          flags: backend
-          name: codecov-umbrella
-          fail_ci_if_error: false
-
   user-service:
     name: User Service (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

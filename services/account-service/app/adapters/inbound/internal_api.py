@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.adapters.outbound.postgresql_account_repository import MySQLAccountRepository
+from app.adapters.outbound.postgresql_account_repository import PostgresAccountRepository
 from app.config import INTERNAL_API_KEY
 from app.database import get_db
 
@@ -31,7 +31,7 @@ def account_exists(
     db: Session = Depends(get_db),
 ) -> dict:
     """Check if an account exists. Used by other services (e.g. goal-service)."""
-    repo = MySQLAccountRepository(db)
+    repo = PostgresAccountRepository(db)
     account = repo.get_by_id(account_id)
     return {"exists": account is not None}
 
@@ -43,7 +43,7 @@ def account_owner(
     db: Session = Depends(get_db),
 ) -> dict:
     """Return the owning user_id for an account. Used by goal-service for authorization."""
-    repo = MySQLAccountRepository(db)
+    repo = PostgresAccountRepository(db)
     account = repo.get_by_id(account_id)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")

@@ -21,7 +21,7 @@ function DashboardOverview() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
     };
     refresh();
-    // MySQL projection lags transaction-service via outbox + consumer (~2–5s).
+    // Gateway aggregates data from multiple services; allow brief propagation delay.
     await new Promise((resolve) => setTimeout(resolve, 2500));
     refresh();
   }, [queryClient]);

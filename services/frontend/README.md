@@ -1,8 +1,8 @@
 # Finance Tracker Frontend
 
-React 18 SPA built with Vite 5 for personal finance tracking. Connects to the monolith backend (port 8000) for analytics and bank connections, user-service (port 8001) for authentication, transaction-service (port 8002) for transaction and category CRUD, and goal-service (port 8006) for savings goals. Uses TanStack Query for server-state management on dashboard and transaction pages.
+React 18 SPA built with Vite 5 for personal finance tracking. Connects to gateway-service (port 8010) for dashboard analytics, user-service (port 8001) for authentication, transaction-service (port 8002) for transaction and category CRUD, budget-service (port 8003) for budgets, account-service (port 8004) for accounts, goal-service (port 8006) for savings goals, and banking-service (port 8009) for bank connections. Uses TanStack Query for server-state management on dashboard and transaction pages.
 
-Package manager: npm only. `package-lock.json` is the source of truth for this frontend; do not use Yarn here.
+Package manager: yarn. `yarn.lock` is the source of truth for this frontend.
 
 ## Quick Start
 

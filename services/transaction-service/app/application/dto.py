@@ -128,7 +128,7 @@ class BulkCreateTransactionItemDTO(BaseModel):
 
 class BulkCreateTransactionDTO(BaseModel):
     """Bulk transaction-import request used by trusted internal
-    producers such as the banking module in the monolith.
+    producers such as banking-service.
     """
 
     items: list[BulkCreateTransactionItemDTO] = Field(min_length=1, max_length=500)
