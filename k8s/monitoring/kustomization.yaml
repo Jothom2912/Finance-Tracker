@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: finance-tracker
+
+resources:
+  - prometheus.yaml
+  - blackbox-exporter.yaml
+  - grafana.yaml
+  - loki.yaml
+  - promtail-rbac.yaml
+  - promtail.yaml
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml=config/prometheus/prometheus.yml
+  - name: prometheus-alerts
+    files:
+      - alerts.yml=config/prometheus/alerts.yml
+  - name: blackbox-config
+    files:
+      - blackbox.yml=config/blackbox/blackbox.yml
+  - name: loki-config
+    files:
+      - loki-config.yml=config/loki/loki-config.yml
+  - name: promtail-config
+    files:
+      - promtail-config.yml=config/promtail/promtail-config.yml
+  - name: grafana-datasources
+    files:
+      - datasources.yml=config/grafana-datasources/datasources.yml
+  - name: grafana-dashboards-provider
+    files:
+      - dashboards.yml=config/grafana-dashboards-provider/dashboards.yml
+  - name: grafana-dashboard-finance-tracker
+    files:
+      - finance-tracker-overview.json=config/grafana-dashboards/finance-tracker-overview.json
+
+generatorOptions:
+  disableNameSuffixHash: true
