@@ -148,6 +148,12 @@ async def get_graphql_context(
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ) -> dict[str, Any]:
     """Build resolver context with hexagonal services and auth info."""
+    logger.warning(
+        "DEPRECATED: monolith GraphQL endpoint hit — use gateway-service. method=%s path=%s account=%s",
+        request.method,
+        request.url.path,
+        request.headers.get("X-Account-ID", "unknown"),
+    )
     return {
         "analytics_service": get_analytics_service(db),
         "category_service": get_category_service(db),
