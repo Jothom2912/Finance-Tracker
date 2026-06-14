@@ -36,6 +36,7 @@ def health():
 
 
 app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(saga_router, prefix="/api/v1")
 app.include_router(create_graphql_router(), prefix="/api/v1/graphql")
 
 if __name__ == "__main__":

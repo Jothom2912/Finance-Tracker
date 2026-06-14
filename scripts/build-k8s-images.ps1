@@ -9,6 +9,7 @@ docker build -t finance-tracker/goal-service:local -f services/goal-service/Dock
 docker build -t finance-tracker/ai-service:local -f services/ai-service/Dockerfile .
 docker build -t finance-tracker/gateway-service:local -f services/gateway-service/Dockerfile .
 docker build -t finance-tracker/banking-service:local -f services/banking-service/Dockerfile .
+docker build -t finance-tracker/saga-service:local -f services/saga-service/Dockerfile .
 docker build -t finance-tracker/serverless-health-job:local -f services/serverless-health-job/Dockerfile .
 
 if (Test-Path "services/frontend/Dockerfile") {
