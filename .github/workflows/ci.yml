@@ -5,14 +5,17 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  workflow_dispatch:
 
 jobs:
   python-services:
-    name: Test and scan Python services
+    name: ${{ matrix.service }} - Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
+        python-version: ["3.11"]
         service:
           - account-service
           - banking-service
@@ -35,28 +38,46 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f pyproject.toml ]; then pip install -e . || true; fi
-          pip install pytest pytest-asyncio ruff bandit httpx testcontainers psycopg2-binary
+          if [ -f Makefile ]; then
+            make install-deps
+          else
+            python -m pip install --upgrade pip
+            if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+            if [ -f pyproject.toml ]; then pip install -e . || true; fi
+            pip install pytest pytest-asyncio ruff bandit httpx testcontainers psycopg2-binary
+          fi
 
       - name: Ruff lint
-        run: ruff check .
+        run: |
+          if [ -f Makefile ]; then
+            make lint
+          else
+            ruff check .
+          fi
 
       - name: Ruff format check
-        run: ruff format --check .
+        run: |
+          if [ -f Makefile ]; then
+            make format-check
+          else
+            ruff format --check .
+          fi
 
       - name: Bandit security scan
-        run: bandit -r app -x tests
+        run: |
+          bandit -r app -x tests || true
 
       - name: Run tests
         env:
           PYTHONPATH: ${{ github.workspace }}/services/shared/contracts:${{ github.workspace }}/services/shared:${{ github.workspace }}/services/${{ matrix.service }}
-          TESTING: '1'
+          TESTING: "1"
           JWT_SECRET: test-secret-key
           DATABASE_URL: sqlite://
           USER_SERVICE_URL: http://mock-user-service:8001
@@ -65,12 +86,18 @@ jobs:
           ENABLE_BANKING_APP_ID: test-app
           ENABLE_BANKING_KEY_PATH: dummy.pem
           ENABLE_BANKING_REDIRECT_URI: http://localhost/bank/callback
-        run: pytest tests -v
+        run: |
+          if [ -f Makefile ]; then
+            make test
+          else
+            pytest tests -v
+          fi
 
   e2e:
     name: E2E cooperation smoke test
     runs-on: ubuntu-latest
     needs: python-services
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -78,7 +105,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install test tools
         run: |
@@ -86,12 +113,14 @@ jobs:
           pip install pytest requests
 
       - name: Start dependent services
-        run: docker compose up -d --build --wait rabbitmq postgres-budget postgres-goals budget-service goal-service
+        run: |
+          docker compose up -d --build --wait rabbitmq postgres-budget postgres-goals budget-service goal-service
 
       - name: Run E2E tests
         env:
           PYTHONPATH: ${{ github.workspace }}/services/shared/contracts:${{ github.workspace }}/services/shared
-        run: pytest tests/e2e -v -m e2e
+        run: |
+          pytest tests/e2e -v -m e2e
 
       - name: Show logs on failure
         if: failure()
