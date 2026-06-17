@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class HttpAnalyticsReadRepository(IAnalyticsReadRepository):
-
     def __init__(self, auth_header: str) -> None:
         self._auth_header = auth_header
         self._base = TRANSACTION_SERVICE_URL.rstrip("/")
@@ -76,16 +75,18 @@ class HttpAnalyticsReadRepository(IAnalyticsReadRepository):
             if end_date and row_date > end_date:
                 continue
 
-            result.append({
-                "idTransaction": row.get("id"),
-                "amount": row.get("amount", 0),
-                "description": row.get("description"),
-                "date": raw_date,
-                "type": row.get("transaction_type", ""),
-                "Category_idCategory": row.get("category_id"),
-                "Account_idAccount": row.get("account_id"),
-                "categorization_tier": row.get("categorization_tier"),
-            })
+            result.append(
+                {
+                    "idTransaction": row.get("id"),
+                    "amount": row.get("amount", 0),
+                    "description": row.get("description"),
+                    "date": raw_date,
+                    "type": row.get("transaction_type", ""),
+                    "Category_idCategory": row.get("category_id"),
+                    "Account_idAccount": row.get("account_id"),
+                    "categorization_tier": row.get("categorization_tier"),
+                }
+            )
 
         return result
 

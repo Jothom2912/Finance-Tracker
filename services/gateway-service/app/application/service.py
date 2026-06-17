@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class AnalyticsService:
-
     def __init__(self, read_repo: IAnalyticsReadRepository):
         self._read_repo = read_repo
 

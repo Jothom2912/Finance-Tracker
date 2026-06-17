@@ -131,9 +131,7 @@ async def get_graphql_context(
 def _require_account_id(ctx: dict[str, Any]) -> int:
     account_id = ctx.get("account_id")
     if not account_id:
-        raise ValueError(
-            "Account ID required. Send Authorization and/or X-Account-ID header."
-        )
+        raise ValueError("Account ID required. Send Authorization and/or X-Account-ID header.")
     return account_id
 
 
@@ -180,9 +178,7 @@ class Query:
             average_monthly_expenses=result.average_monthly_expenses,
         )
 
-    @strawberry.field(
-        description="Monthly expense totals over a period (respects budget start day)"
-    )
+    @strawberry.field(description="Monthly expense totals over a period (respects budget start day)")
     def expenses_by_month(
         self,
         info: Info,
@@ -200,14 +196,9 @@ class Query:
             end_date=end_date,
             budget_start_day=start_day,
         )
-        return [
-            MonthlyExpensesType(month=r["month"], total_expenses=r["total_expenses"])
-            for r in results
-        ]
+        return [MonthlyExpensesType(month=r["month"], total_expenses=r["total_expenses"]) for r in results]
 
-    @strawberry.field(
-        description="Budget summary for a specific month (proxied to budget-service)"
-    )
+    @strawberry.field(description="Budget summary for a specific month (proxied to budget-service)")
     def budget_summary(
         self,
         info: Info,
@@ -248,9 +239,7 @@ class Query:
             over_budget_count=data["over_budget_count"],
         )
 
-    @strawberry.field(
-        description="Financial overview for the current budget month with trend vs previous month"
-    )
+    @strawberry.field(description="Financial overview for the current budget month with trend vs previous month")
     def current_month_overview(self, info: Info) -> CurrentMonthOverviewType:
         ctx = info.context
         account_id = _require_account_id(ctx)
@@ -283,15 +272,9 @@ class Query:
             return round(((current - previous) / abs(previous)) * 100, 1)
 
         trend = TrendType(
-            income_change_percent=_pct_change(
-                result.total_income, prev_result.total_income
-            ),
-            expense_change_percent=_pct_change(
-                result.total_expenses, prev_result.total_expenses
-            ),
-            net_change_diff=round(
-                result.net_change_in_period - prev_result.net_change_in_period, 2
-            ),
+            income_change_percent=_pct_change(result.total_income, prev_result.total_income),
+            expense_change_percent=_pct_change(result.total_expenses, prev_result.total_expenses),
+            net_change_diff=round(result.net_change_in_period - prev_result.net_change_in_period, 2),
             previous_month_income=prev_result.total_income,
             previous_month_expenses=prev_result.total_expenses,
         )
@@ -326,14 +309,10 @@ class Query:
 
         start, end = budget_period(year, month, start_day)
 
-        result = service.get_financial_overview(
-            account_id=account_id, start_date=start, end_date=end
-        )
+        result = service.get_financial_overview(account_id=account_id, start_date=start, end_date=end)
 
         total = result.total_expenses or 1.0
-        sorted_cats = sorted(
-            result.expenses_by_category.items(), key=lambda x: x[1], reverse=True
-        )[:limit]
+        sorted_cats = sorted(result.expenses_by_category.items(), key=lambda x: x[1], reverse=True)[:limit]
 
         return [
             TopSpendingCategoryType(
@@ -349,16 +328,9 @@ class Query:
         ctx = info.context
         service: AnalyticsService = ctx["analytics_service"]
         cats = service._read_repo.get_categories()
-        return [
-            CategoryType(
-                id=c.get("idCategory", 0), name=c.get("name", ""), type=c.get("type", "")
-            )
-            for c in cats
-        ]
+        return [CategoryType(id=c.get("idCategory", 0), name=c.get("name", ""), type=c.get("type", "")) for c in cats]
 
-    @strawberry.field(
-        description="List transactions for the active account"
-    )
+    @strawberry.field(description="List transactions for the active account")
     def transactions(
         self,
         info: Info,

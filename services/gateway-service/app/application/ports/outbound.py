@@ -6,7 +6,6 @@ from typing import Optional
 
 
 class IAnalyticsReadRepository(ABC):
-
     @abstractmethod
     def get_transactions(
         self,

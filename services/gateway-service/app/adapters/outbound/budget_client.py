@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class BudgetClient:
-
     def __init__(self, auth_header: str) -> None:
         self._auth_header = auth_header
         self._base = BUDGET_SERVICE_URL.rstrip("/")
@@ -46,10 +45,7 @@ class BudgetClient:
                     headers=self._headers(),
                 )
                 if resp.status_code == 401:
-                    logger.warning(
-                        "budget-service auth rejected (401) for budget_summary "
-                        "— check token forwarding"
-                    )
+                    logger.warning("budget-service auth rejected (401) for budget_summary — check token forwarding")
                     return None
                 resp.raise_for_status()
                 return resp.json()

@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class AccountClient:
-
     def __init__(self, auth_header: str) -> None:
         self._auth_header = auth_header
         self._base = ACCOUNT_SERVICE_URL.rstrip("/")
@@ -34,22 +33,19 @@ class AccountClient:
                 return int(data.get("budget_start_day", 1))
         except httpx.ConnectError as exc:
             logger.warning(
-                "account-service unreachable for budget_start_day (account=%s), "
-                "falling back to default 1: %s",
+                "account-service unreachable for budget_start_day (account=%s), falling back to default 1: %s",
                 account_id,
                 exc,
             )
         except httpx.TimeoutException as exc:
             logger.warning(
-                "account-service timeout for budget_start_day (account=%s), "
-                "falling back to default 1: %s",
+                "account-service timeout for budget_start_day (account=%s), falling back to default 1: %s",
                 account_id,
                 exc,
             )
         except httpx.HTTPStatusError as exc:
             logger.warning(
-                "account-service returned %d for budget_start_day (account=%s), "
-                "falling back to default 1: %s",
+                "account-service returned %d for budget_start_day (account=%s), falling back to default 1: %s",
                 exc.response.status_code,
                 account_id,
                 exc.response.text[:200],

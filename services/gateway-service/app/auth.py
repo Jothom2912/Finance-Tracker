@@ -55,7 +55,7 @@ def get_account_id_from_headers(
 ) -> Optional[int]:
     token = ""
     if authorization and authorization.startswith("Bearer "):
-        token = authorization[len("Bearer "):]
+        token = authorization[len("Bearer ") :]
 
     if x_account_id:
         try:
