@@ -689,6 +689,7 @@ Utility scripts for development, deployment, and operations live in `scripts/`:
 | [`README.md`](README.md) | This file — project overview and architecture |
 | [`INSTALLATION.md`](INSTALLATION.md) | Detailed setup and installation guide |
 | [`KUBERNETES_GUIDE.md`](KUBERNETES_GUIDE.md) | Full Kubernetes + KEDA deployment walkthrough |
+| [`docs/asyncapi.yaml`](docs/asyncapi.yaml) | AsyncAPI documentation for RabbitMQ events, queues, routing keys, payload schemas, producers and consumers |
 | [`docs/MONITORING.md`](docs/MONITORING.md) | Monitoring stack setup and dashboards |
 | [`docs/MANDATORY_ASSIGNMENT_1_REPORT.md`](docs/MANDATORY_ASSIGNMENT_1_REPORT.md) | Course assignment report |
 | [`docs/adr/`](docs/adr/) | Architecture Decision Records |

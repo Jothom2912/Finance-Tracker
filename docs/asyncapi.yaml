@@ -1,0 +1,1282 @@
+asyncapi: "2.6.0"
+
+info:
+  title: Finance Tracker AsyncAPI
+  version: "1.0.0"
+  description: >
+    AsyncAPI documentation for Finance Tracker message-based communication.
+    The system uses RabbitMQ for asynchronous communication between backend
+    microservices. REST and GraphQL document synchronous APIs, while this file
+    documents event-driven communication, queues, routing keys, producers,
+    consumers and payload formats.
+
+defaultContentType: application/json
+
+servers:
+  rabbitmq:
+    url: rabbitmq:5672
+    protocol: amqp
+    description: RabbitMQ broker running in Docker Compose and Kubernetes.
+
+channels:
+  user.created:
+    description: Published when a new user is created.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: user-service publishes UserCreatedEvent.
+      message:
+        $ref: "#/components/messages/UserCreated"
+      x-producer: user-service
+      x-consumers:
+        - service: account-service
+          queue: account_service.account_creation
+
+  account.created:
+    description: Published when an account is created.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: account-service publishes AccountCreatedEvent.
+      message:
+        $ref: "#/components/messages/AccountCreated"
+      x-producer: account-service
+      x-consumers:
+        - service: banking-service
+          queue: banking.account_sync
+
+  account.updated:
+    description: Published when an account is updated.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: account-service publishes AccountUpdatedEvent.
+      message:
+        $ref: "#/components/messages/AccountUpdated"
+      x-producer: account-service
+      x-consumers:
+        - service: banking-service
+          queue: banking.account_sync
+
+  category.created:
+    description: Published when a category is created.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: transaction-service publishes CategoryCreatedEvent.
+      message:
+        $ref: "#/components/messages/CategoryCreated"
+      x-producer: transaction-service
+      x-consumers:
+        - service: categorization-service
+          queue: categorization.category_sync
+
+  category.updated:
+    description: Published when a category is updated.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: transaction-service publishes CategoryUpdatedEvent.
+      message:
+        $ref: "#/components/messages/CategoryUpdated"
+      x-producer: transaction-service
+      x-consumers:
+        - service: categorization-service
+          queue: categorization.category_sync
+
+  category.deleted:
+    description: Published when a category is deleted.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: transaction-service publishes CategoryDeletedEvent.
+      message:
+        $ref: "#/components/messages/CategoryDeleted"
+      x-producer: transaction-service
+      x-consumers:
+        - service: categorization-service
+          queue: categorization.category_sync
+
+  transaction.created:
+    description: Published when a transaction is created.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: transaction-service publishes TransactionCreatedEvent.
+      message:
+        $ref: "#/components/messages/TransactionCreated"
+      x-producer: transaction-service
+      x-consumers:
+        - service: categorization-service
+          queue: categorization.transaction_created
+
+  transaction.updated:
+    description: Published when a transaction is updated.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: transaction-service publishes TransactionUpdatedEvent.
+      message:
+        $ref: "#/components/messages/TransactionUpdated"
+      x-producer: transaction-service
+
+  transaction.deleted:
+    description: Published when a transaction is deleted or soft-deleted.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: transaction-service publishes TransactionDeletedEvent.
+      message:
+        $ref: "#/components/messages/TransactionDeleted"
+      x-producer: transaction-service
+
+  transaction.categorized:
+    description: Published when categorization-service has categorized a transaction.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: categorization-service publishes TransactionCategorizedEvent.
+      message:
+        $ref: "#/components/messages/TransactionCategorized"
+      x-producer: categorization-service
+      x-consumers:
+        - service: transaction-service
+          queue: transaction_service.transaction_categorized
+
+  budget.month_closed:
+    description: Published when a budget month is closed.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: budget-service publishes BudgetMonthClosedEvent.
+      message:
+        $ref: "#/components/messages/BudgetMonthClosed"
+      x-producer: budget-service
+      x-consumers:
+        - service: goal-service
+          queue: goal_service.budget_month_closed
+
+  goal.created:
+    description: Published when a goal is created.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: goal-service publishes GoalCreatedEvent.
+      message:
+        $ref: "#/components/messages/GoalCreated"
+      x-producer: goal-service
+
+  goal.updated:
+    description: Published when a goal is updated.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: goal-service publishes GoalUpdatedEvent.
+      message:
+        $ref: "#/components/messages/GoalUpdated"
+      x-producer: goal-service
+
+  goal.deleted:
+    description: Published when a goal is deleted.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: goal-service publishes GoalDeletedEvent.
+      message:
+        $ref: "#/components/messages/GoalDeleted"
+      x-producer: goal-service
+
+  bank.connection.created:
+    description: Published when a bank connection is created.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: banking-service publishes BankConnectionCreatedEvent.
+      message:
+        $ref: "#/components/messages/BankConnectionCreated"
+      x-producer: banking-service
+
+  bank.connection.disconnected:
+    description: Published when a bank connection is disconnected.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: banking-service publishes BankConnectionDisconnectedEvent.
+      message:
+        $ref: "#/components/messages/BankConnectionDisconnected"
+      x-producer: banking-service
+
+  bank.sync.completed:
+    description: Published when a bank sync has completed.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: banking-service publishes BankSyncCompletedEvent.
+      message:
+        $ref: "#/components/messages/BankSyncCompleted"
+      x-producer: banking-service
+
+  saga.bank_sync.start:
+    description: Published by banking-service to start the bank sync saga.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: banking-service publishes BankSyncSagaStartEvent.
+      message:
+        $ref: "#/components/messages/BankSyncSagaStart"
+      x-producer: banking-service
+      x-consumers:
+        - service: saga-service
+          queue: saga_service.saga_start
+
+  saga.cmd.bank_fetch_transactions:
+    description: Saga command asking banking-service to fetch transactions from the bank API.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: saga-service publishes BankFetchTransactionsCommand.
+      message:
+        $ref: "#/components/messages/BankFetchTransactionsCommand"
+      x-producer: saga-service
+      x-consumers:
+        - service: banking-service
+          queue: banking_service.saga_commands
+
+  saga.cmd.bulk_import_transactions:
+    description: Saga command asking transaction-service to bulk import fetched transactions.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: saga-service publishes BulkImportTransactionsCommand.
+      message:
+        $ref: "#/components/messages/BulkImportTransactionsCommand"
+      x-producer: saga-service
+      x-consumers:
+        - service: transaction-service
+          queue: transaction_service.saga_commands
+
+  saga.cmd.rollback_import:
+    description: Compensation command asking transaction-service to rollback imported transactions.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: saga-service publishes RollbackImportCommand.
+      message:
+        $ref: "#/components/messages/RollbackImportCommand"
+      x-producer: saga-service
+      x-consumers:
+        - service: transaction-service
+          queue: transaction_service.saga_commands
+
+  saga.cmd.mark_sync_complete:
+    description: Saga command asking banking-service to mark the sync as completed.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: saga-service publishes MarkSyncCompleteCommand.
+      message:
+        $ref: "#/components/messages/MarkSyncCompleteCommand"
+      x-producer: saga-service
+      x-consumers:
+        - service: banking-service
+          queue: banking_service.saga_commands
+
+  saga.reply.#:
+    description: Replies from banking-service and transaction-service back to saga-service.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: banking-service and transaction-service publish SagaReply messages.
+      message:
+        $ref: "#/components/messages/SagaReply"
+      x-producers:
+        - banking-service
+        - transaction-service
+      x-consumers:
+        - service: saga-service
+          queue: saga_service.saga_reply
+
+  saga.bank_sync.completed:
+    description: Published when the bank sync saga has completed successfully.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: saga-service publishes BankSyncSagaCompletedEvent.
+      message:
+        $ref: "#/components/messages/BankSyncSagaCompleted"
+      x-producer: saga-service
+
+  serverless.health.requests:
+    description: Direct RabbitMQ queue used by KEDA ScaledJob for serverless health checks.
+    bindings:
+      amqp:
+        is: queue
+        queue:
+          name: serverless.health.requests
+          durable: true
+    publish:
+      summary: serverless-health-publish job publishes health check requests.
+      message:
+        $ref: "#/components/messages/HealthReportRequested"
+      x-producer: serverless-health-publish-job
+      x-consumers:
+        - service: serverless-health-job
+          queue: serverless.health.requests
+          scaledBy: KEDA ScaledJob
+
+components:
+  messages:
+    UserCreated:
+      name: UserCreatedEvent
+      payload:
+        $ref: "#/components/schemas/UserCreatedEvent"
+
+    AccountCreated:
+      name: AccountCreatedEvent
+      payload:
+        $ref: "#/components/schemas/AccountCreatedEvent"
+
+    AccountUpdated:
+      name: AccountUpdatedEvent
+      payload:
+        $ref: "#/components/schemas/AccountUpdatedEvent"
+
+    CategoryCreated:
+      name: CategoryCreatedEvent
+      payload:
+        $ref: "#/components/schemas/CategoryCreatedEvent"
+
+    CategoryUpdated:
+      name: CategoryUpdatedEvent
+      payload:
+        $ref: "#/components/schemas/CategoryUpdatedEvent"
+
+    CategoryDeleted:
+      name: CategoryDeletedEvent
+      payload:
+        $ref: "#/components/schemas/CategoryDeletedEvent"
+
+    TransactionCreated:
+      name: TransactionCreatedEvent
+      payload:
+        $ref: "#/components/schemas/TransactionCreatedEvent"
+
+    TransactionUpdated:
+      name: TransactionUpdatedEvent
+      payload:
+        $ref: "#/components/schemas/TransactionUpdatedEvent"
+
+    TransactionDeleted:
+      name: TransactionDeletedEvent
+      payload:
+        $ref: "#/components/schemas/TransactionDeletedEvent"
+
+    TransactionCategorized:
+      name: TransactionCategorizedEvent
+      payload:
+        $ref: "#/components/schemas/TransactionCategorizedEvent"
+
+    BudgetMonthClosed:
+      name: BudgetMonthClosedEvent
+      payload:
+        $ref: "#/components/schemas/BudgetMonthClosedEvent"
+
+    GoalCreated:
+      name: GoalCreatedEvent
+      payload:
+        $ref: "#/components/schemas/GoalCreatedEvent"
+
+    GoalUpdated:
+      name: GoalUpdatedEvent
+      payload:
+        $ref: "#/components/schemas/GoalUpdatedEvent"
+
+    GoalDeleted:
+      name: GoalDeletedEvent
+      payload:
+        $ref: "#/components/schemas/GoalDeletedEvent"
+
+    BankConnectionCreated:
+      name: BankConnectionCreatedEvent
+      payload:
+        $ref: "#/components/schemas/BankConnectionCreatedEvent"
+
+    BankConnectionDisconnected:
+      name: BankConnectionDisconnectedEvent
+      payload:
+        $ref: "#/components/schemas/BankConnectionDisconnectedEvent"
+
+    BankSyncCompleted:
+      name: BankSyncCompletedEvent
+      payload:
+        $ref: "#/components/schemas/BankSyncCompletedEvent"
+
+    BankSyncSagaStart:
+      name: BankSyncSagaStartEvent
+      payload:
+        $ref: "#/components/schemas/BankSyncSagaStartEvent"
+
+    BankFetchTransactionsCommand:
+      name: BankFetchTransactionsCommand
+      payload:
+        $ref: "#/components/schemas/BankFetchTransactionsCommand"
+
+    BulkImportTransactionsCommand:
+      name: BulkImportTransactionsCommand
+      payload:
+        $ref: "#/components/schemas/BulkImportTransactionsCommand"
+
+    RollbackImportCommand:
+      name: RollbackImportCommand
+      payload:
+        $ref: "#/components/schemas/RollbackImportCommand"
+
+    MarkSyncCompleteCommand:
+      name: MarkSyncCompleteCommand
+      payload:
+        $ref: "#/components/schemas/MarkSyncCompleteCommand"
+
+    SagaReply:
+      name: SagaReply
+      payload:
+        $ref: "#/components/schemas/SagaReply"
+
+    BankSyncSagaCompleted:
+      name: BankSyncSagaCompletedEvent
+      payload:
+        $ref: "#/components/schemas/BankSyncSagaCompletedEvent"
+
+    HealthReportRequested:
+      name: HealthReportRequested
+      payload:
+        $ref: "#/components/schemas/HealthReportRequested"
+
+  schemas:
+    BaseEvent:
+      type: object
+      required:
+        - event_type
+        - event_version
+        - correlation_id
+        - timestamp
+      properties:
+        event_type:
+          type: string
+          description: Routing key and logical event type.
+        event_version:
+          type: integer
+          example: 1
+        correlation_id:
+          type: string
+          format: uuid
+          description: Used to trace events across services.
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC event creation time.
+
+    UserCreatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - user_id
+            - email
+            - username
+          properties:
+            user_id:
+              type: integer
+              example: 42
+            email:
+              type: string
+              example: alice@example.com
+            username:
+              type: string
+              example: alice
+
+    AccountCreatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - account_id
+            - user_id
+            - account_name
+          properties:
+            account_id:
+              type: integer
+              example: 1001
+            user_id:
+              type: integer
+              example: 42
+            account_name:
+              type: string
+              example: Main account
+            saldo:
+              type: string
+              example: "0.00"
+            budget_start_day:
+              type: integer
+              example: 1
+
+    AccountUpdatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - account_id
+            - user_id
+            - name
+            - saldo
+            - budget_start_day
+          properties:
+            account_id:
+              type: integer
+              example: 1001
+            user_id:
+              type: integer
+              example: 42
+            name:
+              type: string
+              example: Updated account
+            saldo:
+              type: string
+              example: "1250.50"
+            budget_start_day:
+              type: integer
+              example: 1
+
+    CategoryCreatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - category_id
+            - name
+            - category_type
+          properties:
+            category_id:
+              type: integer
+              example: 10
+            name:
+              type: string
+              example: Groceries
+            category_type:
+              type: string
+              example: expense
+
+    CategoryUpdatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - category_id
+            - name
+            - category_type
+            - previous_name
+            - previous_type
+          properties:
+            category_id:
+              type: integer
+              example: 10
+            name:
+              type: string
+              example: Food
+            category_type:
+              type: string
+              example: expense
+            previous_name:
+              type: string
+              example: Groceries
+            previous_type:
+              type: string
+              example: expense
+
+    CategoryDeletedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - category_id
+            - name
+            - category_type
+          properties:
+            category_id:
+              type: integer
+              example: 10
+            name:
+              type: string
+              example: Groceries
+            category_type:
+              type: string
+              example: expense
+
+    TransactionCreatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - transaction_id
+            - account_id
+            - user_id
+            - amount
+            - transaction_type
+            - tx_date
+          properties:
+            transaction_id:
+              type: integer
+              example: 501
+            account_id:
+              type: integer
+              example: 1001
+            user_id:
+              type: integer
+              example: 42
+            amount:
+              type: string
+              example: "-125.50"
+              description: Decimal amount serialized as string to preserve precision.
+            transaction_type:
+              type: string
+              example: expense
+            tx_date:
+              type: string
+              format: date
+              example: "2026-06-17"
+            category_id:
+              type:
+                - integer
+                - "null"
+              example: 10
+            category:
+              type: string
+              example: Groceries
+            description:
+              type: string
+              example: Netto
+            account_name:
+              type: string
+              example: Main account
+
+    TransactionUpdatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - transaction_id
+            - account_id
+            - user_id
+            - amount
+            - previous_amount
+            - transaction_type
+            - tx_date
+          properties:
+            transaction_id:
+              type: integer
+              example: 501
+            account_id:
+              type: integer
+              example: 1001
+            user_id:
+              type: integer
+              example: 42
+            amount:
+              type: string
+              example: "-135.00"
+            previous_amount:
+              type: string
+              example: "-125.50"
+            transaction_type:
+              type: string
+              example: expense
+            tx_date:
+              type: string
+              format: date
+              example: "2026-06-17"
+            category:
+              type: string
+              example: Food
+            previous_category:
+              type: string
+              example: Groceries
+            description:
+              type: string
+              example: Netto corrected
+
+    TransactionDeletedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - transaction_id
+            - account_id
+            - user_id
+            - amount
+          properties:
+            transaction_id:
+              type: integer
+              example: 501
+            account_id:
+              type: integer
+              example: 1001
+            user_id:
+              type: integer
+              example: 42
+            amount:
+              type: string
+              example: "-125.50"
+
+    TransactionCategorizedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - transaction_id
+            - category_id
+            - subcategory_id
+          properties:
+            transaction_id:
+              type: integer
+              example: 501
+            category_id:
+              type: integer
+              example: 10
+            subcategory_id:
+              type: integer
+              example: 101
+            subcategory_name:
+              type: string
+              example: Supermarket
+            merchant_id:
+              type:
+                - integer
+                - "null"
+              example: 77
+            tier:
+              type: string
+              example: rules
+            confidence:
+              type: string
+              example: "0.95"
+            model_version:
+              type: string
+              example: rules-keyword-v1
+
+    BudgetMonthClosedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - account_id
+            - year
+            - month
+            - budgeted_amount
+            - actual_spent
+            - surplus_amount
+          properties:
+            account_id:
+              type: integer
+              example: 1001
+            year:
+              type: integer
+              example: 2026
+            month:
+              type: integer
+              example: 6
+            budgeted_amount:
+              type: string
+              example: "5000.00"
+            actual_spent:
+              type: string
+              example: "4200.00"
+            surplus_amount:
+              type: string
+              example: "800.00"
+
+    GoalCreatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - goal_id
+            - user_id
+            - target_amount
+            - current_amount
+          properties:
+            goal_id:
+              type: integer
+              example: 301
+            user_id:
+              type: integer
+              example: 42
+            name:
+              type: string
+              example: Emergency fund
+            target_amount:
+              type: string
+              example: "10000.00"
+            current_amount:
+              type: string
+              example: "1500.00"
+            target_date:
+              type: string
+              format: date
+              example: "2026-12-31"
+            status:
+              type: string
+              example: active
+
+    GoalUpdatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/GoalCreatedEvent"
+
+    GoalDeletedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - goal_id
+            - user_id
+          properties:
+            goal_id:
+              type: integer
+              example: 301
+            user_id:
+              type: integer
+              example: 42
+
+    BankConnectionCreatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - connection_id
+            - account_id
+            - user_id
+            - bank_name
+          properties:
+            connection_id:
+              type: string
+              example: bank-conn-1
+            account_id:
+              type: integer
+              example: 1001
+            user_id:
+              type: integer
+              example: 42
+            bank_name:
+              type: string
+              example: Enable Banking Sandbox
+            iban:
+              type: string
+              example: DK5000400440116243
+            status:
+              type: string
+              example: new
+
+    BankConnectionDisconnectedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BankConnectionCreatedEvent"
+
+    BankSyncCompletedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - connection_id
+            - account_id
+            - user_id
+            - total_fetched
+            - new_imported
+            - duplicates_skipped
+            - errors
+          properties:
+            connection_id:
+              type: string
+              example: bank-conn-1
+            account_id:
+              type: integer
+              example: 1001
+            user_id:
+              type: integer
+              example: 42
+            total_fetched:
+              type: integer
+              example: 50
+            new_imported:
+              type: integer
+              example: 35
+            duplicates_skipped:
+              type: integer
+              example: 15
+            errors:
+              type: integer
+              example: 0
+
+    BankSyncSagaStartEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - saga_type
+            - connection_id
+            - user_id
+            - account_id
+            - account_name
+            - bank_account_uid
+          properties:
+            saga_type:
+              type: string
+              example: bank_sync
+            connection_id:
+              type: string
+              example: bank-conn-1
+            user_id:
+              type: integer
+              example: 42
+            account_id:
+              type: integer
+              example: 1001
+            account_name:
+              type: string
+              example: Main account
+            bank_account_uid:
+              type: string
+              example: bank-account-uid-123
+            date_from:
+              type: string
+              example: "2026-01-01"
+
+    BankFetchTransactionsCommand:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - saga_id
+            - saga_type
+            - step_name
+            - connection_id
+            - user_id
+          properties:
+            saga_id:
+              type: string
+              example: saga-123
+            saga_type:
+              type: string
+              example: bank_sync
+            step_name:
+              type: string
+              example: fetch_transactions
+            connection_id:
+              type: string
+              example: bank-conn-1
+            user_id:
+              type: integer
+              example: 42
+            date_from:
+              type: string
+              example: "2026-01-01"
+
+    BulkImportTransactionsCommand:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - saga_id
+            - saga_type
+            - step_name
+            - user_id
+            - account_id
+            - account_name
+            - items
+          properties:
+            saga_id:
+              type: string
+              example: saga-123
+            saga_type:
+              type: string
+              example: bank_sync
+            step_name:
+              type: string
+              example: import_transactions
+            user_id:
+              type: integer
+              example: 42
+            account_id:
+              type: integer
+              example: 1001
+            account_name:
+              type: string
+              example: Main account
+            items:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+
+    RollbackImportCommand:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - saga_id
+            - saga_type
+            - step_name
+            - user_id
+            - transaction_ids
+          properties:
+            saga_id:
+              type: string
+              example: saga-123
+            saga_type:
+              type: string
+              example: bank_sync
+            step_name:
+              type: string
+              example: rollback_import
+            user_id:
+              type: integer
+              example: 42
+            transaction_ids:
+              type: array
+              items:
+                type: integer
+              example:
+                - 501
+                - 502
+
+    MarkSyncCompleteCommand:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - saga_id
+            - saga_type
+            - step_name
+            - connection_id
+            - user_id
+            - total_fetched
+            - new_imported
+            - duplicates_skipped
+            - errors
+          properties:
+            saga_id:
+              type: string
+              example: saga-123
+            saga_type:
+              type: string
+              example: bank_sync
+            step_name:
+              type: string
+              example: mark_sync_complete
+            connection_id:
+              type: string
+              example: bank-conn-1
+            user_id:
+              type: integer
+              example: 42
+            total_fetched:
+              type: integer
+              example: 50
+            new_imported:
+              type: integer
+              example: 35
+            duplicates_skipped:
+              type: integer
+              example: 15
+            errors:
+              type: integer
+              example: 0
+
+    SagaReply:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - saga_id
+            - step_name
+            - success
+          properties:
+            saga_id:
+              type: string
+              example: saga-123
+            step_name:
+              type: string
+              example: fetch_transactions
+            success:
+              type: boolean
+              example: true
+            error_message:
+              type: string
+              example: null
+            result_data:
+              type: object
+              additionalProperties: true
+            is_compensation:
+              type: boolean
+              example: false
+
+    BankSyncSagaCompletedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - saga_id
+            - connection_id
+            - user_id
+            - new_imported
+            - errors
+          properties:
+            saga_id:
+              type: string
+              example: saga-123
+            connection_id:
+              type: string
+              example: bank-conn-1
+            user_id:
+              type: integer
+              example: 42
+            new_imported:
+              type: integer
+              example: 35
+            errors:
+              type: integer
+              example: 0
+
+    HealthReportRequested:
+      type: object
+      required:
+        - type
+        - index
+        - created_at
+      properties:
+        type:
+          type: string
+          example: health_report_requested
+        index:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-06-17T10:00:00Z"
