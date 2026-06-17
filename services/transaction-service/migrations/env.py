@@ -21,11 +21,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-database_url = (
-    os.getenv("DATABASE_URL_SYNC")
-    or os.getenv("SYNC_DATABASE_URL")
-    or os.getenv("DATABASE_URL")
-)
+database_url = os.getenv("DATABASE_URL_SYNC") or os.getenv("SYNC_DATABASE_URL") or os.getenv("DATABASE_URL")
 
 if database_url:
     database_url = database_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
