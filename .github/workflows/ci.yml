@@ -19,7 +19,6 @@ jobs:
           - account-service
           - user-service
           - transaction-service
-          - categorization-service
           - budget-service
           - goal-service
           - ai-service
