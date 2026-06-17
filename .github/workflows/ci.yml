@@ -17,6 +17,8 @@ jobs:
       matrix:
         service:
           - account-service
+          - banking-service
+          - gateway-service
           - user-service
           - transaction-service
           - budget-service
