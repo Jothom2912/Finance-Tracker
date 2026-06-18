@@ -206,6 +206,7 @@ class PostgresTransactionRepository(ITransactionRepository):
             date=model.date,
             created_at=model.created_at,
             subcategory_id=model.subcategory_id,
+            subcategory_name=model.subcategory_name,
             categorization_tier=model.categorization_tier,
             categorization_confidence=model.categorization_confidence,
         )

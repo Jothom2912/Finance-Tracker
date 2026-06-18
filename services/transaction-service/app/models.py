@@ -36,6 +36,11 @@ class TransactionModel(Base):
     # banking module's rule engine today, future ML/LLM adapters
     # tomorrow).  See migration 004_add_categorization_metadata.
     subcategory_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # Denormalized subcategory name for display.  category_name is ALWAYS the
+    # parent-level name; subcategory_name carries the sub-level name (e.g.
+    # category_name="Mad & drikke", subcategory_name="Dagligvarer").  See
+    # migration 009 and the category-consistency work (Fase 2).
+    subcategory_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     categorization_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
     categorization_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

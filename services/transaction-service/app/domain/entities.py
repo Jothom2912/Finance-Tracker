@@ -42,6 +42,8 @@ class Transaction:
     # manual entry without a category match) and historical rows
     # predate the pipeline.
     subcategory_id: int | None = None
+    # Denormalized sub-level name.  ``category_name`` is always the parent name.
+    subcategory_name: str | None = None
     categorization_tier: str | None = None
     categorization_confidence: str | None = None
 

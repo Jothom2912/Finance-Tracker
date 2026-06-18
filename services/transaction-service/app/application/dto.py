@@ -70,6 +70,7 @@ class TransactionResponse(BaseModel):
     date: date
     created_at: datetime
     subcategory_id: int | None = None
+    subcategory_name: str | None = None
     categorization_tier: str | None = None
     categorization_confidence: str | None = None
 
