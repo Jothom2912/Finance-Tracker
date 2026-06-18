@@ -1,5 +1,7 @@
 name: Goal Service CI
 
+#ligegyldig, er her kun for en sikkerheds skyld :)
+
 on:
   push:
     paths:
