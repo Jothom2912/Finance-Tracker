@@ -1,37 +1,27 @@
-"""Category CRUD endpoints — master taxonomy management.
+"""Category read endpoints.
 
-Categorization-service is the source of truth for categories
-and subcategories.  Changes emit category.* events via outbox.
+Per ADR-002, transaction-service is the authoritative writer for the
+categories table; categorization-service keeps a read-copy in sync via
+``CategorySyncConsumer``.  The write endpoints (POST/PUT/DELETE) were
+therefore removed from this router to close the split-brain — see Fase 1
+of the category-consistency work.  Only read routes remain, because
+budget-service depends on them (``CategoryPort`` reads category names and
+existence from cat-service; see NOTE in ADR-002 about the dual read source).
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 
 from app.application.category_service import CategoryService
 from app.application.dto import (
     CategoryResponseDTO,
-    CreateCategoryDTO,
     SubCategoryResponseDTO,
-    UpdateCategoryDTO,
 )
 from app.auth import get_current_user_id
 from app.dependencies import get_category_service
 
 category_router = APIRouter(prefix="/api/v1/categories", tags=["categories"])
-
-
-@category_router.post(
-    "/",
-    response_model=CategoryResponseDTO,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_category(
-    body: CreateCategoryDTO,
-    _user_id: int = Depends(get_current_user_id),
-    service: CategoryService = Depends(get_category_service),
-) -> CategoryResponseDTO:
-    return await service.create_category(body)
 
 
 @category_router.get("/", response_model=list[CategoryResponseDTO])
@@ -49,29 +39,6 @@ async def get_category(
     service: CategoryService = Depends(get_category_service),
 ) -> CategoryResponseDTO:
     return await service.get_category(category_id)
-
-
-@category_router.put("/{category_id}", response_model=CategoryResponseDTO)
-async def update_category(
-    category_id: int,
-    body: UpdateCategoryDTO,
-    _user_id: int = Depends(get_current_user_id),
-    service: CategoryService = Depends(get_category_service),
-) -> CategoryResponseDTO:
-    return await service.update_category(category_id, body)
-
-
-@category_router.delete(
-    "/{category_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
-)
-async def delete_category(
-    category_id: int,
-    _user_id: int = Depends(get_current_user_id),
-    service: CategoryService = Depends(get_category_service),
-) -> None:
-    await service.delete_category(category_id)
 
 
 @category_router.get(
