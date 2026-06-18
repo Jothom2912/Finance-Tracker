@@ -134,7 +134,7 @@ class TestLogin:
             await client.post(f"{USER_SERVICE}/register", json=user)
             resp = await client.post(
                 f"{USER_SERVICE}/login",
-                json={"email": user["email"], "password": user["password"]},
+                json={"username_or_email": user["email"], "password": user["password"]},
             )
 
         assert resp.status_code == 200
@@ -177,7 +177,7 @@ class TestSagaFlow:
             await client.post(f"{USER_SERVICE}/register", json=user)
             login_resp = await client.post(
                 f"{USER_SERVICE}/login",
-                json={"email": user["email"], "password": user["password"]},
+                json={"username_or_email": user["email"], "password": user["password"]},
             )
             token = login_resp.json()["access_token"]
 

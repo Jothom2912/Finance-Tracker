@@ -52,7 +52,7 @@ async def _register_and_login(
     login = await client.post(
         f"{USER_SERVICE}/login",
         json={
-            "email": f"txe2e_{uid}@example.com",
+            "username_or_email": f"txe2e_{uid}@example.com",
             "password": "SecurePass123!",
         },
     )
