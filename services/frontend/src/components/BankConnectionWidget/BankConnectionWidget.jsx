@@ -79,7 +79,7 @@ function BankConnectionWidget({ onSyncComplete }) {
     setConnectError(null);
     try {
       const { authorization_url } = await connectBank(bankName, 'DK');
-      window.location.href = authorization_url;
+      window.location.assign(authorization_url);
     } catch (err) {
       setConnectError(err.message || 'Kunne ikke starte bankforbindelse');
       setConnectingBank(null);

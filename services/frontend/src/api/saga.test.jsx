@@ -10,35 +10,25 @@ import {
   pollSagaUntilComplete,
 } from './saga';
 
-function mockFetchSequence(responses) {
-  let call = 0;
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
-    const body = responses[Math.min(call, responses.length - 1)];
-    call += 1;
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      json: () => Promise.resolve(body),
-    });
-  });
-}
-
 describe('getSagaProgressLabel', () => {
   it('returns starter label when saga is missing', () => {
     expect(getSagaProgressLabel(null)).toBe('Starter sync...');
   });
 
   it('maps active bank sync steps to Danish labels', () => {
-    expect(getSagaProgressLabel({
-      status: 'started',
-      current_step_name: 'fetch_transactions',
-    })).toBe('Henter transaktioner fra bank...');
+    expect(
+      getSagaProgressLabel({
+        status: 'started',
+        current_step_name: 'fetch_transactions',
+      }),
+    ).toBe('Henter transaktioner fra bank...');
 
-    expect(getSagaProgressLabel({
-      status: 'started',
-      current_step_name: 'import_transactions',
-    })).toBe('Importerer transaktioner...');
+    expect(
+      getSagaProgressLabel({
+        status: 'started',
+        current_step_name: 'import_transactions',
+      }),
+    ).toBe('Importerer transaktioner...');
   });
 
   it('returns compensation and failure labels', () => {
@@ -46,10 +36,12 @@ describe('getSagaProgressLabel', () => {
     expect(getSagaProgressLabel({ status: 'compensating' })).toBe(
       'Ruller import tilbage...',
     );
-    expect(getSagaProgressLabel({
-      status: 'failed',
-      error_detail: 'Bank API nede',
-    })).toBe('Bank API nede');
+    expect(
+      getSagaProgressLabel({
+        status: 'failed',
+        error_detail: 'Bank API nede',
+      }),
+    ).toBe('Bank API nede');
   });
 });
 
@@ -80,7 +72,8 @@ describe('pollSagaUntilComplete', () => {
   });
 
   it('polls until saga reaches terminal status', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
         ok: false,
         status: 404,
@@ -91,16 +84,21 @@ describe('pollSagaUntilComplete', () => {
         ok: true,
         status: 200,
         statusText: 'OK',
-        json: () => Promise.resolve({
-          status: 'started',
-          current_step_name: 'fetch_transactions',
-        }),
+        json: () =>
+          Promise.resolve({
+            status: 'started',
+            current_step_name: 'fetch_transactions',
+          }),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         statusText: 'OK',
-        json: () => Promise.resolve({ status: 'completed', context: { new_imported: 1 } }),
+        json: () =>
+          Promise.resolve({
+            status: 'completed',
+            context: { new_imported: 1 },
+          }),
       });
 
     const progress = [];

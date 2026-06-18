@@ -36,7 +36,7 @@ describe('GoalProgressSection', () => {
   it('shows completion badge for completed goals', () => {
     render(<GoalProgressSection goals={mockGoals} />);
 
-    expect(screen.getByText('Nået!')).toBeInTheDocument();
+    expect(screen.getByText('Opfyldt')).toBeInTheDocument();
   });
 
   it('shows percentage for each goal', () => {
