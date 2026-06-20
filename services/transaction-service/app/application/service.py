@@ -167,6 +167,16 @@ class TransactionService(ITransactionService):
             previous_amount = existing.amount
             previous_category = existing.category_name or ""
 
+            # A manual category edit pins the choice as tier="manual" so the
+            # async categorization consumer won't silently overwrite it.  If the
+            # parent category actually changes, any previously-derived
+            # subcategory no longer applies, so clear it.
+            if "category_id" in fields or "category_name" in fields:
+                fields["categorization_tier"] = "manual"
+                if "category_id" in fields and fields["category_id"] != existing.category_id:
+                    fields.setdefault("subcategory_id", None)
+                    fields.setdefault("subcategory_name", None)
+
             updated = await self._uow.transactions.update(transaction_id, user_id, **fields)
 
             await self._uow.outbox.add(
@@ -492,6 +502,7 @@ class TransactionService(ITransactionService):
             date=entity.date,
             created_at=entity.created_at,
             subcategory_id=entity.subcategory_id,
+            subcategory_name=entity.subcategory_name,
             categorization_tier=entity.categorization_tier,
             categorization_confidence=entity.categorization_confidence,
         )

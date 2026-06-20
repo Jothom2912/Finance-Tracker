@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import async_session_factory
-from app.models import ProcessedEventModel, TransactionModel
+from app.models import CategoryModel, ProcessedEventModel, TransactionModel
 
 logging.basicConfig(
     level=logging.INFO,
@@ -100,7 +100,8 @@ class TransactionCategorizedConsumer:
                 if tx is None:
                     raise _TransactionNotFoundYet(transaction_id)
 
-                self._apply_categorization(tx, body)
+                parent_name = await self._lookup_parent_name(session, body.get("category_id"))
+                self._apply_categorization(tx, body, parent_name)
 
                 if message_id:
                     self._add_inbox_row(session, message_id, body.get("event_type", ""))
@@ -155,18 +156,61 @@ class TransactionCategorizedConsumer:
                 await message.nack(requeue=False)
 
     @staticmethod
-    def _apply_categorization(tx: TransactionModel, event_data: dict) -> None:
+    async def _lookup_parent_name(session: AsyncSession, category_id: int | None) -> str | None:
+        """Resolve the parent category name from the local categories table.
+
+        ``category_name`` on a transaction is always the parent-level name, so
+        the consumer derives it from ``category_id`` rather than trusting the
+        event's ``subcategory_name``.  Returns ``None`` if the id is unknown
+        (e.g. categories table not yet synced), in which case the existing
+        ``category_name`` is left untouched.
+        """
+        if category_id is None:
+            return None
+        cat = await session.get(CategoryModel, category_id)
+        if cat is None:
+            # category_id not in the local categories table (e.g. not yet
+            # synced).  category_name is left stale while subcategory_name is
+            # still updated — log it rather than diverging silently.
+            logger.warning(
+                "Cannot resolve parent name for category_id=%s — "
+                "category_name left unchanged (categories table not synced?)",
+                category_id,
+            )
+            return None
+        return cat.name
+
+    @staticmethod
+    def _apply_categorization(
+        tx: TransactionModel,
+        event_data: dict,
+        parent_name: str | None = None,
+    ) -> None:
         new_sub = event_data.get("subcategory_id")
         new_tier = event_data.get("tier", "")
         new_confidence = event_data.get("confidence", "")
         new_category_id = event_data.get("category_id")
-        new_category_name = event_data.get("subcategory_name", "")
+        # The event carries the SUB-level name; treat "" as absent.
+        new_subcategory_name = event_data.get("subcategory_name", "") or None
+
+        # Protect a manual user choice: auto-categorization must not silently
+        # overwrite a category the user set themselves (tier == "manual").
+        if tx.categorization_tier == "manual":
+            logger.info(
+                "Skipping auto-categorization for tx=%d: manual user choice preserved",
+                tx.id,
+            )
+            return
+
+        # category_name is ALWAYS the parent name; only override when resolved.
+        target_category_name = parent_name if parent_name else tx.category_name
 
         if (
             tx.subcategory_id == new_sub
             and tx.categorization_tier == new_tier
             and tx.categorization_confidence == new_confidence
-            and (not new_category_name or tx.category_name == new_category_name)
+            and tx.category_name == target_category_name
+            and (new_subcategory_name is None or tx.subcategory_name == new_subcategory_name)
             and (new_category_id is None or tx.category_id == new_category_id)
         ):
             return
@@ -186,8 +230,12 @@ class TransactionCategorizedConsumer:
         tx.categorization_confidence = new_confidence
         if new_category_id is not None:
             tx.category_id = new_category_id
-        if new_category_name:
-            tx.category_name = new_category_name
+        # category_name = parent name (NOT the subcategory name).
+        if parent_name:
+            tx.category_name = parent_name
+        # subcategory_name = the sub-level name from the event.
+        if new_subcategory_name is not None:
+            tx.subcategory_name = new_subcategory_name
 
     @staticmethod
     async def _get_transaction(session: AsyncSession, transaction_id: int) -> TransactionModel | None:

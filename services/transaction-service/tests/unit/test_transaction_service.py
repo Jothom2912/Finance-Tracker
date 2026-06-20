@@ -286,6 +286,62 @@ class TestUpdateTransaction:
         assert event.previous_category == "Food"
 
     @pytest.mark.asyncio()
+    async def test_manual_category_change_pins_tier_and_clears_subcategory(self) -> None:
+        """A manual parent-category edit must pin tier="manual" (so the async
+        categorization consumer won't overwrite it) and clear the now-stale
+        subcategory, since the previously-derived sub no longer belongs to the
+        new parent."""
+        service, uow = _build_service()
+        existing = _make_transaction(
+            category_id=5,
+            subcategory_id=42,
+            categorization_tier="rule",
+        )
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = _make_transaction(category_id=10)
+        dto = UpdateTransactionDTO(category_id=10, category_name="Transport")
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        fields = uow.transactions.update.call_args.kwargs
+        assert fields["categorization_tier"] == "manual"
+        assert fields["subcategory_id"] is None
+        assert fields["subcategory_name"] is None
+
+    @pytest.mark.asyncio()
+    async def test_category_name_only_edit_pins_manual_without_clearing_subcategory(self) -> None:
+        """Renaming/setting category_name without changing category_id pins the
+        choice as manual but must NOT clear the subcategory — the parent is
+        unchanged, so the derived sub still applies."""
+        service, uow = _build_service()
+        existing = _make_transaction(category_id=5, subcategory_id=42)
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = _make_transaction()
+        dto = UpdateTransactionDTO(category_name="Mad & drikke")
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        fields = uow.transactions.update.call_args.kwargs
+        assert fields["categorization_tier"] == "manual"
+        assert "subcategory_id" not in fields
+        assert "subcategory_name" not in fields
+
+    @pytest.mark.asyncio()
+    async def test_non_category_edit_does_not_pin_manual(self) -> None:
+        """Editing only amount/description must leave categorization metadata
+        untouched, so the async consumer can still categorize the row."""
+        service, uow = _build_service()
+        existing = _make_transaction(category_id=5)
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = _make_transaction(amount=Decimal("75.00"))
+        dto = UpdateTransactionDTO(amount=Decimal("75.00"))
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        fields = uow.transactions.update.call_args.kwargs
+        assert "categorization_tier" not in fields
+
+    @pytest.mark.asyncio()
     async def test_not_found(self) -> None:
         service, uow = _build_service()
         uow.transactions.find_by_id.return_value = None
