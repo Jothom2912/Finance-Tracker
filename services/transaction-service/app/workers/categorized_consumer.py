@@ -168,7 +168,17 @@ class TransactionCategorizedConsumer:
         if category_id is None:
             return None
         cat = await session.get(CategoryModel, category_id)
-        return cat.name if cat else None
+        if cat is None:
+            # category_id not in the local categories table (e.g. not yet
+            # synced).  category_name is left stale while subcategory_name is
+            # still updated — log it rather than diverging silently.
+            logger.warning(
+                "Cannot resolve parent name for category_id=%s — "
+                "category_name left unchanged (categories table not synced?)",
+                category_id,
+            )
+            return None
+        return cat.name
 
     @staticmethod
     def _apply_categorization(
