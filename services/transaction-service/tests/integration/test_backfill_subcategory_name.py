@@ -49,9 +49,7 @@ def postgres():
 @pytest.fixture(scope="module")
 def _migrated_db(postgres):
     url = postgres.get_connection_url()
-    os.environ["DATABASE_URL"] = url.replace("postgresql://", "postgresql+asyncpg://").replace(
-        "psycopg2", "asyncpg"
-    )
+    os.environ["DATABASE_URL"] = url.replace("postgresql://", "postgresql+asyncpg://").replace("psycopg2", "asyncpg")
     os.environ["JWT_SECRET"] = "test-secret"
 
     alembic_cfg = Config("alembic.ini")
