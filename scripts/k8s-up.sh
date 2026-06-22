@@ -29,6 +29,20 @@ echo "Building all local Docker images..."
 echo "Creating namespace first..."
 kubectl apply -f k8s/namespace.yaml
 
+# Enable Banking PEM secret. The private key is gitignored (*.pem) and must NOT
+# be committed, so it cannot live in k8s/secrets.yaml — create it here from the
+# local file instead. Idempotent: re-applies on every run if the PEM is present.
+PEM_FILE="enablebanking-sandbox.pem"
+if [ -f "$PEM_FILE" ]; then
+  echo "Creating enablebanking-pem secret from $PEM_FILE..."
+  kubectl create secret generic enablebanking-pem \
+    --namespace finance-tracker \
+    --from-file=enablebanking-sandbox.pem="$PEM_FILE" \
+    --dry-run=client -o yaml | kubectl apply -f -
+else
+  echo "WARNING: $PEM_FILE not found in repo root — banking-service cannot reach Enable Banking until it is added (the file is gitignored)." >&2
+fi
+
 echo "Deploying Finance Tracker with kustomize..."
 kubectl apply -k k8s
 
