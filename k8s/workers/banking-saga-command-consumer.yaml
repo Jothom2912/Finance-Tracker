@@ -29,3 +29,14 @@ spec:
                 secretKeyRef:
                   name: finance-tracker-secrets
                   key: DATABASE_URL_BANKING
+          volumeMounts:
+            - name: enablebanking-pem
+              mountPath: /app/secrets
+              readOnly: true
+          volumes:
+            - name: enablebanking-pem
+              secret:
+                secretName: enablebanking-pem
+                items:
+                  - key: enablebanking-sandbox.pem
+                    path: enablebanking-sandbox.pem
