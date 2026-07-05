@@ -7,6 +7,11 @@ const USER_SERVICE_URL =
 const TRANSACTION_SERVICE_URL =
   import.meta.env.VITE_TRANSACTION_SERVICE_URL || 'http://localhost:8002/api/v1';
 
+// Taksonomien (kategorier + subkategorier) ejes af categorization-service
+// (ADR-003) — al kategori-CRUD går dertil.
+const CATEGORIZATION_SERVICE_URL =
+  import.meta.env.VITE_CATEGORIZATION_SERVICE_URL || 'http://localhost:8005/api/v1';
+
 const BUDGET_SERVICE_URL =
   import.meta.env.VITE_BUDGET_SERVICE_URL || 'http://localhost:8003/api/v1';
 
@@ -26,6 +31,7 @@ export {
   GATEWAY_SERVICE_URL,
   USER_SERVICE_URL,
   TRANSACTION_SERVICE_URL,
+  CATEGORIZATION_SERVICE_URL,
   BUDGET_SERVICE_URL,
   AI_SERVICE_URL,
   ACCOUNT_SERVICE_URL,

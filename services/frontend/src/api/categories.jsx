@@ -1,8 +1,8 @@
 import { createCrudApi } from './crudFactory';
-import { TRANSACTION_SERVICE_URL } from '../config/serviceUrls';
+import { CATEGORIZATION_SERVICE_URL } from '../config/serviceUrls';
 
 const crud = createCrudApi('/categories', {
-  baseUrl: TRANSACTION_SERVICE_URL,
+  baseUrl: CATEGORIZATION_SERVICE_URL,
   trailingSlash: true,
 });
 
