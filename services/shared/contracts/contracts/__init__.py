@@ -18,17 +18,14 @@ from contracts.events.category import (
     CategoryCreatedEvent,
     CategoryDeletedEvent,
     CategoryUpdatedEvent,
+    SubCategoryCreatedEvent,
+    SubCategoryDeletedEvent,
+    SubCategoryUpdatedEvent,
 )
 from contracts.events.goal import (
     GoalCreatedEvent,
     GoalDeletedEvent,
     GoalUpdatedEvent,
-)
-from contracts.events.transaction import (
-    TransactionCategorizedEvent,
-    TransactionCreatedEvent,
-    TransactionDeletedEvent,
-    TransactionUpdatedEvent,
 )
 from contracts.events.saga import (
     BankFetchTransactionsCommand,
@@ -39,6 +36,12 @@ from contracts.events.saga import (
     RollbackImportCommand,
     SagaCommand,
     SagaReply,
+)
+from contracts.events.transaction import (
+    TransactionCategorizedEvent,
+    TransactionCreatedEvent,
+    TransactionDeletedEvent,
+    TransactionUpdatedEvent,
 )
 from contracts.events.user import UserCreatedEvent
 
@@ -56,6 +59,9 @@ __all__ = [
     "GoalCreatedEvent",
     "GoalDeletedEvent",
     "GoalUpdatedEvent",
+    "SubCategoryCreatedEvent",
+    "SubCategoryDeletedEvent",
+    "SubCategoryUpdatedEvent",
     "TransactionCategorizedEvent",
     "TransactionCreatedEvent",
     "TransactionDeletedEvent",

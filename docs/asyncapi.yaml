@@ -74,7 +74,7 @@ channels:
           queue: banking.account_sync
 
   category.created:
-    description: Published when a category is created.
+    description: Published when a category is created (v2, full state incl. display_order).
     bindings:
       amqp:
         is: routingKey
@@ -83,16 +83,16 @@ channels:
           type: topic
           durable: true
     publish:
-      summary: transaction-service publishes CategoryCreatedEvent.
+      summary: categorization-service publishes CategoryCreatedEvent.
       message:
         $ref: "#/components/messages/CategoryCreated"
-      x-producer: transaction-service
+      x-producer: categorization-service
       x-consumers:
-        - service: categorization-service
-          queue: categorization.category_sync
+        - service: transaction-service
+          queue: transaction_service.taxonomy_sync
 
   category.updated:
-    description: Published when a category is updated.
+    description: Published when a category is updated (v2, full state; previous_* dropped).
     bindings:
       amqp:
         is: routingKey
@@ -101,16 +101,16 @@ channels:
           type: topic
           durable: true
     publish:
-      summary: transaction-service publishes CategoryUpdatedEvent.
+      summary: categorization-service publishes CategoryUpdatedEvent.
       message:
         $ref: "#/components/messages/CategoryUpdated"
-      x-producer: transaction-service
+      x-producer: categorization-service
       x-consumers:
-        - service: categorization-service
-          queue: categorization.category_sync
+        - service: transaction-service
+          queue: transaction_service.taxonomy_sync
 
   category.deleted:
-    description: Published when a category is deleted.
+    description: Published when a category is deleted (v2, full final state).
     bindings:
       amqp:
         is: routingKey
@@ -119,13 +119,69 @@ channels:
           type: topic
           durable: true
     publish:
-      summary: transaction-service publishes CategoryDeletedEvent.
+      summary: categorization-service publishes CategoryDeletedEvent.
       message:
         $ref: "#/components/messages/CategoryDeleted"
-      x-producer: transaction-service
+      x-producer: categorization-service
       x-consumers:
-        - service: categorization-service
-          queue: categorization.category_sync
+        - service: transaction-service
+          queue: transaction_service.taxonomy_sync
+
+  subcategory.created:
+    description: >-
+      Published when a subcategory is created. Note: a topic binding on
+      `category.*` does NOT match `subcategory.*` — consumers bind both.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: categorization-service publishes SubCategoryCreatedEvent.
+      message:
+        $ref: "#/components/messages/SubCategoryCreated"
+      x-producer: categorization-service
+      x-consumers:
+        - service: transaction-service
+          queue: transaction_service.taxonomy_sync
+
+  subcategory.updated:
+    description: Published when a subcategory is updated (full state).
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: categorization-service publishes SubCategoryUpdatedEvent.
+      message:
+        $ref: "#/components/messages/SubCategoryUpdated"
+      x-producer: categorization-service
+      x-consumers:
+        - service: transaction-service
+          queue: transaction_service.taxonomy_sync
+
+  subcategory.deleted:
+    description: Published when a subcategory is deleted (full final state).
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: categorization-service publishes SubCategoryDeletedEvent.
+      message:
+        $ref: "#/components/messages/SubCategoryDeleted"
+      x-producer: categorization-service
+      x-consumers:
+        - service: transaction-service
+          queue: transaction_service.taxonomy_sync
 
   transaction.created:
     description: Published when a transaction is created.
@@ -476,6 +532,21 @@ components:
       payload:
         $ref: "#/components/schemas/CategoryDeletedEvent"
 
+    SubCategoryCreated:
+      name: SubCategoryCreatedEvent
+      payload:
+        $ref: "#/components/schemas/SubCategoryCreatedEvent"
+
+    SubCategoryUpdated:
+      name: SubCategoryUpdatedEvent
+      payload:
+        $ref: "#/components/schemas/SubCategoryUpdatedEvent"
+
+    SubCategoryDeleted:
+      name: SubCategoryDeletedEvent
+      payload:
+        $ref: "#/components/schemas/SubCategoryDeletedEvent"
+
     TransactionCreated:
       name: TransactionCreatedEvent
       payload:
@@ -684,6 +755,10 @@ components:
             category_type:
               type: string
               example: expense
+            display_order:
+              type: integer
+              default: 0
+              example: 1
 
     CategoryUpdatedEvent:
       allOf:
@@ -693,8 +768,6 @@ components:
             - category_id
             - name
             - category_type
-            - previous_name
-            - previous_type
           properties:
             category_id:
               type: integer
@@ -705,12 +778,10 @@ components:
             category_type:
               type: string
               example: expense
-            previous_name:
-              type: string
-              example: Groceries
-            previous_type:
-              type: string
-              example: expense
+            display_order:
+              type: integer
+              default: 0
+              example: 1
 
     CategoryDeletedEvent:
       allOf:
@@ -730,6 +801,40 @@ components:
             category_type:
               type: string
               example: expense
+            display_order:
+              type: integer
+              default: 0
+              example: 1
+
+    SubCategoryCreatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - subcategory_id
+            - name
+            - category_id
+          properties:
+            subcategory_id:
+              type: integer
+              example: 3
+            name:
+              type: string
+              example: Dagligvarer
+            category_id:
+              type: integer
+              example: 1
+            is_default:
+              type: boolean
+              default: true
+
+    SubCategoryUpdatedEvent:
+      allOf:
+        - $ref: "#/components/schemas/SubCategoryCreatedEvent"
+
+    SubCategoryDeletedEvent:
+      allOf:
+        - $ref: "#/components/schemas/SubCategoryCreatedEvent"
 
     TransactionCreatedEvent:
       allOf:
@@ -861,6 +966,10 @@ components:
             category_id:
               type: integer
               example: 10
+            category_name:
+              type: string
+              description: Parent-level name (v2; empty on v1 payloads).
+              example: Mad & drikke
             subcategory_id:
               type: integer
               example: 101

@@ -16,12 +16,13 @@ class TestTransactionCategorizedEvent:
             subcategory_id=1,
         )
         assert event.event_type == "transaction.categorized"
-        assert event.event_version == 1
+        assert event.event_version == 2
 
     def test_roundtrip_serialization(self) -> None:
         event = TransactionCategorizedEvent(
             transaction_id=42,
             category_id=1,
+            category_name="Mad & drikke",
             subcategory_id=3,
             merchant_id=7,
             tier="rule",
@@ -33,6 +34,7 @@ class TestTransactionCategorizedEvent:
 
         assert restored.transaction_id == 42
         assert restored.category_id == 1
+        assert restored.category_name == "Mad & drikke"
         assert restored.subcategory_id == 3
         assert restored.merchant_id == 7
         assert restored.tier == "rule"
@@ -50,6 +52,8 @@ class TestTransactionCategorizedEvent:
         assert event.tier == ""
         assert event.confidence == ""
         assert event.model_version == ""
+        # v1 payloads without category_name must still parse (empty = not provided)
+        assert event.category_name == ""
 
     def test_unique_correlation_ids(self) -> None:
         a = TransactionCategorizedEvent(transaction_id=1, category_id=1, subcategory_id=1)

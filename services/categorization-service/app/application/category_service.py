@@ -47,6 +47,7 @@ class CategoryService:
                     category_id=category.id,
                     name=category.name,
                     category_type=category.type.value,
+                    display_order=getattr(category, "display_order", 0),
                 ),
                 aggregate_type="category",
                 aggregate_id=str(category.id),
@@ -81,9 +82,6 @@ class CategoryService:
             if not fields:
                 return self._to_dto(existing)
 
-            previous_name = existing.name
-            previous_type = existing.type.value if hasattr(existing.type, "value") else str(existing.type)
-
             updated = await self._uow.categories.update(category_id, **fields)
 
             await self._uow.outbox.add(
@@ -91,8 +89,7 @@ class CategoryService:
                     category_id=updated.id,
                     name=updated.name,
                     category_type=updated.type.value if hasattr(updated.type, "value") else str(updated.type),
-                    previous_name=previous_name,
-                    previous_type=previous_type,
+                    display_order=getattr(updated, "display_order", 0),
                 ),
                 aggregate_type="category",
                 aggregate_id=str(updated.id),
@@ -113,6 +110,7 @@ class CategoryService:
                     category_id=existing.id,
                     name=existing.name,
                     category_type=existing.type.value if hasattr(existing.type, "value") else str(existing.type),
+                    display_order=getattr(existing, "display_order", 0),
                 ),
                 aggregate_type="category",
                 aggregate_id=str(existing.id),

@@ -88,9 +88,6 @@ class CategoryService(ICategoryService):
                 if duplicate is not None:
                     raise DuplicateCategoryNameException(fields["name"])
 
-            previous_name = existing.name
-            previous_type = existing.type.value
-
             updated = await self._uow.categories.update(category_id, **fields)
 
             await self._uow.outbox.add(
@@ -98,8 +95,6 @@ class CategoryService(ICategoryService):
                     category_id=updated.id,
                     name=updated.name,
                     category_type=updated.type.value,
-                    previous_name=previous_name,
-                    previous_type=previous_type,
                 ),
                 aggregate_type="category",
                 aggregate_id=str(updated.id),

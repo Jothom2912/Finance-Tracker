@@ -71,13 +71,20 @@ class TransactionCategorizedEvent(BaseEvent):
 
     ``model_version`` identifies which pipeline configuration produced the
     result (e.g. ``rules-keyword-v1``), enabling audit and rollback.
+
+    v2: adds ``category_name`` (parent-level name). The consumer previously
+    derived it from its local categories read copy and left it stale with a
+    warning when the copy wasn't synced yet; carrying it in the event closes
+    that window. Empty string means "not provided" (v1 payloads) — consumers
+    fall back to a local lookup.
     """
 
     event_type: str = "transaction.categorized"
-    event_version: int = 1
+    event_version: int = 2
 
     transaction_id: int
     category_id: int
+    category_name: str = ""
     subcategory_id: int
     subcategory_name: str = ""
     merchant_id: int | None = None

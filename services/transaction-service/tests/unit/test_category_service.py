@@ -137,7 +137,7 @@ class TestUpdateCategory:
         assert result.name == "Groceries"
 
     @pytest.mark.asyncio()
-    async def test_writes_outbox_event_with_previous(self) -> None:
+    async def test_writes_outbox_event_with_full_state(self) -> None:
         service, uow = _build_service()
         existing = _make_category(name="Food", type=CategoryType.EXPENSE)
         updated = _make_category(name="Groceries", type=CategoryType.EXPENSE)
@@ -151,9 +151,9 @@ class TestUpdateCategory:
         uow.outbox.add.assert_awaited_once()
         event = uow.outbox.add.call_args[1]["event"]
         assert event.event_type == "category.updated"
+        assert event.event_version == 2
         assert event.name == "Groceries"
-        assert event.previous_name == "Food"
-        assert event.previous_type == "expense"
+        assert event.category_type == "expense"
 
     @pytest.mark.asyncio()
     async def test_not_found(self) -> None:
