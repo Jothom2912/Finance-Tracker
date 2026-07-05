@@ -6,28 +6,20 @@ import { fetchGoals } from '../../api/goals';
 import { formatAmount, formatDate } from '../../lib/formatters';
 import { CHART_COLORS as COLORS } from '../../lib/chartColors';
 
-const DASHBOARD_QUERY = gql`
-  query DashboardData($month: Int!, $year: Int!) {
-    currentMonthOverview {
-      startDate
-      endDate
-      totalIncome
-      totalExpenses
-      netChangeInPeriod
+const EXPENSES_BY_CATEGORY_FIELDS = `
       expensesByCategory {
+        categoryId
         categoryName
         amount
+        subcategories {
+          subcategoryId
+          subcategoryName
+          amount
+        }
       }
-      currentAccountBalance
-      averageMonthlyExpenses
-      trend {
-        incomeChangePercent
-        expenseChangePercent
-        netChangeDiff
-        previousMonthIncome
-        previousMonthExpenses
-      }
-    }
+`;
+
+const SHARED_FIELDS = `
     budgetSummary(month: $month, year: $year) {
       month
       year
@@ -44,6 +36,33 @@ const DASHBOARD_QUERY = gql`
       totalRemaining
       overBudgetCount
     }
+    expensesByMonth {
+      month
+      totalExpenses
+    }
+`;
+
+// Nuværende måned: currentMonthOverview har trend + respekterer kontoens
+// budget-startdag.
+const CURRENT_MONTH_QUERY = gql`
+  query DashboardData($month: Int!, $year: Int!) {
+    currentMonthOverview {
+      startDate
+      endDate
+      totalIncome
+      totalExpenses
+      netChangeInPeriod
+      ${EXPENSES_BY_CATEGORY_FIELDS}
+      currentAccountBalance
+      averageMonthlyExpenses
+      trend {
+        incomeChangePercent
+        expenseChangePercent
+        netChangeDiff
+        previousMonthIncome
+        previousMonthExpenses
+      }
+    }
     transactions(limit: 10) {
       id
       amount
@@ -51,12 +70,39 @@ const DASHBOARD_QUERY = gql`
       date
       type
       categoryId
+      categoryName
+      subcategoryName
       categorizationTier
     }
-    expensesByMonth {
-      month
+    ${SHARED_FIELDS}
+  }
+`;
+
+// Historisk måned: financialOverview over kalendermåneden (ingen trend).
+const PERIOD_QUERY = gql`
+  query DashboardPeriod($month: Int!, $year: Int!, $startDate: Date!, $endDate: Date!) {
+    financialOverview(startDate: $startDate, endDate: $endDate) {
+      startDate
+      endDate
+      totalIncome
       totalExpenses
+      netChangeInPeriod
+      ${EXPENSES_BY_CATEGORY_FIELDS}
+      currentAccountBalance
+      averageMonthlyExpenses
     }
+    transactions(startDate: $startDate, endDate: $endDate, limit: 10) {
+      id
+      amount
+      description
+      date
+      type
+      categoryId
+      categoryName
+      subcategoryName
+      categorizationTier
+    }
+    ${SHARED_FIELDS}
   }
 `;
 
@@ -76,15 +122,35 @@ function mapGoalFromRest(g) {
   };
 }
 
-export function useDashboardData() {
+function periodBounds(month, year) {
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  return { startDate, endDate };
+}
+
+export function useDashboardData({ month, year } = {}) {
   const accountId = localStorage.getItem('account_id');
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  const selectedMonth = month ?? now.getMonth() + 1;
+  const selectedYear = year ?? now.getFullYear();
+  const isCurrentMonth =
+    selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: dashboardQueryKey(accountId, month, year),
-    queryFn: () => gqlRequest(DASHBOARD_QUERY, { month, year }),
+    queryKey: dashboardQueryKey(accountId, selectedMonth, selectedYear),
+    queryFn: () => {
+      if (isCurrentMonth) {
+        return gqlRequest(CURRENT_MONTH_QUERY, { month: selectedMonth, year: selectedYear });
+      }
+      const { startDate, endDate } = periodBounds(selectedMonth, selectedYear);
+      return gqlRequest(PERIOD_QUERY, {
+        month: selectedMonth,
+        year: selectedYear,
+        startDate,
+        endDate,
+      });
+    },
   });
 
   const { data: goalsData, isLoading: goalsLoading, error: goalsError } = useQuery({
@@ -93,7 +159,12 @@ export function useDashboardData() {
     select: (data) => (data ?? []).map(mapGoalFromRest),
   });
 
-  const overview = data?.currentMonthOverview ?? null;
+  const overview = useMemo(() => {
+    if (data?.currentMonthOverview) return data.currentMonthOverview;
+    if (data?.financialOverview) return { ...data.financialOverview, trend: null };
+    return null;
+  }, [data]);
+
   const budgetSummary = data?.budgetSummary ?? null;
   const goals = goalsData ?? [];
   const recentTransactions = data?.transactions ?? [];
@@ -103,8 +174,14 @@ export function useDashboardData() {
     if (!overview?.expensesByCategory?.length) return [];
     return overview.expensesByCategory
       .map((entry) => ({
+        id: entry.categoryId,
         name: entry.categoryName,
         value: Math.abs(entry.amount),
+        subcategories: (entry.subcategories ?? []).map((sub) => ({
+          id: sub.subcategoryId,
+          name: sub.subcategoryName,
+          value: Math.abs(sub.amount),
+        })),
       }))
       .filter((item) => item.value > 0)
       .sort((a, b) => b.value - a.value);
@@ -128,6 +205,7 @@ export function useDashboardData() {
     goals,
     recentTransactions,
     expensesByMonth,
+    isCurrentMonth,
     loading: isLoading || goalsLoading,
     error: (error || goalsError) ? (error?.message || goalsError?.message || 'Kunne ikke hente dashboard-data.') : null,
     processedCategoryData,

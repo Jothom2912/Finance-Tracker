@@ -2,7 +2,7 @@
 
 import './CategoryExpensesList.css'; // Opret denne CSS-fil
 
-function CategoryExpensesList({ data, totalExpenses, formatAmount }) {
+function CategoryExpensesList({ data, totalExpenses, formatAmount, onSelectCategory }) {
   if (!data || data.length === 0) {
     return <p className="no-expenses-message">Ingen udgifter registreret i denne periode.</p>;
   }
@@ -16,8 +16,8 @@ function CategoryExpensesList({ data, totalExpenses, formatAmount }) {
             return null;
           }
 
-          return (
-            <li key={`${item.name}-${index}`} className="category-item">
+          const content = (
+            <>
               <div className="category-name">
                 <span
                   className="category-color-dot"
@@ -27,6 +27,23 @@ function CategoryExpensesList({ data, totalExpenses, formatAmount }) {
                 <span className="category-percentage">({item.percentage}%)</span>
               </div>
               <span className="category-amount">{formatAmount(item.value)}</span>
+            </>
+          );
+
+          return (
+            <li key={`${item.name}-${index}`} className="category-item">
+              {onSelectCategory ? (
+                <button
+                  type="button"
+                  className="category-item-button"
+                  onClick={() => onSelectCategory(item)}
+                  title={`Se underkategorier for ${item.name}`}
+                >
+                  {content}
+                </button>
+              ) : (
+                content
+              )}
             </li>
           );
         })}

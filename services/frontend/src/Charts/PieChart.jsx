@@ -4,7 +4,7 @@ import { formatAmount } from '../lib/formatters';
 
 const isDev = import.meta.env.DEV;
 
-const CategoryPieChart = ({ data, colors }) => {
+const CategoryPieChart = ({ data, colors, onSliceClick }) => {
   if (!data || !Array.isArray(data) || data.length === 0) {
     if (isDev) console.warn('CategoryPieChart: Invalid or empty data provided');
     return (
@@ -105,11 +105,13 @@ const CategoryPieChart = ({ data, colors }) => {
               outerRadius={120}
               fill="#8884d8"
               dataKey="value"
+              onClick={onSliceClick ? (entry) => onSliceClick(entry?.payload ?? entry) : undefined}
             >
               {data.map((entry, index) => (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={colors[index % colors.length]} 
+                <Cell
+                  key={`cell-${index}`}
+                  fill={colors[index % colors.length]}
+                  cursor={onSliceClick ? 'pointer' : undefined}
                 />
               ))}
             </Pie>

@@ -125,3 +125,21 @@
     justify-content: center;
   }
 }
+
+.category-item-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.category-item-button:hover .category-name span:nth-child(2) {
+    text-decoration: underline;
+}

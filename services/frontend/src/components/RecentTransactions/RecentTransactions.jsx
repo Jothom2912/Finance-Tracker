@@ -46,7 +46,15 @@ function RecentTransactions({ transactions }) {
                     </span>
                   )}
                 </div>
-                <span className="recent-tx-date">{formatDate(tx.date)}</span>
+                <span className="recent-tx-date">
+                  {formatDate(tx.date)}
+                  {tx.categoryName && (
+                    <span className="recent-tx-category">
+                      {' · '}{tx.categoryName}
+                      {tx.subcategoryName ? ` › ${tx.subcategoryName}` : ''}
+                    </span>
+                  )}
+                </span>
               </div>
               <span className={`recent-tx-amount ${isExpense ? 'expense' : 'income'}`}>
                 {isExpense ? '-' : '+'}{formatAmount(Math.abs(tx.amount))}

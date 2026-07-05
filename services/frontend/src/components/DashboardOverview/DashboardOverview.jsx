@@ -1,20 +1,28 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import CategoryPieChart from '../../Charts/PieChart';
 import SummaryCards from '../SummaryCards/SummaryCards';
 import CategoryExpensesList from '../CategoryExpensesList/CategoryExpensesList';
+import CategoryDrilldown from '../CategoryDrilldown/CategoryDrilldown';
 import BudgetProgressSection from '../BudgetProgressSection/BudgetProgressSection';
 import GoalProgressSection from '../GoalProgressSection/GoalProgressSection';
 import RecentTransactions from '../RecentTransactions/RecentTransactions';
 import BankConnectionWidget from '../BankConnectionWidget/BankConnectionWidget';
 import MonthlyExpensesTrend from '../MonthlyExpensesTrend/MonthlyExpensesTrend';
 import { useDashboardData } from '../../hooks/useDashboardData/useDashboardData';
-import { getMonthLabel } from '../../lib/formatters';
+import { MONTH_OPTIONS, getYearOptions, getMonthLabel } from '../../lib/formatters';
 import './DashboardOverview.css';
 
 function DashboardOverview() {
   const queryClient = useQueryClient();
+
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [drilldownCategoryId, setDrilldownCategoryId] = useState(null);
+  const yearOptions = useMemo(() => getYearOptions(3), []);
+
   const forceRefresh = useCallback(async () => {
     const refresh = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -37,7 +45,26 @@ function DashboardOverview() {
     processedCategoryData,
     categoryDataWithPercentages,
     formatAmount,
-  } = useDashboardData();
+  } = useDashboardData({ month: selectedMonth, year: selectedYear });
+
+  const handlePeriodChange = (month, year) => {
+    setSelectedMonth(month);
+    setSelectedYear(year);
+    // Drill-down peger på den gamle periodes data — nulstil.
+    setDrilldownCategoryId(null);
+  };
+
+  // 'Ukategoriseret'-bucketen har id null — sentinel adskiller den fra
+  // "ingen drill-down".
+  const UNCATEGORIZED_KEY = 'uncategorized';
+  const toDrilldownKey = (id) => (id == null ? UNCATEGORIZED_KEY : id);
+
+  const drilldownCategory = useMemo(() => {
+    if (drilldownCategoryId == null) return null;
+    return (
+      categoryDataWithPercentages.find((c) => toDrilldownKey(c.id) === drilldownCategoryId) ?? null
+    );
+  }, [categoryDataWithPercentages, drilldownCategoryId]);
 
   if (loading) return <div className="dashboard-loading">Indlæser dashboard...</div>;
   if (error) return <div className="dashboard-error">Fejl: {error}</div>;
@@ -52,9 +79,7 @@ function DashboardOverview() {
     );
   }
 
-  const now = new Date();
-  const monthLabel = getMonthLabel(String(now.getMonth() + 1).padStart(2, '0'));
-  const yearLabel = now.getFullYear();
+  const monthLabel = getMonthLabel(String(selectedMonth).padStart(2, '0'));
 
   const renderChart = () => {
     if (!processedCategoryData || processedCategoryData.length === 0) {
@@ -70,6 +95,7 @@ function DashboardOverview() {
         <CategoryPieChart
           data={processedCategoryData}
           colors={categoryDataWithPercentages.map((item) => item.color)}
+          onSliceClick={(entry) => setDrilldownCategoryId(toDrilldownKey(entry?.id))}
         />
       </div>
     );
@@ -79,8 +105,32 @@ function DashboardOverview() {
     <div className="dashboard-overview-container">
       <div className="dashboard-header">
         <h2 className="dashboard-title">
-          {monthLabel} {yearLabel}
+          {monthLabel} {selectedYear}
         </h2>
+        <div className="dashboard-period-selector">
+          <label htmlFor="dash-month" className="visually-hidden">Måned</label>
+          <select
+            id="dash-month"
+            className="period-select"
+            value={selectedMonth}
+            onChange={(e) => handlePeriodChange(parseInt(e.target.value, 10), selectedYear)}
+          >
+            {MONTH_OPTIONS.map((m) => (
+              <option key={m.value} value={parseInt(m.value, 10)}>{m.label}</option>
+            ))}
+          </select>
+          <label htmlFor="dash-year" className="visually-hidden">År</label>
+          <select
+            id="dash-year"
+            className="period-select"
+            value={selectedYear}
+            onChange={(e) => handlePeriodChange(selectedMonth, parseInt(e.target.value, 10))}
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <SummaryCards
@@ -112,12 +162,24 @@ function DashboardOverview() {
         <div className="dashboard-col-right">
           <div className="dashboard-section">
             <h3>Udgifter pr. kategori</h3>
-            {renderChart()}
-            <CategoryExpensesList
-              data={categoryDataWithPercentages}
-              totalExpenses={overview.totalExpenses}
-              formatAmount={formatAmount}
-            />
+            {drilldownCategory ? (
+              <CategoryDrilldown
+                category={drilldownCategory}
+                totalExpenses={overview.totalExpenses}
+                onBack={() => setDrilldownCategoryId(null)}
+                formatAmount={formatAmount}
+              />
+            ) : (
+              <>
+                {renderChart()}
+                <CategoryExpensesList
+                  data={categoryDataWithPercentages}
+                  totalExpenses={overview.totalExpenses}
+                  formatAmount={formatAmount}
+                  onSelectCategory={(item) => setDrilldownCategoryId(toDrilldownKey(item.id))}
+                />
+              </>
+            )}
           </div>
 
           <div className="dashboard-section">
