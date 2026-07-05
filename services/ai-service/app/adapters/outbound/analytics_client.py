@@ -162,16 +162,18 @@ class AnalyticsClient:
             _raise_for_status(resp)
 
         data = resp.json()
-        expenses_by_cat: dict[str, float] = data.get("expenses_by_category", {})
-        total = sum(expenses_by_cat.values()) or 1.0
+        # ADR-003 shape: list of {category_id, category_name, amount,
+        # subcategories[]} (id-keyed aggregation, sorted by amount desc).
+        expenses_by_cat: list[dict] = data.get("expenses_by_category", [])
+        total = sum(e.get("amount", 0.0) for e in expenses_by_cat) or 1.0
 
         items = [
             CategoryBreakdownItem(
-                category=cat,
-                amount=amt,
-                percentage=round(amt / total * 100, 1),
+                category=e.get("category_name", "Ukategoriseret"),
+                amount=e.get("amount", 0.0),
+                percentage=round(e.get("amount", 0.0) / total * 100, 1),
             )
-            for cat, amt in sorted(expenses_by_cat.items(), key=lambda x: x[1], reverse=True)
+            for e in expenses_by_cat
         ]
 
         elapsed_ms = (time.monotonic() - t0) * 1000

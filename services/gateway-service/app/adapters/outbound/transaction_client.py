@@ -75,35 +75,22 @@ class HttpAnalyticsReadRepository(IAnalyticsReadRepository):
             if end_date and row_date > end_date:
                 continue
 
+            # Normalized keys — legacy monolith renames (idTransaction,
+            # Category_idCategory, ...) were removed with ADR-003.
             result.append(
                 {
-                    "idTransaction": row.get("id"),
+                    "id": row.get("id"),
                     "amount": row.get("amount", 0),
                     "description": row.get("description"),
                     "date": raw_date,
                     "type": row.get("transaction_type", ""),
-                    "Category_idCategory": row.get("category_id"),
-                    "Account_idAccount": row.get("account_id"),
+                    "category_id": row.get("category_id"),
+                    "category_name": row.get("category_name"),
+                    "subcategory_id": row.get("subcategory_id"),
+                    "subcategory_name": row.get("subcategory_name"),
+                    "account_id": row.get("account_id"),
                     "categorization_tier": row.get("categorization_tier"),
                 }
             )
 
         return result
-
-    def get_categories(self) -> list[dict]:
-        with httpx.Client(timeout=self._timeout) as client:
-            resp = client.get(
-                f"{self._base}/api/v1/categories/",
-                headers=self._headers(),
-            )
-            resp.raise_for_status()
-            rows = resp.json()
-
-        return [
-            {
-                "idCategory": row.get("id"),
-                "name": row.get("name"),
-                "type": row.get("type"),
-            }
-            for row in rows
-        ]

@@ -11,7 +11,9 @@ from strawberry.types import Info
 
 from app.adapters.outbound.account_client import AccountClient
 from app.adapters.outbound.budget_client import BudgetClient
+from app.adapters.outbound.category_client import CategoryClient
 from app.adapters.outbound.transaction_client import HttpAnalyticsReadRepository
+from app.application.dto import CategoryExpense
 from app.application.service import AnalyticsService
 from app.auth import get_account_id_from_headers
 from app.shared.budget_period import budget_period, determine_budget_month
@@ -19,10 +21,38 @@ from app.shared.budget_period import budget_period, determine_budget_month
 logger = logging.getLogger(__name__)
 
 
-@strawberry.type(description="Expense amount for a single category")
+@strawberry.type(description="Expense amount for a single subcategory within a category")
+class SubcategoryExpenseEntry:
+    subcategory_id: Optional[int]
+    subcategory_name: str
+    amount: float
+
+
+@strawberry.type(description="Expense amount for a single category, with subcategory breakdown")
 class CategoryExpenseEntry:
+    category_id: Optional[int]
     category_name: str
     amount: float
+    subcategories: list[SubcategoryExpenseEntry]
+
+
+def _to_expense_entries(expenses: list[CategoryExpense]) -> list[CategoryExpenseEntry]:
+    return [
+        CategoryExpenseEntry(
+            category_id=e.category_id,
+            category_name=e.category_name,
+            amount=e.amount,
+            subcategories=[
+                SubcategoryExpenseEntry(
+                    subcategory_id=s.subcategory_id,
+                    subcategory_name=s.subcategory_name,
+                    amount=s.amount,
+                )
+                for s in e.subcategories
+            ],
+        )
+        for e in expenses
+    ]
 
 
 @strawberry.type(description="Financial overview for an account over a period")
@@ -69,6 +99,15 @@ class CategoryType:
     id: int
     name: str
     type: str
+    display_order: int = 0
+
+
+@strawberry.type(description="Subcategory read projection")
+class SubcategoryType:
+    id: int
+    name: str
+    category_id: int
+    is_default: bool = True
 
 
 @strawberry.type(description="Transaction read projection")
@@ -78,7 +117,10 @@ class TransactionType:
     description: Optional[str]
     date: date
     type: str
-    category_id: int
+    category_id: Optional[int]
+    category_name: Optional[str] = None
+    subcategory_id: Optional[int] = None
+    subcategory_name: Optional[str] = None
     account_id: int
     categorization_tier: Optional[str] = None
 
@@ -107,6 +149,7 @@ class CurrentMonthOverviewType:
 
 @strawberry.type(description="Top spending category for a given period")
 class TopSpendingCategoryType:
+    category_id: Optional[int]
     category_name: str
     amount: float
     percentage_of_total: float
@@ -118,10 +161,12 @@ async def get_graphql_context(
 ) -> dict[str, Any]:
     auth_header = request.headers.get("authorization", "")
     read_repo = HttpAnalyticsReadRepository(auth_header)
+    category_client = CategoryClient(auth_header)
     return {
-        "analytics_service": AnalyticsService(read_repo=read_repo),
+        "analytics_service": AnalyticsService(read_repo=read_repo, category_repo=category_client),
         "account_client": AccountClient(auth_header),
         "budget_client": BudgetClient(auth_header),
+        "category_client": category_client,
         "account_id": account_id,
         "auth_header": auth_header,
         "_budget_start_day_cache": {},
@@ -170,10 +215,7 @@ class Query:
             total_income=result.total_income,
             total_expenses=result.total_expenses,
             net_change_in_period=result.net_change_in_period,
-            expenses_by_category=[
-                CategoryExpenseEntry(category_name=name, amount=amount)
-                for name, amount in result.expenses_by_category.items()
-            ],
+            expenses_by_category=_to_expense_entries(result.expenses_by_category),
             current_account_balance=result.current_account_balance,
             average_monthly_expenses=result.average_monthly_expenses,
         )
@@ -285,10 +327,7 @@ class Query:
             total_income=result.total_income,
             total_expenses=result.total_expenses,
             net_change_in_period=result.net_change_in_period,
-            expenses_by_category=[
-                CategoryExpenseEntry(category_name=name, amount=amount)
-                for name, amount in result.expenses_by_category.items()
-            ],
+            expenses_by_category=_to_expense_entries(result.expenses_by_category),
             current_account_balance=result.current_account_balance,
             average_monthly_expenses=result.average_monthly_expenses,
             trend=trend,
@@ -312,23 +351,48 @@ class Query:
         result = service.get_financial_overview(account_id=account_id, start_date=start, end_date=end)
 
         total = result.total_expenses or 1.0
-        sorted_cats = sorted(result.expenses_by_category.items(), key=lambda x: x[1], reverse=True)[:limit]
-
+        # expenses_by_category is already sorted by amount desc.
         return [
             TopSpendingCategoryType(
-                category_name=name,
-                amount=amount,
-                percentage_of_total=round((amount / total) * 100, 1),
+                category_id=e.category_id,
+                category_name=e.category_name,
+                amount=e.amount,
+                percentage_of_total=round((e.amount / total) * 100, 1),
             )
-            for name, amount in sorted_cats
+            for e in result.expenses_by_category[:limit]
         ]
 
-    @strawberry.field(description="List all categories")
+    @strawberry.field(description="List all categories (from categorization-service, ADR-003)")
     def categories(self, info: Info) -> list[CategoryType]:
         ctx = info.context
-        service: AnalyticsService = ctx["analytics_service"]
-        cats = service._read_repo.get_categories()
-        return [CategoryType(id=c.get("idCategory", 0), name=c.get("name", ""), type=c.get("type", "")) for c in cats]
+        client: CategoryClient = ctx["category_client"]
+        cats = client.get_categories()
+        return [
+            CategoryType(
+                id=c.get("id", 0),
+                name=c.get("name", ""),
+                type=c.get("type", ""),
+                display_order=c.get("display_order", 0),
+            )
+            for c in cats
+        ]
+
+    @strawberry.field(description="List subcategories, optionally filtered by category")
+    def subcategories(self, info: Info, category_id: Optional[int] = None) -> list[SubcategoryType]:
+        ctx = info.context
+        client: CategoryClient = ctx["category_client"]
+        subs = client.get_subcategories()
+        if category_id is not None:
+            subs = [s for s in subs if s.get("category_id") == category_id]
+        return [
+            SubcategoryType(
+                id=s.get("id", 0),
+                name=s.get("name", ""),
+                category_id=s.get("category_id", 0),
+                is_default=s.get("is_default", True),
+            )
+            for s in subs
+        ]
 
     @strawberry.field(description="List transactions for the active account")
     def transactions(
@@ -359,7 +423,10 @@ class Query:
                 description=t.description,
                 date=t.date,
                 type=t.type,
-                category_id=t.category_id or 0,
+                category_id=t.category_id,
+                category_name=t.category_name,
+                subcategory_id=t.subcategory_id,
+                subcategory_name=t.subcategory_name,
                 account_id=t.account_id,
                 categorization_tier=t.categorization_tier,
             )

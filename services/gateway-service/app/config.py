@@ -9,6 +9,11 @@ load_dotenv()
 TRANSACTION_SERVICE_URL = os.getenv("TRANSACTION_SERVICE_URL", "http://transaction-service:8002")
 TRANSACTION_SERVICE_TIMEOUT = float(os.getenv("TRANSACTION_SERVICE_TIMEOUT", "10"))
 
+# Taxonomy (categories + subcategories) is owned by categorization-service
+# per ADR-003 — the gateway reads it from there, not transaction-service.
+CATEGORIZATION_SERVICE_URL = os.getenv("CATEGORIZATION_SERVICE_URL", "http://categorization-service:8005")
+CATEGORIZATION_SERVICE_TIMEOUT = float(os.getenv("CATEGORIZATION_SERVICE_TIMEOUT", "5"))
+
 ACCOUNT_SERVICE_URL = os.getenv("ACCOUNT_SERVICE_URL", "http://account-service:8003")
 ACCOUNT_SERVICE_TIMEOUT = float(os.getenv("ACCOUNT_SERVICE_TIMEOUT", "5"))
 

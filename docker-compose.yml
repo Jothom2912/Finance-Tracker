@@ -650,6 +650,7 @@ services:
       - "8010:8010"
     environment:
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
+      CATEGORIZATION_SERVICE_URL: http://categorization-service:8005
       ACCOUNT_SERVICE_URL: http://account-service:8003
       BUDGET_SERVICE_URL: http://budget-service:8003
       SAGA_SERVICE_URL: http://saga-service:8011
@@ -658,6 +659,8 @@ services:
       ENVIRONMENT: development
     depends_on:
       transaction-service:
+        condition: service_started
+      categorization-service:
         condition: service_started
       account-service:
         condition: service_started

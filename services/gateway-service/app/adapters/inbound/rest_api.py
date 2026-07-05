@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
+from app.adapters.outbound.category_client import CategoryClient
 from app.adapters.outbound.transaction_client import HttpAnalyticsReadRepository
 from app.application.dto import FinancialOverview
 from app.application.service import AnalyticsService
@@ -25,7 +26,10 @@ def get_financial_overview_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account ID mangler. Vælg en konto først.",
         )
-    service = AnalyticsService(read_repo=HttpAnalyticsReadRepository(authorization or ""))
+    service = AnalyticsService(
+        read_repo=HttpAnalyticsReadRepository(authorization or ""),
+        category_repo=CategoryClient(authorization or ""),
+    )
     return service.get_financial_overview(account_id=account_id, start_date=start_date, end_date=end_date)
 
 

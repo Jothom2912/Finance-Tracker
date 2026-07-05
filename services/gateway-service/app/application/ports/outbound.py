@@ -15,6 +15,14 @@ class IAnalyticsReadRepository(ABC):
     ) -> list[dict]:
         pass
 
+
+class ICategoryReadRepository(ABC):
+    """Taxonomy read source — categorization-service per ADR-003."""
+
     @abstractmethod
     def get_categories(self) -> list[dict]:
+        pass
+
+    @abstractmethod
+    def get_subcategories(self) -> list[dict]:
         pass
