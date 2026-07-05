@@ -11,6 +11,7 @@ from app.domain.entities import (
     Category,
     OutboxEntry,
     PlannedTransaction,
+    SubCategory,
     Transaction,
     TransactionType,
 )
@@ -30,6 +31,7 @@ class ITransactionRepository(ABC):
         description: str | None,
         tx_date: date,
         subcategory_id: int | None = None,
+        subcategory_name: str | None = None,
         categorization_tier: str | None = None,
         categorization_confidence: str | None = None,
     ) -> Transaction: ...
@@ -119,6 +121,16 @@ class ICategoryRepository(ABC):
     async def find_by_name(self, name: str) -> Category | None: ...
 
 
+class ISubCategoryReadRepository(ABC):
+    """Read-only access to the event-synced subcategories read copy."""
+
+    @abstractmethod
+    async def find_by_id(self, subcategory_id: int) -> SubCategory | None: ...
+
+    @abstractmethod
+    async def find_by_ids(self, subcategory_ids: list[int]) -> dict[int, SubCategory]: ...
+
+
 class IOutboxRepository(ABC):
     """Port for the transactional outbox.
 
@@ -157,6 +169,7 @@ class IUnitOfWork(ABC):
     transactions: ITransactionRepository
     planned: IPlannedTransactionRepository
     categories: ICategoryRepository
+    subcategories: ISubCategoryReadRepository
     outbox: IOutboxRepository
 
     @abstractmethod

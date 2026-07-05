@@ -27,6 +27,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         description: str | None,
         tx_date: date,
         subcategory_id: int | None = None,
+        subcategory_name: str | None = None,
         categorization_tier: str | None = None,
         categorization_confidence: str | None = None,
     ) -> Transaction:
@@ -41,6 +42,7 @@ class PostgresTransactionRepository(ITransactionRepository):
             description=description,
             date=tx_date,
             subcategory_id=subcategory_id,
+            subcategory_name=subcategory_name,
             categorization_tier=categorization_tier,
             categorization_confidence=categorization_confidence,
         )
@@ -181,6 +183,7 @@ class PostgresTransactionRepository(ITransactionRepository):
                     description=tx.get("description"),
                     date=tx["tx_date"],
                     subcategory_id=tx.get("subcategory_id"),
+                    subcategory_name=tx.get("subcategory_name"),
                     categorization_tier=tx.get("categorization_tier"),
                     categorization_confidence=tx.get("categorization_confidence"),
                 )

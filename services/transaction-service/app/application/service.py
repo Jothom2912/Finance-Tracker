@@ -27,6 +27,8 @@ from app.domain.entities import PlannedTransaction, Transaction
 from app.domain.exceptions import (
     CSVImportException,
     PlannedTransactionNotFoundException,
+    SubcategoryMismatchException,
+    SubcategoryNotFoundException,
     TransactionNotFoundException,
 )
 
@@ -59,6 +61,8 @@ class TransactionService(ITransactionService):
     # ── Transactions ────────────────────────────────────────────────
 
     async def create_transaction(self, user_id: int, dto: CreateTransactionDTO) -> TransactionResponse:
+        category_id = dto.category_id
+        category_name = dto.category_name
         subcategory_id = dto.subcategory_id
         cat_tier = dto.categorization_tier
         cat_confidence = dto.categorization_confidence
@@ -70,13 +74,27 @@ class TransactionService(ITransactionService):
                 amount=float(dto.amount),
             )
             if cat_result is not None:
-                subcategory_id = cat_result.subcategory_id
+                # Accept the categorizer's subcategory only when it doesn't
+                # contradict a category the caller chose explicitly — the
+                # caller's parent category always wins.
+                if category_id is None:
+                    category_id = cat_result.category_id
+                    subcategory_id = cat_result.subcategory_id
+                elif category_id == cat_result.category_id:
+                    subcategory_id = cat_result.subcategory_id
+                else:
+                    logger.info(
+                        "Categorizer suggested category %s but caller chose %s — keeping caller's, skipping subcategory",
+                        cat_result.category_id,
+                        category_id,
+                    )
                 cat_tier = cat_result.tier
                 cat_confidence = cat_result.confidence
                 logger.info(
-                    "Sync categorization: '%s' -> sub=%d, tier=%s",
+                    "Sync categorization: '%s' -> cat=%s, sub=%s, tier=%s",
                     (dto.description or "")[:40],
-                    cat_result.subcategory_id,
+                    category_id,
+                    subcategory_id,
                     cat_result.tier,
                 )
             else:
@@ -86,17 +104,23 @@ class TransactionService(ITransactionService):
                 )
 
         async with self._uow:
+            # Names are resolved from the local read copies — callers may
+            # send stale or missing names; ids are authoritative.
+            category_name = await self._resolve_category_name(category_id, category_name)
+            subcategory_name = await self._resolve_subcategory_name(subcategory_id)
+
             transaction = await self._uow.transactions.create(
                 user_id=user_id,
                 account_id=dto.account_id,
                 account_name=dto.account_name,
-                category_id=dto.category_id,
-                category_name=dto.category_name,
+                category_id=category_id,
+                category_name=category_name,
                 amount=dto.amount,
                 transaction_type=dto.transaction_type,
                 description=dto.description,
                 tx_date=dto.date,
                 subcategory_id=subcategory_id,
+                subcategory_name=subcategory_name,
                 categorization_tier=cat_tier,
                 categorization_confidence=cat_confidence,
             )
@@ -167,15 +191,34 @@ class TransactionService(ITransactionService):
             previous_amount = existing.amount
             previous_category = existing.category_name or ""
 
-            # A manual category edit pins the choice as tier="manual" so the
-            # async categorization consumer won't silently overwrite it.  If the
-            # parent category actually changes, any previously-derived
-            # subcategory no longer applies, so clear it.
-            if "category_id" in fields or "category_name" in fields:
+            # A manual category/subcategory edit pins the choice as
+            # tier="manual" so the async categorization consumer won't
+            # silently overwrite it.  If the parent category actually
+            # changes, any previously-derived subcategory no longer
+            # applies, so clear it (unless a new one is chosen in the
+            # same request).
+            if "category_id" in fields or "category_name" in fields or "subcategory_id" in fields:
                 fields["categorization_tier"] = "manual"
                 if "category_id" in fields and fields["category_id"] != existing.category_id:
                     fields.setdefault("subcategory_id", None)
                     fields.setdefault("subcategory_name", None)
+                    # The name must match the new id — never trust a stale
+                    # caller-provided name over the read copy.
+                    fields["category_name"] = await self._resolve_category_name(
+                        fields["category_id"], fields.get("category_name")
+                    )
+
+            if fields.get("subcategory_id") is not None:
+                subcategory = await self._uow.subcategories.find_by_id(fields["subcategory_id"])
+                if subcategory is None:
+                    raise SubcategoryNotFoundException(fields["subcategory_id"])
+                effective_category_id = fields.get("category_id", existing.category_id)
+                if subcategory.category_id != effective_category_id:
+                    raise SubcategoryMismatchException(subcategory.id, effective_category_id)
+                fields["subcategory_name"] = subcategory.name
+            elif "subcategory_id" in fields:
+                # Explicit null clears both denormalized fields.
+                fields["subcategory_name"] = None
 
             updated = await self._uow.transactions.update(transaction_id, user_id, **fields)
 
@@ -383,14 +426,22 @@ class TransactionService(ITransactionService):
             enriched = 0
             for idx, cat_result in zip(uncategorized, cat_results):
                 if cat_result is not None:
-                    rows_to_create[idx]["subcategory_id"] = cat_result.subcategory_id
-                    rows_to_create[idx]["categorization_tier"] = cat_result.tier
-                    rows_to_create[idx]["categorization_confidence"] = cat_result.confidence
+                    row = rows_to_create[idx]
+                    # Same rule as create_transaction: the producer's explicit
+                    # parent category wins over the categorizer's suggestion.
+                    if row.get("category_id") is None:
+                        row["category_id"] = cat_result.category_id
+                        row["subcategory_id"] = cat_result.subcategory_id
+                    elif row["category_id"] == cat_result.category_id:
+                        row["subcategory_id"] = cat_result.subcategory_id
+                    row["categorization_tier"] = cat_result.tier
+                    row["categorization_confidence"] = cat_result.confidence
                     enriched += 1
             if enriched:
                 logger.info("Bulk categorization: %d/%d items enriched", enriched, len(uncategorized))
 
         async with self._uow:
+            await self._resolve_names_for_rows(rows_to_create)
             if not rows_to_create:
                 await self._uow.commit()
                 return BulkCreateResultDTO(
@@ -484,6 +535,53 @@ class TransactionService(ITransactionService):
                 raise PlannedTransactionNotFoundException(planned_id)
             await self._uow.planned.deactivate(planned_id, user_id)
             await self._uow.commit()
+
+    # ── Name resolution (local taxonomy read copies) ────────────────
+
+    async def _resolve_category_name(
+        self,
+        category_id: int | None,
+        fallback: str | None = None,
+    ) -> str | None:
+        """Parent name from the local read copy; ids are authoritative.
+
+        Falls back to the caller-provided name only when the id isn't in
+        the read copy yet (sync lag) — better a possibly-stale name than
+        none at all.
+        """
+        if category_id is None:
+            return fallback
+        category = await self._uow.categories.find_by_id(category_id)
+        if category is None:
+            return fallback
+        return category.name
+
+    async def _resolve_subcategory_name(self, subcategory_id: int | None) -> str | None:
+        if subcategory_id is None:
+            return None
+        subcategory = await self._uow.subcategories.find_by_id(subcategory_id)
+        return subcategory.name if subcategory else None
+
+    async def _resolve_names_for_rows(self, rows: list[dict]) -> None:
+        """Batch-resolve denormalized names on bulk rows in place."""
+        category_ids = {row["category_id"] for row in rows if row.get("category_id") is not None}
+        subcategory_ids = [row["subcategory_id"] for row in rows if row.get("subcategory_id") is not None]
+
+        category_names: dict[int, str] = {}
+        for cat_id in category_ids:
+            category = await self._uow.categories.find_by_id(cat_id)
+            if category is not None:
+                category_names[cat_id] = category.name
+
+        subcategories = await self._uow.subcategories.find_by_ids(subcategory_ids)
+
+        for row in rows:
+            cat_id = row.get("category_id")
+            if cat_id is not None and cat_id in category_names:
+                row["category_name"] = category_names[cat_id]
+            sub_id = row.get("subcategory_id")
+            if sub_id is not None and sub_id in subcategories:
+                row["subcategory_name"] = subcategories[sub_id].name
 
     # ── Mapping helpers ─────────────────────────────────────────────
 

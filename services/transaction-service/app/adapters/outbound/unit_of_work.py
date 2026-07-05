@@ -13,6 +13,9 @@ from app.adapters.outbound.postgres_outbox_repository import (
 from app.adapters.outbound.postgres_planned_repository import (
     PostgresPlannedTransactionRepository,
 )
+from app.adapters.outbound.postgres_subcategory_repository import (
+    PostgresSubCategoryReadRepository,
+)
 from app.adapters.outbound.postgres_transaction_repository import (
     PostgresTransactionRepository,
 )
@@ -33,6 +36,7 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
         self.transactions = PostgresTransactionRepository(session)
         self.planned = PostgresPlannedTransactionRepository(session)
         self.categories = PostgresCategoryRepository(session)
+        self.subcategories = PostgresSubCategoryReadRepository(session)
         self.outbox = PostgresOutboxRepository(session)
 
     async def __aenter__(self) -> Self:

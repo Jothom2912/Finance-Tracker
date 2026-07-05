@@ -62,6 +62,10 @@ class UpdateTransactionDTO(BaseModel):
     account_name: str | None = Field(default=None, max_length=ACCOUNT_NAME_MAX)
     category_id: int | None = None
     category_name: str | None = Field(default=None, max_length=CATEGORY_NAME_MAX)
+    # exclude_unset semantics: omitted = untouched, explicit null = clear.
+    # subcategory_name is deliberately NOT accepted — it is resolved
+    # server-side from the local subcategories read copy.
+    subcategory_id: int | None = None
     amount: Decimal | None = Field(default=None, ge=AMOUNT_MIN, le=AMOUNT_MAX, decimal_places=2)
     transaction_type: TransactionType | None = None
     description: str | None = None

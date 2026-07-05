@@ -100,7 +100,11 @@ class TransactionCategorizedConsumer:
                 if tx is None:
                     raise _TransactionNotFoundYet(transaction_id)
 
-                parent_name = await self._lookup_parent_name(session, body.get("category_id"))
+                # v2 events carry the parent name; fall back to a local
+                # lookup for v1/empty payloads.
+                parent_name = body.get("category_name") or None
+                if parent_name is None:
+                    parent_name = await self._lookup_parent_name(session, body.get("category_id"))
                 self._apply_categorization(tx, body, parent_name)
 
                 if message_id:

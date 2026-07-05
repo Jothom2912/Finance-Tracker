@@ -25,6 +25,16 @@ class Category:
 
 
 @dataclass(frozen=True)
+class SubCategory:
+    """Event-synced read copy of categorization-service's subcategory."""
+
+    id: int
+    name: str
+    category_id: int
+    is_default: bool = True
+
+
+@dataclass(frozen=True)
 class Transaction:
     id: int
     user_id: int

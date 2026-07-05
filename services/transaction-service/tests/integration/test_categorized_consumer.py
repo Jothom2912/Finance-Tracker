@@ -129,6 +129,70 @@ class TestConsumerUpdatesTransaction:
 
         msg.ack.assert_awaited()
 
+    async def test_v2_event_category_name_applied_without_local_lookup(
+        self, consumer, session_factory
+    ) -> None:
+        """v2 events carry the parent name — it must be applied even when
+        the category_id is unknown in the local read copy (the old
+        stale-name window)."""
+        from app.models import TransactionModel
+
+        msg = _make_message(
+            {
+                "event_type": "transaction.categorized",
+                "transaction_id": 1,
+                "category_id": 9999,  # not in the local categories read copy
+                "category_name": "Ferie",
+                "subcategory_id": 7,
+                "subcategory_name": "Hotel",
+                "tier": "rule",
+                "confidence": "high",
+                "model_version": "rules-keyword-v1",
+            },
+            str(uuid4()),
+        )
+
+        await consumer._on_message(msg)
+
+        async with session_factory() as session:
+            tx = (await session.execute(select(TransactionModel).where(TransactionModel.id == 1))).scalar_one()
+            assert tx.category_id == 9999
+            assert tx.category_name == "Ferie"
+            assert tx.subcategory_name == "Hotel"
+
+        msg.ack.assert_awaited()
+
+    async def test_v1_event_without_category_name_resolves_locally(
+        self, consumer, session_factory
+    ) -> None:
+        """Old payloads (empty category_name) fall back to the local
+        categories read copy for the parent name."""
+        from app.models import TransactionModel
+
+        msg = _make_message(
+            {
+                "event_type": "transaction.categorized",
+                "transaction_id": 1,
+                "category_id": 1,  # seeded: "Mad & drikke"
+                "subcategory_id": 1,
+                "subcategory_name": "Dagligvarer",
+                "tier": "rule",
+                "confidence": "high",
+                "model_version": "rules-keyword-v1",
+            },
+            str(uuid4()),
+        )
+
+        await consumer._on_message(msg)
+
+        async with session_factory() as session:
+            tx = (await session.execute(select(TransactionModel).where(TransactionModel.id == 1))).scalar_one()
+            assert tx.category_id == 1
+            assert tx.category_name == "Mad & drikke"
+            assert tx.subcategory_name == "Dagligvarer"
+
+        msg.ack.assert_awaited()
+
     async def test_fills_uncategorized_transaction(self, consumer, session_factory) -> None:
         from app.models import TransactionModel
 

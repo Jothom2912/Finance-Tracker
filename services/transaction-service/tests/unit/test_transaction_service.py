@@ -14,10 +14,19 @@ from app.application.dto import (
     UpdateTransactionDTO,
 )
 from app.application.service import TransactionService
-from app.domain.entities import PlannedTransaction, Transaction, TransactionType
+from app.domain.entities import (
+    Category,
+    CategoryType,
+    PlannedTransaction,
+    SubCategory,
+    Transaction,
+    TransactionType,
+)
 from app.domain.exceptions import (
     CSVImportException,
     PlannedTransactionNotFoundException,
+    SubcategoryMismatchException,
+    SubcategoryNotFoundException,
     TransactionNotFoundException,
 )
 
@@ -66,6 +75,13 @@ def _build_service():  # type: ignore[no-untyped-def]
     uow.transactions = AsyncMock()
     uow.planned = AsyncMock()
     uow.outbox = AsyncMock()
+    # Taxonomy read copies: default to "id unknown" so name resolution
+    # falls back to caller-provided names unless a test stubs them.
+    uow.categories = AsyncMock()
+    uow.categories.find_by_id.return_value = None
+    uow.subcategories = AsyncMock()
+    uow.subcategories.find_by_id.return_value = None
+    uow.subcategories.find_by_ids.return_value = {}
     uow.commit = AsyncMock()
     uow.rollback = AsyncMock()
     uow.__aenter__ = AsyncMock(return_value=uow)
@@ -160,6 +176,70 @@ class TestCreateTransaction:
         assert event.subcategory_id == 42
         assert event.categorization_tier == "rule"
         assert event.categorization_confidence == "high"
+
+    @pytest.mark.asyncio()
+    async def test_sync_categorization_copies_category_and_resolves_names(self) -> None:
+        """When the caller provides no category, the categorizer's
+        category_id AND subcategory_id are applied, and both denormalized
+        names are resolved from the local read copies."""
+        service, uow = _build_service()
+        cat_client = AsyncMock()
+        cat_client.categorize.return_value = MagicMock(
+            category_id=1, subcategory_id=3, tier="rule", confidence="high",
+        )
+        service._cat_client = cat_client
+        uow.categories.find_by_id.return_value = Category(
+            id=1, name="Mad & drikke", type=CategoryType.EXPENSE,
+        )
+        uow.subcategories.find_by_id.return_value = SubCategory(
+            id=3, name="Takeaway", category_id=1,
+        )
+        uow.transactions.create.return_value = _make_transaction()
+        dto = CreateTransactionDTO(
+            account_id=100,
+            account_name="Main Account",
+            amount=Decimal("49.99"),
+            transaction_type=TransactionType.EXPENSE,
+            description="Wolt",
+            date=date(2026, 3, 1),
+        )
+
+        await service.create_transaction(user_id=10, dto=dto)
+
+        repo_kwargs = uow.transactions.create.call_args.kwargs
+        assert repo_kwargs["category_id"] == 1
+        assert repo_kwargs["category_name"] == "Mad & drikke"
+        assert repo_kwargs["subcategory_id"] == 3
+        assert repo_kwargs["subcategory_name"] == "Takeaway"
+
+    @pytest.mark.asyncio()
+    async def test_sync_categorization_conflict_keeps_callers_category(self) -> None:
+        """A caller-chosen parent category wins over the categorizer's
+        suggestion; the conflicting subcategory is skipped to avoid a
+        parent/child mismatch."""
+        service, uow = _build_service()
+        cat_client = AsyncMock()
+        cat_client.categorize.return_value = MagicMock(
+            category_id=1, subcategory_id=3, tier="rule", confidence="high",
+        )
+        service._cat_client = cat_client
+        uow.transactions.create.return_value = _make_transaction()
+        dto = CreateTransactionDTO(
+            account_id=100,
+            account_name="Main Account",
+            category_id=2,
+            category_name="Bolig",
+            amount=Decimal("49.99"),
+            transaction_type=TransactionType.EXPENSE,
+            description="Wolt",
+            date=date(2026, 3, 1),
+        )
+
+        await service.create_transaction(user_id=10, dto=dto)
+
+        repo_kwargs = uow.transactions.create.call_args.kwargs
+        assert repo_kwargs["category_id"] == 2
+        assert repo_kwargs["subcategory_id"] is None
 
     @pytest.mark.asyncio()
     async def test_outbox_before_commit(self) -> None:
@@ -340,6 +420,88 @@ class TestUpdateTransaction:
 
         fields = uow.transactions.update.call_args.kwargs
         assert "categorization_tier" not in fields
+
+    @pytest.mark.asyncio()
+    async def test_subcategory_edit_resolves_name_and_pins_manual(self) -> None:
+        """Choosing a subcategory validates it against the local read copy,
+        resolves subcategory_name server-side, and pins tier=manual so the
+        async consumer won't overwrite the user's choice."""
+        service, uow = _build_service()
+        existing = _make_transaction(category_id=5, subcategory_id=None)
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = _make_transaction(subcategory_id=42)
+        uow.subcategories.find_by_id.return_value = SubCategory(
+            id=42, name="Dagligvarer", category_id=5,
+        )
+        dto = UpdateTransactionDTO(subcategory_id=42)
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        fields = uow.transactions.update.call_args.kwargs
+        assert fields["subcategory_id"] == 42
+        assert fields["subcategory_name"] == "Dagligvarer"
+        assert fields["categorization_tier"] == "manual"
+
+    @pytest.mark.asyncio()
+    async def test_subcategory_must_belong_to_effective_category(self) -> None:
+        service, uow = _build_service()
+        existing = _make_transaction(category_id=5)
+        uow.transactions.find_by_id.return_value = existing
+        uow.subcategories.find_by_id.return_value = SubCategory(
+            id=42, name="Husleje", category_id=2,
+        )
+        dto = UpdateTransactionDTO(subcategory_id=42)
+
+        with pytest.raises(SubcategoryMismatchException):
+            await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+        uow.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_subcategory_validated_against_new_category_when_both_change(self) -> None:
+        service, uow = _build_service()
+        existing = _make_transaction(category_id=5)
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = _make_transaction(category_id=2, subcategory_id=6)
+        uow.subcategories.find_by_id.return_value = SubCategory(
+            id=6, name="Husleje", category_id=2,
+        )
+        uow.categories.find_by_id.return_value = Category(
+            id=2, name="Bolig", type=CategoryType.EXPENSE,
+        )
+        dto = UpdateTransactionDTO(category_id=2, subcategory_id=6)
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        fields = uow.transactions.update.call_args.kwargs
+        assert fields["subcategory_id"] == 6
+        assert fields["subcategory_name"] == "Husleje"
+        assert fields["category_name"] == "Bolig"
+
+    @pytest.mark.asyncio()
+    async def test_unknown_subcategory_raises_404(self) -> None:
+        service, uow = _build_service()
+        existing = _make_transaction(category_id=5)
+        uow.transactions.find_by_id.return_value = existing
+        uow.subcategories.find_by_id.return_value = None
+        dto = UpdateTransactionDTO(subcategory_id=999)
+
+        with pytest.raises(SubcategoryNotFoundException):
+            await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+    @pytest.mark.asyncio()
+    async def test_explicit_null_subcategory_clears_both_fields(self) -> None:
+        service, uow = _build_service()
+        existing = _make_transaction(category_id=5, subcategory_id=42)
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = _make_transaction(subcategory_id=None)
+        dto = UpdateTransactionDTO(subcategory_id=None)
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        fields = uow.transactions.update.call_args.kwargs
+        assert fields["subcategory_id"] is None
+        assert fields["subcategory_name"] is None
+        assert fields["categorization_tier"] == "manual"
 
     @pytest.mark.asyncio()
     async def test_not_found(self) -> None:

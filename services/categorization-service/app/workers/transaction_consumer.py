@@ -164,6 +164,13 @@ class TransactionCreatedConsumer:
             stmt = select(SubCategoryModel.name).where(SubCategoryModel.id == result.subcategory_id)
             subcategory_name = (await session.execute(stmt)).scalar_one_or_none() or ""
 
+        # v2: carry the parent name so the consumer never has to leave
+        # category_name stale when its local read copy lags.
+        category_name = ""
+        if result.category_id:
+            stmt = select(CategoryModel.name).where(CategoryModel.id == result.category_id)
+            category_name = (await session.execute(stmt)).scalar_one_or_none() or ""
+
         result_repo = PostgresCategorizationResultRepository(session)
         outbox_repo = PostgresOutboxRepository(session)
 
@@ -184,6 +191,7 @@ class TransactionCreatedConsumer:
             event=TransactionCategorizedEvent(
                 transaction_id=transaction_id,
                 category_id=result.category_id,
+                category_name=category_name,
                 subcategory_id=result.subcategory_id,
                 subcategory_name=subcategory_name,
                 merchant_id=result.merchant_id,

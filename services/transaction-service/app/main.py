@@ -16,6 +16,8 @@ from app.domain.exceptions import (
     CSVImportException,
     InvalidTransactionException,
     PlannedTransactionNotFoundException,
+    SubcategoryMismatchException,
+    SubcategoryNotFoundException,
     TransactionNotFoundException,
 )
 
@@ -70,6 +72,16 @@ async def invalid_transaction_handler(_request: Request, exc: InvalidTransaction
 @app.exception_handler(CSVImportException)
 async def csv_import_handler(_request: Request, exc: CSVImportException) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(SubcategoryNotFoundException)
+async def subcategory_not_found_handler(_request: Request, exc: SubcategoryNotFoundException) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(SubcategoryMismatchException)
+async def subcategory_mismatch_handler(_request: Request, exc: SubcategoryMismatchException) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
 # Category CRUD lives in categorization-service per ADR-003 — this
