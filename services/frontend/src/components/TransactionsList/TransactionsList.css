@@ -222,3 +222,8 @@
         letter-spacing: var(--letter-spacing-wide);
     }
 }
+
+.subcategory-label {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}

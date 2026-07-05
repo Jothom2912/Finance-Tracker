@@ -58,6 +58,9 @@ function TransactionsList({
                 <td data-label="Type">{transaction.type === 'expense' ? 'Udgift' : 'Indkomst'}</td>
                 <td data-label="Kategori">
                   {getCategoryName(transaction)}
+                  {transaction.subcategory_name && (
+                    <span className="subcategory-label"> › {transaction.subcategory_name}</span>
+                  )}
                 </td>
                 <td data-label="Handlinger" className="transaction-actions">
                   <button className="button secondary small-button" onClick={() => onEdit(transaction)}>Rediger</button>

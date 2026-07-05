@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createTransaction as apiCreateTransaction, updateTransaction as apiUpdateTransaction } from '../../api/transactions';
+import { useSubcategories } from '../../hooks/useSubcategories';
 import './TransactionForm.css';
 
 function TransactionForm({
@@ -16,14 +17,21 @@ function TransactionForm({
 }) {
     const [amount, setAmount] = useState('');
     const [category, setCategory] = useState('');
+    const [subcategoryId, setSubcategoryId] = useState('');
     const [date, setDate] = useState('');
     const [description, setDescription] = useState('');
     const [isExpense, setIsExpense] = useState(true);
+
+    const {
+        subcategories,
+        loading: subcategoriesLoading,
+    } = useSubcategories(category ? parseInt(category) : null);
 
     useEffect(() => {
         if (transactionToEdit) {
             setAmount(Math.abs(transactionToEdit.amount));
             setCategory(transactionToEdit.category_id || '');
+            setSubcategoryId(transactionToEdit.subcategory_id || '');
             setDate(transactionToEdit.date);
             setDescription(transactionToEdit.description);
             setIsExpense(transactionToEdit.transaction_type === 'expense' || transactionToEdit.type === 'expense');
@@ -31,11 +39,18 @@ function TransactionForm({
             // Reset form for new transaction
             setAmount('');
             setCategory('');
+            setSubcategoryId('');
             setDate('');
             setDescription('');
             setIsExpense(true); // Default to expense
         }
     }, [transactionToEdit]);
+
+    const handleCategoryChange = (value) => {
+        setCategory(value);
+        // Kaskade: subkategorien hører til den gamle kategori og nulstilles.
+        setSubcategoryId('');
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -70,6 +85,8 @@ function TransactionForm({
             amount: finalAmount,
             category_id: categoryId,
             category_name: selectedCategory?.name || null,
+            // Kun id — subcategory_name og tier=manual sættes server-side.
+            subcategory_id: subcategoryId ? parseInt(subcategoryId) : null,
             date: date,
             description: description,
             type: isExpense ? 'expense' : 'income',
@@ -110,7 +127,7 @@ function TransactionForm({
                     <select
                         id="category"
                         value={category}
-                        onChange={(e) => setCategory(e.target.value)}
+                        onChange={(e) => handleCategoryChange(e.target.value)}
                         disabled={categoriesLoading || !!categoriesError}
                         required
                     >
@@ -133,6 +150,31 @@ function TransactionForm({
                             )}
                         </p>
                     )}
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="subcategory">Underkategori:</label>
+                    <select
+                        id="subcategory"
+                        value={subcategoryId}
+                        onChange={(e) => setSubcategoryId(e.target.value)}
+                        disabled={!category || subcategoriesLoading || subcategories.length === 0}
+                    >
+                        <option value="">
+                            {!category
+                                ? 'Vælg først kategori'
+                                : subcategoriesLoading
+                                    ? 'Indlæser underkategorier…'
+                                    : subcategories.length === 0
+                                        ? 'Ingen underkategorier'
+                                        : '(Ingen underkategori)'}
+                        </option>
+                        {subcategories.map((sub) => (
+                            <option key={sub.id} value={sub.id}>
+                                {sub.name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
                 <div className="form-group">
