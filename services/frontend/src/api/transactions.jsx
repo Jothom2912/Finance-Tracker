@@ -86,9 +86,6 @@ function toServicePayload(data) {
 function fromServiceResponse(tx) {
   return {
     ...tx,
-    idTransaction: tx.id,
-    Category_idCategory: tx.category_id,
-    Account_idAccount: tx.account_id,
     type: tx.transaction_type,
   };
 }

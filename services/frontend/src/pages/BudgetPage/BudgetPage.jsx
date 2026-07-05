@@ -45,7 +45,7 @@ function BudgetPage() {
   );
 
   const availableCategories = useMemo(
-    () => expenseCategories.filter((c) => !usedCategoryIds.has(c.idCategory)),
+    () => expenseCategories.filter((c) => !usedCategoryIds.has(c.id)),
     [expenseCategories, usedCategoryIds]
   );
 
@@ -164,11 +164,11 @@ function BudgetPage() {
 
   const handleAddLine = () => {
     if (!addCategoryId) return;
-    const cat = expenseCategories.find((c) => c.idCategory === parseInt(addCategoryId, 10));
+    const cat = expenseCategories.find((c) => c.id === parseInt(addCategoryId, 10));
     if (!cat) return;
     setEditLines((prev) => [
       ...prev,
-      { category_id: cat.idCategory, category_name: cat.name, amount: 0 },
+      { category_id: cat.id, category_name: cat.name, amount: 0 },
     ]);
     setAddCategoryId('');
     if (!isEditing) setIsEditing(true);
@@ -426,7 +426,7 @@ function BudgetPage() {
               >
                 <option value="">Tilføj kategori...</option>
                 {availableCategories.map((c) => (
-                  <option key={c.idCategory} value={c.idCategory}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
               <button

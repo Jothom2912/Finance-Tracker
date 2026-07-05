@@ -17,9 +17,8 @@ function CategorySpendingOverview({
     const categoryIdToName = {};
     const categoryNameToId = {};
     categories.forEach((cat) => {
-      const id = cat.idCategory ?? cat.id;
-      categoryIdToName[id] = cat.name;
-      categoryNameToId[cat.name] = id;
+      categoryIdToName[cat.id] = cat.name;
+      categoryNameToId[cat.name] = cat.id;
     });
 
     return Object.entries(expensesByCategory)

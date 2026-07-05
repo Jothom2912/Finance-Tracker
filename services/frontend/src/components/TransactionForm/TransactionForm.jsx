@@ -23,7 +23,7 @@ function TransactionForm({
     useEffect(() => {
         if (transactionToEdit) {
             setAmount(Math.abs(transactionToEdit.amount));
-            setCategory(transactionToEdit.category_id || transactionToEdit.Category_idCategory);
+            setCategory(transactionToEdit.category_id || '');
             setDate(transactionToEdit.date);
             setDescription(transactionToEdit.description);
             setIsExpense(transactionToEdit.transaction_type === 'expense' || transactionToEdit.type === 'expense');
@@ -64,7 +64,7 @@ function TransactionForm({
             return;
         }
 
-        const selectedCategory = categories.find((cat) => (cat.id || cat.idCategory) === categoryId);
+        const selectedCategory = categories.find((cat) => cat.id === categoryId);
 
         const transactionData = {
             amount: finalAmount,
@@ -76,7 +76,7 @@ function TransactionForm({
         };
 
         try {
-            const transactionId = transactionToEdit?.idTransaction || transactionToEdit?.id;
+            const transactionId = transactionToEdit?.id;
             if (transactionToEdit) {
                 await apiUpdateTransaction(transactionId, transactionData);
                 onTransactionUpdated();
@@ -118,7 +118,7 @@ function TransactionForm({
                             {categoriesLoading ? 'Indlæser kategorier…' : 'Vælg Kategori'}
                         </option>
                         {categories.map((cat) => (
-                            <option key={cat.id || cat.idCategory} value={cat.id || cat.idCategory}>
+                            <option key={cat.id} value={cat.id}>
                                 {cat.name}
                             </option>
                         ))}

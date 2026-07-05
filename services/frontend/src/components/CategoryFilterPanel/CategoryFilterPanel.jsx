@@ -27,7 +27,7 @@ function CategoryFilterPanel({
   }, [categories, typeFilter]);
 
   const allSelected = filteredCategories.length > 0
-    && filteredCategories.every((cat) => selectedCategoryIds.includes(cat.idCategory ?? cat.id));
+    && filteredCategories.every((cat) => selectedCategoryIds.includes(cat.id));
 
   const handleToggleCategory = (catId) => {
     setSelectedCategoryIds((prev) =>
@@ -39,7 +39,7 @@ function CategoryFilterPanel({
     if (allSelected) {
       setSelectedCategoryIds([]);
     } else {
-      setSelectedCategoryIds(filteredCategories.map((cat) => cat.idCategory ?? cat.id));
+      setSelectedCategoryIds(filteredCategories.map((cat) => cat.id));
     }
   };
 
@@ -104,7 +104,7 @@ function CategoryFilterPanel({
 
         <div className="category-chips">
           {filteredCategories.map((cat) => {
-            const catId = cat.idCategory ?? cat.id;
+            const catId = cat.id;
             const isSelected = selectedCategoryIds.includes(catId);
             return (
               <button

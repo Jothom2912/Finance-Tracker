@@ -382,14 +382,11 @@ function BudgetSetup({
                             disabled={isSubmitting}
                         >
                             <option value="">Vælg kategori</option>
-                            {expenseCategories.map(cat => {
-                                const catId = cat.id || cat.idCategory;
-                                return (
-                                    <option key={catId} value={String(catId)}>
-                                        {cat.name}
-                                    </option>
-                                );
-                            })}
+                            {expenseCategories.map(cat => (
+                                <option key={cat.id} value={String(cat.id)}>
+                                    {cat.name}
+                                </option>
+                            ))}
                         </select>
                     </label>
                 </div>

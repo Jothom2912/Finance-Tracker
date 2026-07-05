@@ -125,11 +125,8 @@ function FilterComponent({
             <option value="">
               {categoriesLoading ? 'Indlæser kategorier…' : 'Alle Kategorier'}
             </option>
-            {categories.map((cat, index) => (
-              <option
-                key={cat.idCategory || cat.id || `category-${index}`}
-                value={cat.idCategory || cat.id}
-              >
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
                 {cat.name}
               </option>
             ))}

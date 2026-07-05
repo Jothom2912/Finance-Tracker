@@ -6,26 +6,16 @@ const crud = createCrudApi('/categories', {
   trailingSlash: true,
 });
 
-function fromServiceResponse(cat) {
-  return {
-    ...cat,
-    idCategory: cat.id,
-  };
-}
-
 export async function fetchCategories(params) {
-  const data = await crud.fetchAll(params);
-  return data.map(fromServiceResponse);
+  return crud.fetchAll(params);
 }
 
 export async function createCategory(data) {
-  const result = await crud.create(data);
-  return fromServiceResponse(result);
+  return crud.create(data);
 }
 
 export async function updateCategory(id, data) {
-  const result = await crud.update(id, data);
-  return fromServiceResponse(result);
+  return crud.update(id, data);
 }
 
 export async function deleteCategory(id) {

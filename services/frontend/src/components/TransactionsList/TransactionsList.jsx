@@ -11,9 +11,9 @@ function TransactionsList({
 }) {
   const getCategoryName = (transaction) => {
     if (transaction.category_name) return transaction.category_name;
-    const id = transaction.category_id || transaction.Category_idCategory;
+    const id = transaction.category_id;
     if (!id) return 'Ukendt';
-    const category = categories.find((cat) => cat.id === id || cat.idCategory === id);
+    const category = categories.find((cat) => cat.id === id);
     return category ? category.name : 'Ukendt';
   };
 
@@ -43,7 +43,7 @@ function TransactionsList({
         </thead>
         <tbody>
           {transactions.map((transaction) => {
-            const transactionId = transaction.idTransaction || transaction.id;
+            const transactionId = transaction.id;
             return (
               <tr key={transactionId} className={transaction.type === 'expense' ? 'expense-row' : 'income-row'}>
                 <td data-label="Dato">{formatDate(transaction.date)}</td>
