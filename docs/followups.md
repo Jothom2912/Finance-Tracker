@@ -683,3 +683,26 @@ Two habits that served this session well and should continue:
    flagged explicitly**, ideally in-line in the response and
    in the commit body. ADR-0002 exists precisely because this
    habit was missed once; it should not be missed again.
+
+## Followups fra taksonomi-konsolideringen (ADR-003, juli 2026)
+
+- **PlannedTransactionModel mangler subkategori-felter** — planned
+  transactions har kun category_id/category_name. Tilføj
+  subcategory_id/subcategory_name hvis planlagte transaktioner skal
+  kunne kategoriseres på sub-niveau.
+- **Fallback-subkategorien "Anden" er pinned by name** i rule-engine
+  (`transaction_consumer._build_rule_engine`). Delete er guarded, men
+  rename kan stadig knække fallback ved næste consumer-restart —
+  overvej pin-by-id (=32).
+- **Budget-service payload-nøgler** (`Category_idCategory`,
+  `categories[0].idCategory` i budget-responses) er stadig legacy —
+  frontend (BudgetSetup/Budget.js) transformerer dem defensivt.
+  Normalisér ved næste budget-service-arbejde.
+- **Merchant-learning loop**: `is_user_confirmed` på merchants er
+  stadig dødt. En `transaction.manually_categorized`-event fra
+  update_transaction (tier->manual) kunne fodre merchant-mappings.
+- **Dashboard-månedvælgerens semantik**: historiske måneder bruger
+  kalendermåned (financialOverview), nuværende måned bruger kontoens
+  budget-startdag (currentMonthOverview). Overvej en
+  periodOverview(month, year) i gateway der respekterer budgetperioden
+  også historisk.

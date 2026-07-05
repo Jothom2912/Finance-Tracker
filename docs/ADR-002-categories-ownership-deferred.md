@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — temporary technical debt
+Superseded by ADR-003 (decision A executed — categorization-service now
+owns the full taxonomy)
 
 ## Context
 
