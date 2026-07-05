@@ -1,40 +1,44 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import CategoryBarChart from '../../Charts/CategoryBarChart';
+import CategoryDrilldown from '../CategoryDrilldown/CategoryDrilldown';
 import { formatAmount } from '../../lib/formatters';
 import { CHART_COLORS as COLORS } from '../../lib/chartColors';
 import './CategorySpendingOverview.css';
+
+// Filter-sentinel for 'Ukategoriseret' (categoryId er null i data).
+export const UNCATEGORIZED_FILTER_ID = 'uncategorized';
 
 function CategorySpendingOverview({
   expensesByCategory,
   budgetSummary,
   selectedCategoryIds,
-  categories,
   loading,
 }) {
+  const [drilldownKey, setDrilldownKey] = useState(null);
+
+  // Gateway'en leverer allerede id-baserede buckets — ingen navn→id
+  // reverse-mapping længere.
   const categoryData = useMemo(() => {
-    if (!expensesByCategory || Object.keys(expensesByCategory).length === 0) return [];
-
-    const categoryIdToName = {};
-    const categoryNameToId = {};
-    categories.forEach((cat) => {
-      categoryIdToName[cat.id] = cat.name;
-      categoryNameToId[cat.name] = cat.id;
-    });
-
-    return Object.entries(expensesByCategory)
-      .map(([name, value]) => {
-        const numValue = Math.abs(Number(value));
-        if (!name || Number.isNaN(numValue) || numValue <= 0) return null;
-        const catId = categoryNameToId[name.trim()];
-        return { name: name.trim(), value: numValue, categoryId: catId };
-      })
+    if (!expensesByCategory?.length) return [];
+    return expensesByCategory
+      .map((entry) => ({
+        categoryId: entry.categoryId,
+        filterId: entry.categoryId ?? UNCATEGORIZED_FILTER_ID,
+        name: entry.categoryName,
+        value: Math.abs(Number(entry.amount)),
+        subcategories: (entry.subcategories ?? []).map((sub) => ({
+          id: sub.subcategoryId,
+          name: sub.subcategoryName,
+          value: Math.abs(Number(sub.amount)),
+        })),
+      }))
+      .filter((item) => item.value > 0)
       .filter((item) => {
-        if (!item) return false;
         if (selectedCategoryIds.length === 0) return true;
-        return selectedCategoryIds.includes(item.categoryId);
+        return selectedCategoryIds.includes(item.filterId);
       })
       .sort((a, b) => b.value - a.value);
-  }, [expensesByCategory, selectedCategoryIds, categories]);
+  }, [expensesByCategory, selectedCategoryIds]);
 
   const totalExpenses = useMemo(
     () => categoryData.reduce((sum, item) => sum + item.value, 0),
@@ -50,24 +54,31 @@ function CategorySpendingOverview({
     }));
   }, [categoryData, totalExpenses]);
 
+  const drilldownCategory = useMemo(() => {
+    if (drilldownKey == null) return null;
+    return (
+      categoryDataWithMeta.find((c) => c.filterId === drilldownKey) ?? null
+    );
+  }, [categoryDataWithMeta, drilldownKey]);
+
   const budgetItems = useMemo(() => {
     if (!budgetSummary?.items) return [];
     return budgetSummary.items
       .filter((item) => {
         if (selectedCategoryIds.length === 0) return true;
-        return selectedCategoryIds.includes(item.category_id);
+        return selectedCategoryIds.includes(item.categoryId);
       })
-      .filter((item) => item.budget_amount > 0 || item.spent_amount > 0);
+      .filter((item) => item.budgetAmount > 0 || item.spentAmount > 0);
   }, [budgetSummary, selectedCategoryIds]);
 
   const stats = useMemo(() => {
-    const totalBudget = budgetItems.reduce((sum, i) => sum + (i.budget_amount || 0), 0);
+    const totalBudget = budgetItems.reduce((sum, i) => sum + (i.budgetAmount || 0), 0);
     const budgetedSpent = budgetItems
-      .filter((i) => i.budget_amount > 0)
-      .reduce((sum, i) => sum + (i.spent_amount || 0), 0);
-    const overBudgetCount = budgetItems.filter((i) => i.remaining_amount < 0).length;
+      .filter((i) => i.budgetAmount > 0)
+      .reduce((sum, i) => sum + (i.spentAmount || 0), 0);
+    const overBudgetCount = budgetItems.filter((i) => i.remainingAmount < 0).length;
     const withinBudgetCount = budgetItems.filter(
-      (i) => i.budget_amount > 0 && i.remaining_amount >= 0,
+      (i) => i.budgetAmount > 0 && i.remainingAmount >= 0,
     ).length;
 
     return {
@@ -130,38 +141,64 @@ function CategorySpendingOverview({
         )}
       </div>
 
-      {/* Bar chart: spending vs budget */}
+      {/* Bar chart: spending vs budget — eller subkategori-drilldown */}
       <div className="spending-chart-full">
-        <h3>Forbrug vs. budget pr. kategori</h3>
-        <div className="chart-legend">
-          <span className="legend-item">
-            <span className="legend-swatch" style={{ backgroundColor: '#0088FE' }} />
-            Forbrug
-          </span>
-          <span className="legend-item">
-            <span className="legend-swatch budget" />
-            Budget
-          </span>
-        </div>
-        <CategoryBarChart
-          categoryData={categoryDataWithMeta}
-          budgetItems={budgetItems}
-        />
-        <div className="spending-total-row">
-          <strong>Samlet forbrug: {formatAmount(totalExpenses)}</strong>
-        </div>
+        {drilldownCategory ? (
+          <CategoryDrilldown
+            category={drilldownCategory}
+            totalExpenses={totalExpenses}
+            onBack={() => setDrilldownKey(null)}
+            formatAmount={formatAmount}
+          />
+        ) : (
+          <>
+            <h3>Forbrug vs. budget pr. kategori</h3>
+            <div className="chart-legend">
+              <span className="legend-item">
+                <span className="legend-swatch" style={{ backgroundColor: '#0088FE' }} />
+                Forbrug
+              </span>
+              <span className="legend-item">
+                <span className="legend-swatch budget" />
+                Budget
+              </span>
+            </div>
+            <CategoryBarChart
+              categoryData={categoryDataWithMeta}
+              budgetItems={budgetItems}
+            />
+            <div className="spending-drilldown-hint">
+              {categoryDataWithMeta.map((item) => (
+                <button
+                  key={item.filterId}
+                  type="button"
+                  className="drilldown-chip"
+                  style={{ borderColor: item.color }}
+                  onClick={() => setDrilldownKey(item.filterId)}
+                  title={`Se underkategorier for ${item.name}`}
+                >
+                  <span className="drilldown-chip-dot" style={{ backgroundColor: item.color }} />
+                  {item.name}
+                </button>
+              ))}
+            </div>
+            <div className="spending-total-row">
+              <strong>Samlet forbrug: {formatAmount(totalExpenses)}</strong>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Budget compliance section */}
-      {budgetItems.length > 0 && (
+      {budgetItems.length > 0 && !drilldownCategory && (
         <div className="budget-compliance-section">
           <h3>Budget-overholdelse</h3>
           <div className="budget-compliance-list">
             {budgetItems
-              .filter((item) => item.budget_amount > 0)
-              .sort((a, b) => (b.percentage_used || 0) - (a.percentage_used || 0))
+              .filter((item) => item.budgetAmount > 0)
+              .sort((a, b) => (b.percentageUsed || 0) - (a.percentageUsed || 0))
               .map((item) => (
-                <BudgetComplianceRow key={item.category_id} item={item} />
+                <BudgetComplianceRow key={item.categoryId} item={item} />
               ))}
           </div>
         </div>
@@ -171,8 +208,8 @@ function CategorySpendingOverview({
 }
 
 function BudgetComplianceRow({ item }) {
-  const pct = item.percentage_used || 0;
-  const isOver = item.remaining_amount < 0;
+  const pct = item.percentageUsed || 0;
+  const isOver = item.remainingAmount < 0;
   const isClose = pct >= 80 && !isOver;
 
   let statusClass = 'ok';
@@ -188,7 +225,7 @@ function BudgetComplianceRow({ item }) {
   return (
     <div className={`compliance-row ${statusClass}`}>
       <div className="compliance-info">
-        <span className="compliance-name">{item.category_name}</span>
+        <span className="compliance-name">{item.categoryName}</span>
         <span className={`compliance-status ${statusClass}`}>{statusText}</span>
       </div>
       <div className="compliance-bar-wrapper">
@@ -200,11 +237,11 @@ function BudgetComplianceRow({ item }) {
         </div>
       </div>
       <div className="compliance-amounts">
-        <span className="compliance-spent">{formatAmount(item.spent_amount)}</span>
+        <span className="compliance-spent">{formatAmount(item.spentAmount)}</span>
         <span className="compliance-divider">/</span>
-        <span className="compliance-budget">{formatAmount(item.budget_amount)}</span>
+        <span className="compliance-budget">{formatAmount(item.budgetAmount)}</span>
         <span className={`compliance-remaining ${isOver ? 'over' : ''}`}>
-          ({isOver ? '' : '+'}{formatAmount(item.remaining_amount)})
+          ({isOver ? '' : '+'}{formatAmount(item.remainingAmount)})
         </span>
       </div>
     </div>

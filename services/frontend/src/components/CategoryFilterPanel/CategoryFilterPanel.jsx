@@ -8,6 +8,10 @@ const TYPE_LABELS = {
   transfer: 'Overførsel',
 };
 
+// Sentinel-id for 'Ukategoriseret'-chippen (transaktioner uden kategori har
+// categoryId null i gateway-data; null kan ikke bruges som chip-værdi).
+const UNCATEGORIZED_FILTER_ID = 'uncategorized';
+
 function CategoryFilterPanel({
   selectedMonth,
   setSelectedMonth,
@@ -18,13 +22,22 @@ function CategoryFilterPanel({
   setSelectedCategoryIds,
   typeFilter,
   setTypeFilter,
+  includeUncategorized = false,
 }) {
   const yearOptions = useMemo(() => getYearOptions(3), []);
 
   const filteredCategories = useMemo(() => {
-    if (typeFilter === 'all') return categories;
-    return categories.filter((cat) => cat.type === typeFilter);
-  }, [categories, typeFilter]);
+    const base = typeFilter === 'all'
+      ? categories
+      : categories.filter((cat) => cat.type === typeFilter);
+    if (!includeUncategorized || typeFilter === 'income' || typeFilter === 'transfer') {
+      return base;
+    }
+    return [
+      ...base,
+      { id: UNCATEGORIZED_FILTER_ID, name: 'Ukategoriseret', type: 'expense' },
+    ];
+  }, [categories, typeFilter, includeUncategorized]);
 
   const allSelected = filteredCategories.length > 0
     && filteredCategories.every((cat) => selectedCategoryIds.includes(cat.id));

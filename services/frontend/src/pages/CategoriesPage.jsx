@@ -1,17 +1,18 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart3 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import CategoryFilterPanel from '../components/CategoryFilterPanel/CategoryFilterPanel';
 import CategorySpendingOverview from '../components/CategorySpendingOverview/CategorySpendingOverview';
 import CategoryManagement from '../components/CategoryManagement/CategoryManagement';
 import Modal from '../components/Modal/Modal';
 import { useCategories } from '../hooks/useCategories';
 import { useNotifications } from '../hooks/useNotifications';
-import { fetchDashboardOverview } from '../api/dashboard';
-import { fetchBudgetSummary } from '../api/budgets';
+import { usePeriodOverview } from '../hooks/usePeriodOverview';
 import './CategoriesPage.css';
 
 function CategoriesPage() {
+  const queryClient = useQueryClient();
   const { categories, refresh: refreshCategories } = useCategories();
   const { showError, showSuccess, clearMessages } = useNotifications();
   const [showManagementModal, setShowManagementModal] = useState(false);
@@ -24,69 +25,31 @@ function CategoriesPage() {
   const [typeFilter, setTypeFilter] = useState('expense');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
 
-  const [overviewData, setOverviewData] = useState(null);
-  const [budgetData, setBudgetData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [dataError, setDataError] = useState(null);
-
   const hasAccount = Boolean(localStorage.getItem('account_id'));
 
-  const dateRange = useMemo(() => {
-    const month = parseInt(selectedMonth, 10);
-    const year = parseInt(selectedYear, 10);
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-    return { startDate, endDate, month, year };
-  }, [selectedMonth, selectedYear]);
+  const period = useMemo(
+    () => ({
+      month: parseInt(selectedMonth, 10),
+      year: parseInt(selectedYear, 10),
+    }),
+    [selectedMonth, selectedYear],
+  );
 
-  const fetchData = useCallback(async () => {
-    if (!hasAccount) {
-      setLoading(false);
-      setDataError('no-account');
-      return;
-    }
-
-    setLoading(true);
-    setDataError(null);
-    try {
-      const [overview, budget] = await Promise.all([
-        fetchDashboardOverview({
-          startDate: dateRange.startDate,
-          endDate: dateRange.endDate,
-        }),
-        fetchBudgetSummary({
-          month: dateRange.month,
-          year: dateRange.year,
-        }),
-      ]);
-      setOverviewData(overview);
-      setBudgetData(budget);
-    } catch (err) {
-      console.error('Fejl ved hentning af kategori-data:', err);
-      const isAccountError = err.message?.toLowerCase().includes('account')
-        || err.status === 400;
-      if (isAccountError) {
-        setDataError('no-account');
-      } else {
-        setDataError('fetch-error');
-        showError(err.message || 'Kunne ikke hente data.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [dateRange, showError, hasAccount]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { overview, budgetSummary, loading, error } = usePeriodOverview({
+    month: period.month,
+    year: period.year,
+    enabled: hasAccount,
+  });
 
   const handleCategoryChange = useCallback(() => {
     refreshCategories();
-    fetchData();
+    queryClient.invalidateQueries({ queryKey: ['periodOverview'] });
+    queryClient.invalidateQueries({ queryKey: ['subcategories'] });
     showSuccess('Handling udført!');
     setShowManagementModal(false);
-  }, [refreshCategories, fetchData, showSuccess]);
+  }, [refreshCategories, queryClient, showSuccess]);
+
+  const noAccount = !hasAccount;
 
   return (
     <div className="categories-page">
@@ -110,9 +73,10 @@ function CategoriesPage() {
         setSelectedCategoryIds={setSelectedCategoryIds}
         typeFilter={typeFilter}
         setTypeFilter={setTypeFilter}
+        includeUncategorized
       />
 
-      {dataError === 'no-account' ? (
+      {noAccount ? (
         <div className="categories-no-account">
           <div className="no-account-icon"><BarChart3 aria-hidden="true" size={48} /></div>
           <h3>Ingen konto valgt</h3>
@@ -121,12 +85,16 @@ function CategoriesPage() {
             Vælg konto
           </Link>
         </div>
+      ) : error ? (
+        <div className="categories-no-account">
+          <h3>Kunne ikke hente data</h3>
+          <p>{error}</p>
+        </div>
       ) : (
         <CategorySpendingOverview
-          expensesByCategory={overviewData?.expenses_by_category}
-          budgetSummary={budgetData}
+          expensesByCategory={overview?.expensesByCategory}
+          budgetSummary={budgetSummary}
           selectedCategoryIds={selectedCategoryIds}
-          categories={categories}
           loading={loading}
         />
       )}

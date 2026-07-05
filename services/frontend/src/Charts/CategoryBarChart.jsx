@@ -76,8 +76,8 @@ function CategoryBarChart({ categoryData, budgetItems }) {
   }
 
   const chartData = categoryData.map((cat, index) => {
-    const budgetInfo = budgetItems?.find((b) => b.category_id === cat.categoryId);
-    const budget = budgetInfo?.budget_amount || 0;
+    const budgetInfo = budgetItems?.find((b) => b.categoryId === cat.categoryId);
+    const budget = budgetInfo?.budgetAmount || 0;
     const spent = cat.value;
     const isOver = budget > 0 && spent > budget;
 
