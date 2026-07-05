@@ -5,6 +5,7 @@ from typing import Self
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.postgres_category_repository import PostgresCategoryRepository
+from app.adapters.outbound.postgres_merchant_repository import PostgresMerchantRepository
 from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.adapters.outbound.postgres_result_repository import PostgresCategorizationResultRepository
 from app.adapters.outbound.postgres_rule_repository import PostgresRuleRepository
@@ -23,7 +24,7 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
         self._session = session
         self.categories = PostgresCategoryRepository(session)
         self.subcategories = PostgresSubCategoryRepository(session)
-        self.merchants = None  # type: ignore[assignment]
+        self.merchants = PostgresMerchantRepository(session)
         self.rules = PostgresRuleRepository(session)
         self.results = PostgresCategorizationResultRepository(session)
         self.outbox = PostgresOutboxRepository(session)
