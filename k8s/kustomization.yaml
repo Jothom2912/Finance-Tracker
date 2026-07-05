@@ -51,6 +51,7 @@ resources:
   - workers/categorization-category-sync.yaml
   - workers/categorization-transaction-consumer.yaml
   - workers/transaction-categorized-consumer.yaml
+  - workers/transaction-taxonomy-consumer.yaml
   - workers/goal-budget-consumer.yaml
   - workers/banking-account-projection-consumer.yaml
   - workers/saga-outbox-worker.yaml

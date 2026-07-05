@@ -81,6 +81,31 @@ class TestMigration005SeedsCategories:
 
 
 # ─────────────────────────────────────────────────────────────
+# Migration 010 — subcategories read model (ADR-003)
+# ─────────────────────────────────────────────────────────────
+
+
+class TestMigration010SubcategoriesReadModel:
+    def test_upgrade_creates_and_seeds_41_subcategories(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.connect() as conn:
+            rows = conn.execute(
+                sa.text("SELECT id, name, category_id FROM subcategories ORDER BY id")
+            ).fetchall()
+
+        assert len(rows) == 41
+        assert (rows[0].id, rows[0].name, rows[0].category_id) == (1, "Dagligvarer", 1)
+        # The rule engine's fallback subcategory must be present.
+        anden = next(r for r in rows if r.name == "Anden")
+        assert (anden.id, anden.category_id) == (32, 8)
+
+
+# ─────────────────────────────────────────────────────────────
 # Migration 006 — outbox events for default categories
 # ─────────────────────────────────────────────────────────────
 

@@ -3,13 +3,21 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
 
 class CategoryModel(Base):
+    """Event-synced read copy of categorization-service's categories.
+
+    Per ADR-003 this service no longer owns categories; the copy exists
+    for name denormalization on transactions. Ordering (display_order)
+    is a presentation concern served by categorization-service and is
+    deliberately not projected here.
+    """
+
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -17,6 +25,24 @@ class CategoryModel(Base):
     type: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now())
+
+
+class SubCategoryModel(Base):
+    """Event-synced read copy of categorization-service's subcategories.
+
+    Used to resolve ``subcategory_name`` on write paths and to validate
+    that a manually chosen subcategory belongs to the chosen category —
+    without an HTTP call to categorization-service. See ADR-003 and
+    migration 010.
+    """
+
+    __tablename__ = "subcategories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    category_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class TransactionModel(Base):

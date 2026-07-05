@@ -347,6 +347,25 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  transaction-taxonomy-consumer:
+    build:
+      context: .
+      dockerfile: services/transaction-service/Dockerfile
+    command: ["python", "-m", "app.workers.taxonomy_sync_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      transaction-service:
+        condition: service_started
+      categorization-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
   transaction-saga-command-consumer:
     build:
       context: .
