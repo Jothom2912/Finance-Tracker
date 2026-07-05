@@ -28,11 +28,24 @@ class CategorizeResponseDTO(BaseModel):
 class CreateCategoryDTO(BaseModel):
     name: str = Field(..., min_length=1, max_length=45)
     type: str = Field(..., description="income, expense, or transfer")
+    display_order: int = Field(default=0, ge=0)
 
 
 class UpdateCategoryDTO(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=45)
     type: str | None = None
+    display_order: int | None = Field(default=None, ge=0)
+
+
+class CreateSubCategoryDTO(BaseModel):
+    """category_id comes from the URL path, not the body."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+
+
+class UpdateSubCategoryDTO(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    category_id: int | None = Field(default=None, gt=0, description="Re-parent to another category")
 
 
 class CategoryResponseDTO(BaseModel):

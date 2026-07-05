@@ -7,10 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound.categorize_api import categorize_router
-from app.adapters.inbound.category_api import category_router
+from app.adapters.inbound.category_api import category_router, subcategory_router
 from app.config import settings
 from app.domain.exceptions import (
+    CategoryHasSubcategories,
     CategoryNotFound,
+    DuplicateCategoryName,
+    DuplicateSubCategoryName,
+    InvalidCategoryType,
+    SubCategoryInUse,
     SubCategoryNotFound,
 )
 from app.rule_engine_provider import RuleEngineProvider
@@ -60,8 +65,40 @@ async def subcategory_not_found_handler(_request: Request, exc: SubCategoryNotFo
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
+@app.exception_handler(DuplicateCategoryName)
+async def duplicate_category_handler(_request: Request, exc: DuplicateCategoryName) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(DuplicateSubCategoryName)
+async def duplicate_subcategory_handler(
+    _request: Request, exc: DuplicateSubCategoryName
+) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(CategoryHasSubcategories)
+async def category_has_subcategories_handler(
+    _request: Request, exc: CategoryHasSubcategories
+) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(SubCategoryInUse)
+async def subcategory_in_use_handler(_request: Request, exc: SubCategoryInUse) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(InvalidCategoryType)
+async def invalid_category_type_handler(
+    _request: Request, exc: InvalidCategoryType
+) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
 app.include_router(categorize_router)
 app.include_router(category_router)
+app.include_router(subcategory_router)
 
 
 @app.get("/health")

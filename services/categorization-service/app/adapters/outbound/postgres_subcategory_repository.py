@@ -43,6 +43,15 @@ class PostgresSubCategoryRepository(ISubCategoryRepository):
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
 
+    async def find_by_name_and_category(self, name: str, category_id: int) -> Optional[SubCategory]:
+        stmt = select(SubCategoryModel).where(
+            SubCategoryModel.name == name,
+            SubCategoryModel.category_id == category_id,
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return self._to_entity(model) if model else None
+
     async def find_by_category_id(self, category_id: int) -> list[SubCategory]:
         stmt = (
             select(SubCategoryModel)
@@ -53,6 +62,16 @@ class PostgresSubCategoryRepository(ISubCategoryRepository):
         )
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
+
+    async def update(self, subcategory_id: int, **fields: object) -> SubCategory:
+        stmt = select(SubCategoryModel).where(SubCategoryModel.id == subcategory_id)
+        result = await self._session.execute(stmt)
+        model = result.scalar_one()
+        for key, value in fields.items():
+            setattr(model, key, value)
+        await self._session.flush()
+        await self._session.refresh(model)
+        return self._to_entity(model)
 
     async def delete(self, subcategory_id: int) -> bool:
         stmt = select(SubCategoryModel).where(SubCategoryModel.id == subcategory_id)

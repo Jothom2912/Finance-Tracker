@@ -44,6 +44,13 @@ class PostgresRuleRepository(IRuleRepository):
         await self._session.refresh(model)
         return self._to_entity(model)
 
+    async def find_by_subcategory_id(self, subcategory_id: int) -> list[CategorizationRule]:
+        stmt = select(CategorizationRuleModel).where(
+            CategorizationRuleModel.matches_subcategory_id == subcategory_id,
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
     async def update(self, rule_id: int, **fields: object) -> CategorizationRule:
         stmt = select(CategorizationRuleModel).where(CategorizationRuleModel.id == rule_id)
         result = await self._session.execute(stmt)
