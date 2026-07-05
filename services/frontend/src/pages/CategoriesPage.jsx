@@ -143,6 +143,7 @@ function CategoriesPage() {
           onCategoryDeleted={handleCategoryChange}
           setError={showError}
           setSuccessMessage={showSuccess}
+          onCloseModal={() => setShowManagementModal(false)}
         />
       </Modal>
     </div>

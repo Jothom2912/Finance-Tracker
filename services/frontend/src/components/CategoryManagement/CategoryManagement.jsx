@@ -125,7 +125,7 @@ function CategoryManagement({
         setLocalSuccessMessage(null);
         setError(null);
         setSuccessMessage(null);
-        onCloseModal(); // Lukker modalen via prop fra App.js
+        onCloseModal?.(); // Lukker modalen via prop fra App.js
     };
 
     return (
@@ -152,6 +152,7 @@ function CategoryManagement({
                         <select value={categoryTypeInput} onChange={(e) => setCategoryTypeInput(e.target.value)}>
                             <option value="expense">Udgift</option>
                             <option value="income">Indtægt</option>
+                            <option value="transfer">Overførsel</option>
                         </select>
                     </label>
                 </div>

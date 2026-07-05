@@ -17,7 +17,12 @@ import './TransactionsPage.css';
 
 function TransactionsPage() {
   const queryClient = useQueryClient();
-  const { categories } = useCategories();
+  const {
+    categories,
+    loading: categoriesLoading,
+    error: categoriesError,
+    refresh: refreshCategories,
+  } = useCategories();
   const { showError, showSuccess, clearMessages } = useNotifications();
   const confirm = useConfirm();
 
@@ -147,6 +152,9 @@ function TransactionsPage() {
             selectedCategory={selectedCategory}
             setSelectedCategory={setSelectedCategory}
             categories={categories}
+            categoriesLoading={categoriesLoading}
+            categoriesError={categoriesError}
+            onRetryCategories={refreshCategories}
           />
         </div>
       </div>
@@ -201,6 +209,9 @@ function TransactionsPage() {
         >
           <TransactionForm
             categories={categories}
+            categoriesLoading={categoriesLoading}
+            categoriesError={categoriesError}
+            onRetryCategories={refreshCategories}
             onTransactionAdded={() => handleTransactionSaved(false)}
             transactionToEdit={transactionToEdit}
             onTransactionUpdated={() => handleTransactionSaved(true)}

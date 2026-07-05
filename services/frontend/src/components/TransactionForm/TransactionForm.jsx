@@ -4,6 +4,9 @@ import './TransactionForm.css';
 
 function TransactionForm({
     categories,
+    categoriesLoading = false,
+    categoriesError = null,
+    onRetryCategories,
     onTransactionAdded,
     transactionToEdit,
     onTransactionUpdated,
@@ -108,15 +111,28 @@ function TransactionForm({
                         id="category"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
+                        disabled={categoriesLoading || !!categoriesError}
                         required
                     >
-                        <option key="default" value="">Vælg Kategori</option>
+                        <option key="default" value="">
+                            {categoriesLoading ? 'Indlæser kategorier…' : 'Vælg Kategori'}
+                        </option>
                         {categories.map((cat) => (
                             <option key={cat.id || cat.idCategory} value={cat.id || cat.idCategory}>
                                 {cat.name}
                             </option>
                         ))}
                     </select>
+                    {categoriesError && (
+                        <p className="field-error">
+                            Kunne ikke hente kategorier.
+                            {onRetryCategories && (
+                                <button type="button" className="link-button" onClick={onRetryCategories}>
+                                    Prøv igen
+                                </button>
+                            )}
+                        </p>
+                    )}
                 </div>
 
                 <div className="form-group">

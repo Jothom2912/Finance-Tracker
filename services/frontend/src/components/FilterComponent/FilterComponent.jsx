@@ -60,6 +60,9 @@ function FilterComponent({
   selectedCategory,
   setSelectedCategory,
   categories,
+  categoriesLoading = false,
+  categoriesError = null,
+  onRetryCategories,
 }) {
   const applyPreset = (preset) => {
     const [start, end] = preset.range();
@@ -117,8 +120,11 @@ function FilterComponent({
             id="filterCategory"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
+            disabled={categoriesLoading || !!categoriesError}
           >
-            <option value="">Alle Kategorier</option>
+            <option value="">
+              {categoriesLoading ? 'Indlæser kategorier…' : 'Alle Kategorier'}
+            </option>
             {categories.map((cat, index) => (
               <option
                 key={cat.idCategory || cat.id || `category-${index}`}
@@ -128,6 +134,16 @@ function FilterComponent({
               </option>
             ))}
           </select>
+          {categoriesError && (
+            <p className="filter-field-error">
+              Kunne ikke hente kategorier.
+              {onRetryCategories && (
+                <button type="button" className="link-button" onClick={onRetryCategories}>
+                  Prøv igen
+                </button>
+              )}
+            </p>
+          )}
         </div>
       </div>
     </div>

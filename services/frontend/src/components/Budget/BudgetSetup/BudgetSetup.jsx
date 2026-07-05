@@ -5,6 +5,7 @@ import apiClient from '../../../utils/apiClient';
 import { BUDGET_SERVICE_URL } from '../../../config/serviceUrls';
 import { getAccountId } from '../../../utils/authStorage';
 import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
+import { MONTH_OPTIONS, getYearOptions, formatAmount } from '../../../lib/formatters';
 import './BudgetSetup.css';
 
 function BudgetSetup({
@@ -77,30 +78,7 @@ function BudgetSetup({
     // Filtrer kun expense kategorier (vi budgetterer typisk kun udgifter)
     const expenseCategories = categories.filter(cat => cat.type === 'expense');
 
-    // Memoized hjælpefunktioner
-    const monthOptions = useMemo(() => [
-        { value: '01', label: 'Januar' },
-        { value: '02', label: 'Februar' },
-        { value: '03', label: 'Marts' },
-        { value: '04', label: 'April' },
-        { value: '05', label: 'Maj' },
-        { value: '06', label: 'Juni' },
-        { value: '07', label: 'Juli' },
-        { value: '08', label: 'August' },
-        { value: '09', label: 'September' },
-        { value: '10', label: 'Oktober' },
-        { value: '11', label: 'November' },
-        { value: '12', label: 'December' }
-    ], []);
-
-    const yearOptions = useMemo(() => {
-        const currentYear = new Date().getFullYear();
-        const years = [];
-        for (let i = currentYear - 2; i <= currentYear + 2; i++) {
-            years.push(i);
-        }
-        return years;
-    }, []);
+    const yearOptions = useMemo(() => getYearOptions(2), []);
 
     // Hjælpefunktion til at finde kategorinavn (memoized for ydeevne)
     const getCategoryName = useCallback((categoryId) => {
@@ -377,17 +355,9 @@ function BudgetSetup({
         onCloseModal?.();
     };
 
-    const formatAmount = (amount) => {
-        return new Intl.NumberFormat('da-DK', {
-            style: 'currency',
-            currency: 'DKK',
-            minimumFractionDigits: 2
-        }).format(amount);
-    };
-
     const getPeriodLabel = (period) => {
         const [year, month] = period.split('-');
-        const monthLabel = monthOptions.find(m => m.value === month)?.label || month;
+        const monthLabel = MONTH_OPTIONS.find(m => m.value === month)?.label || month;
         return `${monthLabel} ${year}`;
     };
 
@@ -452,7 +422,7 @@ function BudgetSetup({
                                 required
                                 disabled={isSubmitting}
                             >
-                                {monthOptions.map(month => (
+                                {MONTH_OPTIONS.map(month => (
                                     <option key={month.value} value={month.value}>
                                         {month.label}
                                     </option>

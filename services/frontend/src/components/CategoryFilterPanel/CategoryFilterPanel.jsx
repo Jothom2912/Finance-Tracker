@@ -2,6 +2,12 @@ import { useMemo } from 'react';
 import { MONTH_OPTIONS, getYearOptions, getMonthLabel } from '../../lib/formatters';
 import './CategoryFilterPanel.css';
 
+const TYPE_LABELS = {
+  expense: 'Udgift',
+  income: 'Indtægt',
+  transfer: 'Overførsel',
+};
+
 function CategoryFilterPanel({
   selectedMonth,
   setSelectedMonth,
@@ -76,6 +82,7 @@ function CategoryFilterPanel({
           >
             <option value="expense">Udgifter</option>
             <option value="income">Indtægter</option>
+            <option value="transfer">Overførsler</option>
             <option value="all">Alle</option>
           </select>
         </div>
@@ -105,7 +112,7 @@ function CategoryFilterPanel({
                 type="button"
                 className={`category-chip ${isSelected ? 'selected' : ''} ${cat.type}`}
                 onClick={() => handleToggleCategory(catId)}
-                title={`${cat.name} (${cat.type === 'expense' ? 'Udgift' : 'Indtægt'})`}
+                title={`${cat.name} (${TYPE_LABELS[cat.type] ?? cat.type})`}
               >
                 {cat.name}
               </button>
