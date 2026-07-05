@@ -1,8 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import MessageDisplay from '../MessageDisplay';
 import { createCategory, updateCategory, deleteCategory as apiDeleteCategory } from '../../api/categories';
 import { useConfirm } from '../ConfirmDialog/ConfirmDialog';
+import SubcategoryList from './SubcategoryList';
 import './CategoryManagement.css';
+
+const TYPE_LABELS = {
+  expense: 'Udgift',
+  income: 'Indtægt',
+  transfer: 'Overførsel',
+};
 
 // Ændret props: Fjernet 'fetchCategories', 'error', 'successMessage'
 // Tilføjet 'onCategoryAdded', 'onCategoryUpdated', 'onCategoryDeleted'
@@ -19,11 +27,21 @@ function CategoryManagement({
     const [editingCategory, setEditingCategory] = useState(null);
     const [categoryNameInput, setCategoryNameInput] = useState('');
     const [categoryTypeInput, setCategoryTypeInput] = useState('expense');
+    const [expandedCategoryId, setExpandedCategoryId] = useState(null);
 
     // Lokal state til fejl/succesmeddelelser for denne komponent, hvis du vil have dem adskilt
     // Alternativt kan du bruge de setError/setSuccessMessage props direkte
     const [localError, setLocalError] = useState(null);
     const [localSuccessMessage, setLocalSuccessMessage] = useState(null);
+
+    // display_order kommer fra taksonomien (categorization-service);
+    // navne-fallback for brugeroprettede kategorier uden ordering.
+    const sortedCategories = useMemo(
+        () => [...categories].sort(
+            (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.name.localeCompare(b.name, 'da'),
+        ),
+        [categories],
+    );
 
 
     useEffect(() => {
@@ -165,29 +183,55 @@ function CategoryManagement({
             </form>
 
             <h3>Eksisterende Kategorier:</h3>
-            {categories.length > 0 ? (
-                <ul>
-                    {categories.map(cat => (
-                        <li key={cat.id}>
-                            <span>
-                                {cat.name} ({cat.type})
-                            </span>
-                            <div className="category-actions">
-                                <button
-                                    onClick={() => setEditingCategory(cat)}
-                                    className="edit-button"
-                                >
-                                    Rediger
-                                </button>
-                                <button
-                                    onClick={() => handleDeleteCategory(cat.id)}
-                                    className="delete-button"
-                                >
-                                    Slet
-                                </button>
-                            </div>
-                        </li>
-                    ))}
+            {sortedCategories.length > 0 ? (
+                <ul className="category-management-list">
+                    {sortedCategories.map(cat => {
+                        const isExpanded = expandedCategoryId === cat.id;
+                        return (
+                            <li key={cat.id} className="category-management-item">
+                                <div className="category-row">
+                                    <button
+                                        type="button"
+                                        className="expand-button"
+                                        onClick={() => setExpandedCategoryId(isExpanded ? null : cat.id)}
+                                        aria-expanded={isExpanded}
+                                        title={isExpanded ? 'Skjul underkategorier' : 'Vis underkategorier'}
+                                    >
+                                        {isExpanded
+                                            ? <ChevronDown size={16} aria-hidden="true" />
+                                            : <ChevronRight size={16} aria-hidden="true" />}
+                                    </button>
+                                    <span className="category-row-name">
+                                        {cat.name}
+                                        <span className={`type-badge type-${cat.type}`}>
+                                            {TYPE_LABELS[cat.type] ?? cat.type}
+                                        </span>
+                                    </span>
+                                    <div className="category-actions">
+                                        <button
+                                            onClick={() => setEditingCategory(cat)}
+                                            className="edit-button"
+                                        >
+                                            Rediger
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteCategory(cat.id)}
+                                            className="delete-button"
+                                        >
+                                            Slet
+                                        </button>
+                                    </div>
+                                </div>
+                                {isExpanded && (
+                                    <SubcategoryList
+                                        categoryId={cat.id}
+                                        onError={(msg) => { setLocalError(msg); setError(msg); }}
+                                        onSuccess={(msg) => { setLocalSuccessMessage(msg); }}
+                                    />
+                                )}
+                            </li>
+                        );
+                    })}
                 </ul>
             ) : (
                 <p>Ingen kategorier fundet.</p>
