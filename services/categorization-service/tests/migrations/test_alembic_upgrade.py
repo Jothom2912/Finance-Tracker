@@ -86,6 +86,17 @@ class TestCategorySeed:
             next_val = conn.execute(text("SELECT nextval('categories_id_seq')")).scalar()
             assert next_val > 10, f"Sequence should be >10 after seed, got {next_val}"
 
+    def test_display_order_matches_canonical_seed(self, engine) -> None:
+        """Migration 006 heals display_order=0 drift left by the old
+        CategorySyncConsumer — after upgrade the canonical ordering from
+        migration 002 must hold."""
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT id, display_order FROM categories ORDER BY id")
+            ).fetchall()
+            expected = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 10, 10: 20}
+            assert dict(rows) == expected
+
 
 class TestSubcategorySeed:
     def test_41_subcategories_seeded(self, engine) -> None:
@@ -185,10 +196,20 @@ class TestRuleSeed:
 
 
 class TestInfrastructureTables:
-    def test_outbox_is_empty(self, engine) -> None:
+    def test_outbox_holds_exactly_the_taxonomy_seed_events(self, engine) -> None:
+        """Migration 006 re-announces the seed taxonomy (10 categories +
+        41 subcategories) as pending outbox events for downstream read
+        copies — nothing else may be in the outbox after upgrade."""
         with engine.connect() as conn:
-            count = conn.execute(text("SELECT COUNT(*) FROM outbox_events")).scalar()
-            assert count == 0
+            rows = conn.execute(
+                text("SELECT event_type, COUNT(*) FROM outbox_events GROUP BY event_type")
+            ).fetchall()
+            counts = dict(rows)
+            assert counts == {"category.created": 10, "subcategory.created": 41}
+            pending = conn.execute(
+                text("SELECT COUNT(*) FROM outbox_events WHERE status = 'pending'")
+            ).scalar()
+            assert pending == 51
 
     def test_processed_events_is_empty(self, engine) -> None:
         with engine.connect() as conn:
