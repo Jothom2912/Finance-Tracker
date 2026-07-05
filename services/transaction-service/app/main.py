@@ -10,14 +10,10 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 
-from app.adapters.inbound.category_api import category_router
 from app.adapters.inbound.rest_api import planned_router, transaction_router
 from app.config import settings
 from app.domain.exceptions import (
-    CategoryInUseException,
-    CategoryNotFoundException,
     CSVImportException,
-    DuplicateCategoryNameException,
     InvalidTransactionException,
     PlannedTransactionNotFoundException,
     TransactionNotFoundException,
@@ -76,24 +72,10 @@ async def csv_import_handler(_request: Request, exc: CSVImportException) -> JSON
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-@app.exception_handler(CategoryNotFoundException)
-async def category_not_found_handler(_request: Request, exc: CategoryNotFoundException) -> JSONResponse:
-    return JSONResponse(status_code=404, content={"detail": str(exc)})
-
-
-@app.exception_handler(DuplicateCategoryNameException)
-async def duplicate_category_handler(_request: Request, exc: DuplicateCategoryNameException) -> JSONResponse:
-    return JSONResponse(status_code=400, content={"detail": str(exc)})
-
-
-@app.exception_handler(CategoryInUseException)
-async def category_in_use_handler(_request: Request, exc: CategoryInUseException) -> JSONResponse:
-    return JSONResponse(status_code=409, content={"detail": str(exc)})
-
-
+# Category CRUD lives in categorization-service per ADR-003 — this
+# service holds only event-synced read copies of the taxonomy.
 app.include_router(transaction_router)
 app.include_router(planned_router)
-app.include_router(category_router)
 
 
 @app.get("/health")

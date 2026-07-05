@@ -435,23 +435,6 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  categorization-category-sync:
-    build:
-      context: .
-      dockerfile: services/categorization-service/Dockerfile
-    command: ["python", "-m", "app.workers.category_sync_consumer"]
-    restart: on-failure
-    environment:
-      DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
-      ENVIRONMENT: development
-    depends_on:
-      categorization-service:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
-
   categorization-transaction-consumer:
     build:
       context: .

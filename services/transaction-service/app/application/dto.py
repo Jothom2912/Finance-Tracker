@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.entities import CategoryType, TransactionType
+from app.domain.entities import TransactionType
 
 CATEGORY_NAME_MIN = 1
 CATEGORY_NAME_MAX_LEN = 45
@@ -18,24 +18,6 @@ CATEGORIZATION_CONFIDENCE_MAX = 10
 
 # Alias to prevent collision when a Pydantic field is also named ``date``
 DateType = date
-
-
-class CreateCategoryDTO(BaseModel):
-    name: str = Field(min_length=CATEGORY_NAME_MIN, max_length=CATEGORY_NAME_MAX_LEN)
-    type: CategoryType
-
-
-class UpdateCategoryDTO(BaseModel):
-    name: str | None = Field(default=None, min_length=CATEGORY_NAME_MIN, max_length=CATEGORY_NAME_MAX_LEN)
-    type: CategoryType | None = None
-
-
-class CategoryResponseDTO(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    type: CategoryType
 
 
 class CreateTransactionDTO(BaseModel):

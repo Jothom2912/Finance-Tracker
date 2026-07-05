@@ -48,7 +48,6 @@ resources:
   - workers/goal-outbox-worker.yaml
   - workers/banking-outbox-worker.yaml
   - workers/account-service-consumer.yaml
-  - workers/categorization-category-sync.yaml
   - workers/categorization-transaction-consumer.yaml
   - workers/transaction-categorized-consumer.yaml
   - workers/transaction-taxonomy-consumer.yaml

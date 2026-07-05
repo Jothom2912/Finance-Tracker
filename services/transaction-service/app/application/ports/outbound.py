@@ -9,7 +9,6 @@ from contracts.base import BaseEvent
 
 from app.domain.entities import (
     Category,
-    CategoryType,
     OutboxEntry,
     PlannedTransaction,
     Transaction,
@@ -103,8 +102,12 @@ class IPlannedTransactionRepository(ABC):
 
 
 class ICategoryRepository(ABC):
-    @abstractmethod
-    async def create(self, name: str, category_type: CategoryType) -> Category: ...
+    """Read-only access to the event-synced categories read copy.
+
+    Writes happen exclusively in categorization-service (ADR-003); the
+    local copy is maintained by the taxonomy sync consumer, which works
+    directly on the model — no write methods belong on this port.
+    """
 
     @abstractmethod
     async def find_all(self) -> list[Category]: ...
@@ -114,15 +117,6 @@ class ICategoryRepository(ABC):
 
     @abstractmethod
     async def find_by_name(self, name: str) -> Category | None: ...
-
-    @abstractmethod
-    async def update(self, category_id: int, **fields: object) -> Category: ...
-
-    @abstractmethod
-    async def delete(self, category_id: int) -> bool: ...
-
-    @abstractmethod
-    async def count_transactions(self, category_id: int) -> int: ...
 
 
 class IOutboxRepository(ABC):

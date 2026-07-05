@@ -5,39 +5,15 @@ from abc import ABC, abstractmethod
 from app.application.dto import (
     BulkCreateResultDTO,
     BulkCreateTransactionDTO,
-    CategoryResponseDTO,
-    CreateCategoryDTO,
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
     CSVImportResultDTO,
     PlannedTransactionResponse,
     TransactionFiltersDTO,
     TransactionResponse,
-    UpdateCategoryDTO,
     UpdatePlannedTransactionDTO,
     UpdateTransactionDTO,
 )
-
-
-class ICategoryService(ABC):
-    @abstractmethod
-    async def create_category(self, dto: CreateCategoryDTO) -> CategoryResponseDTO: ...
-
-    @abstractmethod
-    async def get_categories(self) -> list[CategoryResponseDTO]: ...
-
-    @abstractmethod
-    async def get_category(self, category_id: int) -> CategoryResponseDTO: ...
-
-    @abstractmethod
-    async def update_category(
-        self,
-        category_id: int,
-        dto: UpdateCategoryDTO,
-    ) -> CategoryResponseDTO: ...
-
-    @abstractmethod
-    async def delete_category(self, category_id: int) -> None: ...
 
 
 class ITransactionService(ABC):

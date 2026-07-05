@@ -22,7 +22,6 @@ What this suite catches that the unit tests can't:
 
 from __future__ import annotations
 
-import json
 from decimal import Decimal
 
 import sqlalchemy as sa
@@ -106,74 +105,27 @@ class TestMigration010SubcategoriesReadModel:
 
 
 # ─────────────────────────────────────────────────────────────
-# Migration 006 — outbox events for default categories
+# Migration 006 — tombstoned (taxonomy events moved to cat-service)
 # ─────────────────────────────────────────────────────────────
 
 
-class TestMigration006EmitsOutboxEvents:
-    def test_upgrade_produces_ten_pending_outbox_rows(
+class TestMigration006IsTombstoned:
+    def test_no_category_outbox_rows_on_fresh_upgrade(
         self,
         clean_db: Engine,
         alembic_cfg,  # type: ignore[no-untyped-def]
     ) -> None:
+        """Per ADR-003 category events are emitted by categorization-
+        service; a fresh transaction-service DB must not publish
+        category.created from the wrong owner."""
         _upgrade_head(alembic_cfg)
 
         with clean_db.connect() as conn:
-            rows = conn.execute(
-                sa.text(
-                    "SELECT aggregate_id, event_type, status, payload_json "
-                    "FROM outbox_events "
-                    "WHERE aggregate_type='category' "
-                    "ORDER BY aggregate_id::int"
-                )
-            ).fetchall()
+            outbox_count = conn.execute(
+                sa.text("SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='category'")
+            ).scalar()
 
-        assert len(rows) == 10
-        assert all(r.status == "pending" for r in rows)
-        assert all(r.event_type == "category.created" for r in rows)
-        assert [int(r.aggregate_id) for r in rows] == list(range(1, 11))
-
-    def test_event_payloads_roundtrip_through_pydantic(
-        self,
-        clean_db: Engine,
-        alembic_cfg,  # type: ignore[no-untyped-def]
-    ) -> None:
-        """Every outbox row must deserialise back into
-        ``CategoryCreatedEvent`` — otherwise the consumer would reject
-        the event at runtime.
-        """
-        from contracts.events.category import CategoryCreatedEvent
-
-        _upgrade_head(alembic_cfg)
-
-        with clean_db.connect() as conn:
-            rows = conn.execute(
-                sa.text("SELECT aggregate_id, payload_json FROM outbox_events WHERE aggregate_type='category'")
-            ).fetchall()
-
-        for row in rows:
-            event = CategoryCreatedEvent.model_validate_json(row.payload_json)
-            assert event.category_id == int(row.aggregate_id)
-
-    def test_payload_names_match_seeded_categories(
-        self,
-        clean_db: Engine,
-        alembic_cfg,  # type: ignore[no-untyped-def]
-    ) -> None:
-        """The event's ``name`` must match the seeded row's ``name``
-        for the projection to land consistently on the monolith side.
-        """
-        _upgrade_head(alembic_cfg)
-
-        with clean_db.connect() as conn:
-            categories = {r.id: r.name for r in conn.execute(sa.text("SELECT id, name FROM categories")).fetchall()}
-            outbox = conn.execute(
-                sa.text("SELECT aggregate_id, payload_json FROM outbox_events WHERE aggregate_type='category'")
-            ).fetchall()
-
-        for row in outbox:
-            payload = json.loads(row.payload_json)
-            assert payload["name"] == categories[int(row.aggregate_id)]
+        assert outbox_count == 0
 
 
 # ─────────────────────────────────────────────────────────────
@@ -188,7 +140,7 @@ class TestMigrationRoundTrip:
         alembic_cfg,  # type: ignore[no-untyped-def]
     ) -> None:
         """Running upgrade head twice must not duplicate anything.
-        The ``ON CONFLICT (id) DO NOTHING`` clauses in 005 and 006 are
+        The ``ON CONFLICT (id) DO NOTHING`` clauses in 005 and 010 are
         what guarantee this — test exists to catch a future migration
         that forgets them.
         """
@@ -197,12 +149,10 @@ class TestMigrationRoundTrip:
 
         with clean_db.connect() as conn:
             cat_count = conn.execute(sa.text("SELECT COUNT(*) FROM categories")).scalar()
-            outbox_count = conn.execute(
-                sa.text("SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='category'")
-            ).scalar()
+            sub_count = conn.execute(sa.text("SELECT COUNT(*) FROM subcategories")).scalar()
 
         assert cat_count == 10
-        assert outbox_count == 10
+        assert sub_count == 41
 
     def test_downgrade_then_upgrade_returns_to_same_state(
         self,
@@ -210,42 +160,22 @@ class TestMigrationRoundTrip:
         alembic_cfg,  # type: ignore[no-untyped-def]
     ) -> None:
         """Full round-trip: upgrade to head, downgrade to 004 (below
-        both seed migrations), upgrade back.  Final state must match
-        the first upgrade's state exactly — same IDs, same outbox UUIDs.
+        the seed migrations), upgrade back — seeds must be restored.
         """
         _upgrade_head(alembic_cfg)
-
-        with clean_db.connect() as conn:
-            before_ids = sorted(
-                r[0]
-                for r in conn.execute(
-                    sa.text("SELECT id FROM outbox_events WHERE aggregate_type='category'")
-                ).fetchall()
-            )
-
         _downgrade_to(alembic_cfg, "004")
 
         with clean_db.connect() as conn:
             after_downgrade_cats = conn.execute(sa.text("SELECT COUNT(*) FROM categories")).scalar()
-            after_downgrade_outbox = conn.execute(
-                sa.text("SELECT COUNT(*) FROM outbox_events WHERE aggregate_type='category'")
-            ).scalar()
         assert after_downgrade_cats == 0
-        assert after_downgrade_outbox == 0
 
         _upgrade_head(alembic_cfg)
 
         with clean_db.connect() as conn:
-            after_ids = sorted(
-                r[0]
-                for r in conn.execute(
-                    sa.text("SELECT id FROM outbox_events WHERE aggregate_type='category'")
-                ).fetchall()
-            )
-
-        assert before_ids == after_ids, (
-            "Deterministic UUIDs should produce byte-identical outbox row IDs across upgrade/downgrade cycles."
-        )
+            cat_count = conn.execute(sa.text("SELECT COUNT(*) FROM categories")).scalar()
+            sub_count = conn.execute(sa.text("SELECT COUNT(*) FROM subcategories")).scalar()
+        assert cat_count == 10
+        assert sub_count == 41
 
 
 # ─────────────────────────────────────────────────────────────
