@@ -689,13 +689,21 @@ services:
       saga-service:
         condition: service_started
 
-  # analytics-service:
-  #   build: ./services/analytics-service
-  #   ports:
-  #     - "8007:8007"
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
+  analytics-projection-consumer:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    command: ["python", "-m", "app.workers.projection_consumer"]
+    restart: on-failure
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ENVIRONMENT: development
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
 
   # notification-service:
   #   build: ./services/notification-service

@@ -89,8 +89,9 @@ class ITaxonomyProjectionStore(ABC):
         display_order: int,
         is_deleted: bool,
         event_ts: int,
-    ) -> None:
-        pass
+    ) -> bool:
+        """Returnerer True hvis upserten blev anvendt (ikke stale/noop) —
+        rename-propagering må kun ske for anvendte opdateringer."""
 
     @abstractmethod
     async def upsert_subcategory(
@@ -102,8 +103,12 @@ class ITaxonomyProjectionStore(ABC):
         is_default: bool,
         is_deleted: bool,
         event_ts: int,
-    ) -> None:
+    ) -> bool:
         pass
+
+    @abstractmethod
+    async def get_subcategory_name(self, subcategory_id: int) -> Optional[str]:
+        """Navneopslag til core-events, der kun bærer subcategory_id."""
 
     @abstractmethod
     async def propagate_category_rename(self, *, category_id: int, name: str) -> None:
