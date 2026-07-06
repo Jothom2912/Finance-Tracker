@@ -50,6 +50,26 @@ services:
       retries: 10
       start_period: 30s
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.4
+    environment:
+      discovery.type: single-node
+      # Dev only — ES indeholder kun projektioner der kan genopbygges via
+      # backfill/events. Prod (k8s) skal aktivere xpack + snapshots, se ADR-004.
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    mem_limit: 1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   ollama:
     image: ollama/ollama
     ports:
@@ -799,3 +819,4 @@ volumes:
   ai_chromadb_data:
   postgres_banking_data:
   postgres_saga_data:
+  es_data:
