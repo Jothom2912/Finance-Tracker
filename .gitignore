@@ -18,8 +18,9 @@ __pycache__/
 *.so
 .Python
 
-# Database dumps and backup files
+# Database dumps and backup files (may contain real personal data — never commit)
 dumps/
+scripts/backups/
 *.dump
 *.sql
 !**/migrations/**/*.sql

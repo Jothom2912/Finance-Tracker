@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from app.domain.exceptions import TransactionNotFoundException
 from app.workers.saga_command_consumer import TransactionSagaCommandConsumer
 
 
@@ -41,10 +42,41 @@ async def test_rollback_import_noop_when_no_transaction_ids() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rollback_import_continues_when_single_delete_fails() -> None:
+async def test_rollback_import_reports_failure_when_single_delete_fails() -> None:
+    """A real delete failure must not be swallowed: all ids are still
+    attempted, but the reply is success=False naming the failed id so
+    the orchestrator can escalate the broken compensation."""
     consumer = TransactionSagaCommandConsumer()
     mock_service = AsyncMock()
-    mock_service.delete_transaction.side_effect = [None, RuntimeError("not found"), None]
+    mock_service.delete_transaction.side_effect = [None, RuntimeError("DB down"), None]
+
+    with (
+        patch("app.workers.saga_command_consumer.async_session_factory") as session_factory,
+        patch("app.workers.saga_command_consumer.SQLAlchemyUnitOfWork"),
+        patch("app.workers.saga_command_consumer.TransactionService", return_value=mock_service),
+    ):
+        session_factory.return_value.__aenter__.return_value = MagicMock()
+        result = await consumer._handle_rollback_import(
+            {"user_id": 10, "transaction_ids": [1, 2, 3]},
+        )
+
+    assert result["success"] is False
+    assert result["is_compensation"] is True
+    assert "2" in result["error_message"]
+    assert mock_service.delete_transaction.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_rollback_import_treats_already_deleted_as_success() -> None:
+    """Missing transactions mean the compensation goal is already met —
+    a redelivered rollback command must stay idempotent (success=True)."""
+    consumer = TransactionSagaCommandConsumer()
+    mock_service = AsyncMock()
+    mock_service.delete_transaction.side_effect = [
+        None,
+        TransactionNotFoundException(2),
+        TransactionNotFoundException(3),
+    ]
 
     with (
         patch("app.workers.saga_command_consumer.async_session_factory") as session_factory,

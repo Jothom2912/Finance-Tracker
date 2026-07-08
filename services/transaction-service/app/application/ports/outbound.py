@@ -40,16 +40,17 @@ class ITransactionRepository(ABC):
     async def find_by_id(self, transaction_id: int, user_id: int) -> Transaction | None: ...
 
     @abstractmethod
-    async def find_by_user(self, user_id: int, skip: int = 0, limit: int = 50) -> list[Transaction]: ...
-
-    @abstractmethod
-    async def find_by_account(self, account_id: int, user_id: int) -> list[Transaction]: ...
-
-    @abstractmethod
-    async def find_by_category(self, category_id: int, user_id: int) -> list[Transaction]: ...
-
-    @abstractmethod
-    async def find_by_date_range(self, user_id: int, start: date, end: date) -> list[Transaction]: ...
+    async def find_filtered(
+        self,
+        user_id: int,
+        account_id: int | None = None,
+        category_id: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        transaction_type: TransactionType | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Transaction]: ...
 
     @abstractmethod
     async def update(self, transaction_id: int, user_id: int, **fields: object) -> Transaction: ...

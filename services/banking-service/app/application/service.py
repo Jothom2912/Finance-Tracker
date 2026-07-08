@@ -158,7 +158,8 @@ class BankingService:
         )
         return created
 
-    async def list_connections(self, account_id: int) -> list[dict[str, Any]]:
+    async def list_connections(self, account_id: int, user_id: int) -> list[dict[str, Any]]:
+        await self._verify_account_access(account_id, user_id)
         async with self._uow:
             connections = await self._uow.connections.list_by_account(account_id)
         return [
@@ -223,11 +224,13 @@ class BankingService:
         )
         return saga_id
 
-    async def disconnect(self, connection_id: UUID) -> bool:
+    async def disconnect(self, connection_id: UUID, user_id: int) -> bool:
         async with self._uow:
             conn = await self._uow.connections.get_by_id(connection_id)
         if conn is None:
             return False
+        if conn.user_id != user_id:
+            raise BankAccountNotOwned(conn.account_id)
         try:
             self._client.delete_session(conn.session_id)
         except Exception:

@@ -19,11 +19,13 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
         self,
         budget_id: int,
         account_id: int,
+        user_id: int,
     ) -> Optional[MonthlyBudget]:
         result = await self._session.execute(
             select(MonthlyBudgetModel).where(
                 MonthlyBudgetModel.id == budget_id,
                 MonthlyBudgetModel.account_id == account_id,
+                MonthlyBudgetModel.user_id == user_id,
             ),
         )
         model = result.scalar_one_or_none()
@@ -34,12 +36,14 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
         account_id: int,
         month: int,
         year: int,
+        user_id: int,
     ) -> Optional[MonthlyBudget]:
         result = await self._session.execute(
             select(MonthlyBudgetModel).where(
                 MonthlyBudgetModel.account_id == account_id,
                 MonthlyBudgetModel.month == month,
                 MonthlyBudgetModel.year == year,
+                MonthlyBudgetModel.user_id == user_id,
             ),
         )
         model = result.scalar_one_or_none()
@@ -85,11 +89,12 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
         await self._session.refresh(model)
         return self._to_entity(model)
 
-    async def delete(self, budget_id: int, account_id: int) -> bool:
+    async def delete(self, budget_id: int, account_id: int, user_id: int) -> bool:
         result = await self._session.execute(
             delete(MonthlyBudgetModel).where(
                 MonthlyBudgetModel.id == budget_id,
                 MonthlyBudgetModel.account_id == account_id,
+                MonthlyBudgetModel.user_id == user_id,
             ),
         )
         await self._session.flush()

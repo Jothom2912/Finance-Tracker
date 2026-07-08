@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     BUDGET_SERVICE_URL: str = "http://budget-service:8003"
     CHROMADB_PATH: str = "/data/chromadb"
     RETRIEVAL_TOP_K: int = 10
-    JWT_SECRET: str = ""
+    JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
 

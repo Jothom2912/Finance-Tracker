@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import chromadb
 import ollama
@@ -11,10 +12,24 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-COLLECTION_NAME = "transactions"
+LEGACY_COLLECTION_NAME = "transactions"
 
 _chroma: chromadb.ClientAPI | None = None
 _ollama: ollama.Client | None = None
+_legacy_warning_done = False
+
+
+def get_collection_name() -> str:
+    """Collection name versioned by embedding model.
+
+    Embeddings from different models have different dimensions and are not
+    comparable, so each model gets its own collection. Swapping the model
+    creates a new (empty) collection instead of touching existing data —
+    users must re-ingest after a model change. Characters ChromaDB disallows
+    in collection names are replaced with '-'.
+    """
+    sanitized = re.sub(r"[^a-zA-Z0-9._-]", "-", settings.EMBEDDING_MODEL)
+    return f"transactions__{sanitized}"
 
 
 def get_chroma_client() -> chromadb.ClientAPI:
@@ -27,10 +42,36 @@ def get_chroma_client() -> chromadb.ClientAPI:
 
 def get_collection() -> chromadb.Collection:
     client = get_chroma_client()
-    return client.get_or_create_collection(
-        name=COLLECTION_NAME,
+    collection = client.get_or_create_collection(
+        name=get_collection_name(),
         metadata={"hnsw:space": "cosine"},
     )
+    _warn_if_legacy_data(client, collection)
+    return collection
+
+
+def _warn_if_legacy_data(client: chromadb.ClientAPI, collection: chromadb.Collection) -> None:
+    """Warn once if data only exists in the legacy unversioned collection."""
+    global _legacy_warning_done
+    if _legacy_warning_done:
+        return
+    _legacy_warning_done = True
+    try:
+        if collection.count() > 0:
+            return
+        legacy = client.get_collection(LEGACY_COLLECTION_NAME)
+        legacy_count = legacy.count()
+    except Exception:
+        return
+    if legacy_count > 0:
+        logger.warning(
+            "Legacy collection '%s' has %d documents but versioned collection '%s' "
+            "is empty — re-ingest transactions to embed them with model '%s'",
+            LEGACY_COLLECTION_NAME,
+            legacy_count,
+            collection.name,
+            settings.EMBEDDING_MODEL,
+        )
 
 
 def get_ollama_client() -> ollama.Client:

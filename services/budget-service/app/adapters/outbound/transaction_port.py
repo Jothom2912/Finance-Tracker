@@ -8,6 +8,7 @@ import httpx
 from app.application.ports.outbound import ITransactionPort
 from app.auth import make_service_auth_header
 from app.config import settings
+from app.domain.exceptions import UpstreamServiceUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +37,11 @@ class TransactionPort(ITransactionPort):
                         "transaction_port: got %s from transaction-service",
                         response.status_code,
                     )
-                    return {}
+                    raise UpstreamServiceUnavailable("transaction-service")
                 transactions = response.json()
         except httpx.HTTPError:
             logger.warning("transaction_port: kunne ikke nå transaction-service")
-            return {}
+            raise UpstreamServiceUnavailable("transaction-service")
 
         expenses: dict[int, float] = {}
         for tx in transactions:

@@ -2,7 +2,7 @@
 
 Handles:
 - saga.cmd.bulk_import_transactions: bulk import transactions
-- saga.cmd.rollback_import: soft-delete previously imported transactions (compensation)
+- saga.cmd.rollback_import: hard-delete previously imported transactions (compensation)
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from app.application.dto import BulkCreateTransactionDTO, BulkCreateTransactionI
 from app.application.service import TransactionService
 from app.config import settings
 from app.database import async_session_factory
+from app.domain.exceptions import TransactionNotFoundException
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -143,14 +144,34 @@ class TransactionSagaCommandConsumer:
         if not transaction_ids:
             return {"success": True, "is_compensation": True}
 
+        failed_ids: list[int] = []
         async with async_session_factory() as session:
             uow = SQLAlchemyUnitOfWork(session)
             service = TransactionService(uow=uow, categorization_client=None)
             for tx_id in transaction_ids:
                 try:
                     await service.delete_transaction(tx_id, user_id)
+                except TransactionNotFoundException:
+                    # Already deleted — the compensation goal is met, so a
+                    # redelivered/retried rollback stays idempotent.
+                    logger.info("Rollback: transaction %d already deleted (user=%d)", tx_id, user_id)
                 except Exception:
                     logger.warning("Failed to rollback transaction %d", tx_id, exc_info=True)
+                    failed_ids.append(tx_id)
+
+        if failed_ids:
+            logger.error(
+                "Rollback incomplete: %d/%d transactions failed (user=%d): %s",
+                len(failed_ids),
+                len(transaction_ids),
+                user_id,
+                failed_ids,
+            )
+            return {
+                "success": False,
+                "error_message": f"Failed to roll back transactions: {failed_ids}",
+                "is_compensation": True,
+            }
 
         logger.info("Rolled back %d transactions for saga compensation (user=%d)", len(transaction_ids), user_id)
         return {"success": True, "is_compensation": True}

@@ -106,6 +106,99 @@ async def test_complete_connect_emits_outbox_event(
 
 
 @pytest.mark.asyncio
+async def test_list_connections_raises_when_account_not_owned(
+    service: BankingService,
+    uow: MagicMock,
+    account_port: AsyncMock,
+) -> None:
+    uow.accounts.get_projection.return_value = None
+    account_port.get_owner_user_id.return_value = 99
+
+    with pytest.raises(BankAccountNotOwned):
+        await service.list_connections(account_id=1, user_id=2)
+
+    uow.connections.list_by_account.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_connections_returns_connections_when_owned(
+    service: BankingService,
+    uow: MagicMock,
+) -> None:
+    connection_id = uuid4()
+    conn = BankConnection(
+        id=connection_id,
+        account_id=1,
+        user_id=2,
+        session_id="sess-1",
+        bank_name="Nordea",
+        bank_country="DK",
+        bank_account_uid="uid-1",
+        bank_account_iban="DK123",
+    )
+    uow.accounts.get_projection.return_value = (2, "Main")
+    uow.connections.list_by_account.return_value = [conn]
+
+    result = await service.list_connections(account_id=1, user_id=2)
+
+    assert len(result) == 1
+    assert result[0]["id"] == str(connection_id)
+    assert result[0]["iban"] == "DK123"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_raises_when_connection_not_owned(
+    service: BankingService,
+    uow: MagicMock,
+    banking_client: MagicMock,
+) -> None:
+    connection_id = uuid4()
+    conn = BankConnection(
+        id=connection_id,
+        account_id=1,
+        user_id=2,
+        session_id="sess-1",
+        bank_name="Nordea",
+        bank_country="DK",
+        bank_account_uid="uid-1",
+    )
+    uow.connections.get_by_id.return_value = conn
+
+    with pytest.raises(BankAccountNotOwned):
+        await service.disconnect(connection_id, user_id=99)
+
+    banking_client.delete_session.assert_not_called()
+    uow.connections.update_status.assert_not_awaited()
+    uow.outbox.add.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_disconnect_succeeds_for_owner(
+    service: BankingService,
+    uow: MagicMock,
+    banking_client: MagicMock,
+) -> None:
+    connection_id = uuid4()
+    conn = BankConnection(
+        id=connection_id,
+        account_id=1,
+        user_id=2,
+        session_id="sess-1",
+        bank_name="Nordea",
+        bank_country="DK",
+        bank_account_uid="uid-1",
+    )
+    uow.connections.get_by_id.return_value = conn
+
+    result = await service.disconnect(connection_id, user_id=2)
+
+    assert result is True
+    banking_client.delete_session.assert_called_once_with("sess-1")
+    uow.connections.update_status.assert_awaited_once_with(connection_id, "disconnected")
+    uow.commit.assert_awaited()
+
+
+@pytest.mark.asyncio
 async def test_start_sync_saga_emits_bank_sync_start_event(
     service: BankingService,
     uow: MagicMock,

@@ -59,3 +59,9 @@ class NoBudgetToCopy(MonthlyBudgetException):
 class MonthlyBudgetAlreadyClosed(MonthlyBudgetException):
     def __init__(self, month: int, year: int):
         super().__init__(f"Budget for {month:02d}/{year} er allerede lukket.")
+
+
+class UpstreamServiceUnavailable(Exception):
+    def __init__(self, service_name: str):
+        self.service_name = service_name
+        super().__init__(f"{service_name} er ikke tilgængelig i øjeblikket. Prøv igen senere.")

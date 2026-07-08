@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 
+import anyio.to_thread
+
 from app.adapters.outbound.transaction_client import TransactionDTO, fetch_user_transactions
 from app.adapters.outbound.vectorstore import embed_texts, get_collection
 
@@ -85,7 +87,9 @@ def _make_metadata(user_id: int, txn: TransactionDTO) -> dict:
 async def ingest_transactions(user_id: int, token: str) -> int:
     """Fetch user's transactions and upsert them into ChromaDB.
 
-    Returns the number of transactions ingested.
+    Returns the number of transactions ingested. Embedding (Ollama HTTP)
+    and upserts are blocking, so the whole batch loop runs in a worker
+    thread to keep the event loop free for concurrent SSE streams.
     """
     transactions = await fetch_user_transactions(token)
 
@@ -97,27 +101,38 @@ async def ingest_transactions(user_id: int, token: str) -> int:
     documents = [_format_transaction_text(t) for t in transactions]
     metadatas = [_make_metadata(user_id, t) for t in transactions]
 
+    return await anyio.to_thread.run_sync(_ingest_sync, user_id, doc_ids, documents, metadatas)
+
+
+def _ingest_sync(
+    user_id: int,
+    doc_ids: list[str],
+    documents: list[str],
+    metadatas: list[dict],
+) -> int:
+    """Blocking embed + upsert work — must run in a worker thread."""
     collection = get_collection()
 
-    # Auto-reset collection if embedding dimensions changed (e.g. model swap)
+    # The collection is versioned by embedding model, so a dimension mismatch
+    # should be impossible — fail loudly instead of corrupting the collection.
+    sample = embed_texts([documents[0]])
+    stored_dim: int | None = None
     try:
-        sample = embed_texts([documents[0]])
         existing = collection.peek(limit=1)
-        if existing["embeddings"] and len(existing["embeddings"][0]) != len(sample[0]):
-            logger.warning(
-                "Embedding dimension mismatch (stored=%d, new=%d) — recreating collection",
-                len(existing["embeddings"][0]),
-                len(sample[0]),
-            )
-            from app.adapters.outbound.vectorstore import COLLECTION_NAME, get_chroma_client
-
-            get_chroma_client().delete_collection(COLLECTION_NAME)
-            collection = get_collection()
+        if existing["embeddings"]:
+            stored_dim = len(existing["embeddings"][0])
     except Exception:
         logger.debug("No existing embeddings to compare — fresh collection")
+    if stored_dim is not None and stored_dim != len(sample[0]):
+        raise RuntimeError(
+            f"Embedding dimension mismatch in collection '{collection.name}' "
+            f"(stored={stored_dim}, new={len(sample[0])}) — the collection is "
+            "versioned by embedding model, so this should never happen. "
+            "Refusing to ingest."
+        )
 
     batch_size = 50
-    total = len(transactions)
+    total = len(documents)
 
     for start in range(0, total, batch_size):
         end = min(start + batch_size, total)

@@ -1,10 +1,14 @@
+# Sandbox-specific vars (SANDBOX_ prefix) so they never collide with the
+# production ENABLE_BANKING_* values in .env, which compose auto-loads.
+# The PEM should live OUTSIDE the repo — point ENABLE_BANKING_SANDBOX_PEM_PATH
+# at its real location; the default only eases first-time local setup.
 x-enable-banking-env: &enable-banking-env
-  ENABLE_BANKING_APP_ID: 4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7
+  ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_SANDBOX_APP_ID:-4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7}
   ENABLE_BANKING_KEY_PATH: /app/enablebanking-sandbox.pem
   ENABLE_BANKING_REDIRECT_URI: http://localhost:8009/api/v1/bank/callback
 
 x-enable-banking-volumes: &enable-banking-volumes
-  - ./enablebanking-sandbox.pem:/app/enablebanking-sandbox.pem:ro
+  - ${ENABLE_BANKING_SANDBOX_PEM_PATH:-./enablebanking-sandbox.pem}:/app/enablebanking-sandbox.pem:ro
 
 services:
   # === Infrastructure ===
@@ -761,6 +765,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
       CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       ENVIRONMENT: development
       SAGA_TIMEOUT_SECONDS: 300
@@ -779,6 +784,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
       ENVIRONMENT: development
     depends_on:
       saga-service:
@@ -795,6 +801,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
       ENVIRONMENT: development
     depends_on:
       saga-service:
@@ -811,6 +818,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
       ENVIRONMENT: development
     depends_on:
       saga-service:
@@ -827,6 +835,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
       ENVIRONMENT: development
       SAGA_TIMEOUT_SECONDS: 300
       TIMEOUT_CHECK_INTERVAL_SECONDS: 30

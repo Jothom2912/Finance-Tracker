@@ -186,10 +186,10 @@ async def bank_callback(
 @router.get("/connections")
 async def list_connections(
     account_id: int = Query(...),
-    _user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: BankingService = Depends(get_banking_service),
 ) -> list[dict]:
-    return await service.list_connections(account_id)
+    return await service.list_connections(account_id, user_id=user_id)
 
 
 @router.post(
@@ -226,9 +226,9 @@ async def sync_transactions(
 @router.delete("/connections/{connection_id}")
 async def disconnect_bank(
     connection_id: UUID,
-    _user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: BankingService = Depends(get_banking_service),
 ) -> dict:
-    if not await service.disconnect(connection_id):
+    if not await service.disconnect(connection_id, user_id=user_id):
         raise HTTPException(status_code=404, detail="Connection not found")
     return {"message": "Bank disconnected"}

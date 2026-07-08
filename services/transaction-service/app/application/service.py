@@ -158,18 +158,16 @@ class TransactionService(ITransactionService):
 
     async def list_transactions(self, user_id: int, filters: TransactionFiltersDTO) -> list[TransactionResponse]:
         async with self._uow:
-            if filters.account_id is not None:
-                results = await self._uow.transactions.find_by_account(filters.account_id, user_id)
-            elif filters.category_id is not None:
-                results = await self._uow.transactions.find_by_category(filters.category_id, user_id)
-            elif filters.start_date is not None and filters.end_date is not None:
-                results = await self._uow.transactions.find_by_date_range(user_id, filters.start_date, filters.end_date)
-            else:
-                results = await self._uow.transactions.find_by_user(user_id, skip=filters.skip, limit=filters.limit)
-
-        if filters.transaction_type is not None:
-            results = [t for t in results if t.transaction_type == filters.transaction_type]
-
+            results = await self._uow.transactions.find_filtered(
+                user_id,
+                account_id=filters.account_id,
+                category_id=filters.category_id,
+                start_date=filters.start_date,
+                end_date=filters.end_date,
+                transaction_type=filters.transaction_type,
+                skip=filters.skip,
+                limit=filters.limit,
+            )
         return [self._to_response(t) for t in results]
 
     async def update_transaction(

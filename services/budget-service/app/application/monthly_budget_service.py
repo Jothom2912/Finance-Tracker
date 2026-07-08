@@ -32,6 +32,7 @@ from app.domain.exceptions import (
     MonthlyBudgetAlreadyExists,
     MonthlyBudgetNotFound,
     NoBudgetToCopy,
+    UpstreamServiceUnavailable,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,11 +56,13 @@ class MonthlyBudgetService:
         account_id: int,
         month: int,
         year: int,
+        user_id: int,
     ) -> Optional[MonthlyBudgetResponse]:
         budget = await self._uow.monthly_budgets.get_by_account_and_period(
             account_id,
             month,
             year,
+            user_id,
         )
         if not budget:
             return None
@@ -80,14 +83,21 @@ class MonthlyBudgetService:
             account_id,
             month,
             year,
+            user_id,
         )
         start_date, end_date = budget_period(year, month, budget_start_day)
-        expenses = await self._transaction_port.get_expenses_by_category(
-            account_id,
-            start_date,
-            end_date,
-            user_id=user_id,
-        )
+        try:
+            expenses = await self._transaction_port.get_expenses_by_category(
+                account_id,
+                start_date,
+                end_date,
+                user_id=user_id,
+            )
+        except UpstreamServiceUnavailable:
+            # Read-only summary degraderer gracefully når transaction-service er
+            # nede (viser spent=0) — bevarer tidligere fail-open adfærd her.
+            # close_month må derimod ALDRIG fail-open (se close_month).
+            expenses = {}
         category_names = await self._category_port.get_all_names()
 
         items: list[MonthlyBudgetSummaryItem] = []
@@ -161,6 +171,7 @@ class MonthlyBudgetService:
             account_id,
             dto.month,
             dto.year,
+            user_id,
         )
         if existing:
             raise MonthlyBudgetAlreadyExists(dto.month, dto.year)
@@ -185,9 +196,10 @@ class MonthlyBudgetService:
         self,
         budget_id: int,
         account_id: int,
+        user_id: int,
         dto: MonthlyBudgetUpdate,
     ) -> MonthlyBudgetResponse:
-        existing = await self._uow.monthly_budgets.get_by_id_for_account(budget_id, account_id)
+        existing = await self._uow.monthly_budgets.get_by_id_for_account(budget_id, account_id, user_id)
         if not existing:
             raise MonthlyBudgetNotFound(budget_id)
 
@@ -199,8 +211,8 @@ class MonthlyBudgetService:
         await self._uow.commit()
         return await self._to_response(updated)
 
-    async def delete(self, budget_id: int, account_id: int) -> bool:
-        result = await self._uow.monthly_budgets.delete(budget_id, account_id)
+    async def delete(self, budget_id: int, account_id: int, user_id: int) -> bool:
+        result = await self._uow.monthly_budgets.delete(budget_id, account_id, user_id)
         await self._uow.commit()
         return result
 
@@ -217,6 +229,7 @@ class MonthlyBudgetService:
             account_id,
             dto.source_month,
             dto.source_year,
+            user_id,
         )
         if not source or not source.lines:
             raise NoBudgetToCopy(dto.source_month, dto.source_year)
@@ -225,6 +238,7 @@ class MonthlyBudgetService:
             account_id,
             dto.target_month,
             dto.target_year,
+            user_id,
         )
         if existing_target:
             raise MonthlyBudgetAlreadyExists(dto.target_month, dto.target_year)
@@ -262,11 +276,15 @@ class MonthlyBudgetService:
             account_id,
             month,
             year,
+            user_id,
         )
         if not budget:
             raise MonthlyBudgetNotFound(month=month, year=year)
 
         start_date, end_date = budget_period(year, month, budget_start_day)
+        # Fail-closed: kan udgifterne ikke hentes, propagerer
+        # UpstreamServiceUnavailable — måneden lukkes IKKE og der udsendes
+        # ingen event (spent=0 ville kreditere et fiktivt overskud til mål).
         expenses = await self._transaction_port.get_expenses_by_category(
             account_id,
             start_date,

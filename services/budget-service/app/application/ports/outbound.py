@@ -39,10 +39,16 @@ class ICategoryPort(ABC):
 
 class IMonthlyBudgetRepository(ABC):
     @abstractmethod
-    async def get_by_id_for_account(self, budget_id: int, account_id: int) -> Optional[MonthlyBudget]: ...
+    async def get_by_id_for_account(self, budget_id: int, account_id: int, user_id: int) -> Optional[MonthlyBudget]: ...
 
     @abstractmethod
-    async def get_by_account_and_period(self, account_id: int, month: int, year: int) -> Optional[MonthlyBudget]: ...
+    async def get_by_account_and_period(
+        self,
+        account_id: int,
+        month: int,
+        year: int,
+        user_id: int,
+    ) -> Optional[MonthlyBudget]: ...
 
     @abstractmethod
     async def create(self, budget: MonthlyBudget) -> MonthlyBudget: ...
@@ -51,7 +57,7 @@ class IMonthlyBudgetRepository(ABC):
     async def update(self, budget: MonthlyBudget) -> MonthlyBudget: ...
 
     @abstractmethod
-    async def delete(self, budget_id: int, account_id: int) -> bool: ...
+    async def delete(self, budget_id: int, account_id: int, user_id: int) -> bool: ...
 
     @abstractmethod
     async def mark_closed(self, budget_id: int) -> bool:
@@ -72,7 +78,9 @@ class ITransactionPort(ABC):
         start_date: date,
         end_date: date,
         user_id: int = 0,
-    ) -> dict[int, float]: ...
+    ) -> dict[int, float]:
+        """Raises UpstreamServiceUnavailable hvis transaction-service ikke kan nås."""
+        ...
 
 
 class IOutboxRepository(ABC):

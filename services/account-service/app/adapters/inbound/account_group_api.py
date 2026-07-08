@@ -9,6 +9,7 @@ from app.application.dto import (
     AccountGroupsCreate,
 )
 from app.application.service import AccountService
+from app.auth import get_current_user_id
 from app.dependencies import get_account_service
 from app.domain.exceptions import InvalidUserInGroup
 
@@ -23,6 +24,7 @@ def list_groups(
     skip: int = 0,
     limit: int = 100,
     service: AccountService = Depends(get_account_service),
+    user_id: int = Depends(get_current_user_id),
 ) -> list[AccountGroupSchema]:
     """Henter en liste over kontogrupper."""
     return service.list_groups(skip=skip, limit=limit)
@@ -32,6 +34,7 @@ def list_groups(
 def get_group(
     group_id: int,
     service: AccountService = Depends(get_account_service),
+    user_id: int = Depends(get_current_user_id),
 ) -> AccountGroupSchema:
     """Henter en kontogruppe baseret på ID."""
     group = service.get_group(group_id)
@@ -51,6 +54,7 @@ def get_group(
 def create_group(
     group_data: AccountGroupsCreate,
     service: AccountService = Depends(get_account_service),
+    user_id: int = Depends(get_current_user_id),
 ) -> AccountGroupSchema:
     """Opretter en ny kontogruppe."""
     try:
@@ -64,6 +68,7 @@ def update_group(
     group_id: int,
     group_data: AccountGroupsCreate,
     service: AccountService = Depends(get_account_service),
+    user_id: int = Depends(get_current_user_id),
 ) -> AccountGroupSchema:
     """Opdaterer en kontogruppe."""
     try:

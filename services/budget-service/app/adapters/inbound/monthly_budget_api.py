@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi_cache.decorator import cache
 
 from app.application.dto import (
     CopyBudgetRequest,
@@ -22,6 +21,7 @@ from app.domain.exceptions import (
     MonthlyBudgetAlreadyExists,
     MonthlyBudgetNotFound,
     NoBudgetToCopy,
+    UpstreamServiceUnavailable,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,13 +35,12 @@ async def get_monthly_budget(
     month: int = Query(..., ge=1, le=12),
     year: int = Query(..., ge=2000),
     service: MonthlyBudgetService = Depends(get_monthly_budget_service),
-    _user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
 ):
-    return await service.get_or_none(account_id, month, year)
+    return await service.get_or_none(account_id, month, year, user_id)
 
 
 @router.get("/summary", response_model=MonthlyBudgetSummary)
-@cache(expire=60)
 async def get_monthly_budget_summary(
     account_id: int = Query(...),
     month: int = Query(..., ge=1, le=12),
@@ -79,10 +78,10 @@ async def update_monthly_budget(
     account_id: int = Query(...),
     dto: MonthlyBudgetUpdate = ...,
     service: MonthlyBudgetService = Depends(get_monthly_budget_service),
-    _user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
 ):
     try:
-        return await service.update(budget_id, account_id, dto)
+        return await service.update(budget_id, account_id, user_id, dto)
     except MonthlyBudgetNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except CategoryNotFoundForBudgetLine as e:
@@ -94,9 +93,9 @@ async def delete_monthly_budget(
     budget_id: int,
     account_id: int = Query(...),
     service: MonthlyBudgetService = Depends(get_monthly_budget_service),
-    _user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
 ):
-    if not await service.delete(budget_id, account_id):
+    if not await service.delete(budget_id, account_id, user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
 
 
@@ -132,3 +131,7 @@ async def close_month(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except MonthlyBudgetAlreadyClosed as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except UpstreamServiceUnavailable as e:
+        # Fail-closed: uden faktiske udgifter kan overskuddet ikke beregnes —
+        # måneden er IKKE lukket, klienten kan prøve igen senere.
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))

@@ -60,51 +60,35 @@ class PostgresTransactionRepository(ITransactionRepository):
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
 
-    async def find_by_user(self, user_id: int, skip: int = 0, limit: int = 50) -> list[Transaction]:
-        stmt = (
-            select(TransactionModel)
-            .where(TransactionModel.user_id == user_id)
-            .order_by(TransactionModel.date.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        result = await self._session.execute(stmt)
-        return [self._to_entity(m) for m in result.scalars().all()]
+    async def find_filtered(
+        self,
+        user_id: int,
+        account_id: int | None = None,
+        category_id: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        transaction_type: TransactionType | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Transaction]:
+        """Single filtered listing query — every provided filter is
+        applied in SQL, combined with AND, plus OFFSET/LIMIT pagination.
 
-    async def find_by_account(self, account_id: int, user_id: int) -> list[Transaction]:
-        stmt = (
-            select(TransactionModel)
-            .where(
-                TransactionModel.account_id == account_id,
-                TransactionModel.user_id == user_id,
-            )
-            .order_by(TransactionModel.date.desc())
-        )
-        result = await self._session.execute(stmt)
-        return [self._to_entity(m) for m in result.scalars().all()]
-
-    async def find_by_category(self, category_id: int, user_id: int) -> list[Transaction]:
-        stmt = (
-            select(TransactionModel)
-            .where(
-                TransactionModel.category_id == category_id,
-                TransactionModel.user_id == user_id,
-            )
-            .order_by(TransactionModel.date.desc())
-        )
-        result = await self._session.execute(stmt)
-        return [self._to_entity(m) for m in result.scalars().all()]
-
-    async def find_by_date_range(self, user_id: int, start: date, end: date) -> list[Transaction]:
-        stmt = (
-            select(TransactionModel)
-            .where(
-                TransactionModel.user_id == user_id,
-                TransactionModel.date >= start,
-                TransactionModel.date <= end,
-            )
-            .order_by(TransactionModel.date.desc())
-        )
+        Ordering is date desc with id desc as tie-breaker so pagination
+        is deterministic for same-date rows.
+        """
+        stmt = select(TransactionModel).where(TransactionModel.user_id == user_id)
+        if account_id is not None:
+            stmt = stmt.where(TransactionModel.account_id == account_id)
+        if category_id is not None:
+            stmt = stmt.where(TransactionModel.category_id == category_id)
+        if start_date is not None:
+            stmt = stmt.where(TransactionModel.date >= start_date)
+        if end_date is not None:
+            stmt = stmt.where(TransactionModel.date <= end_date)
+        if transaction_type is not None:
+            stmt = stmt.where(TransactionModel.transaction_type == transaction_type.value)
+        stmt = stmt.order_by(TransactionModel.date.desc(), TransactionModel.id.desc()).offset(skip).limit(limit)
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 

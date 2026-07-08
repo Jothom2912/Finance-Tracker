@@ -286,7 +286,7 @@ class TestListTransactions:
     @pytest.mark.asyncio()
     async def test_with_date_filter(self) -> None:
         service, uow = _build_service()
-        uow.transactions.find_by_date_range.return_value = [_make_transaction()]
+        uow.transactions.find_filtered.return_value = [_make_transaction()]
         filters = TransactionFiltersDTO(
             start_date=date(2026, 1, 1),
             end_date=date(2026, 12, 31),
@@ -294,29 +294,65 @@ class TestListTransactions:
 
         results = await service.list_transactions(user_id=10, filters=filters)
 
-        uow.transactions.find_by_date_range.assert_awaited_once_with(10, date(2026, 1, 1), date(2026, 12, 31))
+        uow.transactions.find_filtered.assert_awaited_once_with(
+            10,
+            account_id=None,
+            category_id=None,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+            transaction_type=None,
+            skip=0,
+            limit=50,
+        )
         assert len(results) == 1
 
     @pytest.mark.asyncio()
-    async def test_with_account_filter(self) -> None:
+    async def test_combined_filters_forwarded_in_one_query(self) -> None:
+        """account + date range + type + pagination must reach the
+        repository together — no filter may be silently dropped."""
         service, uow = _build_service()
-        uow.transactions.find_by_account.return_value = [_make_transaction()]
-        filters = TransactionFiltersDTO(account_id=100)
+        uow.transactions.find_filtered.return_value = [_make_transaction()]
+        filters = TransactionFiltersDTO(
+            account_id=100,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 3, 31),
+            transaction_type=TransactionType.EXPENSE,
+            skip=10,
+            limit=25,
+        )
 
         results = await service.list_transactions(user_id=10, filters=filters)
 
-        uow.transactions.find_by_account.assert_awaited_once_with(100, 10)
+        uow.transactions.find_filtered.assert_awaited_once_with(
+            10,
+            account_id=100,
+            category_id=None,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 3, 31),
+            transaction_type=TransactionType.EXPENSE,
+            skip=10,
+            limit=25,
+        )
         assert len(results) == 1
 
     @pytest.mark.asyncio()
     async def test_default_pagination(self) -> None:
         service, uow = _build_service()
-        uow.transactions.find_by_user.return_value = []
+        uow.transactions.find_filtered.return_value = []
         filters = TransactionFiltersDTO()
 
         await service.list_transactions(user_id=10, filters=filters)
 
-        uow.transactions.find_by_user.assert_awaited_once_with(10, skip=0, limit=50)
+        uow.transactions.find_filtered.assert_awaited_once_with(
+            10,
+            account_id=None,
+            category_id=None,
+            start_date=None,
+            end_date=None,
+            transaction_type=None,
+            skip=0,
+            limit=50,
+        )
 
 
 class TestUpdateTransaction:

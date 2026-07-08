@@ -115,6 +115,7 @@ class TestAccountGroupCRUD:
             resp = client.post(
                 "/api/v1/account-groups/",
                 json={"name": "Familie", "max_users": 5, "user_ids": [1]},
+                headers=_make_auth_header(user_id=1),
             )
         assert resp.status_code == 201
         data = resp.json()
@@ -129,6 +130,7 @@ class TestAccountGroupCRUD:
             create_resp = client.post(
                 "/api/v1/account-groups/",
                 json={"name": "Par", "max_users": 5, "user_ids": [1, 2]},
+                headers=_make_auth_header(user_id=1),
             )
         group_id = create_resp.json()["idAccountGroups"]
 
@@ -136,7 +138,10 @@ class TestAccountGroupCRUD:
             "app.adapters.outbound.user_adapter.UserServiceAdapter.get_users_by_ids",
             return_value=[(1, "alice"), (2, "bob")],
         ):
-            resp = client.get(f"/api/v1/account-groups/{group_id}")
+            resp = client.get(
+                f"/api/v1/account-groups/{group_id}",
+                headers=_make_auth_header(user_id=1),
+            )
         assert resp.status_code == 200
         users = resp.json()["users"]
         assert len(users) == 2
@@ -149,8 +154,27 @@ class TestAccountGroupCRUD:
             resp = client.post(
                 "/api/v1/account-groups/",
                 json={"name": "Ugyldig", "max_users": 5, "user_ids": [1, 999]},
+                headers=_make_auth_header(user_id=1),
             )
         assert resp.status_code == 400
+
+    def test_no_auth_returns_401(self, client):
+        assert client.get("/api/v1/account-groups/").status_code == 401
+        assert client.get("/api/v1/account-groups/1").status_code == 401
+        assert (
+            client.post(
+                "/api/v1/account-groups/",
+                json={"name": "Familie", "max_users": 5, "user_ids": [1]},
+            ).status_code
+            == 401
+        )
+        assert (
+            client.put(
+                "/api/v1/account-groups/1",
+                json={"name": "Familie", "max_users": 5, "user_ids": [1]},
+            ).status_code
+            == 401
+        )
 
 
 class TestHealthEndpoint:

@@ -23,6 +23,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:
 
 from app.config import settings
 from app.dependencies import get_banking_service
+from app.domain.exceptions import BankAccountNotOwned
 from app.main import app
 from fastapi.testclient import TestClient
 from jose import jwt
@@ -38,7 +39,7 @@ class FakeBankingService:
             "state": "state-1",
         }
 
-    async def list_connections(self, account_id: int) -> list[dict]:
+    async def list_connections(self, account_id: int, user_id: int) -> list[dict]:
         return [{"id": "connection-1", "account_id": account_id, "status": "active"}]
 
 
@@ -98,3 +99,72 @@ def test_connect_endpoint_uses_user_from_jwt() -> None:
         account_id=123,
         user_id=42,
     )
+
+
+def test_list_connections_passes_user_from_jwt() -> None:
+    fake_service = FakeBankingService()
+    fake_service.list_connections = AsyncMock(return_value=[])
+    app.dependency_overrides[get_banking_service] = lambda: fake_service
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/v1/bank/connections?account_id=123",
+                headers=make_auth_header(user_id=42),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    fake_service.list_connections.assert_awaited_once_with(123, user_id=42)
+
+
+def test_list_connections_denied_for_foreign_account() -> None:
+    fake_service = FakeBankingService()
+    fake_service.list_connections = AsyncMock(side_effect=BankAccountNotOwned(123))
+    app.dependency_overrides[get_banking_service] = lambda: fake_service
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/v1/bank/connections?account_id=123",
+                headers=make_auth_header(user_id=42),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+
+
+def test_disconnect_passes_user_from_jwt() -> None:
+    connection_id = "11111111-1111-1111-1111-111111111111"
+    fake_service = FakeBankingService()
+    fake_service.disconnect = AsyncMock(return_value=True)
+    app.dependency_overrides[get_banking_service] = lambda: fake_service
+    try:
+        with TestClient(app) as client:
+            response = client.delete(
+                f"/api/v1/bank/connections/{connection_id}",
+                headers=make_auth_header(user_id=42),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    fake_service.disconnect.assert_awaited_once()
+    assert fake_service.disconnect.await_args.kwargs["user_id"] == 42
+
+
+def test_disconnect_denied_for_foreign_connection() -> None:
+    connection_id = "11111111-1111-1111-1111-111111111111"
+    fake_service = FakeBankingService()
+    fake_service.disconnect = AsyncMock(side_effect=BankAccountNotOwned(123))
+    app.dependency_overrides[get_banking_service] = lambda: fake_service
+    try:
+        with TestClient(app) as client:
+            response = client.delete(
+                f"/api/v1/bank/connections/{connection_id}",
+                headers=make_auth_header(user_id=42),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
