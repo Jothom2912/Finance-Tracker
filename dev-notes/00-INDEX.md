@@ -34,6 +34,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 ## Sessions
 - [sessions/2026-07-07-architecture-audit.md](sessions/2026-07-07-architecture-audit.md) — audit session: what was done, method, open ends.
 - [sessions/2026-07-07-phase1-p1-fixes.md](sessions/2026-07-07-phase1-p1-fixes.md) — Phase 1: all 12 P1 critical fixes shipped, deploy actions, decisions needed.
+- [sessions/2026-07-12-es-integration-rebase.md](sessions/2026-07-12-es-integration-rebase.md) — rebase onto master's ES read-side + stack bring-up: dual-read 0 divergences, backfill, P2-06 crash-loop fixed, Ollama drift fixed.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)

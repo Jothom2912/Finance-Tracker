@@ -1,7 +1,7 @@
 ---
 title: Integrate phase-1-fixes with master's Elasticsearch analytics read-side
 date: 2026-07-11
-status: open
+status: in-progress
 backlog-items: [P2-04, AI-03, AI-06, AI-11, AI-18, AI-19, AI-20, AI-21, ML-02, ML-13, ML-15]
 related:
   - ../sessions/2026-07-07-phase1-p1-fixes.md
@@ -58,13 +58,13 @@ re-verification shows zero divergences on overview/expenses-by-month.
 
 ### A — Secure and reconcile the working tree
 
-1. [ ] **Commit the working tree on `phase-1-fixes`** in logical chunks (e.g. one commit
+1. [x] **Commit the working tree on `phase-1-fixes`** in logical chunks (e.g. one commit
    for P1-remainder, one for the shared packages, one per-service P2 batch, one for
    frontend P2-17/18). Nothing may stay uncommitted through a rebase. Untracked test
    conftests (`services/gateway-service/tests/conftest.py` — sets `SECRET_KEY` for tests)
    MUST be included: master's new gateway tests import `app.config`, which now fail-fasts
    without it.
-2. [ ] **Settle the gateway async/sync question before rebasing** (it is the one genuine
+2. [x] **Settle the gateway async/sync question before rebasing** (it is the one genuine
    semantic incompatibility): local P2-04 made `IAnalyticsReadRepository` methods async,
    but master's new `LegacyFinancialAnalyticsAdapter` → `AnalyticsService` →
    `HttpAnalyticsReadRepository` chain is synchronous — a textually-clean merge would
@@ -78,7 +78,7 @@ re-verification shows zero divergences on overview/expenses-by-month.
    branch, and keep `http_client.py` (shared client helper) for the clients that survive
    cutover. **Note the legacy REST `/api/v1/dashboard/overview/` cannot be deleted yet:
    ai-service's `category_breakdown` intent consumes it** (see AI-19).
-3. [ ] **Rebase `phase-1-fixes` onto `origin/master`** (`git rebase origin/master`).
+3. [x] **Rebase `phase-1-fixes` onto `origin/master`** (`git rebase origin/master`).
    Expected manual resolutions (keep-from-each-side table from the conflict report):
    - `docker-compose.yml` — keep master's ES/analytics blocks + local's enable-banking
      anchors and saga `JWT_SECRET`s (disjoint hunks).
@@ -94,26 +94,26 @@ re-verification shows zero divergences on overview/expenses-by-month.
    - `services/frontend/src/hooks/useDashboardData/useDashboardData.jsx` — take master's
      `DASHBOARD_QUERY` rewrite wholesale, re-apply local's `useGoals()` swap on top
      (local-only `useGoals.jsx` survives untouched).
-4. [ ] **Post-rebase consistency sweep**: grep gateway for stray `await` on now-sync
+4. [x] **Post-rebase consistency sweep**: grep gateway for stray `await` on now-sync
    read-repo calls and vice versa; `python -m py_compile` over changed files; run
    `npm install` in `services/frontend` (lock drifted locally).
 
 ### B — Bring the ES stack up correctly (deploy/run order)
 
-5. [ ] **Secrets/env**: ensure `.env` provides `SECRET_KEY` (gateway/ai fail-fast now),
+5. [x] **Secrets/env**: ensure `.env` provides `SECRET_KEY` (gateway/ai fail-fast now),
    `JWT_SECRET` for saga services (P1) AND analytics-service — analytics `JWT_SECRET`
    must equal the platform JWT signing secret or every `/api/v1/analytics/*` call 401s.
    Compose defaults exist for dev; k8s uses `finance-tracker-secrets`.
-6. [ ] `docker compose up -d elasticsearch analytics-service analytics-projection-consumer`
+6. [x] `docker compose up -d elasticsearch analytics-service analytics-projection-consumer`
    — ES is single-node 8.11.4, xpack off, healthcheck-gated. Index bootstrap is automatic
    and idempotent (`ensure_indices` on startup of API/consumer/backfill).
-7. [ ] **One-time P1 deploy actions** (from the P1 session log, still pending): drain +
+7. [x] **One-time P1 deploy actions** (from the P1 session log, still pending): drain +
    delete RabbitMQ queue `account_service.account_creation` so it recreates with DLQ
    args; note AI re-ingest targets `transactions__bge-m3`.
-8. [ ] **Backfill history**: `docker compose run --rm analytics-service python -m
+8. [x] **Backfill history**: `docker compose run --rm analytics-service python -m
    app.tools.backfill --user-id <N>` per user (idempotent, live-safe; taxonomy seeded
    first). Confirm doc counts in the report output.
-9. [ ] **Re-verify the cutover under the merged code**: set gateway
+9. [x] **Re-verify the cutover under the merged code**: set gateway
    `ANALYTICS_READ_SOURCE=dual`, click through dashboard + transactions + search, then
    `docker logs gateway-service | grep analytics.dual_read`. Criterion (per ADR-0004):
    zero divergences on overview/expenses-by-month; order-only divergence on
@@ -122,13 +122,13 @@ re-verification shows zero divergences on overview/expenses-by-month.
 
 ### C — Verification
 
-10. [ ] Gateway: `make -C services/gateway-service test` (master's 5 new analytics test
+10. [x] Gateway: `make -C services/gateway-service test` (master's 5 new analytics test
     files + local's memoization/auth-forwarding/secret tests must all pass together).
 11. [ ] Analytics: `make -C services/analytics-service test`.
 12. [ ] The Phase-2 "resume procedure" per-service suites (user, goal, budget,
     transaction, categorization, banking, saga, ai, account) — treat Docker-dependent
     failures as infra. Then `make test`, and `make test-e2e` with the compose stack up.
-13. [ ] Frontend: `npm test` in `services/frontend` (master added
+13. [x] Frontend: `npm test` in `services/frontend` (master added
     `useTransactionSearch`/`MonthComparison` tests; local changed `useDashboardData`).
 14. [ ] Manual smoke: dashboard month-picker + subcategory drilldown (F4 behavior must
     survive the analytics-backed `periodOverview`), transaction free-text search (danish
