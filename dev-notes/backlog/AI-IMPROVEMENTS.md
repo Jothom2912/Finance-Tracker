@@ -37,7 +37,25 @@ Current pipeline (see [architecture/services/categorization-and-ai-services.md](
 | AI-15 | **Use the discarded thinking tokens** | Responder runs `think=True` and throws the reasoning away. Either turn thinking off (latency win) or use it: self-check pass ("do the numbers in my draft match the FACTS block?") before streaming. Measure both against AI-01 | One flag + optional check step | S | open |
 | AI-16 | **Feedback signal** | 👍/👎 per answer, stored with question/intent/retrieved ids. Feeds AI-01's golden set growth and flags bad intents/retrievals in the wild | Notification/UI patterns exist; tiny table in ai-service | S | open |
 | AI-17 | **Proactive insights** | Monthly digest generated through the same pipeline ("dit madforbrug steg 18%…"), delivered via notification service. Chat becomes push, not only pull | F1-01 notifications + F2-06 intents; AI-05 guardrails mandatory here | M | open |
-| AI-18 | **ChromaDB server mode ADR** | Embedded PersistentClient caps ai-service at 1 replica and couples storage to the pod. Decide: chroma server container vs pgvector-in-Postgres (fits database-per-service house style). Write the ADR before any scaling work | Audit M24; infra patterns for both exist in-repo | S (ADR) | open |
+| AI-18 | **ChromaDB server mode ADR** | Embedded PersistentClient caps ai-service at 1 replica and couples storage to the pod. Decide: chroma server container vs pgvector-in-Postgres (fits database-per-service house style). Write the ADR before any scaling work. **2026-07-11: AI-20 proposes resolving this in favor of Elasticsearch (already in the stack via ADR-0004)** | Audit M24; infra patterns for both exist in-repo | S (ADR) | open |
+
+## A4 — Elasticsearch read-store integration (added 2026-07-11, after ADR-0004 cutover)
+
+The analytics-service ES read store (indices `transactions`/`accounts`/`taxonomy`/`goals`,
+event-synced projection consumer, `/api/v1/analytics/*` API) changes the calculus for
+several items above: event-synced, danish-analyzed, taxonomy-denormalized transaction
+docs already exist. See [plans/2026-07-11-es-analytics-integration.md](../plans/2026-07-11-es-analytics-integration.md).
+
+| ID | Idea | What & why | Builds on | Effort | Status |
+|----|------|-----------|-----------|--------|--------|
+| AI-19 | **Re-point structured intents to analytics-service** | `largest_expense` (200-row fetch + client-side sort, documented miss risk) → `/api/v1/analytics/transactions` ES sort; `category_breakdown` (gateway legacy in-memory REST agg) → `/api/v1/analytics/overview`. Implements AI-03's guard with exact aggregations AND removes ai-service's dependency on the legacy REST dashboard, unblocking ADR-0004 cleanup | `services/ai-service/app/adapters/outbound/analytics_client.py` is the single seam; analytics endpoints live | S | open |
+| AI-20 | **ES hybrid search backend for chat (replaces ChromaDB)** | Add bge-m3 `dense_vector` to the `transactions` mapping (`transactions_v2` behind the alias), populate via projector/embed-worker, implement `ISemanticSearchPort` with BM25 + kNN + RRF. Delivers AI-06 on shared infra, resolves AI-18 (multi-replica), and the event-synced index kills ghost-data/manual-full-re-ingest (AI-11, P3-04) as a side effect | `transactions` index already danish-analyzed + taxonomy-denormalized + event-synced; seam = `chromadb_search.py` adapter swap | M | open |
+| AI-21 | **Taxonomy-aware chat filters via ES `taxonomy` index** | Activate the dead slot→filter path (AI-02) and resolve router `category` slot text → `category_id`/`subcategory_id` via keyword+fuzzy match on the `taxonomy` index (ids are the grouping key per ADR-003, never names). Subcategory drilldown answers come free from denormalized transaction fields | AI-02's slot plumbing; `taxonomy` index live; combines with AI-20 filters | S | open |
+
+ML cross-links: `/analytics/top-merchants` + `description.raw` term aggs serve ML-02
+(merchant memory) and ML-15 (cross-user priors) without new infra; a `dense_vector` on
+`taxonomy` serves ML-13 (zero-shot subcategory). Ownership boundary unchanged:
+categorization-service stays sole taxonomy writer (ADR-003); ES holds read-copies only.
 
 ## Sequencing
 
@@ -45,6 +63,7 @@ Current pipeline (see [architecture/services/categorization-and-ai-services.md](
 AI-01 eval harness  ──►  gate for everything below
 Wave A (activation, days):    AI-02, AI-03, AI-04, AI-05, AI-08, AI-13, AI-15
 Wave B (quality, per-item):   AI-06 → AI-07 → AI-09 → AI-11   (measure each against AI-01)
+  └─ ES route (post-ADR-0004): AI-19 (S, anytime) → AI-20 (subsumes AI-06+AI-11+AI-18) → AI-21
 Wave C (capability):          AI-12 → AI-10 multi-hop (needs A-wave tools + B-wave retrieval)
 Continuous:                   AI-16 feedback; AI-18 ADR before any multi-replica plan; AI-14 when latency hurts; AI-17 after F1-01
 ```
