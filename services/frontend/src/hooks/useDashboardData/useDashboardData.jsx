@@ -6,7 +6,23 @@ import { fetchGoals } from '../../api/goals';
 import { formatAmount, formatDate } from '../../lib/formatters';
 import { CHART_COLORS as COLORS } from '../../lib/chartColors';
 
-const EXPENSES_BY_CATEGORY_FIELDS = `
+// Antal budgetmåneder i cashflow-grafen (server-drevet, dense/zero-filled).
+export const TREND_MONTHS = 12;
+
+// Ét samlet query for både nuværende og historiske måneder:
+// periodOverview følger altid kontoens budget-startdag og har trend for
+// alle måneder (lukkede followups-punktet om månedsvælgerens
+// kalender/budget-inkonsistens). transactions(month, year) bruger samme
+// periodesemantik, så "Seneste transaktioner" matcher overblikket.
+const DASHBOARD_QUERY = gql`
+  query DashboardData($month: Int!, $year: Int!, $months: Int!) {
+    periodOverview(month: $month, year: $year) {
+      startDate
+      endDate
+      isCurrent
+      totalIncome
+      totalExpenses
+      netChangeInPeriod
       expensesByCategory {
         categoryId
         categoryName
@@ -17,9 +33,27 @@ const EXPENSES_BY_CATEGORY_FIELDS = `
           amount
         }
       }
-`;
-
-const SHARED_FIELDS = `
+      currentAccountBalance
+      averageMonthlyExpenses
+      trend {
+        incomeChangePercent
+        expenseChangePercent
+        netChangeDiff
+        previousMonthIncome
+        previousMonthExpenses
+      }
+    }
+    transactions(month: $month, year: $year, limit: 10) {
+      id
+      amount
+      description
+      date
+      type
+      categoryId
+      categoryName
+      subcategoryName
+      categorizationTier
+    }
     budgetSummary(month: $month, year: $year) {
       month
       year
@@ -36,78 +70,31 @@ const SHARED_FIELDS = `
       totalRemaining
       overBudgetCount
     }
-    expensesByMonth {
+    cashflowByMonth(months: $months) {
       month
-      totalExpenses
-    }
-`;
-
-// Nuværende måned: currentMonthOverview har trend + respekterer kontoens
-// budget-startdag.
-const CURRENT_MONTH_QUERY = gql`
-  query DashboardData($month: Int!, $year: Int!) {
-    currentMonthOverview {
-      startDate
-      endDate
       totalIncome
       totalExpenses
-      netChangeInPeriod
-      ${EXPENSES_BY_CATEGORY_FIELDS}
-      currentAccountBalance
-      averageMonthlyExpenses
-      trend {
-        incomeChangePercent
-        expenseChangePercent
-        netChangeDiff
-        previousMonthIncome
-        previousMonthExpenses
+      net
+    }
+    monthComparison(month: $month, year: $year, limit: 5) {
+      previousMonth
+      previousYear
+      totalCurrent
+      totalPrevious
+      deltas {
+        categoryId
+        categoryName
+        currentAmount
+        previousAmount
+        changeAmount
+        changePercent
       }
     }
-    transactions(limit: 10) {
-      id
-      amount
-      description
-      date
-      type
-      categoryId
-      categoryName
-      subcategoryName
-      categorizationTier
-    }
-    ${SHARED_FIELDS}
   }
 `;
 
-// Historisk måned: financialOverview over kalendermåneden (ingen trend).
-const PERIOD_QUERY = gql`
-  query DashboardPeriod($month: Int!, $year: Int!, $startDate: Date!, $endDate: Date!) {
-    financialOverview(startDate: $startDate, endDate: $endDate) {
-      startDate
-      endDate
-      totalIncome
-      totalExpenses
-      netChangeInPeriod
-      ${EXPENSES_BY_CATEGORY_FIELDS}
-      currentAccountBalance
-      averageMonthlyExpenses
-    }
-    transactions(startDate: $startDate, endDate: $endDate, limit: 10) {
-      id
-      amount
-      description
-      date
-      type
-      categoryId
-      categoryName
-      subcategoryName
-      categorizationTier
-    }
-    ${SHARED_FIELDS}
-  }
-`;
-
-export function dashboardQueryKey(accountId, month, year) {
-  return ['dashboard', { accountId, month, year }];
+export function dashboardQueryKey(accountId, month, year, months = TREND_MONTHS) {
+  return ['dashboard', { accountId, month, year, months }];
 }
 
 function mapGoalFromRest(g) {
@@ -122,35 +109,20 @@ function mapGoalFromRest(g) {
   };
 }
 
-function periodBounds(month, year) {
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-  return { startDate, endDate };
-}
-
 export function useDashboardData({ month, year } = {}) {
   const accountId = localStorage.getItem('account_id');
   const now = new Date();
   const selectedMonth = month ?? now.getMonth() + 1;
   const selectedYear = year ?? now.getFullYear();
-  const isCurrentMonth =
-    selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear();
 
   const { data, isLoading, error } = useQuery({
     queryKey: dashboardQueryKey(accountId, selectedMonth, selectedYear),
-    queryFn: () => {
-      if (isCurrentMonth) {
-        return gqlRequest(CURRENT_MONTH_QUERY, { month: selectedMonth, year: selectedYear });
-      }
-      const { startDate, endDate } = periodBounds(selectedMonth, selectedYear);
-      return gqlRequest(PERIOD_QUERY, {
+    queryFn: () =>
+      gqlRequest(DASHBOARD_QUERY, {
         month: selectedMonth,
         year: selectedYear,
-        startDate,
-        endDate,
-      });
-    },
+        months: TREND_MONTHS,
+      }),
   });
 
   const { data: goalsData, isLoading: goalsLoading, error: goalsError } = useQuery({
@@ -159,16 +131,15 @@ export function useDashboardData({ month, year } = {}) {
     select: (data) => (data ?? []).map(mapGoalFromRest),
   });
 
-  const overview = useMemo(() => {
-    if (data?.currentMonthOverview) return data.currentMonthOverview;
-    if (data?.financialOverview) return { ...data.financialOverview, trend: null };
-    return null;
-  }, [data]);
-
+  const overview = data?.periodOverview ?? null;
   const budgetSummary = data?.budgetSummary ?? null;
   const goals = goalsData ?? [];
   const recentTransactions = data?.transactions ?? [];
-  const expensesByMonth = data?.expensesByMonth ?? [];
+  const cashflowByMonth = data?.cashflowByMonth ?? [];
+  const monthComparison = data?.monthComparison ?? null;
+  // Serveren afgør om den valgte budgetmåned er den nuværende —
+  // klient-uret kan ikke, når perioden følger budget-startdagen.
+  const isCurrentMonth = overview?.isCurrent ?? false;
 
   const processedCategoryData = useMemo(() => {
     if (!overview?.expensesByCategory?.length) return [];
@@ -204,7 +175,8 @@ export function useDashboardData({ month, year } = {}) {
     budgetSummary,
     goals,
     recentTransactions,
-    expensesByMonth,
+    cashflowByMonth,
+    monthComparison,
     isCurrentMonth,
     loading: isLoading || goalsLoading,
     error: (error || goalsError) ? (error?.message || goalsError?.message || 'Kunne ikke hente dashboard-data.') : null,

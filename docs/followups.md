@@ -736,8 +736,8 @@ Two habits that served this session well and should continue:
 - **Merchant-learning loop**: `is_user_confirmed` på merchants er
   stadig dødt. En `transaction.manually_categorized`-event fra
   update_transaction (tier->manual) kunne fodre merchant-mappings.
-- **Dashboard-månedvælgerens semantik**: historiske måneder bruger
-  kalendermåned (financialOverview), nuværende måned bruger kontoens
-  budget-startdag (currentMonthOverview). Overvej en
-  periodOverview(month, year) i gateway der respekterer budgetperioden
-  også historisk.
+- **Dashboard-månedvælgerens semantik** (lukket 2026-07-11): gatewayen
+  fik periodOverview(month, year) der respekterer budgetperioden for
+  alle måneder (inkl. trend historisk), og useDashboardData er samlet
+  på ét query oven på den. Dashboardet viser nu periodens eksplicitte
+  datointerval under titlen.

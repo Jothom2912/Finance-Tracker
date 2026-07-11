@@ -17,6 +17,12 @@
   letter-spacing: var(--letter-spacing-tight);
 }
 
+.dashboard-period-range {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
 /* ── Bank widget spacing ── */
 
 .dashboard-overview-container > .bank-widget {

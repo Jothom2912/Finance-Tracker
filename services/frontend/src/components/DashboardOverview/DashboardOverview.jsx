@@ -10,8 +10,9 @@ import GoalProgressSection from '../GoalProgressSection/GoalProgressSection';
 import RecentTransactions from '../RecentTransactions/RecentTransactions';
 import BankConnectionWidget from '../BankConnectionWidget/BankConnectionWidget';
 import MonthlyExpensesTrend from '../MonthlyExpensesTrend/MonthlyExpensesTrend';
+import MonthComparison from '../MonthComparison/MonthComparison';
 import { useDashboardData } from '../../hooks/useDashboardData/useDashboardData';
-import { MONTH_OPTIONS, getYearOptions, getMonthLabel } from '../../lib/formatters';
+import { MONTH_OPTIONS, getYearOptions, getMonthLabel, formatDate } from '../../lib/formatters';
 import './DashboardOverview.css';
 
 function DashboardOverview() {
@@ -39,7 +40,8 @@ function DashboardOverview() {
     budgetSummary,
     goals,
     recentTransactions,
-    expensesByMonth,
+    cashflowByMonth,
+    monthComparison,
     loading,
     error,
     processedCategoryData,
@@ -104,9 +106,16 @@ function DashboardOverview() {
   return (
     <div className="dashboard-overview-container">
       <div className="dashboard-header">
-        <h2 className="dashboard-title">
-          {monthLabel} {selectedYear}
-        </h2>
+        <div>
+          <h2 className="dashboard-title">
+            {monthLabel} {selectedYear}
+          </h2>
+          {/* Budgetperioden kan afvige fra kalendermåneden (kontoens
+              budget-startdag) — vis det eksplicitte interval. */}
+          <p className="dashboard-period-range">
+            {formatDate(overview.startDate)} – {formatDate(overview.endDate)}
+          </p>
+        </div>
         <div className="dashboard-period-selector">
           <label htmlFor="dash-month" className="visually-hidden">Måned</label>
           <select
@@ -147,7 +156,10 @@ function DashboardOverview() {
       <div className="dashboard-grid">
         <div className="dashboard-col-left">
           <div className="dashboard-section">
-            <MonthlyExpensesTrend data={expensesByMonth} />
+            <MonthlyExpensesTrend
+              data={cashflowByMonth}
+              averageMonthlyExpenses={overview.averageMonthlyExpenses}
+            />
           </div>
 
           <div className="dashboard-section">
@@ -180,6 +192,10 @@ function DashboardOverview() {
                 />
               </>
             )}
+          </div>
+
+          <div className="dashboard-section">
+            <MonthComparison comparison={monthComparison} formatAmount={formatAmount} />
           </div>
 
           <div className="dashboard-section">

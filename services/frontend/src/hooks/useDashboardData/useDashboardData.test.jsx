@@ -21,9 +21,17 @@ beforeEach(() => {
 });
 
 const mockGraphQLResponse = {
-  currentMonthOverview: {
+  periodOverview: {
     startDate: '2026-03-01',
     endDate: '2026-03-31',
+    isCurrent: false,
+    trend: {
+      incomeChangePercent: 12.5,
+      expenseChangePercent: -8.0,
+      netChangeDiff: 1500,
+      previousMonthIncome: 8000,
+      previousMonthExpenses: 6500,
+    },
     totalIncome: 10000,
     totalExpenses: 6000,
     netChangeInPeriod: 4000,
@@ -63,6 +71,26 @@ const mockGraphQLResponse = {
       categoryId: 1,
     },
   ],
+  cashflowByMonth: [
+    { month: '2026-02', totalIncome: 8000, totalExpenses: 6500, net: 1500 },
+    { month: '2026-03', totalIncome: 10000, totalExpenses: 6000, net: 4000 },
+  ],
+  monthComparison: {
+    previousMonth: 2,
+    previousYear: 2026,
+    totalCurrent: 6000,
+    totalPrevious: 6500,
+    deltas: [
+      {
+        categoryId: 1,
+        categoryName: 'Food',
+        currentAmount: 3000,
+        previousAmount: 2500,
+        changeAmount: 500,
+        changePercent: 20.0,
+      },
+    ],
+  },
 };
 
 describe('useDashboardData', () => {
@@ -90,7 +118,7 @@ describe('useDashboardData', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.overview).toEqual(mockGraphQLResponse.currentMonthOverview);
+    expect(result.current.overview).toEqual(mockGraphQLResponse.periodOverview);
     expect(result.current.budgetSummary).toEqual(mockGraphQLResponse.budgetSummary);
     expect(result.current.goals).toEqual([
       {
@@ -110,15 +138,15 @@ describe('useDashboardData', () => {
   it('refetches GraphQL when account changes', async () => {
     const accountOneResponse = {
       ...mockGraphQLResponse,
-      currentMonthOverview: {
-        ...mockGraphQLResponse.currentMonthOverview,
+      periodOverview: {
+        ...mockGraphQLResponse.periodOverview,
         totalIncome: 100,
       },
     };
     const accountTwoResponse = {
       ...mockGraphQLResponse,
-      currentMonthOverview: {
-        ...mockGraphQLResponse.currentMonthOverview,
+      periodOverview: {
+        ...mockGraphQLResponse.periodOverview,
         totalIncome: 200,
       },
     };
@@ -179,8 +207,8 @@ describe('useDashboardData', () => {
   it('handles negative amounts by taking absolute value', async () => {
     gqlRequest.mockResolvedValue({
       ...mockGraphQLResponse,
-      currentMonthOverview: {
-        ...mockGraphQLResponse.currentMonthOverview,
+      periodOverview: {
+        ...mockGraphQLResponse.periodOverview,
         expensesByCategory: [{ categoryName: 'Groceries', amount: -500 }],
       },
     });
@@ -198,8 +226,8 @@ describe('useDashboardData', () => {
   it('filters out zero-value categories', async () => {
     gqlRequest.mockResolvedValue({
       ...mockGraphQLResponse,
-      currentMonthOverview: {
-        ...mockGraphQLResponse.currentMonthOverview,
+      periodOverview: {
+        ...mockGraphQLResponse.periodOverview,
         expensesByCategory: [
           { categoryName: 'Real', amount: 100 },
           { categoryName: 'Empty', amount: 0 },
@@ -247,6 +275,35 @@ describe('useDashboardData', () => {
     expect(result.current.goals).toEqual([]);
     expect(result.current.recentTransactions).toEqual([]);
     expect(result.current.processedCategoryData).toEqual([]);
+  });
+
+  it('exposes cashflow, comparison and server-driven isCurrentMonth', async () => {
+    gqlRequest.mockResolvedValue(mockGraphQLResponse);
+
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.cashflowByMonth).toHaveLength(2);
+    expect(result.current.monthComparison.deltas[0].categoryName).toBe('Food');
+    // isCurrent kommer fra serveren (budgetperiode-semantik), ikke klient-uret.
+    expect(result.current.isCurrentMonth).toBe(false);
+  });
+
+  it('exposes trend for historic months too', async () => {
+    gqlRequest.mockResolvedValue(mockGraphQLResponse);
+
+    const { wrapper } = createQueryClientWrapper();
+    const { result } = renderHook(() => useDashboardData({ month: 3, year: 2026 }), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.overview.trend.expenseChangePercent).toBe(-8.0);
   });
 
   it('exposes formatAmount and formatDate utilities', async () => {
