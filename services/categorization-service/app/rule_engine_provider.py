@@ -19,9 +19,10 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select, text
 
+from app.adapters.outbound.postgres_rule_repository import PostgresRuleRepository
 from app.adapters.outbound.rule_engine import RuleEngine
 from app.database import async_session_factory
-from app.domain.taxonomy import SEED_MERCHANT_MAPPINGS
+from app.domain.value_objects import PatternType
 from app.models import CategoryModel, SubCategoryModel
 
 logger = logging.getLogger(__name__)
@@ -82,11 +83,19 @@ class RuleEngineProvider:
             subs = sub_rows.scalars().all()
 
             subcategory_lookup: dict[str, tuple[int, int]] = {}
+            subcategory_name_by_id: dict[int, str] = {}
             for sub in subs:
+                subcategory_name_by_id[sub.id] = sub.name
                 if sub.category_id in cat_ids:
                     subcategory_lookup[sub.name] = (sub.id, sub.category_id)
 
-        keyword_mappings = [(kw, mapping["subcategory"]) for kw, mapping in SEED_MERCHANT_MAPPINGS.items()]
+            rules = await PostgresRuleRepository(session).find_active_rules()
+
+        keyword_mappings = [
+            (rule.pattern_value, subcategory_name_by_id[rule.matches_subcategory_id])
+            for rule in rules
+            if rule.pattern_type == PatternType.KEYWORD and rule.matches_subcategory_id in subcategory_name_by_id
+        ]
         self._engine = RuleEngine(
             keyword_mappings=keyword_mappings,
             subcategory_lookup=subcategory_lookup,
@@ -102,3 +111,9 @@ class RuleEngineProvider:
             len(keyword_mappings),
             len(subcategory_lookup),
         )
+
+
+# Module-level singleton — imported by both app.main (startup warmup) and
+# app.dependencies (request-time DI) so neither has to reach into the other
+# and risk a circular import.
+rule_engine_provider = RuleEngineProvider(ttl_seconds=DEFAULT_TTL_SECONDS)

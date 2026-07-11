@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     CATEGORY_SERVICE_URL: str = "http://localhost:8005"
     TRANSACTION_SERVICE_URL: str = "http://localhost:8002"
+    REDIS_URL: str = "redis://redis:6379"
 
 
 settings = Settings()

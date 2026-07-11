@@ -18,7 +18,7 @@ from app.domain.exceptions import (
     SubCategoryInUse,
     SubCategoryNotFound,
 )
-from app.rule_engine_provider import RuleEngineProvider
+from app.rule_engine_provider import rule_engine_provider
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +38,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-rule_engine_provider = RuleEngineProvider(ttl_seconds=60)
-
 
 @app.on_event("startup")
 async def startup_warmup() -> None:

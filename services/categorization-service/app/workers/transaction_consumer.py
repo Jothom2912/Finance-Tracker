@@ -1,8 +1,16 @@
 """Consumer for transaction.created events.
 
 Listens on RabbitMQ, runs the full categorization pipeline
-(rules -> ML -> LLM -> fallback), persists audit trail in
-categorization_results, and emits transaction.categorized via outbox.
+(rules -> ML -> LLM -> fallback) through the shared ``CategorizationService``
+orchestrator, persists audit trail in categorization_results, and emits
+transaction.categorized via outbox.
+
+The categorization decision is delegated to ``CategorizationService``, built
+fresh (cheaply — cached under the hood) from the shared ``RuleEngineProvider``
+on every message.  This is the same provider/orchestrator combination the
+sync /categorize HTTP endpoint uses, so rule/subcategory changes take effect
+here within the provider's TTL without a consumer restart, and any future
+ML/LLM tier wired into the orchestrator runs here too.
 
 All three writes (categorization_results, outbox_events, processed_events)
 happen in a single DB transaction.  This guarantees atomicity: either all
@@ -32,13 +40,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.adapters.outbound.postgres_result_repository import PostgresCategorizationResultRepository
-from app.adapters.outbound.rule_engine import RuleEngine
+from app.application.categorization_service import CategorizationService
+from app.application.dto import CategorizeRequestDTO
 from app.config import settings
 from app.database import async_session_factory
 from app.domain.entities import CategorizationResultRecord
-from app.domain.taxonomy import SEED_MERCHANT_MAPPINGS
 from app.domain.value_objects import CategorizationResult, CategorizationTier, Confidence
 from app.models import CategoryModel, ProcessedEventModel, SubCategoryModel
+from app.rule_engine_provider import RuleEngineProvider
 
 logging.basicConfig(
     level=logging.INFO,
@@ -62,10 +71,8 @@ class TransactionCreatedConsumer:
     All writes (result + outbox + inbox) committed in one DB transaction.
     """
 
-    def __init__(self, rule_engine: RuleEngine, fallback_sub_id: int, fallback_cat_id: int) -> None:
-        self._rule_engine = rule_engine
-        self._fallback_sub_id = fallback_sub_id
-        self._fallback_cat_id = fallback_cat_id
+    def __init__(self, rule_engine_provider: RuleEngineProvider) -> None:
+        self._rule_engine_provider = rule_engine_provider
         self._connection: AbstractConnection | None = None
         self._channel: AbstractChannel | None = None
 
@@ -157,7 +164,7 @@ class TransactionCreatedConsumer:
         amount_str = event_data.get("amount", "0")
         amount = float(amount_str)
 
-        result = self._categorize(description, amount)
+        result = await self._categorize(description, amount)
 
         subcategory_name = ""
         if result.subcategory_id:

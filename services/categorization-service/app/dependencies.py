@@ -9,14 +9,11 @@ from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.application.categorization_service import CategorizationService
 from app.application.category_service import CategoryService
 from app.database import get_db
+from app.rule_engine_provider import rule_engine_provider
 
 
-async def get_categorization_service(
-    db: AsyncSession = Depends(get_db),
-) -> CategorizationService:
+async def get_categorization_service() -> CategorizationService:
     """Wire CategorizationService using the startup-warmed provider."""
-    from app.main import rule_engine_provider
-
     engine = await rule_engine_provider.get()
 
     return CategorizationService(

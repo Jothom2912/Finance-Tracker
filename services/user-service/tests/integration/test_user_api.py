@@ -84,6 +84,34 @@ class TestRegister:
         assert payload["email"] == "alice@example.com"
         assert payload["username"] == "alice"
 
+    @pytest.mark.asyncio()
+    async def test_register_race_integrity_error_returns_409(
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression test for the register check-then-insert race
+        (finding 2): if a concurrent duplicate registration slips past
+        the pre-checks and only trips the DB's unique constraint on
+        insert, the API must still respond 409, not an unhandled 500.
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        from app.adapters.outbound.postgres_user_repository import (
+            PostgresUserRepository,
+        )
+
+        async def _racing_create(self: PostgresUserRepository, *args: object, **kwargs: object) -> None:
+            raise IntegrityError(
+                "INSERT INTO users ...",
+                {},
+                Exception('duplicate key value violates unique constraint "ix_users_email"'),
+            )
+
+        monkeypatch.setattr(PostgresUserRepository, "create", _racing_create)
+
+        resp = await client.post(REGISTER_URL, json=VALID_USER)
+
+        assert resp.status_code == 409
+
 
 # ── Login ───────────────────────────────────────────────────────────
 

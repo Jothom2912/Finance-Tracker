@@ -14,10 +14,11 @@ class GoalService(IGoalService):
         self._uow = uow
         self._account_port = account_port
 
-    async def _verify_ownership(self, account_id: int, user_id: int) -> None:
+    async def _verify_ownership(self, account_id: int, user_id: int) -> int:
         owner_id = await self._account_port.get_owner_user_id(account_id)
         if owner_id != user_id:
             raise NotAccountOwner()
+        return owner_id
 
     async def get_goal(self, goal_id: int, user_id: int) -> GoalDTO | None:
         async with self._uow:
@@ -36,7 +37,7 @@ class GoalService(IGoalService):
         return [self._to_dto(goal) for goal in goals]
 
     async def create_goal(self, data: GoalCreate, user_id: int) -> GoalDTO:
-        await self._verify_ownership(data.Account_idAccount, user_id)
+        owner_id = await self._verify_ownership(data.Account_idAccount, user_id)
 
         if not await self._account_port.exists(data.Account_idAccount):
             raise AccountNotFoundForGoal(data.Account_idAccount)
@@ -56,7 +57,7 @@ class GoalService(IGoalService):
             await self._uow.outbox.add(
                 event=GoalCreatedEvent(
                     goal_id=created.id or 0,
-                    user_id=created.account_id,
+                    user_id=owner_id,
                     name=created.name,
                     target_amount=str(created.target_amount),
                     current_amount=str(created.current_amount),
@@ -90,7 +91,7 @@ class GoalService(IGoalService):
             await self._uow.outbox.add(
                 event=GoalUpdatedEvent(
                     goal_id=result.id or 0,
-                    user_id=result.account_id,
+                    user_id=owner_id,
                     name=result.name,
                     target_amount=str(result.target_amount),
                     current_amount=str(result.current_amount),
@@ -115,7 +116,7 @@ class GoalService(IGoalService):
             if not deleted:
                 return False
             await self._uow.outbox.add(
-                event=GoalDeletedEvent(goal_id=goal_id, user_id=existing.account_id),
+                event=GoalDeletedEvent(goal_id=goal_id, user_id=owner_id),
                 aggregate_type="goal",
                 aggregate_id=str(goal_id),
             )

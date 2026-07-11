@@ -11,6 +11,7 @@ from app.domain.exceptions import AccountNotFoundForGoal, NotAccountOwner
 
 OWNER_USER_ID = 1
 OTHER_USER_ID = 99
+ACCOUNT_ID = 555  # deliberately distinct from OWNER_USER_ID to catch user_id/account_id mixups
 
 
 def make_uow() -> MagicMock:
@@ -50,7 +51,7 @@ def _active_goal(**overrides) -> Goal:
         current_amount=1000,
         target_date=None,
         status="active",
-        account_id=1,
+        account_id=ACCOUNT_ID,
     )
     defaults.update(overrides)
     return Goal(**defaults)
@@ -70,7 +71,7 @@ async def test_create_goal_persists_goal_and_outbox(service: GoalService, uow: M
             current_amount=1000,
             target_date=None,
             status="active",
-            Account_idAccount=1,
+            Account_idAccount=ACCOUNT_ID,
         ),
         user_id=OWNER_USER_ID,
     )
@@ -79,6 +80,27 @@ async def test_create_goal_persists_goal_and_outbox(service: GoalService, uow: M
     uow.goals.create.assert_awaited_once()
     uow.outbox.add.assert_awaited_once()
     uow.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_create_goal_emits_event_with_owner_user_id_not_account_id(service: GoalService, uow: MagicMock) -> None:
+    uow.goals.create.return_value = _active_goal()
+
+    await service.create_goal(
+        GoalCreate(
+            name="Vacation",
+            target_amount=5000,
+            current_amount=1000,
+            target_date=None,
+            status="active",
+            Account_idAccount=ACCOUNT_ID,
+        ),
+        user_id=OWNER_USER_ID,
+    )
+
+    emitted_event = uow.outbox.add.call_args.kwargs["event"]
+    assert emitted_event.user_id == OWNER_USER_ID
+    assert emitted_event.user_id != ACCOUNT_ID
 
 
 @pytest.mark.asyncio()
@@ -188,6 +210,24 @@ async def test_update_goal_returns_none_for_non_owner(
     uow.goals.update.assert_not_called()
 
 
+@pytest.mark.asyncio()
+async def test_update_goal_emits_event_with_owner_user_id_not_account_id(service: GoalService, uow: MagicMock) -> None:
+    uow.goals.get_by_id.return_value = _active_goal()
+    uow.goals.update.return_value = _active_goal(name="Updated")
+
+    result = await service.update_goal(
+        10,
+        GoalBase(name="Updated", target_amount=8000, current_amount=1000, target_date=None, status="active"),
+        user_id=OWNER_USER_ID,
+    )
+
+    assert result is not None
+    uow.outbox.add.assert_awaited_once()
+    emitted_event = uow.outbox.add.call_args.kwargs["event"]
+    assert emitted_event.user_id == OWNER_USER_ID
+    assert emitted_event.user_id != ACCOUNT_ID
+
+
 # --- Delete ---
 
 
@@ -202,6 +242,18 @@ async def test_delete_goal_persists_outbox_when_found(service: GoalService, uow:
     uow.goals.delete.assert_awaited_once_with(10)
     uow.outbox.add.assert_awaited_once()
     uow.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_delete_goal_emits_event_with_owner_user_id_not_account_id(service: GoalService, uow: MagicMock) -> None:
+    uow.goals.get_by_id.return_value = _active_goal()
+    uow.goals.delete.return_value = True
+
+    await service.delete_goal(10, user_id=OWNER_USER_ID)
+
+    emitted_event = uow.outbox.add.call_args.kwargs["event"]
+    assert emitted_event.user_id == OWNER_USER_ID
+    assert emitted_event.user_id != ACCOUNT_ID
 
 
 @pytest.mark.asyncio()

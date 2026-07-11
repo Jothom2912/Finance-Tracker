@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
@@ -12,6 +14,7 @@ from app.domain.exceptions import (
     UserAlreadyExistsException,
     UserNotFoundException,
 )
+from sqlalchemy.exc import IntegrityError
 
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
@@ -140,6 +143,104 @@ class TestRegister:
 
         uow.outbox.add.assert_not_awaited()
 
+    @pytest.mark.asyncio()
+    async def test_register_concurrent_duplicate_email_raises_conflict(
+        self, service: UserService, uow: MagicMock
+    ) -> None:
+        """Register race (finding 2): a concurrent registration can slip
+        past the check-then-insert pre-checks and only get caught by the
+        DB's unique constraint on insert. That must surface as the
+        existing 409-mapped UserAlreadyExistsException, not an unhandled
+        IntegrityError (500).
+        """
+        uow.users.find_by_email.return_value = None
+        uow.users.find_by_username.return_value = None
+        uow.users.create.side_effect = IntegrityError(
+            "INSERT INTO users ...",
+            {},
+            Exception('duplicate key value violates unique constraint "ix_users_email"'),
+        )
+
+        dto = RegisterDTO(username="dave", email="dave@example.com", password="secret123")
+
+        with pytest.raises(UserAlreadyExistsException) as exc_info:
+            await service.register(dto)
+
+        assert exc_info.value.field == "email"
+        uow.outbox.add.assert_not_awaited()
+        uow.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_register_concurrent_duplicate_username_raises_conflict(
+        self, service: UserService, uow: MagicMock
+    ) -> None:
+        uow.users.find_by_email.return_value = None
+        uow.users.find_by_username.return_value = None
+        uow.users.create.side_effect = IntegrityError(
+            "INSERT INTO users ...",
+            {},
+            Exception("UNIQUE constraint failed: users.username"),
+        )
+
+        dto = RegisterDTO(username="erin", email="erin@example.com", password="secret123")
+
+        with pytest.raises(UserAlreadyExistsException) as exc_info:
+            await service.register(dto)
+
+        assert exc_info.value.field == "username"
+        uow.outbox.add.assert_not_awaited()
+        uow.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_register_offloads_password_hashing_from_event_loop(self, uow: MagicMock) -> None:
+        """Regression test for finding 1 (H1): bcrypt hashing must be
+        offloaded to a worker thread so it doesn't block the event loop.
+        A slow synchronous ``hash_password`` should not prevent other
+        coroutines (here, a ticker awaiting ``asyncio.sleep``) from
+        making progress while it runs.
+        """
+        uow.users.find_by_email.return_value = None
+        uow.users.find_by_username.return_value = None
+        uow.users.create.return_value = _make_user_with_creds(
+            user_id=99, username="carol", email="carol@example.com"
+        )
+
+        def slow_hash(password: str) -> str:
+            time.sleep(0.2)
+            return f"hashed_{password}"
+
+        service = UserService(
+            uow=uow,
+            hash_password=slow_hash,
+            verify_password=lambda plain, hashed: hashed == f"hashed_{plain}",
+            create_token=lambda uid, uname, email: f"token_{uid}",
+        )
+
+        tick_count = 0
+
+        async def ticker() -> None:
+            nonlocal tick_count
+            while True:
+                await asyncio.sleep(0.01)
+                tick_count += 1
+
+        dto = RegisterDTO(username="carol", email="carol@example.com", password="secret123")
+        ticker_task = asyncio.create_task(ticker())
+        try:
+            result = await service.register(dto)
+        finally:
+            ticker_task.cancel()
+
+        # Behavior parity: the result is unaffected by the offload.
+        assert result.id == 99
+        assert result.username == "carol"
+
+        # If slow_hash had blocked the event loop synchronously for
+        # ~0.2s, the ticker (waking every 10ms) would get almost no
+        # chance to run. Offloading via anyio.to_thread.run_sync lets
+        # the loop keep servicing it while hashing runs in a thread.
+        assert tick_count >= 5
+
 
 # ── login ────────────────────────────────────────────────────────────
 
@@ -187,6 +288,46 @@ class TestLogin:
 
         with pytest.raises(InvalidCredentialsException):
             await service.login(dto)
+
+    @pytest.mark.asyncio()
+    async def test_login_offloads_password_verification_from_event_loop(self, uow: MagicMock) -> None:
+        """Regression test for finding 1 (H1): bcrypt verification must
+        be offloaded to a worker thread. See the analogous register()
+        test above for the rationale of the ticker-based assertion.
+        """
+        uow.users.find_by_email.return_value = _make_user_with_creds()
+
+        def slow_verify(plain: str, hashed: str) -> bool:
+            time.sleep(0.2)
+            return hashed == f"hashed_{plain}"
+
+        service = UserService(
+            uow=uow,
+            hash_password=lambda pw: f"hashed_{pw}",
+            verify_password=slow_verify,
+            create_token=lambda uid, uname, email: f"token_{uid}",
+        )
+
+        tick_count = 0
+
+        async def ticker() -> None:
+            nonlocal tick_count
+            while True:
+                await asyncio.sleep(0.01)
+                tick_count += 1
+
+        dto = LoginDTO(username_or_email="alice@example.com", password="secret123")
+        ticker_task = asyncio.create_task(ticker())
+        try:
+            result = await service.login(dto)
+        finally:
+            ticker_task.cancel()
+
+        # Behavior parity: the result is unaffected by the offload.
+        assert result.access_token == "token_1"
+        assert result.user_id == 1
+
+        assert tick_count >= 5
 
 
 # ── get_user ─────────────────────────────────────────────────────────

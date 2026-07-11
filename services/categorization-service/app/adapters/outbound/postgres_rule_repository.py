@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ports.outbound import IRuleRepository
@@ -26,6 +26,8 @@ class PostgresRuleRepository(IRuleRepository):
 
         stmt = stmt.order_by(
             CategorizationRuleModel.priority,
+            func.length(CategorizationRuleModel.pattern_value).desc(),
+            CategorizationRuleModel.id,
         )
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]

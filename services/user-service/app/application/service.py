@@ -4,7 +4,9 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
 
+import anyio.to_thread
 from contracts.events.user import UserCreatedEvent
+from sqlalchemy.exc import IntegrityError
 
 from app.application.dto import (
     LoginDTO,
@@ -52,13 +54,27 @@ class UserService(IUserService):
             if await self._uow.users.find_by_username(dto.username):
                 raise UserAlreadyExistsException("username", dto.username)
 
-            password_hash = self._hash_password(dto.password)
+            # bcrypt hashing is CPU-bound and ~250ms; offload to a worker
+            # thread so it doesn't block the event loop for other requests.
+            password_hash = await anyio.to_thread.run_sync(self._hash_password, dto.password)
 
-            user = await self._uow.users.create(
-                username=dto.username,
-                email=dto.email,
-                password_hash=password_hash,
-            )
+            try:
+                user = await self._uow.users.create(
+                    username=dto.username,
+                    email=dto.email,
+                    password_hash=password_hash,
+                )
+            except IntegrityError as err:
+                # Check-then-insert above has a race window: a concurrent
+                # registration can slip in between the uniqueness checks
+                # and this insert. The DB-level unique constraint is the
+                # real guard; translate its violation into the same 409
+                # the pre-checks raise instead of letting it surface as
+                # an unhandled 500.
+                orig_message = str(err.orig).lower() if err.orig else ""
+                if "username" in orig_message:
+                    raise UserAlreadyExistsException("username", dto.username) from err
+                raise UserAlreadyExistsException("email", dto.email) from err
 
             await self._uow.outbox.add(
                 event=UserCreatedEvent(
@@ -92,7 +108,10 @@ class UserService(IUserService):
         if user is None:
             raise InvalidCredentialsException()
 
-        if not self._verify_password(dto.password, user.password_hash):
+        # Same rationale as register(): bcrypt verification is CPU-bound
+        # and ~250ms, so run it off the event loop.
+        password_ok = await anyio.to_thread.run_sync(self._verify_password, dto.password, user.password_hash)
+        if not password_ok:
             raise InvalidCredentialsException()
 
         access_token = self._create_token(user.id, user.username, user.email)
