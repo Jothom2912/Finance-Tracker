@@ -675,7 +675,11 @@ services:
       BUDGET_SERVICE_URL: http://budget-service:8003
       SAGA_SERVICE_URL: http://saga-service:8011
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
-      ANALYTICS_READ_SOURCE: dual
+      # Cutover udført 2026-07-11 efter ren dual-read-verifikation
+      # (nul divergenser på overview/expensesByMonth; kun den kendte
+      # ordens-klasse på limit-trunkerede transaktionslister). Sæt til
+      # "dual" for at gen-verificere, "legacy" for rollback.
+      ANALYTICS_READ_SOURCE: analytics
       SECRET_KEY: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development

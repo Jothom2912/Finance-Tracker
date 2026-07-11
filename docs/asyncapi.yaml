@@ -54,6 +54,8 @@ channels:
       x-consumers:
         - service: banking-service
           queue: banking.account_sync
+        - service: analytics-service
+          queue: analytics.accounts
 
   account.updated:
     description: Published when an account is updated.
@@ -72,6 +74,8 @@ channels:
       x-consumers:
         - service: banking-service
           queue: banking.account_sync
+        - service: analytics-service
+          queue: analytics.accounts
 
   category.created:
     description: Published when a category is created (v2, full state incl. display_order).
@@ -90,6 +94,8 @@ channels:
       x-consumers:
         - service: transaction-service
           queue: transaction_service.taxonomy_sync
+        - service: analytics-service
+          queue: analytics.taxonomy
 
   category.updated:
     description: Published when a category is updated (v2, full state; previous_* dropped).
@@ -108,6 +114,8 @@ channels:
       x-consumers:
         - service: transaction-service
           queue: transaction_service.taxonomy_sync
+        - service: analytics-service
+          queue: analytics.taxonomy
 
   category.deleted:
     description: Published when a category is deleted (v2, full final state).
@@ -126,6 +134,8 @@ channels:
       x-consumers:
         - service: transaction-service
           queue: transaction_service.taxonomy_sync
+        - service: analytics-service
+          queue: analytics.taxonomy
 
   subcategory.created:
     description: >-
@@ -146,6 +156,8 @@ channels:
       x-consumers:
         - service: transaction-service
           queue: transaction_service.taxonomy_sync
+        - service: analytics-service
+          queue: analytics.taxonomy
 
   subcategory.updated:
     description: Published when a subcategory is updated (full state).
@@ -164,6 +176,8 @@ channels:
       x-consumers:
         - service: transaction-service
           queue: transaction_service.taxonomy_sync
+        - service: analytics-service
+          queue: analytics.taxonomy
 
   subcategory.deleted:
     description: Published when a subcategory is deleted (full final state).
@@ -182,6 +196,8 @@ channels:
       x-consumers:
         - service: transaction-service
           queue: transaction_service.taxonomy_sync
+        - service: analytics-service
+          queue: analytics.taxonomy
 
   transaction.created:
     description: Published when a transaction is created.
@@ -200,6 +216,8 @@ channels:
       x-consumers:
         - service: categorization-service
           queue: categorization.transaction_created
+        - service: analytics-service
+          queue: analytics.transactions
 
   transaction.updated:
     description: Published when a transaction is updated.
@@ -215,6 +233,9 @@ channels:
       message:
         $ref: "#/components/messages/TransactionUpdated"
       x-producer: transaction-service
+      x-consumers:
+        - service: analytics-service
+          queue: analytics.transactions
 
   transaction.deleted:
     description: Published when a transaction is deleted or soft-deleted.
@@ -230,6 +251,9 @@ channels:
       message:
         $ref: "#/components/messages/TransactionDeleted"
       x-producer: transaction-service
+      x-consumers:
+        - service: analytics-service
+          queue: analytics.transactions
 
   transaction.categorized:
     description: Published when categorization-service has categorized a transaction.
@@ -248,6 +272,8 @@ channels:
       x-consumers:
         - service: transaction-service
           queue: transaction_service.transaction_categorized
+        - service: analytics-service
+          queue: analytics.transactions
 
   budget.month_closed:
     description: Published when a budget month is closed.
@@ -281,6 +307,9 @@ channels:
       message:
         $ref: "#/components/messages/GoalCreated"
       x-producer: goal-service
+      x-consumers:
+        - service: analytics-service
+          queue: analytics.goals
 
   goal.updated:
     description: Published when a goal is updated.
@@ -296,6 +325,9 @@ channels:
       message:
         $ref: "#/components/messages/GoalUpdated"
       x-producer: goal-service
+      x-consumers:
+        - service: analytics-service
+          queue: analytics.goals
 
   goal.deleted:
     description: Published when a goal is deleted.
@@ -311,6 +343,9 @@ channels:
       message:
         $ref: "#/components/messages/GoalDeleted"
       x-producer: goal-service
+      x-consumers:
+        - service: analytics-service
+          queue: analytics.goals
 
   bank.connection.created:
     description: Published when a bank connection is created.

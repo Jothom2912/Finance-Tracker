@@ -20,6 +20,7 @@ resources:
   - infra/postgres-saga.yaml
   - infra/ollama.yaml
   - infra/ollama-model-pull-job.yaml
+  - infra/elasticsearch.yaml
 
   # Persistent volumes for app data
   - apps/ai-chromadb-pvc.yaml
@@ -35,6 +36,7 @@ resources:
   - apps/ai-service.yaml
   - apps/gateway-service.yaml
   - apps/saga-service.yaml
+  - apps/analytics-service.yaml
 
   # Frontend
   - apps/frontend.yaml
@@ -53,6 +55,7 @@ resources:
   - workers/transaction-taxonomy-consumer.yaml
   - workers/goal-budget-consumer.yaml
   - workers/banking-account-projection-consumer.yaml
+  - workers/analytics-projection-consumer.yaml
   - workers/saga-outbox-worker.yaml
   - workers/saga-start-consumer.yaml
   - workers/saga-reply-consumer.yaml

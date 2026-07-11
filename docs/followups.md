@@ -4,6 +4,41 @@ Ongoing list of known issues and improvements deferred from active work.
 Not a replacement for an issue tracker — these are items not yet
 formalized. Reference entries from commit messages and ADRs as needed.
 
+## transaction-service ignorerer skip/limit ved filtrerede lister (2026-07-11)
+
+`TransactionService.list_transactions` sender kun `skip`/`limit` videre på
+den ufiltrerede sti (`find_by_user`). Med `account_id` (eller category/
+date-range) bruges `find_by_account` m.fl., som returnerer **alle** rækker
+uanset paginerings-params — API'et accepterer altså params, det stiltiende
+ignorerer. Opdaget under analytics-backfillen, hvis paginering loopede
+uendeligt på identiske sider (216k+ requests før stop). Backfillen har nu
+et seen-ids-guard (`test_terminates_when_source_ignores_pagination`), men
+API-kontrakten bør rettes: enten anvend offset/limit i alle repository-
+metoder eller afvis params på de filtrerede stier med 422.
+
+## Gateway legacy-analytics-kode slettes efter én stabil release (2026-07-11)
+
+Cutover til analytics-service (ADR-0004) er udført. Når ES-read-siden har
+kørt stabilt en release: slet `LegacyFinancialAnalyticsAdapter`,
+`DualReadFinancialAnalyticsRepository`, `HttpAnalyticsReadRepository`,
+gatewayens `AnalyticsService`-aggregering og de gamle REST-endpoints
+`/dashboard/overview/` + `/dashboard/expenses-by-month/` (bruger stadig
+legacy-stien direkte), og fjern `ANALYTICS_READ_SOURCE`-flaget.
+
+## budget-service bør adoptere de kanoniske aggregeringsregler (2026-07-11)
+
+ADR-0004 udpeger analytics-services domain-lag som ejer af expense-
+klassifikation og budgetmåneds-perioder. budget-service tæller stadig kun
+`transaction_type=="expense"` i rå kalendervinduer via live HTTP — det
+resterende "forbrug vs. budget"-mismatch. Enten adoptér reglerne, eller
+(større) lad budget-service læse forbrugs-tal fra analytics-service.
+
+## Net-worth/saldo-historik kræver balance-snapshots (2026-07-11)
+
+Accounts-indexet i analytics har kun aktuel saldo. En formue-over-tid-graf
+kræver periodiske balance-snapshot-events (eller event-sourcing af saldo).
+Udskudt fra dashboard-arbejdet; tages op hvis grafen prioriteres.
+
 ## ADR-0003 goal allocation status (2026-05-01)
 
 The foundation for automatic virtual savings from budget surplus is in

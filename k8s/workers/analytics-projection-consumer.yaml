@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-projection-consumer
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: analytics-projection-consumer }
+  template:
+    metadata:
+      labels: { app: analytics-projection-consumer }
+    spec:
+      containers:
+        - name: analytics-projection-consumer
+          image: finance-tracker/analytics-service:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.workers.projection_consumer"]
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
