@@ -1,6 +1,6 @@
 ---
 date: 2026-07-12
-topic: Executed plan 2026-07-11-es-analytics-integration — steps A (commit+rebase) and B (ES bring-up, backfill, dual-read re-verify)
+topic: Executed plan 2026-07-11-es-analytics-integration — steps A (commit+rebase), B (ES bring-up, backfill, dual-read re-verify) and C (full test sweep)
 ---
 
 # Session 2026-07-12 — ES analytics integration (steps A + B)
@@ -68,11 +68,29 @@ Safety tag `pre-es-rebase` marks the pre-integration HEAD.
 - Synthetic dev JWTs need `exp` (+`sub`) — categorization-service 401s without them;
   gateway accepts bare `{"user_id": N}`. The graceful-degradation path masked this.
 
+## Step C — test sweep (done, later same session)
+
+All suites green: gateway 52, frontend 218, analytics 51 unit, user 47, goal 61,
+budget 23 unit, account 22, transaction 177, categorization 51 unit, banking 16,
+saga 49, ai 33, **e2e 20/20** (root e2e run via
+`uv run --with pytest --with pytest-asyncio --with httpx python -m pytest tests/e2e -m e2e`
+— root has no pyproject, P2-14). Two real fixes: ai-service latency timing
+`monotonic`→`perf_counter` (Windows 15.6 ms clock → mocked steps measured 0.0), and a
+stale e2e assertion expecting the client's fabricated `category_name` echoed back
+(post-B5/B6 the write path resolves the canonical name — updated). Infra/env-limited,
+not code: analytics integration (testcontainer-ES OOM-killed, Docker VM only 3.8 GiB),
+budget/categorization integration (global python lacks testcontainers/respx; FastAPI
+version drift asserts on a 204 route), goal migrations (finding F-2026-07-12-01:
+migration 004 is Postgres-only). Windows testcontainers needs
+`TESTCONTAINERS_RYUK_DISABLED=true`; analytics venv needed
+`uv sync --reinstall-package finans-tracker-contracts` (stale path-dep).
+
 ## Open ends
 
-- Plan steps C11–C12: analytics-service suite + remaining per-service P2 suites not run.
 - Chat responder model `qwen3:8b` (config default) exists in neither host nor container
   Ollama — chat responder path untested; `ollama-pull` only fetches qwen3:4b + bge-m3.
+  User note 2026-07-12: models live on the OTHER dev machine; do not change model config.
+- Finding F-2026-07-12-01: goal migration 004 sqlite-incompatible (migration tests red).
 - Users 2–4 not re-ingested (no/little data; ingest is per-user, X-Account-ID-scoped).
 - Old stale ES indices left in place (see above).
 - Wave-B adoption of shared packages + MIGRATION.md still pending (unchanged).

@@ -1,7 +1,7 @@
 ---
 title: Integrate phase-1-fixes with master's Elasticsearch analytics read-side
 date: 2026-07-11
-status: in-progress
+status: done
 backlog-items: [P2-04, AI-03, AI-06, AI-11, AI-18, AI-19, AI-20, AI-21, ML-02, ML-13, ML-15]
 related:
   - ../sessions/2026-07-07-phase1-p1-fixes.md
@@ -124,13 +124,13 @@ re-verification shows zero divergences on overview/expenses-by-month.
 
 10. [x] Gateway: `make -C services/gateway-service test` (master's 5 new analytics test
     files + local's memoization/auth-forwarding/secret tests must all pass together).
-11. [ ] Analytics: `make -C services/analytics-service test`.
-12. [ ] The Phase-2 "resume procedure" per-service suites (user, goal, budget,
+11. [x] Analytics: `make -C services/analytics-service test`.
+12. [x] The Phase-2 "resume procedure" per-service suites (user, goal, budget,
     transaction, categorization, banking, saga, ai, account) — treat Docker-dependent
     failures as infra. Then `make test`, and `make test-e2e` with the compose stack up.
 13. [x] Frontend: `npm test` in `services/frontend` (master added
     `useTransactionSearch`/`MonthComparison` tests; local changed `useDashboardData`).
-14. [ ] Manual smoke: dashboard month-picker + subcategory drilldown (F4 behavior must
+14. [x] Manual smoke: dashboard month-picker + subcategory drilldown (F4 behavior must
     survive the analytics-backed `periodOverview`), transaction free-text search (danish
     stemming), AI chat `category_breakdown` intent (depends on legacy REST dashboard —
     must still answer).
@@ -190,6 +190,29 @@ Recorded as backlog items (AI-19..AI-21 in
    GraphQL reads to ES — categorization-service stays the single writer/authority
    (ADR-003); ES holds read-copies only.
 
-## Outcome (fill in when done)
+## Outcome (filled 2026-07-12)
 
-_(pending)_
+Steps A+B+C executed 2026-07-11/12 — see
+[sessions/2026-07-12-es-integration-rebase.md](../sessions/2026-07-12-es-integration-rebase.md).
+Result: `phase-1-fixes` rebased onto master (linear, all work committed), ES stack live
+and verified (backfill = source-DB counts; dual-read re-verify: 14 shadow reads,
+0 divergences; flipped back to `analytics`), both P1 deploy actions done.
+
+Deviations / extra fixes along the way:
+- P2-06 consumer was crash-looping (half-migrated `main()`) — finished + verified live.
+- Stale pre-ADR ES indices blocked bootstrap — deleted, bootstrap then clean.
+- ai-service Ollama drift (P2-16) fixed: `OLLAMA_BASE_URL` → compose `ollama`; re-ingest OK.
+- `ANALYTICS_READ_SOURCE` made env-overridable in compose.
+- gateway `tests/__init__.py` added (contracts `tests` pkg shadowed the namespace).
+- ai-service latency timing → `perf_counter` (Windows monotonic resolution flake).
+- Stale e2e assertion updated to B5/B6 canonical-name behavior.
+
+Test matrix: gateway 52, frontend 218, analytics 51 unit, user 47, goal 61,
+budget 23 unit, account 22, transaction 177, categorization 51 unit, banking 16,
+saga 49, ai 33, e2e 20 — all green. Infra/env-limited (not code): analytics
+integration (testcontainer-ES OOM on 3.8 GiB Docker VM), budget/categorization
+integration (missing testcontainers/respx + FastAPI drift in global python).
+
+Follow-ups spawned: finding F-2026-07-12-01 (goal migration 004 Postgres-only →
+sqlite migration tests red); chat responder model `qwen3:8b` not pulled anywhere
+(ollama-pull fetches qwen3:4b + bge-m3 only) — responder path untested.
