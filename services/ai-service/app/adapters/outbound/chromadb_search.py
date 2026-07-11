@@ -43,7 +43,7 @@ class ChromaDBSearch:
 
         Returns (items, elapsed_ms).
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         collection = get_collection()
         where = self._build_where(period, filters)
         query_embedding = embed_texts([query])[0]
@@ -57,7 +57,7 @@ class ChromaDBSearch:
 
         metadatas = results.get("metadatas", [[]])[0]
         items = [self._to_item(m) for m in metadatas]
-        elapsed_ms = (time.monotonic() - t0) * 1000
+        elapsed_ms = (time.perf_counter() - t0) * 1000
         logger.info("ChromaDB search returned %d results in %.0fms", len(items), elapsed_ms)
         return items, elapsed_ms
 

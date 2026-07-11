@@ -139,7 +139,11 @@ class TestTransactionCRUD:
             tx = create_resp.json()
             assert float(tx["amount"]) == 125.50
             assert tx["account_name"] == "Default Account"
-            assert tx["category_name"] == "Groceries"
+            # Skrivestien ignorerer klientens category_name og resolver det
+            # kanoniske navn for category_id fra taksonomi-read-modellen
+            # (B5/B6, ADR-003) — "Groceries" ekkoes derfor IKKE tilbage.
+            assert tx["category_id"] == 1
+            assert tx["category_name"] == "Mad & drikke"
             tx_id = tx["id"]
 
             get_resp = await client.get(

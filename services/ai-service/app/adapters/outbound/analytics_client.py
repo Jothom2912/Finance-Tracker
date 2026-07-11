@@ -87,7 +87,7 @@ class AnalyticsClient:
         window. Correct fix requires server-side sort_by=amount support or
         paginated fetching.
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         start_date, end_date = _period_to_date_range(period)
 
         params: dict[str, str | int] = {
@@ -135,7 +135,7 @@ class AnalyticsClient:
 
         items.sort(key=lambda i: i.amount, reverse=True)
         result = items[:limit]
-        elapsed_ms = (time.monotonic() - t0) * 1000
+        elapsed_ms = (time.perf_counter() - t0) * 1000
         logger.info("Fetched %d largest expenses in %.0fms", len(result), elapsed_ms)
         return result, elapsed_ms
 
@@ -147,7 +147,7 @@ class AnalyticsClient:
 
         Returns (items, elapsed_ms).
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         start_date, end_date = _period_to_date_range(period)
 
         async with httpx.AsyncClient(
@@ -176,7 +176,7 @@ class AnalyticsClient:
             for e in expenses_by_cat
         ]
 
-        elapsed_ms = (time.monotonic() - t0) * 1000
+        elapsed_ms = (time.perf_counter() - t0) * 1000
         logger.info(
             "Fetched category breakdown (%d categories) in %.0fms",
             len(items),
@@ -192,7 +192,7 @@ class AnalyticsClient:
 
         Returns (payload, elapsed_ms).
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         year, month = period.split("-")
 
         async with httpx.AsyncClient(
@@ -226,7 +226,7 @@ class AnalyticsClient:
             over_budget_count=int(data.get("over_budget_count", 0)),
         )
 
-        elapsed_ms = (time.monotonic() - t0) * 1000
+        elapsed_ms = (time.perf_counter() - t0) * 1000
         logger.info("Fetched budget status in %.0fms", elapsed_ms)
         return payload, elapsed_ms
 

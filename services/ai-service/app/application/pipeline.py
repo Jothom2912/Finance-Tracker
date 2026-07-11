@@ -85,13 +85,13 @@ async def run_pipeline(
 
         # --- Step 3: Respond (streaming) ---
         data_context = _format_data_context(data_ready)
-        t_responder = time.monotonic()
+        t_responder = time.perf_counter()
 
         async for delta in responder.stream_response(question, data_context):
             total_tokens += 1
             yield ProseChunkEvent(data=ProseChunkData(delta=delta))
 
-        responder_ms = (time.monotonic() - t_responder) * 1000
+        responder_ms = (time.perf_counter() - t_responder) * 1000
 
         if total_tokens == 0:
             logger.warning("Responder produced no content tokens")

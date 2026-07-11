@@ -66,7 +66,7 @@ class OllamaRouter:
 
         Returns (intent, elapsed_ms).
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         current_period = datetime.now().strftime("%Y-%m")
         system_prompt = _ROUTER_SYSTEM_PROMPT_TEMPLATE.format(current_period=current_period)
 
@@ -89,7 +89,7 @@ class OllamaRouter:
             return response.message.content
 
         raw = await anyio.to_thread.run_sync(_call)
-        elapsed_ms = (time.monotonic() - t0) * 1000
+        elapsed_ms = (time.perf_counter() - t0) * 1000
 
         try:
             intent = ResolvedIntent.model_validate_json(raw)
