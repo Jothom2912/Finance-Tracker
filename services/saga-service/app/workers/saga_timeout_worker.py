@@ -1,4 +1,8 @@
-"""Background worker that marks stale sagas as timed_out."""
+"""Background worker that handles stale sagas.
+
+Stale executing sagas are compensated (if there is anything to undo) or marked
+timed_out; stale compensations get their command re-emitted once, then fail.
+"""
 
 from __future__ import annotations
 
@@ -42,9 +46,9 @@ class SagaTimeoutWorker:
         async with async_session_factory() as session:
             uow = SQLAlchemyUnitOfWork(session)
             orchestrator = SagaOrchestrator(uow, self._registry)
-            timed_out = await orchestrator.check_timeouts(self._max_age)
-            if timed_out:
-                logger.info("Marked %d saga(s) as timed_out", len(timed_out))
+            handled = await orchestrator.check_timeouts(self._max_age)
+            if handled:
+                logger.info("Handled %d stale saga(s) (timed out / compensating)", len(handled))
 
 
 async def main() -> None:

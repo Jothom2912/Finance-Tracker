@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import pytest
-
 from app.application.orchestrator import SagaOrchestrator, SagaRegistry
 from app.application.sagas.bank_sync_saga import BankSyncSagaDefinition
 from app.domain.entities import SagaStatus, StepStatus
+from app.domain.exceptions import SagaStepMismatch
+
 from tests.unit.test_orchestrator import InMemoryUnitOfWork
 
 
@@ -115,9 +116,81 @@ async def test_compensation_reply_marks_saga_failed_after_rollback(bank_sync_orc
         error_message="downstream failed",
     )
 
-    result = await bank_sync_orchestrator.handle_compensation_reply(saga.id, "import_transactions")
+    result = await bank_sync_orchestrator.handle_compensation_reply(saga.id, "import_transactions", success=True)
 
     assert result.status == SagaStatus.FAILED
     assert result.completed_at is not None
     assert result.steps[1].status == StepStatus.COMPENSATED
     assert result.error_detail == "downstream failed"
+
+
+@pytest.mark.asyncio
+async def test_failed_compensation_reply_marks_saga_failed_and_stops_rewind(
+    bank_sync_orchestrator: SagaOrchestrator,
+    bank_sync_uow: InMemoryUnitOfWork,
+) -> None:
+    saga = await bank_sync_orchestrator.start_saga("bank_sync", _bank_sync_context())
+
+    await bank_sync_orchestrator.handle_reply(
+        saga.id,
+        "fetch_transactions",
+        success=True,
+        result_data={"items": [], "total_fetched": 0, "parse_skipped": 0},
+    )
+    await bank_sync_orchestrator.handle_reply(
+        saga.id,
+        "import_transactions",
+        success=True,
+        result_data={"imported": 1, "duplicates_skipped": 0, "errors": 0, "imported_ids": [777]},
+    )
+    await bank_sync_orchestrator.handle_reply(
+        saga.id,
+        "mark_sync_complete",
+        success=False,
+        error_message="downstream failed",
+    )
+    events_before = len(bank_sync_uow.outbox.events)
+
+    result = await bank_sync_orchestrator.handle_compensation_reply(
+        saga.id,
+        "import_transactions",
+        success=False,
+        error_message="rolled back 0 of 1",
+    )
+
+    assert result.status == SagaStatus.FAILED
+    assert result.completed_at is not None
+    assert result.steps[1].status == StepStatus.FAILED
+    assert result.steps[1].error_detail == "rolled back 0 of 1"
+    assert result.error_detail == "compensation failed: import_transactions: rolled back 0 of 1"
+    # No further compensation commands published — the rewind stops.
+    assert len(bank_sync_uow.outbox.events) == events_before
+
+
+@pytest.mark.asyncio
+async def test_compensation_reply_with_wrong_step_name_raises_mismatch(
+    bank_sync_orchestrator: SagaOrchestrator,
+) -> None:
+    saga = await bank_sync_orchestrator.start_saga("bank_sync", _bank_sync_context())
+
+    await bank_sync_orchestrator.handle_reply(
+        saga.id,
+        "fetch_transactions",
+        success=True,
+        result_data={"items": [], "total_fetched": 0, "parse_skipped": 0},
+    )
+    await bank_sync_orchestrator.handle_reply(
+        saga.id,
+        "import_transactions",
+        success=True,
+        result_data={"imported": 1, "duplicates_skipped": 0, "errors": 0, "imported_ids": [777]},
+    )
+    await bank_sync_orchestrator.handle_reply(
+        saga.id,
+        "mark_sync_complete",
+        success=False,
+        error_message="downstream failed",
+    )
+
+    with pytest.raises(SagaStepMismatch):
+        await bank_sync_orchestrator.handle_compensation_reply(saga.id, "mark_sync_complete", success=True)

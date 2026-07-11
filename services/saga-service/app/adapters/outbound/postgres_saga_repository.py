@@ -50,8 +50,16 @@ class PostgresSagaRepository(ISagaRepository):
             self._session.add(step_model)
         await self._session.flush()
 
-    async def get_by_id(self, saga_id: str) -> SagaInstance | None:
-        result = await self._session.execute(select(SagaInstanceModel).where(SagaInstanceModel.id == saga_id))
+    async def get_by_id(self, saga_id: str, *, for_update: bool = False) -> SagaInstance | None:
+        stmt = select(SagaInstanceModel).where(SagaInstanceModel.id == saga_id)
+        if for_update:
+            # Lock the saga row until the surrounding transaction commits.
+            # Step rows are only ever mutated while holding this parent-row
+            # lock, so locking saga_instances alone serializes all
+            # read-modify-write paths (reply handling, compensation replies,
+            # timeout marking).
+            stmt = stmt.with_for_update()
+        result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         if model is None:
             return None
@@ -77,24 +85,17 @@ class PostgresSagaRepository(ISagaRepository):
         step_models = steps_result.scalars().all()
         return self._to_entity(model, list(step_models))
 
-    async def find_stale(self, older_than: datetime) -> list[SagaInstance]:
+    async def find_stale_ids(self, older_than: datetime) -> list[str]:
+        # Deliberately fetches only ids: no context_json, no per-saga step
+        # queries. Full state is loaded (under a row lock) only for sagas
+        # that actually need action.
         result = await self._session.execute(
-            select(SagaInstanceModel).where(
+            select(SagaInstanceModel.id).where(
                 SagaInstanceModel.status.in_(["started", "compensating"]),
                 SagaInstanceModel.updated_at <= older_than,
             )
         )
-        models = result.scalars().all()
-        sagas: list[SagaInstance] = []
-        for model in models:
-            steps_result = await self._session.execute(
-                select(SagaStepLogModel)
-                .where(SagaStepLogModel.saga_id == model.id)
-                .order_by(SagaStepLogModel.step_index)
-            )
-            step_models = steps_result.scalars().all()
-            sagas.append(self._to_entity(model, list(step_models)))
-        return sagas
+        return list(result.scalars().all())
 
     async def update(self, saga: SagaInstance) -> None:
         await self._session.execute(

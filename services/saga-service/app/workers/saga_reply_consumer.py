@@ -79,7 +79,7 @@ class SagaReplyConsumer:
                 uow = SQLAlchemyUnitOfWork(session)
                 orchestrator = SagaOrchestrator(uow, self._registry)
                 if is_compensation:
-                    await orchestrator.handle_compensation_reply(saga_id, step_name)
+                    await orchestrator.handle_compensation_reply(saga_id, step_name, success, error_message)
                 else:
                     await orchestrator.handle_reply(saga_id, step_name, success, result_data, error_message)
 

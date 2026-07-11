@@ -17,6 +17,7 @@ dependencies = [
     "aio-pika>=9.4.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
+    "python-jose[cryptography]>=3.3.0",
     "finans-tracker-contracts",
 ]
 
@@ -27,6 +28,7 @@ dev = [
     "pytest-asyncio",
     "pytest-cov",
     "aiosqlite",
+    "httpx",
 ]
 
 [tool.uv.sources]

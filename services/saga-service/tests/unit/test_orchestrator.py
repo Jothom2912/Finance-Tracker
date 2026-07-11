@@ -73,11 +73,15 @@ class ThreeStepCompensationSaga(SagaDefinition):
 class InMemorySagaRepository(ISagaRepository):
     def __init__(self) -> None:
         self._store: dict[str, SagaInstance] = {}
+        # Records (saga_id, for_update) for every get_by_id call so tests can
+        # assert that read-modify-write paths take the row lock.
+        self.get_by_id_calls: list[tuple[str, bool]] = []
 
     async def save(self, saga: SagaInstance) -> None:
         self._store[saga.id] = saga
 
-    async def get_by_id(self, saga_id: str) -> SagaInstance | None:
+    async def get_by_id(self, saga_id: str, *, for_update: bool = False) -> SagaInstance | None:
+        self.get_by_id_calls.append((saga_id, for_update))
         return self._store.get(saga_id)
 
     async def get_by_correlation_id(self, correlation_id: str) -> SagaInstance | None:
@@ -86,9 +90,11 @@ class InMemorySagaRepository(ISagaRepository):
                 return saga
         return None
 
-    async def find_stale(self, older_than: datetime) -> list[SagaInstance]:
+    async def find_stale_ids(self, older_than: datetime) -> list[str]:
         return [
-            s for s in self._store.values() if s.is_active and s.updated_at is not None and s.updated_at <= older_than
+            s.id
+            for s in self._store.values()
+            if s.is_active and s.updated_at is not None and s.updated_at <= older_than
         ]
 
     async def update(self, saga: SagaInstance) -> None:
@@ -300,6 +306,244 @@ async def test_check_timeouts_ignores_recent_sagas(orchestrator, uow):
 
     timed_out = await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
     assert len(timed_out) == 0
+
+
+def _make_stale(saga: SagaInstance, minutes: int = 10) -> None:
+    saga.updated_at = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+
+
+@pytest.mark.asyncio
+async def test_timeout_with_compensatable_step_begins_compensation(orchestrator, uow):
+    """H7: a stale saga with a succeeded, compensatable step is rolled back
+    instead of being abandoned as timed_out."""
+    saga = await orchestrator.start_saga("three_step", {"connection_id": "abc"})
+    await orchestrator.handle_reply(saga.id, "fetch", success=True, result_data={"items": [1]})
+    await orchestrator.handle_reply(saga.id, "import_data", success=True, result_data={"ids": [100, 101]})
+    # Now stuck at step "complete" (executing), with import_data succeeded.
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+
+    handled = await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+
+    assert len(handled) == 1
+    result = handled[0]
+    assert result.status == SagaStatus.COMPENSATING
+    assert result.error_detail == "timed out after 300.0s; compensating"
+    assert result.completed_at is None
+    assert result.steps[2].status == StepStatus.FAILED  # the stuck step
+    rollback_events = [e for e in uow.outbox.events if e["event_type"] == "cmd.rollback"]
+    assert len(rollback_events) == 1
+    assert rollback_events[0]["payload"]["ids"] == [100, 101]
+
+
+@pytest.mark.asyncio
+async def test_timeout_with_nothing_to_compensate_marks_timed_out(orchestrator, uow):
+    """H7: succeeded steps without a compensation command do not prevent the
+    terminal timed_out marking."""
+    saga = await orchestrator.start_saga("three_step", {"connection_id": "abc"})
+    await orchestrator.handle_reply(saga.id, "fetch", success=True, result_data={"items": [1]})
+    # Stuck at import_data; only "fetch" succeeded and it has no compensation.
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+
+    handled = await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+
+    assert len(handled) == 1
+    assert handled[0].status == SagaStatus.TIMED_OUT
+    assert handled[0].completed_at is not None
+    rollback_events = [e for e in uow.outbox.events if e["event_type"] == "cmd.rollback"]
+    assert rollback_events == []
+
+
+@pytest.mark.asyncio
+async def test_late_reply_after_timeout_compensation_raises_already_completed(orchestrator, uow):
+    """A reply for the stuck step arriving after the timeout routed the saga
+    into compensation must ack cleanly (SagaAlreadyCompleted), not resurrect."""
+    saga = await orchestrator.start_saga("three_step", {"connection_id": "abc"})
+    await orchestrator.handle_reply(saga.id, "fetch", success=True, result_data={"items": [1]})
+    await orchestrator.handle_reply(saga.id, "import_data", success=True, result_data={"ids": [100]})
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+    await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+    assert saga.status == SagaStatus.COMPENSATING
+
+    with pytest.raises(SagaAlreadyCompleted):
+        await orchestrator.handle_reply(saga.id, "complete", success=True)
+
+    assert saga.status == SagaStatus.COMPENSATING  # untouched
+
+
+@pytest.mark.asyncio
+async def test_late_reply_after_timed_out_raises_already_completed(orchestrator, uow):
+    saga = await orchestrator.start_saga("test_saga", {"input": "data"})
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+    await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+    assert saga.status == SagaStatus.TIMED_OUT
+
+    with pytest.raises(SagaAlreadyCompleted):
+        await orchestrator.handle_reply(saga.id, "step_one", success=True)
+
+    assert saga.status == SagaStatus.TIMED_OUT
+
+
+@pytest.mark.asyncio
+async def test_compensation_reply_still_works_after_timeout_compensation(orchestrator, uow):
+    """The compensation triggered by a timeout completes normally when the
+    participant replies."""
+    saga = await orchestrator.start_saga("three_step", {"connection_id": "abc"})
+    await orchestrator.handle_reply(saga.id, "fetch", success=True, result_data={"items": [1]})
+    await orchestrator.handle_reply(saga.id, "import_data", success=True, result_data={"ids": [100]})
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+    await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+
+    result = await orchestrator.handle_compensation_reply(saga.id, "import_data", success=True)
+
+    assert result.status == SagaStatus.FAILED
+    assert result.steps[1].status == StepStatus.COMPENSATED
+    assert result.completed_at is not None
+
+
+# ── Stuck Compensation Tests (H7 part 2) ──────────────────────────
+
+
+async def _saga_in_compensating_state(orchestrator, uow) -> SagaInstance:
+    saga = await orchestrator.start_saga("three_step", {"connection_id": "abc"})
+    await orchestrator.handle_reply(saga.id, "fetch", success=True, result_data={"items": [1]})
+    await orchestrator.handle_reply(saga.id, "import_data", success=True, result_data={"ids": [100]})
+    await orchestrator.handle_reply(saga.id, "complete", success=False, error_message="downstream failed")
+    assert saga.status == SagaStatus.COMPENSATING
+    return saga
+
+
+@pytest.mark.asyncio
+async def test_stuck_compensation_reemits_command_once(orchestrator, uow):
+    saga = await _saga_in_compensating_state(orchestrator, uow)
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+
+    handled = await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+
+    assert len(handled) == 1
+    assert saga.status == SagaStatus.COMPENSATING  # not killed, not timed_out
+    assert saga.completed_at is None
+    assert "compensation command re-emitted" in (saga.error_detail or "")
+    assert "downstream failed" in (saga.error_detail or "")
+    rollback_events = [e for e in uow.outbox.events if e["event_type"] == "cmd.rollback"]
+    assert len(rollback_events) == 2  # original + re-emitted
+    assert rollback_events[1]["payload"]["ids"] == [100]
+
+
+@pytest.mark.asyncio
+async def test_stuck_compensation_fails_after_reemit_did_not_help(orchestrator, uow):
+    saga = await _saga_in_compensating_state(orchestrator, uow)
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+    await orchestrator.check_timeouts(max_age=timedelta(minutes=5))  # first: re-emit
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+
+    handled = await orchestrator.check_timeouts(max_age=timedelta(minutes=5))  # second: give up
+
+    assert len(handled) == 1
+    assert saga.status == SagaStatus.FAILED  # never TIMED_OUT
+    assert saga.completed_at is not None
+    assert "compensation timed out" in (saga.error_detail or "")
+    assert saga.steps[1].status == StepStatus.FAILED
+    rollback_events = [e for e in uow.outbox.events if e["event_type"] == "cmd.rollback"]
+    assert len(rollback_events) == 2  # no third emission
+
+
+@pytest.mark.asyncio
+async def test_late_compensation_reply_after_compensation_failed_raises_already_completed(orchestrator, uow):
+    saga = await _saga_in_compensating_state(orchestrator, uow)
+    for _ in range(2):
+        _make_stale(saga)
+        await uow.sagas.update(saga)
+        await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+    assert saga.status == SagaStatus.FAILED
+
+    with pytest.raises(SagaAlreadyCompleted):
+        await orchestrator.handle_compensation_reply(saga.id, "import_data", success=True)
+
+    assert saga.status == SagaStatus.FAILED
+
+
+# ── Locking / Race Tests (H8) ─────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_handle_reply_reads_saga_with_row_lock(orchestrator, uow):
+    saga = await orchestrator.start_saga("test_saga", {"input": "data"})
+    uow.sagas.get_by_id_calls.clear()
+
+    await orchestrator.handle_reply(saga.id, "step_one", success=True)
+
+    assert uow.sagas.get_by_id_calls == [(saga.id, True)]
+
+
+@pytest.mark.asyncio
+async def test_handle_compensation_reply_reads_saga_with_row_lock(orchestrator, uow):
+    saga = await _saga_in_compensating_state(orchestrator, uow)
+    uow.sagas.get_by_id_calls.clear()
+
+    await orchestrator.handle_compensation_reply(saga.id, "import_data", success=True)
+
+    assert uow.sagas.get_by_id_calls == [(saga.id, True)]
+
+
+@pytest.mark.asyncio
+async def test_check_timeouts_reads_each_candidate_with_row_lock(orchestrator, uow):
+    saga = await orchestrator.start_saga("test_saga", {"input": "data"})
+    _make_stale(saga)
+    await uow.sagas.update(saga)
+    uow.sagas.get_by_id_calls.clear()
+
+    await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+
+    assert uow.sagas.get_by_id_calls == [(saga.id, True)]
+
+
+@pytest.mark.asyncio
+async def test_check_timeouts_skips_saga_completed_between_scan_and_lock(orchestrator, uow):
+    """Race: the staleness scan flagged the saga, but a reply completed it
+    before the timeout worker acquired the row lock. The locked re-read must
+    see the terminal state and never resurrect it."""
+    saga = await orchestrator.start_saga("test_saga", {"input": "data"})
+    await orchestrator.handle_reply(saga.id, "step_one", success=True)
+    await orchestrator.handle_reply(saga.id, "step_two", success=True)
+    assert saga.status == SagaStatus.COMPLETED
+
+    async def stale_scan_snapshot(older_than: datetime) -> list[str]:
+        return [saga.id]  # stale snapshot taken before the reply committed
+
+    uow.sagas.find_stale_ids = stale_scan_snapshot  # type: ignore[method-assign]
+
+    handled = await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+
+    assert handled == []
+    stored = await uow.sagas.get_by_id(saga.id)
+    assert stored is not None and stored.status == SagaStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_check_timeouts_skips_saga_refreshed_between_scan_and_lock(orchestrator, uow):
+    """Race: a reply advanced the saga (bumping updated_at) after the scan.
+    The locked re-read re-validates staleness and leaves the saga alone."""
+    saga = await orchestrator.start_saga("test_saga", {"input": "data"})
+    # updated_at is fresh (just started), but the scan claims it is stale.
+
+    async def stale_scan_snapshot(older_than: datetime) -> list[str]:
+        return [saga.id]
+
+    uow.sagas.find_stale_ids = stale_scan_snapshot  # type: ignore[method-assign]
+
+    handled = await orchestrator.check_timeouts(max_age=timedelta(minutes=5))
+
+    assert handled == []
+    stored = await uow.sagas.get_by_id(saga.id)
+    assert stored is not None and stored.status == SagaStatus.STARTED
 
 
 # ── Duplicate / Error Handling Tests ──────────────────────────────

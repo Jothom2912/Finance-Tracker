@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from typing import Any
+
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import get_current_user_id
 from app.config import settings
 
 app = FastAPI(title="Saga Service")
@@ -15,6 +18,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Context keys stripped from API responses: bulky and/or sensitive payload data
+# (e.g. every synced bank transaction after the fetch step).
+EXCLUDED_CONTEXT_KEYS = {"fetched_items", "items"}
+
+
+def _sanitize_context(context: dict[str, Any] | None) -> dict[str, Any]:
+    if not context:
+        return {}
+    return {k: v for k, v in context.items() if k not in EXCLUDED_CONTEXT_KEYS}
+
 
 @app.get("/health")
 async def health() -> dict[str, str]:
@@ -22,7 +35,7 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/api/v1/sagas/{saga_id}")
-async def get_saga_status(saga_id: str) -> dict:
+async def get_saga_status(saga_id: str, user_id: int = Depends(get_current_user_id)) -> dict:
     from app.adapters.outbound.postgres_saga_repository import PostgresSagaRepository
     from app.database import async_session_factory
 
@@ -32,9 +45,14 @@ async def get_saga_status(saga_id: str) -> dict:
         if instance is None:
             instance = await repo.get_by_correlation_id(saga_id)
         if instance is None:
-            from fastapi import HTTPException
-
             raise HTTPException(status_code=404, detail="Saga not found")
+
+        try:
+            owner_id = int((instance.context or {}).get("user_id"))
+        except (TypeError, ValueError):
+            owner_id = None
+        if owner_id is None or owner_id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
 
         current_step_name = None
         if instance.steps and 0 <= instance.current_step < len(instance.steps):
@@ -46,7 +64,7 @@ async def get_saga_status(saga_id: str) -> dict:
             "status": instance.status.value,
             "current_step": instance.current_step,
             "current_step_name": current_step_name,
-            "context": instance.context,
+            "context": _sanitize_context(instance.context),
             "error_detail": instance.error_detail,
             "started_at": instance.started_at.isoformat() if instance.started_at else None,
             "completed_at": instance.completed_at.isoformat() if instance.completed_at else None,
