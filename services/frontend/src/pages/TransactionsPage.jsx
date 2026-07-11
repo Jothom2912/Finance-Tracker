@@ -7,6 +7,8 @@ import Modal from '../components/Modal/Modal';
 
 import { useCategories } from '../hooks/useCategories';
 import { useTransactions } from '../hooks/useTransactions';
+import { useTransactionSearch } from '../hooks/useTransactionSearch';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useNotifications } from '../hooks/useNotifications';
 import { useConfirm } from '../components/ConfirmDialog/ConfirmDialog';
 import { formatLocalISODate } from '../lib/formatters';
@@ -60,8 +62,21 @@ function TransactionsPage() {
     uploadCsv,
   } = useTransactions(filters);
 
+  // Fritekstsøgning (dansk stemming via analytics-læsesiden). Aktiv
+  // søgning erstatter den filtrerede liste; tom søgning = uændret side.
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebouncedValue(searchTerm);
+  const {
+    isSearchActive,
+    results: searchResults,
+    totalCount: searchTotalCount,
+    loading: searchLoading,
+    error: searchError,
+  } = useTransactionSearch(debouncedSearchTerm);
+
   const invalidateTransactionViews = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['transactionSearch'] });
     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
   }, [queryClient]);
 
@@ -140,6 +155,25 @@ function TransactionsPage() {
           <h1>Transaktioner</h1>
           <p className="header-subtitle">Administrer dine indtægter og udgifter</p>
         </div>
+      </div>
+
+      <div className="transaction-search-section">
+        <label htmlFor="transaction-search" className="visually-hidden">
+          Søg i transaktioner
+        </label>
+        <input
+          id="transaction-search"
+          type="search"
+          className="transaction-search-input"
+          placeholder="Søg i transaktioner (fx 'netto' eller 'forsikring')…"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        {isSearchActive && !searchLoading && !searchError && (
+          <p className="transaction-search-status">
+            {searchResults.length} af {searchTotalCount} resultater for “{debouncedSearchTerm}”
+          </p>
+        )}
       </div>
 
       <div className="controls-section">
@@ -223,14 +257,14 @@ function TransactionsPage() {
       )}
 
       <div className="transactions-content">
-        <h3>Alle Transaktioner</h3>
-        {txLoading ? (
+        <h3>{isSearchActive ? 'Søgeresultater' : 'Alle Transaktioner'}</h3>
+        {(isSearchActive ? searchLoading : txLoading) ? (
           <p>Indlæser transaktioner...</p>
-        ) : txError ? (
-          <p className="message-display error">Fejl: {txError}</p>
+        ) : (isSearchActive ? searchError : txError) ? (
+          <p className="message-display error">Fejl: {isSearchActive ? searchError : txError}</p>
         ) : (
           <TransactionsList
-            transactions={transactions}
+            transactions={isSearchActive ? searchResults : transactions}
             onEdit={handleEditTransaction}
             onDelete={handleDeleteTransaction}
             onCreateTransaction={() => { setShowFormModal(true); clearMessages(); }}

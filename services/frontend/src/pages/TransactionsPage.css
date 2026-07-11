@@ -285,3 +285,32 @@
     font-size: var(--font-size-xl);
   }
 }
+
+/* ── Fritekstsøgning ── */
+
+.transaction-search-section {
+  margin-bottom: 1rem;
+}
+
+.transaction-search-input {
+  width: 100%;
+  max-width: 480px;
+  padding: 0.6rem 0.9rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.transaction-search-input:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px var(--color-brand-50);
+}
+
+.transaction-search-status {
+  margin: 0.5rem 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
