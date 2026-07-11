@@ -689,6 +689,20 @@ services:
       saga-service:
         condition: service_started
 
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    ports:
+      - "8012:8000"
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
   analytics-projection-consumer:
     build:
       context: .

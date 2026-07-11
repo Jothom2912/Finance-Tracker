@@ -69,6 +69,10 @@ INDEX_DEFINITIONS: dict[str, dict[str, Any]] = {
                 "name": {"type": "keyword"},
                 "saldo": _AMOUNT,
                 "budget_start_day": {"type": "integer"},
+                # Ingen account.deleted-event findes endnu, men feltet
+                # holdes konsistent med de øvrige indices — den fælles
+                # guard-upsert bruger det som terminal-flag.
+                "is_deleted": {"type": "boolean"},
                 "event_ts": _TS,
                 "updated_at": _TS,
             },
