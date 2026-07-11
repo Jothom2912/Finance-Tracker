@@ -10,12 +10,17 @@ from strawberry.fastapi import GraphQLRouter
 from strawberry.types import Info
 
 from app.adapters.outbound.account_client import AccountClient
+from app.adapters.outbound.analytics_client import HttpFinancialAnalyticsRepository
 from app.adapters.outbound.budget_client import BudgetClient
 from app.adapters.outbound.category_client import CategoryClient
+from app.adapters.outbound.dual_read_analytics import DualReadFinancialAnalyticsRepository
+from app.adapters.outbound.legacy_analytics_adapter import LegacyFinancialAnalyticsAdapter
 from app.adapters.outbound.transaction_client import HttpAnalyticsReadRepository
 from app.application.dto import CategoryExpense
+from app.application.ports.outbound import IFinancialAnalyticsPort
 from app.application.service import AnalyticsService
 from app.auth import get_account_id_from_headers
+from app.config import ANALYTICS_READ_SOURCE
 from app.shared.budget_period import budget_period, determine_budget_month
 
 logger = logging.getLogger(__name__)
@@ -155,15 +160,37 @@ class TopSpendingCategoryType:
     percentage_of_total: float
 
 
+def build_financial_analytics_port(
+    auth_header: str,
+    read_source: str = ANALYTICS_READ_SOURCE,
+) -> IFinancialAnalyticsPort:
+    """Vælger read-side implementering ud fra ANALYTICS_READ_SOURCE:
+    legacy | dual | analytics (cutover = env-flip, ingen kodeændring)."""
+    if read_source == "analytics":
+        return HttpFinancialAnalyticsRepository(auth_header)
+
+    legacy = LegacyFinancialAnalyticsAdapter(
+        AnalyticsService(
+            read_repo=HttpAnalyticsReadRepository(auth_header),
+            category_repo=CategoryClient(auth_header),
+        )
+    )
+    if read_source == "dual":
+        return DualReadFinancialAnalyticsRepository(
+            primary=legacy,
+            shadow=HttpFinancialAnalyticsRepository(auth_header),
+        )
+    return legacy
+
+
 async def get_graphql_context(
     request: Request,
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ) -> dict[str, Any]:
     auth_header = request.headers.get("authorization", "")
-    read_repo = HttpAnalyticsReadRepository(auth_header)
     category_client = CategoryClient(auth_header)
     return {
-        "analytics_service": AnalyticsService(read_repo=read_repo, category_repo=category_client),
+        "financial_analytics": build_financial_analytics_port(auth_header),
         "account_client": AccountClient(auth_header),
         "budget_client": BudgetClient(auth_header),
         "category_client": category_client,
@@ -201,9 +228,9 @@ class Query:
     ) -> FinancialOverviewType:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        service: AnalyticsService = ctx["analytics_service"]
+        port: IFinancialAnalyticsPort = ctx["financial_analytics"]
 
-        result = service.get_financial_overview(
+        result = port.get_financial_overview(
             account_id=account_id,
             start_date=start_date,
             end_date=end_date,
@@ -229,16 +256,16 @@ class Query:
     ) -> list[MonthlyExpensesType]:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        service: AnalyticsService = ctx["analytics_service"]
+        port: IFinancialAnalyticsPort = ctx["financial_analytics"]
         start_day = _get_budget_start_day(ctx, account_id)
 
-        results = service.get_expenses_by_month(
+        results = port.get_expenses_by_month(
             account_id=account_id,
             start_date=start_date,
             end_date=end_date,
             budget_start_day=start_day,
         )
-        return [MonthlyExpensesType(month=r["month"], total_expenses=r["total_expenses"]) for r in results]
+        return [MonthlyExpensesType(month=r.month, total_expenses=r.total_expenses) for r in results]
 
     @strawberry.field(description="Budget summary for a specific month (proxied to budget-service)")
     def budget_summary(
@@ -285,14 +312,14 @@ class Query:
     def current_month_overview(self, info: Info) -> CurrentMonthOverviewType:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        service: AnalyticsService = ctx["analytics_service"]
+        port: IFinancialAnalyticsPort = ctx["financial_analytics"]
         start_day = _get_budget_start_day(ctx, account_id)
 
         today = date.today()
         cur_year, cur_month = determine_budget_month(today, start_day)
         start, end = budget_period(cur_year, cur_month, start_day)
 
-        result = service.get_financial_overview(
+        result = port.get_financial_overview(
             account_id=account_id,
             start_date=start,
             end_date=end,
@@ -302,7 +329,7 @@ class Query:
         prev_year = cur_year if cur_month > 1 else cur_year - 1
         prev_start, prev_end = budget_period(prev_year, prev_month, start_day)
 
-        prev_result = service.get_financial_overview(
+        prev_result = port.get_financial_overview(
             account_id=account_id,
             start_date=prev_start,
             end_date=prev_end,
@@ -343,12 +370,12 @@ class Query:
     ) -> list[TopSpendingCategoryType]:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        service: AnalyticsService = ctx["analytics_service"]
+        port: IFinancialAnalyticsPort = ctx["financial_analytics"]
         start_day = _get_budget_start_day(ctx, account_id)
 
         start, end = budget_period(year, month, start_day)
 
-        result = service.get_financial_overview(account_id=account_id, start_date=start, end_date=end)
+        result = port.get_financial_overview(account_id=account_id, start_date=start, end_date=end)
 
         total = result.total_expenses or 1.0
         # expenses_by_category is already sorted by amount desc.
@@ -406,9 +433,9 @@ class Query:
     ) -> list[TransactionType]:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        service: AnalyticsService = ctx["analytics_service"]
+        port: IFinancialAnalyticsPort = ctx["financial_analytics"]
 
-        results = service.list_transaction_projections(
+        results = port.list_transactions(
             account_id=account_id,
             start_date=start_date,
             end_date=end_date,

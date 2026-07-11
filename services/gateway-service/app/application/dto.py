@@ -42,6 +42,13 @@ class FinancialOverview(BaseModel):
     average_monthly_expenses: Optional[float] = None
 
 
+class MonthlyExpenses(BaseModel):
+    """Udgifter per budgetmåned; ``month`` er ``"YYYY-MM"``-label."""
+
+    month: str
+    total_expenses: float
+
+
 class TransactionProjection(BaseModel):
     id: int
     amount: float

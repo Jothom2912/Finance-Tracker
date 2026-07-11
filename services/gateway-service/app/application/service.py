@@ -128,11 +128,7 @@ class AnalyticsService:
             # Display name: authoritative taxonomy first, denormalized row
             # name as fallback (sync lag / deleted category), else the
             # explicit uncategorized label.
-            name = (
-                category_id_to_name.get(category_id)
-                or transaction.get("category_name")
-                or UNCATEGORIZED_LABEL
-            )
+            name = category_id_to_name.get(category_id) or transaction.get("category_name") or UNCATEGORIZED_LABEL
             bucket = {"name": name, "amount": 0.0, "subcategories": {}}
             buckets[category_id] = bucket
 

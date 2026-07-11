@@ -674,6 +674,8 @@ services:
       ACCOUNT_SERVICE_URL: http://account-service:8003
       BUDGET_SERVICE_URL: http://budget-service:8003
       SAGA_SERVICE_URL: http://saga-service:8011
+      ANALYTICS_SERVICE_URL: http://analytics-service:8000
+      ANALYTICS_READ_SOURCE: dual
       SECRET_KEY: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development

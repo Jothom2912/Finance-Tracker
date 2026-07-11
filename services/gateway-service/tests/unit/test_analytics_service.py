@@ -86,9 +86,13 @@ class FakeCategoryReadRepository:
     def __init__(self, categories: list[dict] | None = None) -> None:
         # Authoritative taxonomy names — deliberately different from the
         # denormalized row name to prove the taxonomy wins.
-        self._categories = categories if categories is not None else [
-            {"id": 10, "name": "Mad & drikke", "type": "expense", "display_order": 1},
-        ]
+        self._categories = (
+            categories
+            if categories is not None
+            else [
+                {"id": 10, "name": "Mad & drikke", "type": "expense", "display_order": 1},
+            ]
+        )
 
     def get_categories(self):
         return self._categories

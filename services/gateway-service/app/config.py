@@ -34,3 +34,10 @@ TRANSACTION_PAGE_SIZE = 200
 
 SAGA_SERVICE_URL = os.getenv("SAGA_SERVICE_URL", "http://saga-service:8011")
 SAGA_SERVICE_TIMEOUT = float(os.getenv("SAGA_SERVICE_TIMEOUT", "5"))
+
+ANALYTICS_SERVICE_URL = os.getenv("ANALYTICS_SERVICE_URL", "http://analytics-service:8000")
+ANALYTICS_SERVICE_TIMEOUT = float(os.getenv("ANALYTICS_SERVICE_TIMEOUT", "10"))
+# Read-side kilde: legacy (in-process aggregering via transaction-service),
+# dual (server legacy, skygge-læs analytics og log divergenser) eller
+# analytics (ES-backed read store). Cutover = flip til "analytics".
+ANALYTICS_READ_SOURCE = os.getenv("ANALYTICS_READ_SOURCE", "legacy").strip().lower()
