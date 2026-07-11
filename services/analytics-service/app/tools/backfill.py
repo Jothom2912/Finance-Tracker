@@ -68,7 +68,7 @@ class BackfillRunner:
                 account_ids = await self._backfill_accounts(http, user_id)
                 for account_id in account_ids:
                     await self._backfill_transactions(http, user_id, account_id)
-                await self._backfill_goals(http, user_id)
+                    await self._backfill_goals(http, user_id, account_id)
         await self._report_counts()
 
     async def _backfill_taxonomy(self, http: httpx.AsyncClient, user_id: int) -> None:
@@ -126,7 +126,7 @@ class BackfillRunner:
 
     async def _backfill_transactions(self, http: httpx.AsyncClient, user_id: int, account_id: int) -> None:
         base = self._config.transaction_service_url.rstrip("/")
-        total = 0
+        seen_ids: set[int] = set()
         skip = 0
         while True:
             headers = make_service_auth_header(user_id, self._config)  # frisk token per side
@@ -141,7 +141,17 @@ class BackfillRunner:
                 .raise_for_status()
                 .json()
             )
-            for row in rows:
+            # Stop når siden ikke bidrager med nye id'er — ikke kun ved
+            # kort side. transaction-services find_by_account ignorerer
+            # skip/limit og returnerer ALT for kontoen på hver "side";
+            # uden dette guard looper pagineringen uendeligt (observeret
+            # ved 216k+ requests). Dækker både korrekt paginering (kort
+            # side) og ignoreret paginering (første gentagne side).
+            new_rows = [row for row in rows if row["id"] not in seen_ids]
+            if not new_rows:
+                break
+            seen_ids.update(row["id"] for row in new_rows)
+            for row in new_rows:
                 category_id = row.get("category_id")
                 subcategory_id = row.get("subcategory_id")
                 await self._transactions.upsert_core(
@@ -164,14 +174,17 @@ class BackfillRunner:
                     categorization_confidence=row.get("categorization_confidence"),
                     event_ts=BACKFILL_EVENT_TS,
                 )
-            total += len(rows)
             if len(rows) < PAGE_SIZE:
                 break
             skip += PAGE_SIZE
-        logger.info("Konto %d: %d transaktioner", account_id, total)
+        logger.info("Konto %d: %d transaktioner", account_id, len(seen_ids))
 
-    async def _backfill_goals(self, http: httpx.AsyncClient, user_id: int) -> None:
-        headers = make_service_auth_header(user_id, self._config)
+    async def _backfill_goals(self, http: httpx.AsyncClient, user_id: int, account_id: int) -> None:
+        # goal-service lister mål per konto (kræver X-Account-ID).
+        headers = {
+            **make_service_auth_header(user_id, self._config),
+            "X-Account-ID": str(account_id),
+        }
         base = self._config.goal_service_url.rstrip("/")
         goals = (await http.get(f"{base}/api/v1/goals", headers=headers)).raise_for_status().json()
 

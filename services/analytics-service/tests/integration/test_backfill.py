@@ -181,3 +181,26 @@ async def test_live_events_win_over_backfill(
     source = doc["_source"]
     assert source["amount"] == 250.0  # backfill (event_ts=0) må ikke overskrive
     assert source["description"] == "Netto (rettet)"
+
+
+@respx.mock
+async def test_terminates_when_source_ignores_pagination(
+    es: AsyncElasticsearch, index_prefix: str, backfill_settings: Settings, respx_mock: respx.MockRouter
+) -> None:
+    """transaction-services find_by_account ignorerer skip/limit og
+    returnerer alt for kontoen på hver side — backfillen skal stoppe på
+    første gentagne side i stedet for at loope uendeligt (observeret i
+    compose-stakken ved 216k+ requests)."""
+    stub_services(respx_mock)
+    # Overstyr transaktions-stubben: ignorér skip helt og returnér en
+    # FULD side hver gang (ellers stopper kort-side-betingelsen loopet
+    # før guarden overhovedet er i spil).
+    full_page = [{**TRANSACTIONS[1], "id": 100 + i, "description": f"Række {i}"} for i in range(PAGE_SIZE)]
+    respx_mock.get("http://transaction-service:8002/api/v1/transactions/").mock(
+        return_value=Response(200, json=full_page)
+    )
+
+    await BackfillRunner(es, backfill_settings).run([USER_ID])
+
+    counts = await index_counts(es, index_prefix)
+    assert counts["transactions"] == PAGE_SIZE
