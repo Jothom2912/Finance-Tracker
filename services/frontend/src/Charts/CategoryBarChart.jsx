@@ -25,9 +25,9 @@ function CustomTooltip({ active, payload }) {
 
   return (
     <div style={{
-      backgroundColor: '#fff',
+      backgroundColor: 'var(--color-bg-surface)',
       padding: '12px 16px',
-      border: '1px solid #e2e8f0',
+      border: '1px solid var(--color-border-light)',
       borderRadius: '8px',
       boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
       minWidth: '180px',
@@ -36,13 +36,13 @@ function CustomTooltip({ active, payload }) {
         {data.name}
       </p>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '4px' }}>
-        <span style={{ color: '#64748b', fontSize: '13px' }}>Forbrug:</span>
+        <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>Forbrug:</span>
         <span style={{ fontWeight: 600, fontSize: '13px' }}>{formatCurrency(data.spent)}</span>
       </div>
       {hasBudget && (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '4px' }}>
-            <span style={{ color: '#64748b', fontSize: '13px' }}>Budget:</span>
+            <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>Budget:</span>
             <span style={{ fontWeight: 600, fontSize: '13px' }}>{formatCurrency(data.budget)}</span>
           </div>
           <div style={{
@@ -50,13 +50,13 @@ function CustomTooltip({ active, payload }) {
             justifyContent: 'space-between',
             gap: '16px',
             paddingTop: '6px',
-            borderTop: '1px solid #e2e8f0',
+            borderTop: '1px solid var(--color-border-light)',
             marginTop: '4px',
           }}>
-            <span style={{ color: isOver ? '#ef4444' : '#22c55e', fontSize: '13px', fontWeight: 600 }}>
+            <span style={{ color: isOver ? 'var(--color-error-500)' : 'var(--color-success-500)', fontSize: '13px', fontWeight: 600 }}>
               {isOver ? 'Over budget:' : 'Resterende:'}
             </span>
-            <span style={{ fontWeight: 700, fontSize: '13px', color: isOver ? '#ef4444' : '#22c55e' }}>
+            <span style={{ fontWeight: 700, fontSize: '13px', color: isOver ? 'var(--color-error-500)' : 'var(--color-success-500)' }}>
               {formatCurrency(Math.abs(data.budget - data.spent))}
             </span>
           </div>
@@ -113,7 +113,7 @@ function CategoryBarChart({ categoryData, budgetItems }) {
             tickFormatter={formatCurrency}
             axisLine={false}
             tickLine={false}
-            tick={{ fontSize: 11, fill: '#94a3b8' }}
+            tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
             domain={[0, Math.ceil(maxValue * 1.1)]}
           />
           <YAxis
@@ -122,7 +122,7 @@ function CategoryBarChart({ categoryData, budgetItems }) {
             width={130}
             axisLine={false}
             tickLine={false}
-            tick={{ fontSize: 12, fill: '#334155', fontWeight: 500 }}
+            tick={{ fontSize: 12, fill: 'var(--color-text-primary)', fontWeight: 500 }}
           />
           <Tooltip
             content={<CustomTooltip />}
@@ -130,11 +130,11 @@ function CategoryBarChart({ categoryData, budgetItems }) {
           />
           <ReferenceLine x={0} stroke="transparent" />
 
-          <Bar dataKey="budget" name="Budget" radius={[4, 4, 4, 4]} fill="#e2e8f0" opacity={0.7}>
+          <Bar dataKey="budget" name="Budget" radius={[4, 4, 4, 4]} fill="var(--color-border-light)" opacity={0.7}>
             {chartData.map((entry, index) => (
               <Cell
                 key={`budget-${index}`}
-                fill={entry.budget > 0 ? '#e2e8f0' : 'transparent'}
+                fill={entry.budget > 0 ? 'var(--color-border-light)' : 'transparent'}
               />
             ))}
           </Bar>
@@ -143,7 +143,7 @@ function CategoryBarChart({ categoryData, budgetItems }) {
             {chartData.map((entry, index) => (
               <Cell
                 key={`spent-${index}`}
-                fill={entry.isOver ? '#ef4444' : entry.color}
+                fill={entry.isOver ? 'var(--color-error-500)' : entry.color}
               />
             ))}
           </Bar>

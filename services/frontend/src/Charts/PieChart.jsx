@@ -52,14 +52,14 @@ const CategoryPieChart = ({ data, colors, onSliceClick }) => {
 
       return (
         <div className="custom-tooltip" style={{
-          backgroundColor: '#fff',
+          backgroundColor: 'var(--color-bg-surface)',
           padding: '10px',
-          border: '1px solid #ccc',
+          border: '1px solid var(--color-border-light)',
           borderRadius: '4px',
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
         }}>
           <p style={{ margin: 0, fontWeight: 'bold' }}>{name}</p>
-          <p style={{ margin: 0, color: '#666' }}>{formattedValue}</p>
+          <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>{formattedValue}</p>
         </div>
       );
     }
@@ -103,7 +103,7 @@ const CategoryPieChart = ({ data, colors, onSliceClick }) => {
               labelLine={false}
               label={renderCustomizedLabel}
               outerRadius={120}
-              fill="#8884d8"
+              fill="var(--color-brand-500)"
               dataKey="value"
               onClick={onSliceClick ? (entry) => onSliceClick(entry?.payload ?? entry) : undefined}
             >
