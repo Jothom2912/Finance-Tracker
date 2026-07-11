@@ -56,3 +56,9 @@ claude.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Obsidian vault config (dev-notes is plain markdown; editor state stays local)
+dev-notes/.obsidian/
+
+# Local ChromaDB sanity-check databases (contain personal transaction data)
+services/ai-service/test_chromadb_sanity*/

@@ -20,7 +20,14 @@ ACCOUNT_SERVICE_TIMEOUT = float(os.getenv("ACCOUNT_SERVICE_TIMEOUT", "5"))
 BUDGET_SERVICE_URL = os.getenv("BUDGET_SERVICE_URL", "http://budget-service:8003")
 BUDGET_SERVICE_TIMEOUT = float(os.getenv("BUDGET_SERVICE_TIMEOUT", "10"))
 
-SECRET_KEY = os.getenv("SECRET_KEY", "")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    # Fail fast: an empty secret would make jwt.decode accept tokens
+    # signed with "" — refuse to start instead.
+    raise RuntimeError(
+        "SECRET_KEY environment variable is not set. "
+        "The gateway cannot verify JWTs without it — set SECRET_KEY before starting."
+    )
 JWT_ALGORITHM = "HS256"
 
 CORS_ORIGINS = [

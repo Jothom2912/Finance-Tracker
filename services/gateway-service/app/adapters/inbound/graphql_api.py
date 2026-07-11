@@ -17,7 +17,11 @@ from app.adapters.outbound.dual_read_analytics import DualReadFinancialAnalytics
 from app.adapters.outbound.legacy_analytics_adapter import LegacyFinancialAnalyticsAdapter
 from app.adapters.outbound.transaction_client import HttpAnalyticsReadRepository
 from app.application.dto import CategoryExpense, TransactionProjection
-from app.application.ports.outbound import IAnalyticsInsightsPort, IFinancialAnalyticsPort
+from app.application.ports.outbound import (
+    IAnalyticsInsightsPort,
+    IAnalyticsReadRepository,
+    IFinancialAnalyticsPort,
+)
 from app.application.service import AnalyticsService
 from app.auth import get_account_id_from_headers
 from app.config import ANALYTICS_READ_SOURCE
@@ -214,18 +218,47 @@ class TransactionSearchResultType:
     items: list[TransactionType]
 
 
+class _MemoizedAnalyticsReadRepository(IAnalyticsReadRepository):
+    """Per-request memoization of transaction fetches, mirroring
+    ``_budget_start_day_cache``: a multi-field dashboard query hits
+    transaction-service once per distinct (account, start, end)."""
+
+    def __init__(self, inner: IAnalyticsReadRepository, cache: dict[tuple, list[dict]]) -> None:
+        self._inner = inner
+        self._cache = cache
+
+    def get_transactions(
+        self,
+        account_id: int,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> list[dict]:
+        key = (account_id, start_date, end_date)
+        if key not in self._cache:
+            self._cache[key] = self._inner.get_transactions(
+                account_id=account_id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        return self._cache[key]
+
+
 def build_financial_analytics_port(
     auth_header: str,
     read_source: str = ANALYTICS_READ_SOURCE,
+    transactions_cache: Optional[dict[tuple, list[dict]]] = None,
 ) -> IFinancialAnalyticsPort:
     """Vælger read-side implementering ud fra ANALYTICS_READ_SOURCE:
     legacy | dual | analytics (cutover = env-flip, ingen kodeændring)."""
     if read_source == "analytics":
         return HttpFinancialAnalyticsRepository(auth_header)
 
+    read_repo: IAnalyticsReadRepository = HttpAnalyticsReadRepository(auth_header)
+    if transactions_cache is not None:
+        read_repo = _MemoizedAnalyticsReadRepository(read_repo, transactions_cache)
     legacy = LegacyFinancialAnalyticsAdapter(
         AnalyticsService(
-            read_repo=HttpAnalyticsReadRepository(auth_header),
+            read_repo=read_repo,
             category_repo=CategoryClient(auth_header),
         )
     )
@@ -242,9 +275,12 @@ async def get_graphql_context(
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ) -> dict[str, Any]:
     auth_header = request.headers.get("authorization", "")
+    transactions_cache: dict[tuple, list[dict]] = {}
     category_client = CategoryClient(auth_header)
     return {
-        "financial_analytics": build_financial_analytics_port(auth_header),
+        "financial_analytics": build_financial_analytics_port(
+            auth_header, transactions_cache=transactions_cache
+        ),
         # Analytics-only kapabiliteter (cashflow, comparison, søgning) —
         # altid ES-read-siden, uanset ANALYTICS_READ_SOURCE.
         "analytics_insights": HttpFinancialAnalyticsRepository(auth_header),
@@ -254,6 +290,7 @@ async def get_graphql_context(
         "account_id": account_id,
         "auth_header": auth_header,
         "_budget_start_day_cache": {},
+        "_transactions_cache": transactions_cache,
     }
 
 

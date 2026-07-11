@@ -26,6 +26,10 @@ class AnalyticsService:
     ):
         self._read_repo = read_repo
         self._category_repo = category_repo
+        # Memoized per service instance (= per request in the GraphQL
+        # context): currentMonthOverview computes two overviews and must
+        # not fetch the taxonomy twice.
+        self._category_name_map_cache: dict[int, str] | None = None
 
     def get_financial_overview(
         self,
@@ -104,6 +108,8 @@ class AnalyticsService:
         )
 
     def _category_name_map(self) -> dict[int, str]:
+        if self._category_name_map_cache is not None:
+            return self._category_name_map_cache
         if self._category_repo is None:
             return {}
         try:
@@ -111,9 +117,14 @@ class AnalyticsService:
         except Exception:
             # Taxonomy source down: degrade to the denormalized names on
             # the transaction rows rather than failing the whole overview.
+            # Cached too — no point retrying within the same request.
             logger.warning("Could not fetch categories from taxonomy source", exc_info=True)
-            return {}
-        return {cat["id"]: cat["name"] for cat in categories if cat.get("id") is not None}
+            self._category_name_map_cache = {}
+            return self._category_name_map_cache
+        self._category_name_map_cache = {
+            cat["id"]: cat["name"] for cat in categories if cat.get("id") is not None
+        }
+        return self._category_name_map_cache
 
     @staticmethod
     def _add_expense_to_bucket(

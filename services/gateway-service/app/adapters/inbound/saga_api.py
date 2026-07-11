@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from app.adapters.outbound.saga_client import SagaServiceClient
 from app.auth import get_user_id_from_headers
@@ -18,8 +18,9 @@ saga_router = APIRouter(prefix="/sagas", tags=["Sagas"])
 def get_saga_status_route(
     saga_id: str,
     user_id: int = Depends(get_user_id_from_headers),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
 ) -> dict[str, Any]:
-    client = SagaServiceClient()
+    client = SagaServiceClient(authorization or "")
     try:
         saga = client.get_saga_status(saga_id)
     except httpx.HTTPStatusError as exc:
