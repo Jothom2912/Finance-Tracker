@@ -483,7 +483,9 @@ services:
     ports:
       - "8007:8004"
     environment:
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # ai-service skal bruge compose-ollama (som ollama-pull fylder med
+      # qwen3:4b + bge-m3) — ikke en evt. Ollama på host-maskinen (P2-16 drift).
+      OLLAMA_BASE_URL: http://ollama:11434
       LLM_MODEL: qwen3:4b
       EMBEDDING_MODEL: bge-m3
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
