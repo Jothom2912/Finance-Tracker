@@ -683,7 +683,7 @@ services:
       # (nul divergenser på overview/expensesByMonth; kun den kendte
       # ordens-klasse på limit-trunkerede transaktionslister). Sæt til
       # "dual" for at gen-verificere, "legacy" for rollback.
-      ANALYTICS_READ_SOURCE: analytics
+      ANALYTICS_READ_SOURCE: ${ANALYTICS_READ_SOURCE:-analytics}
       SECRET_KEY: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
