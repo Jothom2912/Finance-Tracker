@@ -49,6 +49,33 @@ class MonthlyExpenses(BaseModel):
     total_expenses: float
 
 
+class MonthlyCashflow(BaseModel):
+    month: str
+    total_income: float
+    total_expenses: float
+    net: float
+
+
+class CategoryDelta(BaseModel):
+    category_id: Optional[int]
+    category_name: str
+    current_amount: float
+    previous_amount: float
+    change_amount: float
+    # None når previous_amount == 0 (ny kategori) — frontend viser "Ny".
+    change_percent: Optional[float] = None
+
+
+class MonthComparison(BaseModel):
+    month: int
+    year: int
+    previous_month: int
+    previous_year: int
+    total_current: float
+    total_previous: float
+    deltas: list[CategoryDelta]
+
+
 class TransactionProjection(BaseModel):
     id: int
     amount: float

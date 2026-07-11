@@ -12,8 +12,14 @@ from typing import Any, Optional
 
 import httpx
 
-from app.application.dto import FinancialOverview, MonthlyExpenses, TransactionProjection
-from app.application.ports.outbound import IFinancialAnalyticsPort
+from app.application.dto import (
+    FinancialOverview,
+    MonthComparison,
+    MonthlyCashflow,
+    MonthlyExpenses,
+    TransactionProjection,
+)
+from app.application.ports.outbound import IAnalyticsInsightsPort, IFinancialAnalyticsPort
 from app.config import ANALYTICS_SERVICE_TIMEOUT, ANALYTICS_SERVICE_URL
 
 logger = logging.getLogger(__name__)
@@ -24,7 +30,7 @@ class AnalyticsServiceUnavailable(RuntimeError):
         super().__init__("Analytics-læsesiden er utilgængelig. Prøv igen senere.")
 
 
-class HttpFinancialAnalyticsRepository(IFinancialAnalyticsPort):
+class HttpFinancialAnalyticsRepository(IFinancialAnalyticsPort, IAnalyticsInsightsPort):
     def __init__(self, auth_header: str, transport: httpx.BaseTransport | None = None) -> None:
         self._auth_header = auth_header
         self._base = ANALYTICS_SERVICE_URL.rstrip("/")
@@ -107,3 +113,66 @@ class HttpFinancialAnalyticsRepository(IFinancialAnalyticsPort):
             },
         )
         return [TransactionProjection.model_validate(item) for item in data["items"]]
+
+    # ── IAnalyticsInsightsPort (kun ES-read-siden) ──────────────────
+
+    def get_cashflow_by_month(
+        self,
+        account_id: int,
+        months: int = 12,
+        budget_start_day: int = 1,
+    ) -> list[MonthlyCashflow]:
+        data = self._get(
+            "/cashflow-by-month",
+            {
+                "account_id": account_id,
+                "months": months,
+                "budget_start_day": budget_start_day,
+            },
+        )
+        return [MonthlyCashflow.model_validate(row) for row in data]
+
+    def get_month_comparison(
+        self,
+        account_id: int,
+        year: int,
+        month: int,
+        budget_start_day: int = 1,
+    ) -> MonthComparison:
+        data = self._get(
+            "/comparison",
+            {
+                "account_id": account_id,
+                "year": year,
+                "month": month,
+                "budget_start_day": budget_start_day,
+            },
+        )
+        return MonthComparison.model_validate(data)
+
+    def search_transactions(
+        self,
+        account_id: int,
+        query: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        category_id: Optional[int] = None,
+        tx_type: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[int, list[TransactionProjection]]:
+        data = self._get(
+            "/transactions",
+            {
+                "account_id": account_id,
+                "search": query,
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
+                "category_id": category_id,
+                "tx_type": tx_type,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        items = [TransactionProjection.model_validate(item) for item in data["items"]]
+        return int(data["total_count"]), items

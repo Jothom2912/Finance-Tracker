@@ -16,8 +16,8 @@ from app.adapters.outbound.category_client import CategoryClient
 from app.adapters.outbound.dual_read_analytics import DualReadFinancialAnalyticsRepository
 from app.adapters.outbound.legacy_analytics_adapter import LegacyFinancialAnalyticsAdapter
 from app.adapters.outbound.transaction_client import HttpAnalyticsReadRepository
-from app.application.dto import CategoryExpense
-from app.application.ports.outbound import IFinancialAnalyticsPort
+from app.application.dto import CategoryExpense, TransactionProjection
+from app.application.ports.outbound import IAnalyticsInsightsPort, IFinancialAnalyticsPort
 from app.application.service import AnalyticsService
 from app.auth import get_account_id_from_headers
 from app.config import ANALYTICS_READ_SOURCE
@@ -160,6 +160,60 @@ class TopSpendingCategoryType:
     percentage_of_total: float
 
 
+@strawberry.type(
+    description="Overview for one budget month — unified semantics for current AND "
+    "historic months (respects budget start day; fixes the calendar/budget mismatch)"
+)
+class PeriodOverviewType:
+    month: int
+    year: int
+    start_date: date
+    end_date: date
+    is_current: bool
+    total_income: float
+    total_expenses: float
+    net_change_in_period: float
+    expenses_by_category: list[CategoryExpenseEntry]
+    current_account_balance: Optional[float] = None
+    average_monthly_expenses: Optional[float] = None
+    trend: Optional[TrendType] = None
+
+
+@strawberry.type(description="Income vs expenses for one budget month")
+class MonthlyCashflowType:
+    month: str
+    total_income: float
+    total_expenses: float
+    net: float
+
+
+@strawberry.type(description="Spending change for one category between two budget months")
+class CategoryDeltaType:
+    category_id: Optional[int]
+    category_name: str
+    current_amount: float
+    previous_amount: float
+    change_amount: float
+    change_percent: Optional[float] = None  # null = ny kategori ("Ny" i UI)
+
+
+@strawberry.type(description="Month-over-month per-category spending comparison")
+class MonthComparisonType:
+    month: int
+    year: int
+    previous_month: int
+    previous_year: int
+    total_current: float
+    total_previous: float
+    deltas: list[CategoryDeltaType]
+
+
+@strawberry.type(description="Paginated full-text transaction search result (danish analyzer)")
+class TransactionSearchResultType:
+    total_count: int
+    items: list[TransactionType]
+
+
 def build_financial_analytics_port(
     auth_header: str,
     read_source: str = ANALYTICS_READ_SOURCE,
@@ -191,6 +245,9 @@ async def get_graphql_context(
     category_client = CategoryClient(auth_header)
     return {
         "financial_analytics": build_financial_analytics_port(auth_header),
+        # Analytics-only kapabiliteter (cashflow, comparison, søgning) —
+        # altid ES-read-siden, uanset ANALYTICS_READ_SOURCE.
+        "analytics_insights": HttpFinancialAnalyticsRepository(auth_header),
         "account_client": AccountClient(auth_header),
         "budget_client": BudgetClient(auth_header),
         "category_client": category_client,
@@ -215,6 +272,57 @@ def _get_budget_start_day(ctx: dict[str, Any], account_id: int) -> int:
     value = client.get_budget_start_day(account_id)
     cache[account_id] = value
     return value
+
+
+def _to_transaction_type(t: TransactionProjection) -> TransactionType:
+    return TransactionType(
+        id=t.id,
+        amount=t.amount,
+        description=t.description,
+        date=t.date,
+        type=t.type,
+        category_id=t.category_id,
+        category_name=t.category_name,
+        subcategory_id=t.subcategory_id,
+        subcategory_name=t.subcategory_name,
+        account_id=t.account_id,
+        categorization_tier=t.categorization_tier,
+    )
+
+
+def _pct_change(current: float, previous: float) -> float | None:
+    if previous == 0:
+        return None
+    return round(((current - previous) / abs(previous)) * 100, 1)
+
+
+def _build_trend(result: Any, prev_result: Any) -> TrendType:
+    return TrendType(
+        income_change_percent=_pct_change(result.total_income, prev_result.total_income),
+        expense_change_percent=_pct_change(result.total_expenses, prev_result.total_expenses),
+        net_change_diff=round(result.net_change_in_period - prev_result.net_change_in_period, 2),
+        previous_month_income=prev_result.total_income,
+        previous_month_expenses=prev_result.total_expenses,
+    )
+
+
+def _overview_with_trend(
+    ctx: dict[str, Any], account_id: int, year: int, month: int
+) -> tuple[Any, TrendType, date, date]:
+    """Budgetmåneds-overview + trend mod forrige budgetmåned — fælles
+    motor for periodOverview (vilkårlig måned) og currentMonthOverview."""
+    port: IFinancialAnalyticsPort = ctx["financial_analytics"]
+    start_day = _get_budget_start_day(ctx, account_id)
+
+    start, end = budget_period(year, month, start_day)
+    result = port.get_financial_overview(account_id=account_id, start_date=start, end_date=end)
+
+    prev_month = month - 1 if month > 1 else 12
+    prev_year = year if month > 1 else year - 1
+    prev_start, prev_end = budget_period(prev_year, prev_month, start_day)
+    prev_result = port.get_financial_overview(account_id=account_id, start_date=prev_start, end_date=prev_end)
+
+    return result, _build_trend(result, prev_result), start, end
 
 
 @strawberry.type(description="Read-only queries across Finance Tracker domains")
@@ -308,45 +416,42 @@ class Query:
             over_budget_count=data["over_budget_count"],
         )
 
+    @strawberry.field(
+        description="Overview for any budget month with trend vs the previous one. "
+        "Unifies current/historic semantics: the period always follows the account's "
+        "budget start day"
+    )
+    def period_overview(self, info: Info, month: int, year: int) -> PeriodOverviewType:
+        ctx = info.context
+        account_id = _require_account_id(ctx)
+        start_day = _get_budget_start_day(ctx, account_id)
+
+        result, trend, start, end = _overview_with_trend(ctx, account_id, year, month)
+        is_current = determine_budget_month(date.today(), start_day) == (year, month)
+
+        return PeriodOverviewType(
+            month=month,
+            year=year,
+            start_date=start,
+            end_date=end,
+            is_current=is_current,
+            total_income=result.total_income,
+            total_expenses=result.total_expenses,
+            net_change_in_period=result.net_change_in_period,
+            expenses_by_category=_to_expense_entries(result.expenses_by_category),
+            current_account_balance=result.current_account_balance,
+            average_monthly_expenses=result.average_monthly_expenses,
+            trend=trend,
+        )
+
     @strawberry.field(description="Financial overview for the current budget month with trend vs previous month")
     def current_month_overview(self, info: Info) -> CurrentMonthOverviewType:
         ctx = info.context
         account_id = _require_account_id(ctx)
-        port: IFinancialAnalyticsPort = ctx["financial_analytics"]
         start_day = _get_budget_start_day(ctx, account_id)
 
-        today = date.today()
-        cur_year, cur_month = determine_budget_month(today, start_day)
-        start, end = budget_period(cur_year, cur_month, start_day)
-
-        result = port.get_financial_overview(
-            account_id=account_id,
-            start_date=start,
-            end_date=end,
-        )
-
-        prev_month = cur_month - 1 if cur_month > 1 else 12
-        prev_year = cur_year if cur_month > 1 else cur_year - 1
-        prev_start, prev_end = budget_period(prev_year, prev_month, start_day)
-
-        prev_result = port.get_financial_overview(
-            account_id=account_id,
-            start_date=prev_start,
-            end_date=prev_end,
-        )
-
-        def _pct_change(current: float, previous: float) -> float | None:
-            if previous == 0:
-                return None
-            return round(((current - previous) / abs(previous)) * 100, 1)
-
-        trend = TrendType(
-            income_change_percent=_pct_change(result.total_income, prev_result.total_income),
-            expense_change_percent=_pct_change(result.total_expenses, prev_result.total_expenses),
-            net_change_diff=round(result.net_change_in_period - prev_result.net_change_in_period, 2),
-            previous_month_income=prev_result.total_income,
-            previous_month_expenses=prev_result.total_expenses,
-        )
+        cur_year, cur_month = determine_budget_month(date.today(), start_day)
+        result, trend, _, _ = _overview_with_trend(ctx, account_id, cur_year, cur_month)
 
         return CurrentMonthOverviewType(
             start_date=result.start_date,
@@ -358,6 +463,90 @@ class Query:
             current_account_balance=result.current_account_balance,
             average_monthly_expenses=result.average_monthly_expenses,
             trend=trend,
+        )
+
+    @strawberry.field(
+        description="Income vs expenses per budget month, dense window ending at the "
+        "current budget month (analytics read-side)"
+    )
+    def cashflow_by_month(self, info: Info, months: int = 12) -> list[MonthlyCashflowType]:
+        ctx = info.context
+        account_id = _require_account_id(ctx)
+        insights: IAnalyticsInsightsPort = ctx["analytics_insights"]
+        start_day = _get_budget_start_day(ctx, account_id)
+
+        rows = insights.get_cashflow_by_month(account_id=account_id, months=months, budget_start_day=start_day)
+        return [
+            MonthlyCashflowType(
+                month=r.month,
+                total_income=r.total_income,
+                total_expenses=r.total_expenses,
+                net=r.net,
+            )
+            for r in rows
+        ]
+
+    @strawberry.field(
+        description="Largest per-category spending changes vs the previous budget month (analytics read-side)"
+    )
+    def month_comparison(self, info: Info, month: int, year: int, limit: int = 5) -> MonthComparisonType:
+        ctx = info.context
+        account_id = _require_account_id(ctx)
+        insights: IAnalyticsInsightsPort = ctx["analytics_insights"]
+        start_day = _get_budget_start_day(ctx, account_id)
+
+        result = insights.get_month_comparison(
+            account_id=account_id, year=year, month=month, budget_start_day=start_day
+        )
+        return MonthComparisonType(
+            month=result.month,
+            year=result.year,
+            previous_month=result.previous_month,
+            previous_year=result.previous_year,
+            total_current=result.total_current,
+            total_previous=result.total_previous,
+            deltas=[
+                CategoryDeltaType(
+                    category_id=d.category_id,
+                    category_name=d.category_name,
+                    current_amount=d.current_amount,
+                    previous_amount=d.previous_amount,
+                    change_amount=d.change_amount,
+                    change_percent=d.change_percent,
+                )
+                for d in result.deltas[:limit]
+            ],
+        )
+
+    @strawberry.field(description="Full-text transaction search (danish analyzer, analytics read-side)")
+    def search_transactions(
+        self,
+        info: Info,
+        query: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        category_id: Optional[int] = None,
+        tx_type: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> TransactionSearchResultType:
+        ctx = info.context
+        account_id = _require_account_id(ctx)
+        insights: IAnalyticsInsightsPort = ctx["analytics_insights"]
+
+        total_count, items = insights.search_transactions(
+            account_id=account_id,
+            query=query,
+            start_date=start_date,
+            end_date=end_date,
+            category_id=category_id,
+            tx_type=tx_type,
+            limit=limit,
+            offset=offset,
+        )
+        return TransactionSearchResultType(
+            total_count=total_count,
+            items=[_to_transaction_type(t) for t in items],
         )
 
     @strawberry.field(description="Top spending categories for a month")
@@ -421,12 +610,18 @@ class Query:
             for s in subs
         ]
 
-    @strawberry.field(description="List transactions for the active account")
+    @strawberry.field(
+        description="List transactions for the active account. month/year (budget month, "
+        "respects budget start day) and start_date/end_date are mutually exclusive — "
+        "month/year wins when both are provided"
+    )
     def transactions(
         self,
         info: Info,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        month: Optional[int] = None,
+        year: Optional[int] = None,
         category_id: Optional[int] = None,
         tx_type: Optional[str] = None,
         limit: int = 100,
@@ -434,6 +629,10 @@ class Query:
         ctx = info.context
         account_id = _require_account_id(ctx)
         port: IFinancialAnalyticsPort = ctx["financial_analytics"]
+
+        if month is not None and year is not None:
+            start_day = _get_budget_start_day(ctx, account_id)
+            start_date, end_date = budget_period(year, month, start_day)
 
         results = port.list_transactions(
             account_id=account_id,
@@ -443,22 +642,7 @@ class Query:
             tx_type=tx_type,
             limit=limit,
         )
-        return [
-            TransactionType(
-                id=t.id,
-                amount=t.amount,
-                description=t.description,
-                date=t.date,
-                type=t.type,
-                category_id=t.category_id,
-                category_name=t.category_name,
-                subcategory_id=t.subcategory_id,
-                subcategory_name=t.subcategory_name,
-                account_id=t.account_id,
-                categorization_tier=t.categorization_tier,
-            )
-            for t in results
-        ]
+        return [_to_transaction_type(t) for t in results]
 
 
 schema = strawberry.Schema(query=Query)
