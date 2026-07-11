@@ -47,7 +47,7 @@ from app.database import async_session_factory
 from app.domain.entities import CategorizationResultRecord
 from app.domain.value_objects import CategorizationResult, CategorizationTier, Confidence
 from app.models import CategoryModel, ProcessedEventModel, SubCategoryModel
-from app.rule_engine_provider import RuleEngineProvider
+from app.rule_engine_provider import RuleEngineProvider, rule_engine_provider
 
 logging.basicConfig(
     level=logging.INFO,
@@ -219,16 +219,24 @@ class TransactionCreatedConsumer:
             result.confidence.value,
         )
 
-    def _categorize(self, description: str, amount: float) -> CategorizationResult:
-        result = self._rule_engine.match(description, amount)
-        if result is not None:
-            return result
-
+    async def _categorize(self, description: str, amount: float) -> CategorizationResult:
+        """Run the full pipeline through ``CategorizationService``, built
+        from the shared provider (cached under the hood, TTL-refreshed)."""
+        engine = await self._rule_engine_provider.get()
+        service = CategorizationService(
+            rule_engine=engine,
+            fallback_subcategory_id=self._rule_engine_provider.fallback_subcategory_id,
+            fallback_category_id=self._rule_engine_provider.fallback_category_id,
+        )
+        response = await service.categorize(
+            CategorizeRequestDTO(description=description, amount=amount)
+        )
         return CategorizationResult(
-            category_id=self._fallback_cat_id,
-            subcategory_id=self._fallback_sub_id,
-            tier=CategorizationTier.FALLBACK,
-            confidence=Confidence.LOW,
+            category_id=response.category_id,
+            subcategory_id=response.subcategory_id,
+            merchant_id=response.merchant_id,
+            tier=CategorizationTier(response.tier),
+            confidence=Confidence(response.confidence),
         )
 
     @staticmethod
@@ -306,31 +314,9 @@ class TransactionCreatedConsumer:
                 logger.warning("Inbox cleanup failed — will retry next restart", exc_info=True)
 
 
-async def _build_rule_engine() -> tuple[RuleEngine, int, int]:
-    """Build rule engine from DB data at startup."""
-    async with async_session_factory() as session:
-        cat_rows = await session.execute(select(CategoryModel))
-        cats = cat_rows.scalars().all()
-        cat_ids = {c.id for c in cats}
-
-        sub_rows = await session.execute(select(SubCategoryModel))
-        subs = sub_rows.scalars().all()
-
-        subcategory_lookup: dict[str, tuple[int, int]] = {}
-        for sub in subs:
-            if sub.category_id in cat_ids:
-                subcategory_lookup[sub.name] = (sub.id, sub.category_id)
-
-    keyword_mappings = [(kw, mapping["subcategory"]) for kw, mapping in SEED_MERCHANT_MAPPINGS.items()]
-    engine = RuleEngine(keyword_mappings=keyword_mappings, subcategory_lookup=subcategory_lookup)
-
-    fallback = subcategory_lookup.get("Anden", (0, 0))
-    return engine, fallback[0], fallback[1]
-
-
 async def main() -> None:
-    rule_engine, fallback_sub, fallback_cat = await _build_rule_engine()
-    consumer = TransactionCreatedConsumer(rule_engine, fallback_sub, fallback_cat)
+    await rule_engine_provider.warmup()
+    consumer = TransactionCreatedConsumer(rule_engine_provider)
     await consumer.run()
 
 
