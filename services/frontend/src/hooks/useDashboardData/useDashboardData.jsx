@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { gql } from 'graphql-request';
 import { gqlRequest } from '../../api/graphqlClient';
-import { fetchGoals } from '../../api/goals';
+import { useGoals } from '../useGoals';
 import { formatAmount, formatDate } from '../../lib/formatters';
 import { CHART_COLORS as COLORS } from '../../lib/chartColors';
 
@@ -97,18 +97,6 @@ export function dashboardQueryKey(accountId, month, year, months = TREND_MONTHS)
   return ['dashboard', { accountId, month, year, months }];
 }
 
-function mapGoalFromRest(g) {
-  return {
-    id: g.idGoal,
-    name: g.name,
-    targetAmount: g.target_amount,
-    currentAmount: g.current_amount,
-    targetDate: g.target_date,
-    status: g.effective_status,
-    percentComplete: g.progress_percent,
-  };
-}
-
 export function useDashboardData({ month, year } = {}) {
   const accountId = localStorage.getItem('account_id');
   const now = new Date();
@@ -125,11 +113,7 @@ export function useDashboardData({ month, year } = {}) {
       }),
   });
 
-  const { data: goalsData, isLoading: goalsLoading, error: goalsError } = useQuery({
-    queryKey: ['goals', accountId],
-    queryFn: () => fetchGoals(),
-    select: (data) => (data ?? []).map(mapGoalFromRest),
-  });
+  const { goals: goalsData, loading: goalsLoading, error: goalsError } = useGoals();
 
   const overview = data?.periodOverview ?? null;
   const budgetSummary = data?.budgetSummary ?? null;

@@ -2,6 +2,8 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { clearAuthStorage } from '../utils/authStorage';
+import { isTokenExpired } from '../utils/jwt';
+import { handleUnauthorized } from '../utils/handleUnauthorized';
 
 const AuthContext = createContext(null);
 
@@ -18,13 +20,17 @@ export const AuthProvider = ({ children }) => {
     const savedUsername = localStorage.getItem('username');
 
     if (savedToken && savedUserId && savedUsername) {
-      setUser({
-        id: parseInt(savedUserId),
-        username: savedUsername
-      });
-      setToken(savedToken);
+      if (isTokenExpired(savedToken)) {
+        clearAuthStorage();
+      } else {
+        setUser({
+          id: parseInt(savedUserId),
+          username: savedUsername
+        });
+        setToken(savedToken);
+      }
     }
-    
+
     setLoading(false);
   }, []);
 
@@ -50,12 +56,18 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
   };
 
-  const handleLoginFallback = (_username, _accounts) => {
-    // Placeholder: bruges hvis login kræver account selection
-  };
-
   const isAuthenticated = () => {
-    return !!token && !!user;
+    if (!token || !user) return false;
+
+    if (isTokenExpired(token)) {
+      // Token outlived its exp claim while the SPA stayed mounted (bootstrap
+      // already filters out stale tokens on load). Route through the same
+      // cleanup path used for 401 responses.
+      handleUnauthorized();
+      return false;
+    }
+
+    return true;
   };
 
   const getAuthHeader = () => {
@@ -73,8 +85,7 @@ export const AuthProvider = ({ children }) => {
       login,
       logout,
       isAuthenticated,
-      getAuthHeader,
-      handleLoginFallback
+      getAuthHeader
     }}>
       {children}
     </AuthContext.Provider>

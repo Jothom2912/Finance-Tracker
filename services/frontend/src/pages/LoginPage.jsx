@@ -7,7 +7,7 @@ import '../styles/LoginPage.css';
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { login, handleLoginFallback } = useAuth();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({ username_or_email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,11 +27,6 @@ function LoginPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        if (response.status === 403 || errorData.accounts) {
-          handleLoginFallback(formData.username_or_email, errorData.accounts || []);
-          navigate('/account-selector');
-          return;
-        }
         throw new Error(errorData.detail || 'Login failed');
       }
 
