@@ -116,9 +116,15 @@ class DualReadFinancialAnalyticsRepository(IFinancialAnalyticsPort):
 
     def _log_divergence(self, query: str, account_id: int, diffs: list[str]) -> None:
         if diffs:
+            # Diffs indgår i selve beskeden — standard log-formatet
+            # medtager ikke extra-felter, og divergenser skal kunne
+            # læses direkte med `docker logs | grep dual_read`.
             logger.warning(
-                "analytics.dual_read.divergence",
-                extra={"query": query, "account_id": account_id, "diff": diffs},
+                "analytics.dual_read.divergence query=%s account_id=%s diff=%s",
+                query,
+                account_id,
+                "; ".join(diffs),
+                extra={"query_name": query, "account_id": account_id, "diff": diffs},
             )
 
     def get_financial_overview(
