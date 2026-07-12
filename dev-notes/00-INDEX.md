@@ -38,6 +38,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-07-phase1-p1-fixes.md](sessions/2026-07-07-phase1-p1-fixes.md) — Phase 1: all 12 P1 critical fixes shipped, deploy actions, decisions needed.
 - [sessions/2026-07-12-es-integration-rebase.md](sessions/2026-07-12-es-integration-rebase.md) — rebase onto master's ES read-side + stack bring-up: dual-read 0 divergences, backfill, P2-06 crash-loop fixed, Ollama drift fixed.
 - [sessions/2026-07-12-ai-es-chat-wave1.md](sessions/2026-07-12-ai-es-chat-wave1.md) — wave 1 of ai-es-chat plan: AI-01 eval harness (baseline 1.000, saturated), AI-19 live-smoked, ports made real, junk deleted; legacy dashboard now deletable.
+- [sessions/2026-07-13-gateway-legacy-deletion.md](sessions/2026-07-13-gateway-legacy-deletion.md) — EB active-app vars committed; gateway legacy analytics path + ANALYTICS_READ_SOURCE deleted (ADR-0004 cleanup done, live-smoked); audit's full-history-fetch finding class voided.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)
