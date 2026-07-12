@@ -62,10 +62,10 @@ Execution strategy: [plans/2026-07-07-refactoring-roadmap.md](../plans/2026-07-0
 | P3-01 | account-service async migration + monolith-residue purge (dead auth/config/db code, pinned deps, non-root Docker, migrations out of API process) | account | L | open | M23, L |
 | P3-02 | RS256 JWT plan + real S2S credentials (kill budget's forged user tokens) — write ADR first | cross | L | open | H2, M16 |
 | P3-03 | Deprecate legacy `/api/v1/budgets` domain | budget | M | open | M21 |
-| P3-04 | Event-driven ChromaDB sync (consume transaction events; handle deletes); wire or delete decorative ai ports | ai | L | open | M24 |
+| P3-04 | Event-driven ChromaDB sync (consume transaction events; handle deletes); wire or delete decorative ai ports | ai | L | open — ports-halvdelen done 2026-07-12 (signaturer afstemt, dispatcher typet mod ports, konformans-tests); sync-halvdelen løses af AI-20 (ES erstatter ChromaDB) | M24 |
 | P3-05 | Batch user lookup for account groups (kill N+1 HTTP in repo) | account, user | M | open | H26 |
 | P3-06 | Frontend: shared formatters everywhere; camelCase normalization at API boundary; pagination/virtualized tx table; accountId into AuthContext | frontend | M | open | M27, M28 |
-| P3-07 | Repo hygiene: delete root node_modules/package-lock, dumps/, monolith debris, test_chromadb_sanity*, metrics-patch.json relocation, frontend build/ untracking, redundant goal-service-ci.yml | repo | S | open | L |
+| P3-07 | Repo hygiene: delete root node_modules/package-lock, dumps/, monolith debris, test_chromadb_sanity*, metrics-patch.json relocation, frontend build/ untracking, redundant goal-service-ci.yml | repo | S | open — ai-service-delen done 2026-07-12 (test_chromadb_sanity*/ + .pytest_cache slettet fra disk; var allerede gitignorede/utrackede; brudt sanity-script git rm'et) | L |
 | P3-08 | Unify ADR numbering (migrate `docs/ADR-00N-*` into `docs/adr/` sequence) | docs | S | open | L |
 | P3-09 | `event_id` on BaseEvent; projection dedup on it; freeze `event_type` per contract | contracts | M | open | M7, L |
 | P3-10 | Timezone-aware timestamps everywhere (shared util in P2-01 package) | cross | M | open | M18 |

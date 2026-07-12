@@ -28,6 +28,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [plans/2026-07-07-refactoring-roadmap.md](plans/2026-07-07-refactoring-roadmap.md) — 4-phase execution strategy for the technical backlog, with verification approach.
 - [plans/2026-07-07-feature-roadmap.md](plans/2026-07-07-feature-roadmap.md) — feature sequencing interleaved with refactor phases + build sketches for the top items.
 - [plans/2026-07-11-es-analytics-integration.md](plans/2026-07-11-es-analytics-integration.md) — rebase phase-1-fixes onto master's ES analytics read-side (ADR-0004), bring-up/backfill/dual-read re-verify, + AI-19..21 ES-for-chat proposals.
+- [plans/2026-07-12-ai-service-es-chat.md](plans/2026-07-12-ai-service-es-chat.md) — ai-service onto the ES read-store: AI-01 eval gate → AI-19 structured intents → AI-20 hybrid search replaces ChromaDB → AI-21 slots, + cleanup + chat-UI steps.
 
 ## Decisions
 - (none yet — formal ADRs live in `docs/adr/`; log day-to-day decisions here via the `dev-notes-decision` skill)
@@ -36,6 +37,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-07-architecture-audit.md](sessions/2026-07-07-architecture-audit.md) — audit session: what was done, method, open ends.
 - [sessions/2026-07-07-phase1-p1-fixes.md](sessions/2026-07-07-phase1-p1-fixes.md) — Phase 1: all 12 P1 critical fixes shipped, deploy actions, decisions needed.
 - [sessions/2026-07-12-es-integration-rebase.md](sessions/2026-07-12-es-integration-rebase.md) — rebase onto master's ES read-side + stack bring-up: dual-read 0 divergences, backfill, P2-06 crash-loop fixed, Ollama drift fixed.
+- [sessions/2026-07-12-ai-es-chat-wave1.md](sessions/2026-07-12-ai-es-chat-wave1.md) — wave 1 of ai-es-chat plan: AI-01 eval harness (baseline 1.000, saturated), AI-19 live-smoked, ports made real, junk deleted; legacy dashboard now deletable.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)
