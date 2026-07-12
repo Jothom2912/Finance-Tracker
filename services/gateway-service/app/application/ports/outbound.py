@@ -17,11 +17,10 @@ if TYPE_CHECKING:
 class IFinancialAnalyticsPort(ABC):
     """Grov, præ-aggregeret read-side port.
 
-    Erstatter IAnalyticsReadRepository som resolvers afhængighed:
-    aggregering hører hjemme bag porten (ES-aggs i analytics-service),
-    ikke i gatewayen. Implementeringer: legacy-adapter (in-process
-    aggregering, transition), analytics-service HTTP-klient, og
-    dual-read wrapperen der sammenligner de to.
+    Aggregering hører hjemme bag porten (ES-aggs i analytics-service),
+    ikke i gatewayen. Implementering: analytics-service HTTP-klienten
+    (legacy in-process-aggregering + dual-read blev slettet efter
+    ADR-0004-cutoveren).
     """
 
     @abstractmethod
@@ -59,9 +58,9 @@ class IFinancialAnalyticsPort(ABC):
 class IAnalyticsInsightsPort(ABC):
     """Analytics-only læsekapabiliteter (kræver ES-read-siden, ADR-0004).
 
-    Bevidst adskilt fra IFinancialAnalyticsPort: legacy-adapteren kan og
-    skal aldrig implementere disse — cashflow, sammenligning og dansk
-    fuldtekstsøgning findes kun i analytics-service.
+    Holdes adskilt fra IFinancialAnalyticsPort så resolvers erklærer
+    præcist hvilken kapabilitet de bruger — cashflow, sammenligning og
+    dansk fuldtekstsøgning findes kun i analytics-service.
     """
 
     @abstractmethod
@@ -96,17 +95,6 @@ class IAnalyticsInsightsPort(ABC):
         offset: int = 0,
     ) -> tuple[int, list[TransactionProjection]]:
         """Returnerer (total_count, side af resultater)."""
-
-
-class IAnalyticsReadRepository(ABC):
-    @abstractmethod
-    def get_transactions(
-        self,
-        account_id: int,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-    ) -> list[dict]:
-        pass
 
 
 class ICategoryReadRepository(ABC):

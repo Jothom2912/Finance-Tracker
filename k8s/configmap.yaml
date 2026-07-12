@@ -16,7 +16,6 @@ data:
   GATEWAY_SERVICE_URL: "http://gateway-service:8010"
   SAGA_SERVICE_URL: "http://saga-service:8011"
   ANALYTICS_SERVICE_URL: "http://analytics-service:8000"
-  ANALYTICS_READ_SOURCE: "analytics"
   ELASTICSEARCH_URL: "http://elasticsearch:9200"
   FRONTEND_URL: "http://localhost:5173"
   REDIS_URL: "redis://redis:6379"

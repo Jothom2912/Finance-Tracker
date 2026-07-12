@@ -116,13 +116,19 @@ consumer → ES-dokument (<6 s); DELETE → tombstone.
 
 ## Oprydning efter én stabil release
 
-- Slet `LegacyFinancialAnalyticsAdapter`, `DualReadFinancialAnalyticsRepository`,
-  `HttpAnalyticsReadRepository` og gatewayens `AnalyticsService`-aggregering
-  (+ REST-endpoints `/dashboard/*` der stadig bruger legacy-stien direkte).
-  2026-07-12: sidste eksterne forbruger af `/dashboard/overview/` fjernet —
-  ai-service henter nu `category_breakdown`/`largest_expense` fra
-  `/api/v1/analytics/*` (AI-19). Legacy-REST-stien er hermed frit sletbar.
-- Fjern derefter `ANALYTICS_READ_SOURCE`-flaget.
+**UDFØRT 2026-07-13.**
+
+- [x] Slettet `LegacyFinancialAnalyticsAdapter`, `DualReadFinancialAnalyticsRepository`,
+  `HttpAnalyticsReadRepository`, gatewayens `AnalyticsService`-aggregering,
+  REST-endpoints `/dashboard/*` (+ deres tests og `IAnalyticsReadRepository`-porten).
+  Forudsætning: sidste eksterne forbruger af `/dashboard/overview/` fjernet
+  2026-07-12 — ai-service henter nu `category_breakdown`/`largest_expense` fra
+  `/api/v1/analytics/*` (AI-19).
+- [x] `ANALYTICS_READ_SOURCE`-flaget fjernet (config, compose, k8s-configmap);
+  GraphQL-konteksten bygger nu altid `HttpFinancialAnalyticsRepository`.
+  Gatewayen kalder ikke længere transaction-service — `TRANSACTION_SERVICE_URL`
+  fjernet fra gateway-config og compose-`depends_on` peger på analytics-service.
+  Rollback herfra = git revert (flag-rollback findes ikke længere).
 
 ## Prod-hærdning (udestående)
 

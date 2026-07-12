@@ -6,9 +6,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TRANSACTION_SERVICE_URL = os.getenv("TRANSACTION_SERVICE_URL", "http://transaction-service:8002")
-TRANSACTION_SERVICE_TIMEOUT = float(os.getenv("TRANSACTION_SERVICE_TIMEOUT", "10"))
-
 # Taxonomy (categories + subcategories) is owned by categorization-service
 # per ADR-003 — the gateway reads it from there, not transaction-service.
 CATEGORIZATION_SERVICE_URL = os.getenv("CATEGORIZATION_SERVICE_URL", "http://categorization-service:8005")
@@ -37,14 +34,8 @@ CORS_ORIGINS = [
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-TRANSACTION_PAGE_SIZE = 200
-
 SAGA_SERVICE_URL = os.getenv("SAGA_SERVICE_URL", "http://saga-service:8011")
 SAGA_SERVICE_TIMEOUT = float(os.getenv("SAGA_SERVICE_TIMEOUT", "5"))
 
 ANALYTICS_SERVICE_URL = os.getenv("ANALYTICS_SERVICE_URL", "http://analytics-service:8000")
 ANALYTICS_SERVICE_TIMEOUT = float(os.getenv("ANALYTICS_SERVICE_TIMEOUT", "10"))
-# Read-side kilde: legacy (in-process aggregering via transaction-service),
-# dual (server legacy, skygge-læs analytics og log divergenser) eller
-# analytics (ES-backed read store). Cutover = flip til "analytics".
-ANALYTICS_READ_SOURCE = os.getenv("ANALYTICS_READ_SOURCE", "legacy").strip().lower()

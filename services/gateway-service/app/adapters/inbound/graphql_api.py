@@ -13,18 +13,12 @@ from app.adapters.outbound.account_client import AccountClient
 from app.adapters.outbound.analytics_client import HttpFinancialAnalyticsRepository
 from app.adapters.outbound.budget_client import BudgetClient
 from app.adapters.outbound.category_client import CategoryClient
-from app.adapters.outbound.dual_read_analytics import DualReadFinancialAnalyticsRepository
-from app.adapters.outbound.legacy_analytics_adapter import LegacyFinancialAnalyticsAdapter
-from app.adapters.outbound.transaction_client import HttpAnalyticsReadRepository
 from app.application.dto import CategoryExpense, TransactionProjection
 from app.application.ports.outbound import (
     IAnalyticsInsightsPort,
-    IAnalyticsReadRepository,
     IFinancialAnalyticsPort,
 )
-from app.application.service import AnalyticsService
 from app.auth import get_account_id_from_headers
-from app.config import ANALYTICS_READ_SOURCE
 from app.shared.budget_period import budget_period, determine_budget_month
 
 logger = logging.getLogger(__name__)
@@ -218,79 +212,23 @@ class TransactionSearchResultType:
     items: list[TransactionType]
 
 
-class _MemoizedAnalyticsReadRepository(IAnalyticsReadRepository):
-    """Per-request memoization of transaction fetches, mirroring
-    ``_budget_start_day_cache``: a multi-field dashboard query hits
-    transaction-service once per distinct (account, start, end)."""
-
-    def __init__(self, inner: IAnalyticsReadRepository, cache: dict[tuple, list[dict]]) -> None:
-        self._inner = inner
-        self._cache = cache
-
-    def get_transactions(
-        self,
-        account_id: int,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-    ) -> list[dict]:
-        key = (account_id, start_date, end_date)
-        if key not in self._cache:
-            self._cache[key] = self._inner.get_transactions(
-                account_id=account_id,
-                start_date=start_date,
-                end_date=end_date,
-            )
-        return self._cache[key]
-
-
-def build_financial_analytics_port(
-    auth_header: str,
-    read_source: str = ANALYTICS_READ_SOURCE,
-    transactions_cache: Optional[dict[tuple, list[dict]]] = None,
-) -> IFinancialAnalyticsPort:
-    """Vælger read-side implementering ud fra ANALYTICS_READ_SOURCE:
-    legacy | dual | analytics (cutover = env-flip, ingen kodeændring)."""
-    if read_source == "analytics":
-        return HttpFinancialAnalyticsRepository(auth_header)
-
-    read_repo: IAnalyticsReadRepository = HttpAnalyticsReadRepository(auth_header)
-    if transactions_cache is not None:
-        read_repo = _MemoizedAnalyticsReadRepository(read_repo, transactions_cache)
-    legacy = LegacyFinancialAnalyticsAdapter(
-        AnalyticsService(
-            read_repo=read_repo,
-            category_repo=CategoryClient(auth_header),
-        )
-    )
-    if read_source == "dual":
-        return DualReadFinancialAnalyticsRepository(
-            primary=legacy,
-            shadow=HttpFinancialAnalyticsRepository(auth_header),
-        )
-    return legacy
-
-
 async def get_graphql_context(
     request: Request,
     account_id: Optional[int] = Depends(get_account_id_from_headers),
 ) -> dict[str, Any]:
     auth_header = request.headers.get("authorization", "")
-    transactions_cache: dict[tuple, list[dict]] = {}
-    category_client = CategoryClient(auth_header)
+    # Én ES-backed klient implementerer begge read-porte (ADR-0004);
+    # nøglerne holdes adskilt så resolvers afhænger af den smalle port.
+    analytics = HttpFinancialAnalyticsRepository(auth_header)
     return {
-        "financial_analytics": build_financial_analytics_port(
-            auth_header, transactions_cache=transactions_cache
-        ),
-        # Analytics-only kapabiliteter (cashflow, comparison, søgning) —
-        # altid ES-read-siden, uanset ANALYTICS_READ_SOURCE.
-        "analytics_insights": HttpFinancialAnalyticsRepository(auth_header),
+        "financial_analytics": analytics,
+        "analytics_insights": analytics,
         "account_client": AccountClient(auth_header),
         "budget_client": BudgetClient(auth_header),
-        "category_client": category_client,
+        "category_client": CategoryClient(auth_header),
         "account_id": account_id,
         "auth_header": auth_header,
         "_budget_start_day_cache": {},
-        "_transactions_cache": transactions_cache,
     }
 
 

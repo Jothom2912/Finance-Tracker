@@ -5,7 +5,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.inbound.graphql_api import create_graphql_router
-from app.adapters.inbound.rest_api import dashboard_router
 from app.adapters.inbound.saga_api import saga_router
 from app.config import CORS_ORIGINS, ENVIRONMENT, LOG_LEVEL
 
@@ -35,7 +34,6 @@ def health():
     return {"status": "ok", "service": "gateway-service"}
 
 
-app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(saga_router, prefix="/api/v1")
 app.include_router(create_graphql_router(), prefix="/api/v1/graphql")
 
