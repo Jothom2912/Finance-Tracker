@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-from jose import jwt
-
 import app.adapters.inbound.saga_api as saga_api
 import app.adapters.outbound.saga_client as sc
 from app import auth
 from app.adapters.outbound.saga_client import SagaServiceClient
 from app.main import app
+from fastapi.testclient import TestClient
+from jose import jwt
 
 
 class _FakeResponse:
