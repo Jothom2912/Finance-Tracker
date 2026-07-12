@@ -1,14 +1,18 @@
-# Sandbox-specific vars (SANDBOX_ prefix) so they never collide with the
-# production ENABLE_BANKING_* values in .env, which compose auto-loads.
-# The PEM should live OUTSIDE the repo — point ENABLE_BANKING_SANDBOX_PEM_PATH
-# at its real location; the default only eases first-time local setup.
+# ACTIVE_-prefixed vars (deliberately NOT plain ENABLE_BANKING_*, which .env
+# defines for the legacy monolith) select which Enable Banking app compose
+# runs with. Unset → sandbox defaults below. Set ENABLE_BANKING_ACTIVE_APP_ID
+# + ENABLE_BANKING_ACTIVE_PEM_PATH in .env to run against production.
+# The PEM should live OUTSIDE the repo; the default only eases first-time setup.
 x-enable-banking-env: &enable-banking-env
-  ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_SANDBOX_APP_ID:-4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7}
-  ENABLE_BANKING_KEY_PATH: /app/enablebanking-sandbox.pem
-  ENABLE_BANKING_REDIRECT_URI: http://localhost:8009/api/v1/bank/callback
+  ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_ACTIVE_APP_ID:-4fc48bf2-4d73-41e6-a76c-3fcce9ffe9a7}
+  ENABLE_BANKING_KEY_PATH: /app/enablebanking.pem
+  # Production apps only allow https redirect URLs — localhost is rejected.
+  # Default works for sandbox; production uses a registered https URL and the
+  # browser hop is rewritten to localhost manually (or via a tunnel).
+  ENABLE_BANKING_REDIRECT_URI: ${ENABLE_BANKING_ACTIVE_REDIRECT_URI:-http://localhost:8009/api/v1/bank/callback}
 
 x-enable-banking-volumes: &enable-banking-volumes
-  - ${ENABLE_BANKING_SANDBOX_PEM_PATH:-./enablebanking-sandbox.pem}:/app/enablebanking-sandbox.pem:ro
+  - ${ENABLE_BANKING_ACTIVE_PEM_PATH:-./enablebanking-sandbox.pem}:/app/enablebanking.pem:ro
 
 services:
   # === Infrastructure ===
