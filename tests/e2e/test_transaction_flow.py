@@ -13,6 +13,7 @@ Prerequisites:
 Run:
     pytest tests/e2e/test_transaction_flow.py -v -m e2e
 """
+
 from __future__ import annotations
 
 import uuid
@@ -84,14 +85,10 @@ class TestHealthCheck:
 
 class TestCrossServiceAuth:
     @pytest.mark.asyncio()
-    async def test_user_service_token_accepted(
-        self, token: str
-    ) -> None:
+    async def test_user_service_token_accepted(self, token: str) -> None:
         """Token issued by user-service (8001) works on transaction-service (8002)."""
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{TX_SERVICE}/transactions/", headers=_auth(token)
-            )
+            resp = await client.get(f"{TX_SERVICE}/transactions/", headers=_auth(token))
 
         assert resp.status_code == 200
 
@@ -146,9 +143,7 @@ class TestTransactionCRUD:
             assert tx["category_name"] == "Mad & drikke"
             tx_id = tx["id"]
 
-            get_resp = await client.get(
-                f"{TX_SERVICE}/transactions/{tx_id}", headers=headers
-            )
+            get_resp = await client.get(f"{TX_SERVICE}/transactions/{tx_id}", headers=headers)
             assert get_resp.status_code == 200
             assert get_resp.json()["id"] == tx_id
 
@@ -179,9 +174,7 @@ class TestTransactionCRUD:
             )
 
         assert resp.status_code == 200
-        assert all(
-            tx["date"].startswith("2025-01") for tx in resp.json()
-        )
+        assert all(tx["date"].startswith("2025-01") for tx in resp.json())
 
     @pytest.mark.asyncio()
     async def test_delete(self, token: str) -> None:
@@ -200,14 +193,10 @@ class TestTransactionCRUD:
             )
             tx_id = create_resp.json()["id"]
 
-            del_resp = await client.delete(
-                f"{TX_SERVICE}/transactions/{tx_id}", headers=headers
-            )
+            del_resp = await client.delete(f"{TX_SERVICE}/transactions/{tx_id}", headers=headers)
             assert del_resp.status_code == 204
 
-            get_resp = await client.get(
-                f"{TX_SERVICE}/transactions/{tx_id}", headers=headers
-            )
+            get_resp = await client.get(f"{TX_SERVICE}/transactions/{tx_id}", headers=headers)
             assert get_resp.status_code == 404
 
     @pytest.mark.asyncio()
@@ -257,9 +246,7 @@ class TestCSVImport:
             resp = await client.post(
                 f"{TX_SERVICE}/transactions/import-csv",
                 headers=headers,
-                files={
-                    "file": ("data.csv", csv_content, "text/csv")
-                },
+                files={"file": ("data.csv", csv_content, "text/csv")},
             )
 
             assert resp.status_code == 200
@@ -268,9 +255,7 @@ class TestCSVImport:
             assert result["skipped"] == 0
             assert result["errors"] == []
 
-            list_resp = await client.get(
-                f"{TX_SERVICE}/transactions/", headers=headers
-            )
+            list_resp = await client.get(f"{TX_SERVICE}/transactions/", headers=headers)
             assert len(list_resp.json()) >= 3
 
 
@@ -306,9 +291,7 @@ class TestPlannedTransactions:
                 params={"active_only": "true"},
             )
             assert list_resp.status_code == 200
-            assert any(
-                p["id"] == planned_id for p in list_resp.json()
-            )
+            assert any(p["id"] == planned_id for p in list_resp.json())
 
             update_resp = await client.patch(
                 f"{TX_SERVICE}/planned-transactions/{planned_id}",
@@ -329,6 +312,4 @@ class TestPlannedTransactions:
                 headers=headers,
                 params={"active_only": "true"},
             )
-            assert not any(
-                p["id"] == planned_id for p in list_resp2.json()
-            )
+            assert not any(p["id"] == planned_id for p in list_resp2.json())

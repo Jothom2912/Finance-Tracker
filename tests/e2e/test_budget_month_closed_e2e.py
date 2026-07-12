@@ -74,18 +74,48 @@ async def _poll_until(
 
 def _psql_budget(sql: str) -> str:
     result = subprocess.run(
-        ["docker", "compose", "exec", "-T", "postgres-budget",
-         "psql", "-U", "budget_service", "-d", "budget_service", "-t", "-c", sql],
-        capture_output=True, text=True, check=True,
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postgres-budget",
+            "psql",
+            "-U",
+            "budget_service",
+            "-d",
+            "budget_service",
+            "-t",
+            "-c",
+            sql,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 
 
 def _psql_goals(sql: str) -> str:
     result = subprocess.run(
-        ["docker", "compose", "exec", "-T", "postgres-goals",
-         "psql", "-U", "goal_service", "-d", "goals", "-t", "-c", sql],
-        capture_output=True, text=True, check=True,
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postgres-goals",
+            "psql",
+            "-U",
+            "goal_service",
+            "-d",
+            "goals",
+            "-t",
+            "-c",
+            sql,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 
@@ -138,9 +168,7 @@ async def test_context():
         goal_id = resp.json()["idGoal"]
 
         # 4. Set is_default_savings_goal=true via SQL (not exposed in API)
-        _psql_goals(
-            f'UPDATE goals SET is_default_savings_goal = TRUE WHERE "idGoal" = {goal_id};'
-        )
+        _psql_goals(f'UPDATE goals SET is_default_savings_goal = TRUE WHERE "idGoal" = {goal_id};')
 
         # 5. Use a seeded expense category (exists in both categorization-service
         #    and transaction-service via category sync events)
@@ -230,9 +258,7 @@ class TestBudgetMonthClosedE2E:
                 _check_goal_allocation,
                 desc="goal surplus allocation",
             )
-            assert allocated == ctx["expected_surplus"], (
-                f"Expected surplus {ctx['expected_surplus']}, got {allocated}"
-            )
+            assert allocated == ctx["expected_surplus"], f"Expected surplus {ctx['expected_surplus']}, got {allocated}"
 
         # Verify outbox row is published (filter by aggregate_id to avoid stale rows)
         outbox_status = _psql_budget(
@@ -242,9 +268,7 @@ class TestBudgetMonthClosedE2E:
         assert "published" in outbox_status, f"Outbox row not published: {outbox_status}"
 
         # Verify closed_at is set
-        closed_at = _psql_budget(
-            f"SELECT closed_at FROM monthly_budgets WHERE id = {ctx['budget_id']};"
-        )
+        closed_at = _psql_budget(f"SELECT closed_at FROM monthly_budgets WHERE id = {ctx['budget_id']};")
         assert closed_at and closed_at != "", f"closed_at not set on budget {ctx['budget_id']}"
 
     @pytest.mark.asyncio(loop_scope="module")
@@ -253,10 +277,12 @@ class TestBudgetMonthClosedE2E:
         ctx = test_context
         headers = _auth(ctx["token"])
 
-        count_before = int(_psql_budget(
-            "SELECT COUNT(*) FROM outbox_events "
-            f"WHERE event_type = 'budget.month_closed' AND aggregate_id = '{ctx['budget_id']}';"
-        ))
+        count_before = int(
+            _psql_budget(
+                "SELECT COUNT(*) FROM outbox_events "
+                f"WHERE event_type = 'budget.month_closed' AND aggregate_id = '{ctx['budget_id']}';"
+            )
+        )
 
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             resp = await client.post(
@@ -264,9 +290,7 @@ class TestBudgetMonthClosedE2E:
                 f"?account_id={ctx['account_id']}&month=6&year=2026&budget_start_day=1",
                 headers=headers,
             )
-            assert resp.status_code == 409, (
-                f"Expected 409, got {resp.status_code}: {resp.text}"
-            )
+            assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text}"
 
             # Verify goal allocation unchanged
             resp = await client.get(
@@ -279,13 +303,13 @@ class TestBudgetMonthClosedE2E:
             )
 
         # Verify no new outbox row was created
-        count_after = int(_psql_budget(
-            "SELECT COUNT(*) FROM outbox_events "
-            f"WHERE event_type = 'budget.month_closed' AND aggregate_id = '{ctx['budget_id']}';"
-        ))
-        assert count_after == count_before, (
-            f"Outbox rows increased from {count_before} to {count_after} despite 409"
+        count_after = int(
+            _psql_budget(
+                "SELECT COUNT(*) FROM outbox_events "
+                f"WHERE event_type = 'budget.month_closed' AND aggregate_id = '{ctx['budget_id']}';"
+            )
         )
+        assert count_after == count_before, f"Outbox rows increased from {count_before} to {count_after} despite 409"
 
     @pytest.mark.asyncio(loop_scope="module")
     async def test_2b_consumer_dedup_handles_redelivery(self, test_context):
@@ -335,10 +359,12 @@ class TestBudgetMonthClosedE2E:
             )
 
         # Verify exactly one allocation row exists
-        allocation_count = int(_psql_goals(
-            "SELECT COUNT(*) FROM goal_allocation_history "
-            f"WHERE source_key = 'budget.month_closed:{ctx['account_id']}:2026:6';"
-        ))
+        allocation_count = int(
+            _psql_goals(
+                "SELECT COUNT(*) FROM goal_allocation_history "
+                f"WHERE source_key = 'budget.month_closed:{ctx['account_id']}:2026:6';"
+            )
+        )
         assert allocation_count == 1, (
             f"Expected exactly 1 allocation row, found {allocation_count} — "
             "source_key dedup did not prevent double allocation"

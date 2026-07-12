@@ -6,6 +6,7 @@ Prerequisites:
 Run:
     pytest tests/e2e/test_full_flow.py -v -m e2e
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -151,9 +152,7 @@ class TestSagaFlow:
         user = _unique_user()
 
         async with httpx.AsyncClient(timeout=20.0) as client:
-            reg_resp = await client.post(
-                f"{USER_SERVICE}/register", json=user
-            )
+            reg_resp = await client.post(f"{USER_SERVICE}/register", json=user)
             assert reg_resp.status_code == 201
             user_data = reg_resp.json()
             user_id = user_data["id"]
