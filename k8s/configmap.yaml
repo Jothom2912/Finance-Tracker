@@ -21,7 +21,6 @@ data:
   FRONTEND_URL: "http://localhost:5173"
   REDIS_URL: "redis://redis:6379"
   OLLAMA_BASE_URL: "http://ollama:11434"
-  LLM_MODEL: "qwen3:4b"
   EMBEDDING_MODEL: "bge-m3"
   CHROMADB_PATH: "/data/chromadb"
   RETRIEVAL_TOP_K: "10"

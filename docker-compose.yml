@@ -486,10 +486,9 @@ services:
       # ai-service skal bruge compose-ollama (som ollama-pull fylder med
       # qwen3:4b + bge-m3) — ikke en evt. Ollama på host-maskinen (P2-16 drift).
       OLLAMA_BASE_URL: http://ollama:11434
-      LLM_MODEL: qwen3:4b
       EMBEDDING_MODEL: bge-m3
       TRANSACTION_SERVICE_URL: http://transaction-service:8002
-      GATEWAY_SERVICE_URL: http://gateway-service:8010
+      ANALYTICS_SERVICE_URL: http://analytics-service:8000
       BUDGET_SERVICE_URL: http://budget-service:8003
       CHROMADB_PATH: /data/chromadb
       RETRIEVAL_TOP_K: "10"
@@ -503,7 +502,7 @@ services:
         condition: service_completed_successfully
       transaction-service:
         condition: service_started
-      gateway-service:
+      analytics-service:
         condition: service_started
       budget-service:
         condition: service_started

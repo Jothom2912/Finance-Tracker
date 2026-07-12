@@ -1,4 +1,8 @@
-"""Analytics HTTP client — fetches structured data from gateway-service and budget-service.
+"""Structured-data HTTP client — analytics-service (ES read-store) + budget-service.
+
+largest_expense and category_breakdown are served by analytics-service
+(`/api/v1/analytics/*`, exact ES aggregations per ADR-0004 — AI-19).
+budget_status stays on budget-service: budgets are not projected into ES.
 
 Receives token and account_id per-request (constructor injection) so the port
 interface stays clean of HTTP/auth concerns. Each method maps to one backend
@@ -13,6 +17,7 @@ from __future__ import annotations
 import calendar
 import logging
 import time
+from typing import Any
 
 import httpx
 
@@ -32,7 +37,9 @@ from app.domain.models import (
 
 logger = logging.getLogger(__name__)
 
-_EXPENSE_PAGE_SIZE = 200
+# Slot-kategori er et NAVN (AI-21 mapper til id senere); indtil da filtreres
+# klient-side, så vi henter en større side når kategori-filter er sat.
+_CATEGORY_FILTER_PAGE_SIZE = 200
 
 
 def _raise_for_status(resp: httpx.Response) -> None:
@@ -71,6 +78,22 @@ class AnalyticsClient:
             "X-Account-ID": str(account_id),
         }
 
+    async def _get_json(
+        self,
+        base_url: str,
+        path: str,
+        params: dict[str, Any],
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        async with httpx.AsyncClient(base_url=base_url, timeout=15.0) as client:
+            resp = await client.get(
+                path,
+                params=params,
+                headers=headers or {"Authorization": f"Bearer {self._token}"},
+            )
+            _raise_for_status(resp)
+        return resp.json()
+
     async def get_largest_expenses(
         self,
         period: str,
@@ -78,46 +101,31 @@ class AnalyticsClient:
         category: str | None = None,
         limit: int = 5,
     ) -> tuple[list[TransactionItem], float]:
-        """Fetch expenses for a period, sorted by amount descending.
+        """Fetch the largest expenses for a period, sorted server-side by |amount|.
 
         Returns (items, elapsed_ms).
 
-        Assumes ≤200 expense transactions per month per user. If this limit is
-        hit, a warning is logged — the largest expense could fall outside the
-        window. Correct fix requires server-side sort_by=amount support or
-        paginated fetching.
+        analytics-service sorts on the ES `amount_abs` field, so the result is
+        exact regardless of how many expenses the period holds (the old
+        transaction-service path fetched 200 rows and sorted client-side).
         """
         t0 = time.perf_counter()
         start_date, end_date = _period_to_date_range(period)
 
         params: dict[str, str | int] = {
+            "account_id": self._account_id,
             "start_date": start_date,
             "end_date": end_date,
-            "transaction_type": "expense",
-            "limit": _EXPENSE_PAGE_SIZE,
+            "tx_type": "expense",
+            "sort": "amount_desc",
+            "limit": _CATEGORY_FILTER_PAGE_SIZE if category else limit,
         }
 
-        async with httpx.AsyncClient(
-            base_url=settings.TRANSACTION_SERVICE_URL,
-            timeout=15.0,
-        ) as client:
-            resp = await client.get(
-                "/api/v1/transactions/",
-                params=params,
-                # transaction-service uses JWT user_id for filtering, not X-Account-ID
-                headers={"Authorization": f"Bearer {self._token}"},
-            )
-            _raise_for_status(resp)
-
-        raw_items = resp.json()
-
-        if len(raw_items) >= _EXPENSE_PAGE_SIZE:
-            logger.warning(
-                "Hit expense page limit (%d) for period %s — largest expense "
-                "may be missing from results. Consider paginated fetching.",
-                _EXPENSE_PAGE_SIZE,
-                period,
-            )
+        data = await self._get_json(
+            settings.ANALYTICS_SERVICE_URL,
+            "/api/v1/analytics/transactions",
+            params,
+        )
 
         items = [
             TransactionItem(
@@ -127,13 +135,20 @@ class AnalyticsClient:
                 category=t.get("category_name") or "Ukategoriseret",
                 description=t.get("description") or "",
             )
-            for t in raw_items
+            for t in data.get("items", [])
         ]
 
         if category:
             items = [i for i in items if i.category.lower() == category.lower()]
+            if int(data.get("total_count", 0)) > _CATEGORY_FILTER_PAGE_SIZE:
+                logger.warning(
+                    "Category-filtered largest_expense over %d rows for period %s "
+                    "— result may be incomplete until the slot resolves to "
+                    "category_id (AI-21).",
+                    _CATEGORY_FILTER_PAGE_SIZE,
+                    period,
+                )
 
-        items.sort(key=lambda i: i.amount, reverse=True)
         result = items[:limit]
         elapsed_ms = (time.perf_counter() - t0) * 1000
         logger.info("Fetched %d largest expenses in %.0fms", len(result), elapsed_ms)
@@ -143,25 +158,23 @@ class AnalyticsClient:
         self,
         period: str,
     ) -> tuple[list[CategoryBreakdownItem], float]:
-        """Fetch expense breakdown by category from gateway-service dashboard.
+        """Fetch expense breakdown by category from analytics-service overview.
 
         Returns (items, elapsed_ms).
         """
         t0 = time.perf_counter()
         start_date, end_date = _period_to_date_range(period)
 
-        async with httpx.AsyncClient(
-            base_url=settings.GATEWAY_SERVICE_URL,
-            timeout=15.0,
-        ) as client:
-            resp = await client.get(
-                "/api/v1/dashboard/overview/",
-                params={"start_date": start_date, "end_date": end_date},
-                headers=self._headers,
-            )
-            _raise_for_status(resp)
+        data = await self._get_json(
+            settings.ANALYTICS_SERVICE_URL,
+            "/api/v1/analytics/overview",
+            {
+                "account_id": self._account_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+        )
 
-        data = resp.json()
         # ADR-003 shape: list of {category_id, category_name, amount,
         # subcategories[]} (id-keyed aggregation, sorted by amount desc).
         expenses_by_cat: list[dict] = data.get("expenses_by_category", [])
@@ -195,18 +208,13 @@ class AnalyticsClient:
         t0 = time.perf_counter()
         year, month = period.split("-")
 
-        async with httpx.AsyncClient(
-            base_url=settings.BUDGET_SERVICE_URL,
-            timeout=15.0,
-        ) as client:
-            resp = await client.get(
-                "/api/v1/monthly-budgets/summary",
-                params={"month": int(month), "year": int(year)},
-                headers=self._headers,
-            )
-            _raise_for_status(resp)
+        data = await self._get_json(
+            settings.BUDGET_SERVICE_URL,
+            "/api/v1/monthly-budgets/summary",
+            {"month": int(month), "year": int(year)},
+            headers=self._headers,
+        )
 
-        data = resp.json()
         items = [
             BudgetStatusItem(
                 category_name=item["category_name"],

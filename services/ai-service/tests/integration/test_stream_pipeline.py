@@ -56,27 +56,35 @@ async def test_largest_expense_end_to_end(
         '{"intent": "largest_expense", "period": "2026-04", "slots": {}}'
     )
 
-    # Transaction-service returns expenses
+    # analytics-service /api/v1/analytics/transactions (AI-19): serverside
+    # amount_desc-sortering, TransactionSearchResultDTO-form.
     mock_http_response = MagicMock()
     mock_http_response.is_success = True
-    mock_http_response.json.return_value = [
-        {
-            "id": 42,
-            "date": "2026-04-27",
-            "amount": "-288.00",
-            "category_name": "Anden",
-            "description": "TAXI 4X27",
-            "transaction_type": "expense",
-        },
-        {
-            "id": 43,
-            "date": "2026-04-15",
-            "amount": "-150.00",
-            "category_name": "Dagligvarer",
-            "description": "Netto",
-            "transaction_type": "expense",
-        },
-    ]
+    mock_http_response.json.return_value = {
+        "total_count": 2,
+        "items": [
+            {
+                "id": 42,
+                "date": "2026-04-27",
+                "amount": "-288.00",
+                "category_name": "Anden",
+                "description": "TAXI 4X27",
+                "type": "expense",
+                "category_id": None,
+                "account_id": 1,
+            },
+            {
+                "id": 43,
+                "date": "2026-04-15",
+                "amount": "-150.00",
+                "category_name": "Dagligvarer",
+                "description": "Netto",
+                "type": "expense",
+                "category_id": 3,
+                "account_id": 1,
+            },
+        ],
+    }
 
     mock_client_instance = AsyncMock()
     mock_client_instance.get.return_value = mock_http_response

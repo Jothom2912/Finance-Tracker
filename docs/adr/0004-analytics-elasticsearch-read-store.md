@@ -119,6 +119,9 @@ consumer → ES-dokument (<6 s); DELETE → tombstone.
 - Slet `LegacyFinancialAnalyticsAdapter`, `DualReadFinancialAnalyticsRepository`,
   `HttpAnalyticsReadRepository` og gatewayens `AnalyticsService`-aggregering
   (+ REST-endpoints `/dashboard/*` der stadig bruger legacy-stien direkte).
+  2026-07-12: sidste eksterne forbruger af `/dashboard/overview/` fjernet —
+  ai-service henter nu `category_breakdown`/`largest_expense` fra
+  `/api/v1/analytics/*` (AI-19). Legacy-REST-stien er hermed frit sletbar.
 - Fjern derefter `ANALYTICS_READ_SOURCE`-flaget.
 
 ## Prod-hærdning (udestående)

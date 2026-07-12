@@ -74,8 +74,8 @@ DoneEvent (med latency metadata)
 | `LLM_ROUTER_MODEL` | `qwen3:4b` | Model til intent classification |
 | `LLM_RESPONDER_MODEL` | `qwen3:8b` | Model til prose generation |
 | `EMBEDDING_MODEL` | `bge-m3` | Model til text embeddings |
-| `TRANSACTION_SERVICE_URL` | `http://transaction-service:8002` | Transaction service URL |
-| `GATEWAY_SERVICE_URL` | `http://gateway-service:8010` | Gateway service URL (dashboard data) |
+| `TRANSACTION_SERVICE_URL` | `http://transaction-service:8002` | Transaction service URL (kun ingest) |
+| `ANALYTICS_SERVICE_URL` | `http://analytics-service:8000` | Analytics-service (ES read-store) — largest_expense + category_breakdown |
 | `BUDGET_SERVICE_URL` | `http://budget-service:8003` | Budget service URL |
 | `CHROMADB_PATH` | `/data/chromadb` | Persistent ChromaDB storage path |
 | `RETRIEVAL_TOP_K` | `10` | Antal resultater ved semantisk søgning |
@@ -92,7 +92,7 @@ DoneEvent (med latency metadata)
 
 ## Known Limitations
 
-- Semantisk søgning er svag til aggregations-queries ("total brugt på dagligvarer i april") — finder *lignende* tekster, ikke *alle* relevante.
+- Semantisk søgning er svag til aggregations-queries ("total brugt på dagligvarer i april") — finder *lignende* tekster, ikke *alle* relevante. `largest_expense`/`category_breakdown` er dog eksakte (ES-aggregeringer via analytics-service, AI-19).
 - Dato-parsing er begrænset til simpel dansk måned + år regex.
 - Ingen chat-historik / multi-turn conversation support.
-- `get_largest_expenses` henter max 200 transaktioner client-side — kræver server-side `sort_by=amount` for at skalere.
+- Kategori-slot på `largest_expense` filtrerer stadig på navn klient-side (200-rækkers side) — løses af AI-21 (navn → category_id via ES taxonomy-indekset).

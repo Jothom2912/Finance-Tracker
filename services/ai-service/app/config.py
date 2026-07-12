@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     LLM_RESPONDER_KEEP_ALIVE: int = -1
     EMBEDDING_MODEL: str = "bge-m3"
     TRANSACTION_SERVICE_URL: str = "http://transaction-service:8002"
-    GATEWAY_SERVICE_URL: str = "http://gateway-service:8010"
+    ANALYTICS_SERVICE_URL: str = "http://analytics-service:8000"
     BUDGET_SERVICE_URL: str = "http://budget-service:8003"
     CHROMADB_PATH: str = "/data/chromadb"
     RETRIEVAL_TOP_K: int = 10
