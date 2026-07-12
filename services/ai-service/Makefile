@@ -19,11 +19,14 @@ install-deps: ## Install all dependencies (prod + dev)
 dev: ## Start service with hot-reload on port 8004
 	uv run uvicorn app.main:app --reload --port 8004
 
-test: ## Run all tests
-	uv run pytest tests/ -v
+test: ## Run all tests (except live-Ollama eval — see test-eval)
+	uv run pytest tests/ -v -m "not eval"
 
 test-unit: ## Run unit tests only
 	uv run pytest tests/unit/ -v
+
+test-eval: ## Run the AI-01 quality eval (needs live Ollama with bge-m3 + qwen3:4b, e.g. OLLAMA_BASE_URL=http://localhost:11435)
+	uv run pytest tests/eval/ -v -m eval -s
 
 lint: ## Run ruff linter
 	uv run ruff check .
