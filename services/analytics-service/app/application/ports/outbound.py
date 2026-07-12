@@ -211,6 +211,7 @@ class IAnalyticsQueryPort(ABC):
         tx_type: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
+        sort: str = "date_desc",
     ) -> TransactionSearchResultDTO:
         pass
 

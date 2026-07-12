@@ -153,3 +153,15 @@ class TestSearchValidation:
                 start_date=date(2026, 7, 1),
                 end_date=date(2026, 6, 1),
             )
+
+    async def test_sort_defaults_to_date_desc(self) -> None:
+        service, port = make_service()
+        await service.search_transactions(user_id=7, account_id=1)
+
+        assert port.calls[-1][1]["sort"] == "date_desc"
+
+    async def test_sort_passes_through_amount_desc(self) -> None:
+        service, port = make_service()
+        await service.search_transactions(user_id=7, account_id=1, sort="amount_desc")
+
+        assert port.calls[-1][1]["sort"] == "amount_desc"

@@ -152,6 +152,7 @@ class AnalyticsQueryService:
         tx_type: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
+        sort: str = "date_desc",
     ) -> TransactionSearchResultDTO:
         if start_date and end_date and start_date > end_date:
             raise InvalidPeriodError()
@@ -165,6 +166,7 @@ class AnalyticsQueryService:
             tx_type=tx_type,
             limit=limit,
             offset=offset,
+            sort=sort,
         )
 
     @execute_with_logging("analytics.top_merchants")

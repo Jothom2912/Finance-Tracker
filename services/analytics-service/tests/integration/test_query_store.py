@@ -347,6 +347,13 @@ class TestSearchTransactions:
         assert result.total_count == 5
         assert len(result.items) == 2
 
+    async def test_amount_desc_sorts_on_amount_abs(self, query_store: EsAnalyticsQueryStore) -> None:
+        # AI-19: largest_expense-intentens serverside-sortering.
+        result = await query_store.search_transactions(
+            user_id=USER_ID, account_id=ACCOUNT_ID, tx_type="expense", sort="amount_desc"
+        )
+        assert [t.id for t in result.items] == [2, 4, 3, 5]
+
 
 class TestBudgetStartDayLookup:
     async def test_reads_from_accounts_projection_with_tenant_check(

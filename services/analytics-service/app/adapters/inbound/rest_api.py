@@ -107,6 +107,7 @@ async def transactions(
     tx_type: Optional[str] = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    sort: str = Query(default="date_desc", pattern="^(date_desc|amount_desc)$"),
     user_id: int = Depends(get_current_user_id),
     service: AnalyticsQueryService = Depends(get_query_service),
 ) -> TransactionSearchResultDTO:
@@ -120,6 +121,7 @@ async def transactions(
         tx_type=tx_type,
         limit=limit,
         offset=offset,
+        sort=sort,
     )
 
 

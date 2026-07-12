@@ -51,6 +51,18 @@ from app.domain.exceptions import ReadStoreUnavailableError
 UNCATEGORIZED_LABEL = "Ukategoriseret"
 NO_SUBCATEGORY_LABEL = "(Ingen underkategori)"
 
+# sort-param → ES sort-klausul; transaction_id som deterministisk tiebreak.
+TRANSACTION_SORTS: dict[str, list[dict[str, Any]]] = {
+    "date_desc": [
+        {"tx_date": {"order": "desc"}},
+        {"transaction_id": {"order": "desc"}},
+    ],
+    "amount_desc": [
+        {"amount_abs": {"order": "desc"}},
+        {"transaction_id": {"order": "desc"}},
+    ],
+}
+
 # terms-agg kan ikke returnere null-keys; -1 er sentinel for "mangler"
 # (rigtige ids er positive serials).
 MISSING_ID = -1
@@ -469,6 +481,7 @@ class EsAnalyticsQueryStore(IAnalyticsQueryPort):
         tx_type: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
+        sort: str = "date_desc",
     ) -> TransactionSearchResultDTO:
         filters = self._base_filters(user_id, account_id, start_date, end_date)
         if category_id is not None:
@@ -485,10 +498,7 @@ class EsAnalyticsQueryStore(IAnalyticsQueryPort):
         response = await self._es.search(
             index=self._tx_alias,
             query=query,
-            sort=[
-                {"tx_date": {"order": "desc"}},
-                {"transaction_id": {"order": "desc"}},
-            ],
+            sort=TRANSACTION_SORTS[sort],
             from_=offset,
             size=limit,
             track_total_hits=True,
