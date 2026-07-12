@@ -1,35 +1,58 @@
 ---
-title: gateway-service (BFF) + analytics/notification stubs + monolith footprint
-updated: 2026-07-07
-source: architecture audit 2026-07-07
+title: gateway-service (BFF) + monolith footprint
+updated: 2026-07-13
+source: architecture audit 2026-07-07; ADR-0004 cutover + legacy-path deletion 2026-07-13
 ---
 
 # gateway-service (port 8010)
 
-Read-only BFF. Three inbound surfaces under `/api/v1` (`app/main.py:38-40`):
+Read-only BFF. Two inbound surfaces under `/api/v1` (`app/main.py`):
 
-1. **REST dashboard** — `adapters/inbound/rest_api.py`: `/dashboard/overview/`, `/dashboard/expenses-by-month/`.
-2. **GraphQL (Strawberry)** — `adapters/inbound/graphql_api.py`: query-only root with 9 fields (`financialOverview`, `expensesByMonth`, `budgetSummary`, `currentMonthOverview`, `topSpendingCategories`, `categories`, `subcategories`, `transactions`). No mutations/subscriptions.
-3. **Saga status** — `adapters/inbound/saga_api.py`: `GET /sagas/{id}` proxied to saga-service with gateway-side ownership check (the *model* error-handling code in this service).
+1. **GraphQL (Strawberry)** — `adapters/inbound/graphql_api.py`: query-only root
+   (`financialOverview`, `expensesByMonth`, `budgetSummary`, `periodOverview`,
+   `currentMonthOverview`, `cashflowByMonth`, `monthComparison`, `searchTransactions`,
+   `topSpendingCategories`, `categories`, `subcategories`, `transactions`).
+   No mutations/subscriptions.
+2. **Saga status** — `adapters/inbound/saga_api.py`: `GET /sagas/{id}` proxied to
+   saga-service with gateway-side ownership check.
 
-Layering: hexagonal-lite. Real aggregation logic lives in `app/application/service.py` (`AnalyticsService` — misleading name given the separate analytics-service stub; think `DashboardReadService`). 5 outbound HTTP clients (transaction, categorization, account, budget, saga) — all **sync `httpx.Client`, new client per call**, per-service timeouts, no retries/circuit breakers/caching.
+**REST `/dashboard/*` er slettet (2026-07-13)** sammen med hele legacy-read-stien:
+`AnalyticsService`-aggregeringen, `HttpAnalyticsReadRepository` (transaction-service
+pagineret fuldhistorik-fetch), `LegacyFinancialAnalyticsAdapter`,
+`DualReadFinancialAnalyticsRepository` og `ANALYTICS_READ_SOURCE`-flaget.
+Se ADR-0004 §Oprydning. Gatewayen kalder ikke længere transaction-service.
 
-Auth: JWT validated locally (own copy of `app/auth.py`, one of 9 near-identical copies repo-wide); raw `Authorization` passed through downstream. Account scoping via `X-Account-ID`, ownership verified by a live HTTP call to account-service **per request**; missing header falls back to "first account in list" heuristic.
+## Read-side (as-built efter ADR-0004)
 
-## Read flow (as-built, worst case: GraphQL `currentMonthOverview`)
+Alle finansielle reads går gennem `HttpFinancialAnalyticsRepository`
+(`adapters/outbound/analytics_client.py`) → analytics-service `/api/v1/analytics/*`
+(ES-backed, præ-aggregeret). Én instans pr. request implementerer begge porte
+(`IFinancialAnalyticsPort` + `IAnalyticsInsightsPort` i `application/ports/outbound.py`);
+resolvers afhænger af den smalle port. 503/transportfejl mappes til
+`AnalyticsServiceUnavailable` med dansk besked.
 
-```
-ownership check (HTTP) → budget_start_day (HTTP) →
-financial_overview(current)  = full tx history (HTTP, NO date/limit params!) + all categories (HTTP)
-financial_overview(previous) = full tx history AGAIN + categories AGAIN
-```
-5–6 **sequential** round trips; there is no parallel fan-out anywhere despite the BFF role. Multi-field GraphQL queries multiply this — 4 dashboard fields ⇒ 4 independent full-history downloads in one request (only `_budget_start_day_cache` is memoized per request).
+Øvrige outbound-klienter: account (budget_start_day + ownership), budget (summary),
+categorization (taxonomy, ADR-003), saga. Alle sync `httpx.Client`, ny klient per kald
+— acceptabelt nu hvor de tunge aggregeringskald er væk (P2-04's async-omskrivning blev
+bevidst rullet tilbage; genovervej kun hvis latency-målinger kræver det).
+
+Per-request caches i GraphQL-konteksten: `_budget_start_day_cache` (den tidligere
+transaktions-memoization røg med legacy-stien — ES-kaldene er billige og præ-aggregerede).
+
+Auth: JWT validated locally (own copy of `app/auth.py`, one of 9 near-identical copies
+repo-wide — P2-02 adoption pending); raw `Authorization` passed through downstream.
+Account scoping via `X-Account-ID`, ownership verified via account-service per request;
+missing header falls back to "first account in list" heuristic.
 
 ## Stubs & monolith
 
-- `analytics-service`, `notification-service`: honest stubs (health endpoint only), commented out of compose.
-- `services/monolith/`: **0 git-tracked files** — the ~9.2k local files are untracked debris (.venv, 273 orphaned .pyc). Safe to delete locally.
+- `notification-service`: honest stub (health endpoint only), commented out of compose.
+- `services/monolith/`: 0 git-tracked files — local debris only, safe to delete locally.
 
 ## Open problems
 
-See [findings/2026-07-07-architecture-audit.md](../../findings/2026-07-07-architecture-audit.md). Headliners: unbounded full-history fetch on every read (CRITICAL), empty-string JWT secret fallback fails open (CRITICAL), sync HTTP + no pooling saturates threadpool (HIGH), no per-request memoization of the expensive fetch (HIGH), `budget_period.py` triplicated byte-for-byte across gateway/budget/account services (MEDIUM).
+See [findings/2026-07-07-architecture-audit.md](../../findings/2026-07-07-architecture-audit.md)
+— men bemærk at hele klassen "unbounded full-history fetch on every read" (CRITICAL) og
+"no per-request memoization" (HIGH) er **bortfaldet** med legacy-stien. Tilbage:
+sync HTTP uden pooling (lav impact nu), `budget_period.py`-triplikering (P2-03 adoption),
+auth-kopi (P2-02 adoption), P3-12 (GraphiQL-gating, depth limits, 401-semantik).
