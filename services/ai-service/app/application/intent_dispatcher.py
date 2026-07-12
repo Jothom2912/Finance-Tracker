@@ -13,8 +13,8 @@ from typing import Any
 
 import anyio
 
-from app.adapters.outbound.analytics_client import AnalyticsClient
-from app.adapters.outbound.chromadb_search import ChromaDBSearch
+from app.application.ports.analytics_port import IAnalyticsPort
+from app.application.ports.semantic_search_port import ISemanticSearchPort
 from app.domain.models import (
     CategoryBreakdownPayload,
     DataKind,
@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 
 async def dispatch(
     intent: ResolvedIntent,
-    analytics: AnalyticsClient,
-    search: ChromaDBSearch,
+    analytics: IAnalyticsPort,
+    search: ISemanticSearchPort,
 ) -> tuple[DataReadyData, float]:
     """Dispatch an intent to the appropriate data source.
 
@@ -52,7 +52,7 @@ async def dispatch(
 
 async def _dispatch_largest_expense(
     intent: ResolvedIntent,
-    analytics: AnalyticsClient,
+    analytics: IAnalyticsPort,
 ) -> tuple[DataReadyData, float]:
     category = intent.slots.get("category")
     items, elapsed_ms = await analytics.get_largest_expenses(
@@ -67,7 +67,7 @@ async def _dispatch_largest_expense(
 
 async def _dispatch_category_breakdown(
     intent: ResolvedIntent,
-    analytics: AnalyticsClient,
+    analytics: IAnalyticsPort,
 ) -> tuple[DataReadyData, float]:
     items, elapsed_ms = await analytics.get_category_breakdown(intent.period)
     total = sum(item.amount for item in items)
@@ -77,7 +77,7 @@ async def _dispatch_category_breakdown(
 
 async def _dispatch_transaction_search(
     intent: ResolvedIntent,
-    search: ChromaDBSearch,
+    search: ISemanticSearchPort,
 ) -> tuple[DataReadyData, float]:
     query = intent.slots.get("query", "")
     filters = _slots_to_filters(intent.slots)
@@ -96,7 +96,7 @@ async def _dispatch_transaction_search(
 
 async def _dispatch_budget_status(
     intent: ResolvedIntent,
-    analytics: AnalyticsClient,
+    analytics: IAnalyticsPort,
 ) -> tuple[DataReadyData, float]:
     budget, elapsed_ms = await analytics.get_budget_status(intent.period)
     return DataReadyData(kind=DataKind.BUDGET_STATUS, payload=budget), elapsed_ms

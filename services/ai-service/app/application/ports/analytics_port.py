@@ -1,8 +1,12 @@
-"""Port interface for analytics data retrieval."""
+"""Port interface for structured analytics data retrieval.
+
+All methods return (result, elapsed_ms) — the pipeline aggregates per-step
+latencies into StreamMetadata, so timing is part of the port contract.
+"""
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from app.domain.models import (
     BudgetStatusPayload,
@@ -11,6 +15,7 @@ from app.domain.models import (
 )
 
 
+@runtime_checkable
 class IAnalyticsPort(Protocol):
     async def get_largest_expenses(
         self,
@@ -18,14 +23,14 @@ class IAnalyticsPort(Protocol):
         *,
         category: str | None = None,
         limit: int = 5,
-    ) -> list[TransactionItem]: ...
+    ) -> tuple[list[TransactionItem], float]: ...
 
     async def get_category_breakdown(
         self,
         period: str,
-    ) -> list[CategoryBreakdownItem]: ...
+    ) -> tuple[list[CategoryBreakdownItem], float]: ...
 
     async def get_budget_status(
         self,
         period: str,
-    ) -> BudgetStatusPayload: ...
+    ) -> tuple[BudgetStatusPayload, float]: ...
