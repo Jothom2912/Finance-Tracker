@@ -140,7 +140,8 @@ Ordered = priority order. Steps 1–3 are independent of each other after step 1
 
 ### 3. AI-20 — ES hybrid search replaces ChromaDB (M)
 
-8. [ ] **Decision (record via dev-notes-decision before coding):** where does the
+8. [x] *(2026-07-13: recorded — [decisions/2026-07-13-embed-worker-placement.md](../decisions/2026-07-13-embed-worker-placement.md).)*
+   **Decision (record via dev-notes-decision before coding):** where does the
    embedding writer live? Recommendation: a second consumer **inside analytics-service**
    (queue `analytics.embeddings` on `transaction.*`) that calls Ollama `embed` (bge-m3)
    and partial-updates only the `description_vector` field — ES writes stay within the
