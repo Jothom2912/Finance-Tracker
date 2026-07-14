@@ -496,6 +496,8 @@ services:
       BUDGET_SERVICE_URL: http://budget-service:8003
       CHROMADB_PATH: /data/chromadb
       RETRIEVAL_TOP_K: "10"
+      # AI-20 cutover-flag: flip til "es" når eval-gaten er bestået.
+      SEARCH_BACKEND: chroma
       JWT_SECRET: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development

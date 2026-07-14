@@ -32,6 +32,7 @@ def test_ports_do_not_import_adapters() -> None:
 def test_adapters_conform_to_ports() -> None:
     from app.adapters.outbound.analytics_client import AnalyticsClient
     from app.adapters.outbound.chromadb_search import ChromaDBSearch
+    from app.adapters.outbound.es_search import EsSearch
     from app.adapters.outbound.ollama_responder import OllamaResponder
     from app.adapters.outbound.ollama_router import OllamaRouter
     from app.application.ports.analytics_port import IAnalyticsPort
@@ -40,6 +41,7 @@ def test_adapters_conform_to_ports() -> None:
 
     assert isinstance(AnalyticsClient(token="t", account_id=1), IAnalyticsPort)
     assert isinstance(ChromaDBSearch(user_id=1), ISemanticSearchPort)
+    assert isinstance(EsSearch(user_id=1, token="t"), ISemanticSearchPort)
     assert isinstance(OllamaRouter(), IRouterPort)
     assert isinstance(OllamaResponder(), IResponderPort)
 
@@ -48,6 +50,7 @@ def test_port_and_adapter_method_signatures_match() -> None:
     """runtime_checkable only checks attribute presence — pin the parameters too."""
     from app.adapters.outbound.analytics_client import AnalyticsClient
     from app.adapters.outbound.chromadb_search import ChromaDBSearch
+    from app.adapters.outbound.es_search import EsSearch
     from app.application.ports.analytics_port import IAnalyticsPort
     from app.application.ports.semantic_search_port import ISemanticSearchPort
 
@@ -56,6 +59,7 @@ def test_port_and_adapter_method_signatures_match() -> None:
         (IAnalyticsPort, AnalyticsClient, "get_category_breakdown"),
         (IAnalyticsPort, AnalyticsClient, "get_budget_status"),
         (ISemanticSearchPort, ChromaDBSearch, "search"),
+        (ISemanticSearchPort, EsSearch, "search"),
     ]
     for port, adapter, method in pairs:
         port_params = list(inspect.signature(getattr(port, method)).parameters)

@@ -17,9 +17,12 @@ from starlette.requests import Request
 
 from app.adapters.outbound.analytics_client import AnalyticsClient
 from app.adapters.outbound.chromadb_search import ChromaDBSearch
+from app.adapters.outbound.es_search import EsSearch
 from app.adapters.outbound.ollama_responder import OllamaResponder
 from app.adapters.outbound.ollama_router import OllamaRouter
 from app.application.intent_dispatcher import dispatch
+from app.application.ports.semantic_search_port import ISemanticSearchPort
+from app.config import settings
 from app.domain.exceptions import (
     AnalyticsAuthError,
     AnalyticsError,
@@ -48,6 +51,13 @@ logger = logging.getLogger(__name__)
 PipelineEvent: TypeAlias = IntentResolvedEvent | DataReadyEvent | ProseChunkEvent | DoneEvent | ErrorEvent
 
 
+def build_search(user_id: int, token: str) -> ISemanticSearchPort:
+    """AI-20 cutover-seam: SEARCH_BACKEND vælger semantic search-adapter."""
+    if settings.SEARCH_BACKEND == "es":
+        return EsSearch(user_id=user_id, token=token)
+    return ChromaDBSearch(user_id=user_id)
+
+
 async def run_pipeline(
     question: str,
     user_id: int,
@@ -59,7 +69,7 @@ async def run_pipeline(
     router = OllamaRouter()
     responder = OllamaResponder()
     analytics = AnalyticsClient(token=token, account_id=account_id)
-    search = ChromaDBSearch(user_id=user_id)
+    search = build_search(user_id=user_id, token=token)
 
     router_ms = 0.0
     dispatch_ms = 0.0

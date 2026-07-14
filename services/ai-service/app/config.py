@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +19,9 @@ class Settings(BaseSettings):
     BUDGET_SERVICE_URL: str = "http://budget-service:8003"
     CHROMADB_PATH: str = "/data/chromadb"
     RETRIEVAL_TOP_K: int = 10
+    # AI-20 cutover-flag: chroma → es når ES-hybrid slår ChromaDB-
+    # baselinen på eval-settet (recall@3/MRR). Rollback = flip tilbage.
+    SEARCH_BACKEND: Literal["chroma", "es"] = "chroma"
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
