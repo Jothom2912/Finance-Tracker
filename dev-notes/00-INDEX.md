@@ -40,6 +40,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-12-ai-es-chat-wave1.md](sessions/2026-07-12-ai-es-chat-wave1.md) — wave 1 of ai-es-chat plan: AI-01 eval harness (baseline 1.000, saturated), AI-19 live-smoked, ports made real, junk deleted; legacy dashboard now deletable.
 - [sessions/2026-07-13-gateway-legacy-deletion.md](sessions/2026-07-13-gateway-legacy-deletion.md) — EB active-app vars committed; gateway legacy analytics path + ANALYTICS_READ_SOURCE deleted (ADR-0004 cleanup done, live-smoked); audit's full-history-fetch finding class voided.
 - [sessions/2026-07-13-ai20-gates.md](sessions/2026-07-13-ai20-gates.md) — AI-20's two gates closed: embed-worker decision recorded; eval set hardened (distractors, recall@3) — new baseline recall@3 0.967 / MRR 0.981 / intent 0.955; cutover gate is recall@3+MRR.
+- [sessions/2026-07-14-ai20-hybrid-cutover.md](sessions/2026-07-14-ai20-hybrid-cutover.md) — AI-20 shipped + cut over: transactions_v2 (auto-migration), embedding-consumer, hybrid-endpoint (RRF), EsSearch bag SEARCH_BACKEND=es; ES recall@3 0.971 vs chroma 0.967; ChromaDB-sletning venter på bake.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)

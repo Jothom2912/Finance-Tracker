@@ -158,22 +158,42 @@ Ordered = priority order. Steps 1–3 are independent of each other after step 1
    piggybacks the existing consumer pattern. Rejected alternatives to note: embedding in
    the main projector (couples core projections to Ollama uptime), ai-service writing to
    ES directly (breaks store-per-service ownership).
-9. [ ] `analytics-service mappings.py`: `transactions_v2` physical index with
+9. [x] `analytics-service mappings.py`: `transactions_v2` physical index with
    `description_vector: dense_vector` (1024 dims, cosine, bge-m3) — alias-swap reindex
    per ADR-0004's documented pattern; backfill embeddings via a variant of
    `app/tools/backfill.py`.
-10. [ ] New analytics endpoint (keeps ES access in one service): hybrid search —
+   *(2026-07-14: done — per-index versioner i mappings; bootstrap auto-migrerer
+   (create v2 → `_reindex` → atomisk alias-swap, gammel fysisk beholdes til rollback);
+   live-verificeret på compose (222 docs). Embed-writer per decision
+   2026-07-13: `embedding_consumer.py` på egen kø `analytics.embeddings` (egen DLQ,
+   retries direkte til egen kø — IKKE topic-exchangen, som ville fan-oute), state-læsende
+   `EmbeddingProjector` med `StaleProjectionError`-retry; `backfill_embeddings`-tool.
+   Nye felter: `embedding_event_ts`-guard + danish text-subfelter på kategorinavne.)*
+10. [x] New analytics endpoint (keeps ES access in one service): hybrid search —
     BM25 on danish `description` + kNN on `description_vector`, RRF, filters
     (`user_id`, dates, `category_id`/`subcategory_id`, `tx_type`, amount range on
     `amount_abs`). ai-service embeds the query itself (it owns Ollama) and sends
     text + query_vector.
-11. [ ] ai-service: new `es_search.py` adapter implementing `ISemanticSearchPort`;
+    *(2026-07-14: done — `POST /api/v1/analytics/search/hybrid`; RRF klient-side
+    (ren domain-utility, native ES-RRF kræver licens > basic på 8.11); BM25 også over
+    kategorinavnenes text-subfelter; kNN pre-filtreret; degraderer til BM25-only uden
+    vector; `account_id` valgfri (chat søger på tværs af konti); `category_name`-filter
+    interim til AI-21.)*
+11. [x] ai-service: new `es_search.py` adapter implementing `ISemanticSearchPort`;
     cutover flag `SEARCH_BACKEND ∈ {chroma, es}` (default chroma until eval passes).
     Run the AI-01 golden set against both; flip default when ES ≥ ChromaDB baseline.
+    *(2026-07-14: done + **cutover udført**. Eval (35 cases): ES recall@10 0.996 /
+    recall@3 **0.971** / MRR 0.967 vs chroma 1.000/0.967/**0.981** — bedre på den
+    skarpe metrik; MRR-deltaet er én case ("toej shopping": BM25 matcher
+    Shopping-kategorien leksikalsk — AI-21 kategori-resolve er modtrækket), og
+    "el og vand regninger" gik 0.50 → 1.00 på recall@3. Alle floors grønne.
+    Compose flippet til `es`. Eval kan køre mod begge backends via
+    `SEARCH_BACKEND=es make test-eval-retrieval` (seed-flow: tests/eval/es_seed.py).)*
 12. [ ] Post-cutover deletion: `chromadb_search.py`, `vectorstore.py`,
     `ingest_service.py`, `ingest_api.py`, chromadb dependency, `CHROMADB_PATH`, the
     frontend's ingest trigger if any. Resolves AI-06/AI-11/AI-18/P3-04 in one move;
     unblocks F2-04 (search UI) since staleness is gone (event-synced index).
+    *(Venter til es-flaget har baket — rollback er flip til chroma indtil da.)*
 
 ### 4. AI-02 + AI-21 — activate slots + taxonomy resolution (S)
 

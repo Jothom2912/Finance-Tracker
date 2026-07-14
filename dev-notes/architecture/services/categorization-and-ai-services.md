@@ -29,4 +29,15 @@ source: architecture audit 2026-07-07
 
 ## Open problems
 
+**Status update 2026-07-14 (AI-20 cutover):** chat's `transaction_search` now runs on
+**ES hybrid search** — `EsSearch` adapter (embeds query via Ollama, falls back to
+BM25-only on embed failure) → analytics-service `POST /api/v1/analytics/search/hybrid`
+(BM25 + pre-filtered kNN on `description_vector`, client-side RRF). Documents are
+embedded by a **separate consumer in analytics-service** (`analytics.embeddings` queue,
+own DLQ; decision 2026-07-13-embed-worker-placement) — event-synced, so the ghost-data/
+manual-re-ingest problems below are gone on the ES path. ChromaDB code still present
+behind `SEARCH_BACKEND` (compose = `es`; k8s still defaults to chroma) until the flag
+has baked, then plan step 12 deletes it. The ChromaDB descriptions below are
+end-of-life documentation.
+
 See [findings/2026-07-07-architecture-audit.md](../../findings/2026-07-07-architecture-audit.md). Status update 2026-07-12 (code survey for [plans/2026-07-12-ai-service-es-chat.md](../../plans/2026-07-12-ai-service-es-chat.md)): ingest-blocks-event-loop **fixed** (P1-09, `anyio.to_thread`), collection wipe **fixed** (P1-10, model-versioned collection `transactions__<model>`), rules-DB dead **fixed** (P2-06), `OLLAMA_BASE_URL` drift **fixed** (P2-16 partial); compose still sets dead env `LLM_MODEL` (config reads `LLM_ROUTER_MODEL`/`LLM_RESPONDER_MODEL`), responder model `qwen3:8b` still not pulled by ollama-pull (models live on the other dev machine — do not change config). Still open: ghost data / manual full re-ingest (P3-04 → AI-20), decorative+drifted ports, unreachable slot→filter path (M24 → AI-02/AI-21), junk `test_chromadb_sanity*/` + broken `scripts/sanity_check_retrieval.py` (P3-07), unauthenticated categorize endpoints (MEDIUM), committed `services/categorization-service/.env` (MEDIUM).
