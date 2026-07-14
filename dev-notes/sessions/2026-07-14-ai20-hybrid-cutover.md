@@ -62,6 +62,13 @@ rollback trivial (env flip; Chroma code stays until baked).
   period=2026-04 → correct April groceries (semantic + filter).
 - Full suites green: analytics 122 (incl. 9 nye hybrid-integrationstests +
   bootstrap-migrationstest), ai-service 98.
+- **Live event path** (the "unit-tested handler ≠ working event path" lesson):
+  POST transaction (id 1049) → outbox → RabbitMQ → doc + 1024-dim vector in ES
+  within seconds. The **stale-retry fired for real**: embed queue overtook the
+  projection queue on `transaction.created`, `StaleProjectionError` →
+  backoff-republish → success; `transaction.categorized` then re-embedded with
+  category names. New doc immediately BM25-searchable via `EsSearch` (rank 1 på
+  "Lagkagehuset"). DELETE → tombstone in ES confirmed; smoke data cleaned up.
 
 ## Learned / gotchas
 
