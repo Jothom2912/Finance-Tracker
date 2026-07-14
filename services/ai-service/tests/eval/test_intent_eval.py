@@ -14,7 +14,11 @@ from .golden import INTENT_CASES
 pytestmark = pytest.mark.eval
 
 # Baseline 2026-07-12 (qwen3:4b, constrained JSON): accuracy 1.000 (16/16).
-# Margin for LLM-nondeterminisme ved temp 0.1; hæv ikke over 0.95.
+# Efter hardening 2026-07-13 (22 cases): 0.955 — fast miss er den bevidst svære
+# "Hvor stor en bid tager boligudgifterne af mit samlede forbrug?" (→
+# budget_status i stedet for category_breakdown); den er nu diskriminator for
+# router-prompt-ændringer (AI-02/AI-13). Margin for LLM-nondeterminisme ved
+# temp 0.1; hæv ikke over 0.95.
 ACCURACY_FLOOR = 0.90
 
 

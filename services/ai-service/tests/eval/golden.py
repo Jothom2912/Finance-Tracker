@@ -1,4 +1,4 @@
-"""Golden set for the eval harness (AI-01) — ~50 Danish cases in three groups.
+"""Golden set for the eval harness (AI-01) — ~70 Danish cases in three groups.
 
 - RETRIEVAL_CASES: question → the fixture transaction ids a good retriever
   should surface (recall@k / MRR in test_retrieval_eval.py).
@@ -55,7 +55,7 @@ RETRIEVAL_CASES: list[RetrievalCase] = [
     # Kategori/emne-formuleringer (semantisk)
     RetrievalCase("dagligvarer indkoeb supermarked", frozenset({1, 2, 3, 4, 5, 6, 7, 8})),
     RetrievalCase("kaffe", frozenset({12, 13, 14})),
-    RetrievalCase("restauranter og cafeer", frozenset({10, 11, 12, 13, 14, 15})),
+    RetrievalCase("restauranter og cafeer", frozenset({10, 11, 12, 13, 14, 15, 113})),
     RetrievalCase("streaming abonnementer", frozenset({30, 31, 32, 33, 34, 35, 36})),
     RetrievalCase("tog pendlerkort offentlig transport", frozenset({20, 21, 22, 23})),
     RetrievalCase("benzin tankstation", frozenset({24})),
@@ -69,6 +69,26 @@ RETRIEVAL_CASES: list[RetrievalCase] = [
     RetrievalCase("dagligvarer", frozenset({1, 2, 8}), period="2026-04"),
     RetrievalCase("Netflix", frozenset({32}), period="2026-05"),
     RetrievalCase("restaurant", frozenset({13, 14}), period="2026-05"),
+    RetrievalCase("Netto", frozenset({7}), period="2026-03"),
+    # ===== Hårde cases (2026-07-13) — kræver distractor-korpus (ids 100+) =====
+    # Kryds-stavning: query med æøå mod ASCII-translittererede docs
+    RetrievalCase("Føtex", frozenset({2})),
+    RetrievalCase("tøj shopping", frozenset({40, 41, 42})),
+    # Nær-distractor-diskrimination inden for samme domæne
+    RetrievalCase("forsikring", frozenset({103, 104})),
+    RetrievalCase("bilforsikring", frozenset({104})),  # mod FDM, AutoMester, Tryg
+    RetrievalCase("mobilabonnement telefon", frozenset({100, 102})),  # mod YouSee + streaming
+    RetrievalCase("internet bredbånd", frozenset({101})),  # mod Telia
+    RetrievalCase("værksted bilreparation", frozenset({110})),  # mod FDM, Codan, Circle K
+    # Verdensviden: "musik" står ingen steder i Spotify-doc'et
+    RetrievalCase("musik", frozenset({33, 34})),
+    # "film" står ordret i streaming-docs' synonym-tekst — biografen skal vinde
+    RetrievalCase("biograf film", frozenset({115})),
+    RetrievalCase("tandlæge", frozenset({117})),  # mod Apoteket, Matas, Louis Nielsen
+    RetrievalCase("optiker briller", frozenset({118})),
+    RetrievalCase("blomster gave", frozenset({121})),
+    RetrievalCase("taxa", frozenset({112})),
+    RetrievalCase("kiosk", frozenset({114})),
 ]
 
 INTENT_CASES: list[IntentCase] = [
@@ -88,6 +108,13 @@ INTENT_CASES: list[IntentCase] = [
     IntentCase("Hvad har jeg brugt på streaming?", "transaction_search"),
     IntentCase("Største udgift på mad i maj", "transaction_search"),
     IntentCase("Hvor meget brugte jeg på restauranter i marts?", "transaction_search"),
+    # ===== Hårdere formuleringer (2026-07-13) =====
+    IntentCase("Hvilke abonnementer betaler jeg for?", "transaction_search"),
+    IntentCase("Hvor mange penge har jeg brugt hos Føtex?", "transaction_search"),
+    IntentCase("Hvilken enkelt betaling slugte flest penge i maj?", "largest_expense"),
+    IntentCase("Har jeg råd til at bruge flere penge i denne måned?", "budget_status"),
+    IntentCase("Fordel mit forbrug på kategorier for april", "category_breakdown"),
+    IntentCase("Hvor stor en bid tager boligudgifterne af mit samlede forbrug?", "category_breakdown"),
 ]
 
 AGGREGATION_CASES: list[AggregationCase] = [
@@ -105,19 +132,22 @@ AGGREGATION_CASES: list[AggregationCase] = [
     ),
     AggregationCase(
         "Hvad kostede restaurantbesøg i april i alt?",
-        400.00,
+        478.00,
         category="Restaurant",
         year_month="2026-04",
+        notes="inkl. Joe & The Juice (id 113, distractor-batch 2026-07-13)",
     ),
     AggregationCase(
         "Hvad brugte jeg i alt i april?",
-        10851.30,
+        17034.80,
         year_month="2026-04",
+        notes="opdateret 2026-07-13: distractor-docs lagde 6183.50 til april",
     ),
     AggregationCase(
         "Hvad brugte jeg i alt i maj?",
-        9942.10,
+        12030.10,
         year_month="2026-05",
+        notes="opdateret 2026-07-13: distractor-docs lagde 2088.00 til maj",
     ),
     AggregationCase(
         "Hvor meget tjente jeg i april?",
@@ -157,9 +187,10 @@ AGGREGATION_CASES: list[AggregationCase] = [
     ),
     AggregationCase(
         "Hvor meget brugte jeg på underholdning i april?",
-        367.00,
+        627.00,
         category="Underholdning",
         year_month="2026-04",
+        notes="inkl. Nordisk Film Biografer (id 115, distractor-batch 2026-07-13)",
     ),
     AggregationCase(
         "Hvad koster mit fitnessabonnement om måneden?",

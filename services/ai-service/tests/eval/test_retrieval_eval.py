@@ -21,17 +21,23 @@ logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.eval
 
 TOP_K = 10
+K_STRICT = 3
 
-# Baseline 2026-07-12 (ChromaDB + bge-m3, compose-ollama): mean recall@10 =
-# 1.000, mean MRR = 1.000 over 20 cases. Fixture-korpusset (~45 docs) mætter
-# metrikken — baseline fungerer som regressions-vagt, ikke som diskriminator;
-# skal AI-20-cutoveret diskrimineres, tilføj distraktor-docs og hårdere cases.
+# Baseline 2026-07-13 (ChromaDB + bge-m3, distractor-korpus ~67 docs, 35 cases):
+# mean recall@10 = 1.000, mean recall@3 = 0.967, mean MRR = 0.981.
+# recall@10 er stadig mættet over det lille korpus — diskriminationen ved
+# AI-20-cutoveret ligger i recall@3 og MRR, hvor nær-distractors nu koster
+# rangering ("tøj shopping" recall@3 0.33/RR 0.33; "el og vand regninger"
+# recall@3 0.50). Floors ligger lige under målt baseline så regressioner
+# fejler højt (ét fuldt case-drop koster ~0.029 i mean); hæv dem når en
+# ændring løfter metrikken.
 MEAN_RECALL_FLOOR = 0.95
 MEAN_MRR_FLOOR = 0.95
+MEAN_RECALL_STRICT_FLOOR = 0.95
 
 
-def _run_case(case: RetrievalCase) -> tuple[float, float]:
-    """Returns (recall@TOP_K, reciprocal rank) for one case."""
+def _run_case(case: RetrievalCase) -> tuple[float, float, float]:
+    """Returns (recall@TOP_K, recall@K_STRICT, reciprocal rank) for one case."""
     search = ChromaDBSearch(user_id=EVAL_USER_ID)
     items, _ = search.search(case.question, period=case.period, top_k=TOP_K)
     retrieved = [i.id for i in items]
@@ -39,30 +45,41 @@ def _run_case(case: RetrievalCase) -> tuple[float, float]:
     hits = case.relevant_ids.intersection(retrieved)
     recall = len(hits) / min(len(case.relevant_ids), TOP_K)
 
+    strict_hits = case.relevant_ids.intersection(retrieved[:K_STRICT])
+    recall_strict = len(strict_hits) / min(len(case.relevant_ids), K_STRICT)
+
     rr = 0.0
     for rank, txn_id in enumerate(retrieved, start=1):
         if txn_id in case.relevant_ids:
             rr = 1.0 / rank
             break
-    return recall, rr
+    return recall, recall_strict, rr
 
 
 def test_retrieval_golden_set(eval_collection: None) -> None:
     rows = []
     for case in RETRIEVAL_CASES:
-        recall, rr = _run_case(case)
-        rows.append((case, recall, rr))
+        recall, recall_strict, rr = _run_case(case)
+        rows.append((case, recall, recall_strict, rr))
 
     print("\n--- Retrieval eval (ChromaDB baseline) ---")
-    print(f"{'question':<45} {'period':<9} {'recall@10':>9} {'RR':>6}")
-    for case, recall, rr in sorted(rows, key=lambda r: r[1]):
-        print(f"{case.question:<45} {case.period or '-':<9} {recall:>9.2f} {rr:>6.2f}")
+    print(f"{'question':<45} {'period':<9} {'recall@10':>9} {'recall@3':>9} {'RR':>6}")
+    for case, recall, recall_strict, rr in sorted(rows, key=lambda r: (r[2], r[1])):
+        print(f"{case.question:<45} {case.period or '-':<9} {recall:>9.2f} {recall_strict:>9.2f} {rr:>6.2f}")
 
-    mean_recall = sum(r for _, r, _ in rows) / len(rows)
-    mean_mrr = sum(rr for _, _, rr in rows) / len(rows)
-    print(f"\nmean recall@{TOP_K}: {mean_recall:.3f}   mean MRR: {mean_mrr:.3f}   cases: {len(rows)}")
+    n = len(rows)
+    mean_recall = sum(r for _, r, _, _ in rows) / n
+    mean_strict = sum(s for _, _, s, _ in rows) / n
+    mean_mrr = sum(rr for _, _, _, rr in rows) / n
+    print(
+        f"\nmean recall@{TOP_K}: {mean_recall:.3f}   mean recall@{K_STRICT}: {mean_strict:.3f}   "
+        f"mean MRR: {mean_mrr:.3f}   cases: {n}"
+    )
 
     assert mean_recall >= MEAN_RECALL_FLOOR, f"mean recall@{TOP_K} {mean_recall:.3f} under floor {MEAN_RECALL_FLOOR}"
+    assert mean_strict >= MEAN_RECALL_STRICT_FLOOR, (
+        f"mean recall@{K_STRICT} {mean_strict:.3f} under floor {MEAN_RECALL_STRICT_FLOOR}"
+    )
     assert mean_mrr >= MEAN_MRR_FLOOR, f"mean MRR {mean_mrr:.3f} under floor {MEAN_MRR_FLOOR}"
 
 
