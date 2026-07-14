@@ -728,6 +728,28 @@ services:
       elasticsearch:
         condition: service_healthy
 
+  # AI-20: skriver description_vector via Ollama (bge-m3) på egen kø —
+  # Ollama-nedetid rammer aldrig kerneprojektionerne ovenfor.
+  analytics-embedding-consumer:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    command: ["python", "-m", "app.workers.embedding_consumer"]
+    restart: on-failure
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      OLLAMA_BASE_URL: http://ollama:11434
+      EMBEDDING_MODEL: bge-m3
+      ENVIRONMENT: development
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
+
   # notification-service:
   #   build: ./services/notification-service
   #   ports:

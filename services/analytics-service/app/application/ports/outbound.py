@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 
 from app.application.dto import (
     FinancialOverviewDTO,
@@ -61,6 +61,35 @@ class ITransactionProjectionStore(ABC):
     @abstractmethod
     async def mark_deleted(self, *, transaction_id: int, event_ts: int) -> None:
         """Soft-delete tombstone; terminal (sene replays genopliver aldrig)."""
+
+
+class IEmbeddingStore(ABC):
+    """Læse-/skriveflade for embed-workeren (AI-20).
+
+    Adskilt fra ITransactionProjectionStore: embedding er AFLEDT state
+    (skrives af sin egen consumer på egen queue), ikke en projektion af
+    et event-payload.
+    """
+
+    @abstractmethod
+    async def get_projection(self, *, transaction_id: int) -> Optional[dict[str, Any]]:
+        """Dokument-state (uden vektor) eller None hvis ikke projiceret endnu."""
+
+    @abstractmethod
+    async def update_embedding(
+        self,
+        *,
+        transaction_id: int,
+        vector: list[float],
+        event_ts: int,
+    ) -> None:
+        """Guarded partial update af description_vector (no-op på tombstones)."""
+
+
+class IEmbeddingModelPort(ABC):
+    @abstractmethod
+    async def embed(self, text: str) -> list[float]:
+        """Én tekst → én vektor (dims skal matche mappings.EMBEDDING_DIMS)."""
 
 
 class IAccountProjectionStore(ABC):

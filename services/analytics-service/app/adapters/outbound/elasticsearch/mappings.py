@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from typing import Any
 
-INDEX_VERSION = "v1"
-
 _AMOUNT = {"type": "scaled_float", "scaling_factor": 100}
 _TS = {"type": "date", "format": "epoch_millis"}
 
@@ -25,6 +23,21 @@ TRANSACTIONS_INDEX = "transactions"
 ACCOUNTS_INDEX = "accounts"
 TAXONOMY_INDEX = "taxonomy"
 GOALS_INDEX = "goals"
+
+# bge-m3 embedding-dimension — SKAL matche modellen embed-workeren og
+# ai-service (query-siden) bruger; drift her degraderer kNN tavst.
+EMBEDDING_DIMS = 1024
+
+# Versioner per index; bump ved mapping-ændring → bootstrap reindexer
+# gamle fysiske indices og swapper alias (se bootstrap.ensure_indices).
+# v2 (transactions, AI-20): description_vector + embedding_event_ts +
+# text-subfelter på kategorinavne til hybrid BM25.
+INDEX_VERSIONS: dict[str, str] = {
+    TRANSACTIONS_INDEX: "v2",
+    ACCOUNTS_INDEX: "v1",
+    TAXONOMY_INDEX: "v1",
+    GOALS_INDEX: "v1",
+}
 
 INDEX_DEFINITIONS: dict[str, dict[str, Any]] = {
     TRANSACTIONS_INDEX: {
@@ -47,14 +60,32 @@ INDEX_DEFINITIONS: dict[str, dict[str, Any]] = {
                     "fields": {"raw": {"type": "keyword", "ignore_above": 256}},
                 },
                 "category_id": {"type": "long"},
-                "category_name": {"type": "keyword"},
+                # text-subfelter så hybrid-BM25 kan matche kategorinavne
+                # ("dagligvarer") uden synonym-hacks på dokument-prosaen.
+                "category_name": {
+                    "type": "keyword",
+                    "fields": {"text": {"type": "text", "analyzer": "danish"}},
+                },
                 "subcategory_id": {"type": "long"},
-                "subcategory_name": {"type": "keyword"},
+                "subcategory_name": {
+                    "type": "keyword",
+                    "fields": {"text": {"type": "text", "analyzer": "danish"}},
+                },
                 "categorization_tier": {"type": "keyword"},
                 "categorization_confidence": {"type": "keyword"},
+                # AI-20: kNN-side af hybrid search. Skrives af
+                # embedding-consumeren (aldrig af projektorerne); mangler
+                # den, degraderer søgning til BM25-only.
+                "description_vector": {
+                    "type": "dense_vector",
+                    "dims": EMBEDDING_DIMS,
+                    "index": True,
+                    "similarity": "cosine",
+                },
                 "is_deleted": {"type": "boolean"},
                 "core_event_ts": _TS,
                 "categorization_event_ts": _TS,
+                "embedding_event_ts": _TS,
                 "updated_at": _TS,
             },
         },
@@ -118,7 +149,7 @@ INDEX_DEFINITIONS: dict[str, dict[str, Any]] = {
 
 
 def physical_index(prefix: str, name: str) -> str:
-    return f"{prefix}{name}_{INDEX_VERSION}"
+    return f"{prefix}{name}_{INDEX_VERSIONS[name]}"
 
 
 def alias_name(prefix: str, name: str) -> str:

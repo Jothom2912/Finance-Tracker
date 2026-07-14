@@ -242,3 +242,69 @@ class TestTaxonomyRenamePropagation:
         doc = await es.get(index=alias_name(index_prefix, "taxonomy"), id="category:3")
         assert doc["_source"]["name"] == "Dagligvarer"
         assert doc["_source"]["doc_type"] == "category"
+
+
+class TestEmbeddingStore:
+    """AI-20: guarded vektor-skriv + state-læsning til embed-workeren."""
+
+    VECTOR = [0.5] * 1024
+    NEWER_VECTOR = [0.7] * 1024
+
+    async def test_update_embedding_writes_vector_with_guard_ts(
+        self,
+        es: AsyncElasticsearch,
+        stores: tuple[EsTransactionProjectionStore, EsTaxonomyProjectionStore, str],
+    ) -> None:
+        tx_store, taxonomy_store, alias = stores
+        await TransactionProjector(tx_store, taxonomy_store).handle_created_or_updated(created_event(T0))
+
+        await tx_store.update_embedding(
+            transaction_id=1, vector=self.VECTOR, event_ts=event_ts_millis(created_event(T0))
+        )
+
+        doc = await get_tx_doc(es, alias)
+        assert doc["description_vector"] == self.VECTOR
+        assert doc["embedding_event_ts"] == event_ts_millis(created_event(T0))
+
+    async def test_stale_embedding_never_overwrites_newer(
+        self,
+        es: AsyncElasticsearch,
+        stores: tuple[EsTransactionProjectionStore, EsTaxonomyProjectionStore, str],
+    ) -> None:
+        tx_store, taxonomy_store, alias = stores
+        await TransactionProjector(tx_store, taxonomy_store).handle_created_or_updated(created_event(T0))
+
+        await tx_store.update_embedding(
+            transaction_id=1, vector=self.NEWER_VECTOR, event_ts=event_ts_millis(created_event(T1))
+        )
+        await tx_store.update_embedding(
+            transaction_id=1, vector=self.VECTOR, event_ts=event_ts_millis(created_event(T0))
+        )
+
+        doc = await get_tx_doc(es, alias)
+        assert doc["description_vector"] == self.NEWER_VECTOR
+
+    async def test_update_embedding_on_missing_doc_is_noop(
+        self,
+        stores: tuple[EsTransactionProjectionStore, EsTaxonomyProjectionStore, str],
+    ) -> None:
+        tx_store, _, _ = stores
+        # Slettet mellem get og update — må ikke kaste.
+        await tx_store.update_embedding(transaction_id=999, vector=self.VECTOR, event_ts=1)
+
+    async def test_get_projection_excludes_vector_and_none_on_missing(
+        self,
+        stores: tuple[EsTransactionProjectionStore, EsTaxonomyProjectionStore, str],
+    ) -> None:
+        tx_store, taxonomy_store, _ = stores
+        await TransactionProjector(tx_store, taxonomy_store).handle_created_or_updated(created_event(T0))
+        await tx_store.update_embedding(
+            transaction_id=1, vector=self.VECTOR, event_ts=event_ts_millis(created_event(T0))
+        )
+
+        source = await tx_store.get_projection(transaction_id=1)
+        assert source is not None
+        assert source["description"] == "NETTO 1234"
+        assert "description_vector" not in source
+
+        assert await tx_store.get_projection(transaction_id=999) is None

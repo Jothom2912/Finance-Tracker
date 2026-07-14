@@ -22,9 +22,10 @@ from datetime import date
 from typing import Any, Optional
 
 from elasticsearch import AsyncElasticsearch
+from elasticsearch.exceptions import NotFoundError
 
 from app.adapters.outbound.elasticsearch.mappings import TRANSACTIONS_INDEX, alias_name
-from app.application.ports.outbound import ITransactionProjectionStore
+from app.application.ports.outbound import IEmbeddingStore, ITransactionProjectionStore
 
 _CORE_SCRIPT = """
 if (ctx._source.is_deleted == true) { ctx.op = 'noop'; }
@@ -75,8 +76,23 @@ ctx._source.is_deleted = true;
 ctx._source.updated_at = params.event_ts;
 """
 
+# Vektoren er afledt state (af beskrivelse/kategori) — dens guard-ts er
+# dokumentets updated_at på embed-tidspunktet, så en re-embed af nyere
+# dokument-state altid vinder, og replays/backfill er benigne no-ops.
+# Ingen upsert: findes dokumentet ikke (endnu), er der intet at embedde.
+_EMBEDDING_SCRIPT = """
+if (ctx._source.is_deleted == true) { ctx.op = 'noop'; }
+else {
+  def emb = ctx._source.embedding_event_ts;
+  if (emb == null || params.event_ts >= emb) {
+    ctx._source.description_vector = params.vector;
+    ctx._source.embedding_event_ts = params.event_ts;
+  } else { ctx.op = 'noop'; }
+}
+"""
 
-class EsTransactionProjectionStore(ITransactionProjectionStore):
+
+class EsTransactionProjectionStore(ITransactionProjectionStore, IEmbeddingStore):
     def __init__(self, es: AsyncElasticsearch, index_prefix: str = "") -> None:
         self._es = es
         self._alias = alias_name(index_prefix, TRANSACTIONS_INDEX)
@@ -153,6 +169,41 @@ class EsTransactionProjectionStore(ITransactionProjectionStore):
             scripted_upsert=True,
             retry_on_conflict=3,
         )
+
+    async def get_projection(self, *, transaction_id: int) -> Optional[dict[str, Any]]:
+        """Rå dokument-state (uden vektor) til embed-workerens prosa-bygning."""
+        try:
+            doc = await self._es.get(
+                index=self._alias,
+                id=str(transaction_id),
+                source_excludes=["description_vector"],
+            )
+        except NotFoundError:
+            return None
+        return dict(doc["_source"])
+
+    async def update_embedding(
+        self,
+        *,
+        transaction_id: int,
+        vector: list[float],
+        event_ts: int,
+    ) -> None:
+        try:
+            await self._es.update(
+                index=self._alias,
+                id=str(transaction_id),
+                script={
+                    "source": _EMBEDDING_SCRIPT,
+                    "lang": "painless",
+                    "params": {"vector": vector, "event_ts": event_ts},
+                },
+                retry_on_conflict=3,
+            )
+        except NotFoundError:
+            # Slettet mellem get og update — vektor på en tombstone er
+            # ligegyldig (alle queries filtrerer is_deleted).
+            return
 
     async def mark_deleted(self, *, transaction_id: int, event_ts: int) -> None:
         await self._es.update(

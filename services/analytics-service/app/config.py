@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     # cluster (tom streng i drift).
     es_index_prefix: str = ""
 
+    # Embedding-worker (AI-20). Samme env-navne som ai-service (query-
+    # siden) — dokument- og query-embeddings SKAL komme fra samme model.
+    ollama_base_url: str = "http://ollama:11434"
+    embedding_model: str = "bge-m3"
+
     # Kilder til engangs-backfill (app/tools/backfill.py) — ikke brugt af
     # request-flowet, som alene læser fra Elasticsearch.
     transaction_service_url: str = "http://transaction-service:8002"
