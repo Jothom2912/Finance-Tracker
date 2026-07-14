@@ -14,6 +14,16 @@ x-enable-banking-env: &enable-banking-env
 x-enable-banking-volumes: &enable-banking-volumes
   - ${ENABLE_BANKING_ACTIVE_PEM_PATH:-./enablebanking-sandbox.pem}:/app/enablebanking.pem:ro
 
+# P2-16: fælles healthcheck-timings for API-services. Flere services kører
+# `alembic upgrade head` i entrypoint før uvicorn starter, så start_period
+# er bevidst rummelig — service_healthy-gating må ikke flappe på cold start.
+# Images er python-slim (ingen curl/wget), så proben bruger stdlib urllib.
+x-api-healthcheck-defaults: &api-healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 10
+  start_period: 45s
+
 services:
   # === Infrastructure ===
 
@@ -21,11 +31,19 @@ services:
   #   monolith + sync consumers were removed. Data in mysql_data volume is
   #   preserved until the volume is explicitly deleted (docker volume rm).
 
+  # redis: intet volume med vilje — cache-only efter P2-12, indhold kan
+  # altid genopbygges. Tilføj kun volume hvis redis får persistent state.
   redis:
     image: redis:7
     container_name: redis
     ports:
       - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   postgres:
     image: postgres:16
@@ -111,8 +129,12 @@ services:
     build:
       context: .
       dockerfile: services/user-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+asyncpg://user_service:user_service_pass@postgres:5432/users
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -148,8 +170,12 @@ services:
     build:
       context: .
       dockerfile: services/goal-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8006:8006"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8006/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -163,9 +189,9 @@ services:
       postgres-goals:
         condition: service_healthy
       user-service:
-        condition: service_started
+        condition: service_healthy
       account-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -184,7 +210,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       goal-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -203,7 +229,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       goal-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -220,7 +246,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       user-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -252,8 +278,12 @@ services:
     build:
       context: .
       dockerfile: services/transaction-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8002:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8002/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -269,14 +299,18 @@ services:
       rabbitmq:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
 
   account-service:
     build:
       context: .
       dockerfile: services/account-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8004:8003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+psycopg2://account_user:account_password@postgres-account:5432/account_db
       JWT_SECRET: dev-secret-key-change-in-production
@@ -287,7 +321,7 @@ services:
       postgres-account:
         condition: service_healthy
       user-service:
-        condition: service_started
+        condition: service_healthy
 
   postgres-account:
     image: postgres:16
@@ -311,6 +345,9 @@ services:
       context: .
       dockerfile: services/account-service/Dockerfile
     command: ["python", "-m", "app.workers.outbox_publisher"]
+    # P2-16: manglede restart-policy — et crash stoppede account-event-levering
+    # i stilhed. on-failure matcher søster-workerne (outbox-workers).
+    restart: on-failure
     environment:
       DATABASE_URL: postgresql+asyncpg://account_user:account_password@postgres-account:5432/account_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -337,7 +374,7 @@ services:
       rabbitmq:
         condition: service_healthy
       user-service:
-        condition: service_started
+        condition: service_healthy
 
   transaction-outbox-worker:
     build:
@@ -352,7 +389,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       transaction-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -369,9 +406,9 @@ services:
       ENVIRONMENT: development
     depends_on:
       transaction-service:
-        condition: service_started
+        condition: service_healthy
       categorization-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -388,9 +425,9 @@ services:
       ENVIRONMENT: development
     depends_on:
       transaction-service:
-        condition: service_started
+        condition: service_healthy
       categorization-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -407,7 +444,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       transaction-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -432,8 +469,12 @@ services:
     build:
       context: .
       dockerfile: services/categorization-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8005:8005"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8005/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -459,7 +500,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       categorization-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -476,7 +517,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       categorization-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -484,8 +525,12 @@ services:
     build:
       context: .
       dockerfile: services/ai-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8007:8004"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8004/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       # ai-service skal bruge compose-ollama (som ollama-pull fylder med
       # qwen3:4b + bge-m3) — ikke en evt. Ollama på host-maskinen (P2-16 drift).
@@ -508,11 +553,11 @@ services:
       ollama-pull:
         condition: service_completed_successfully
       transaction-service:
-        condition: service_started
+        condition: service_healthy
       analytics-service:
-        condition: service_started
+        condition: service_healthy
       budget-service:
-        condition: service_started
+        condition: service_healthy
 
   # === Placeholder services (uncomment as services are ready) ===
 
@@ -537,8 +582,12 @@ services:
     build:
       context: .
       dockerfile: services/budget-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8003:8003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8003/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -554,7 +603,7 @@ services:
       rabbitmq:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
 
   budget-outbox-worker:
     build:
@@ -571,7 +620,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       budget-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -596,8 +645,12 @@ services:
     build:
       context: .
       dockerfile: services/banking-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8009:8009"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8009/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -615,9 +668,9 @@ services:
       rabbitmq:
         condition: service_healthy
       transaction-service:
-        condition: service_started
+        condition: service_healthy
       account-service:
-        condition: service_started
+        condition: service_healthy
 
   banking-outbox-worker:
     build:
@@ -632,7 +685,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       banking-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -649,7 +702,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       banking-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       account-outbox-publisher:
@@ -669,7 +722,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       banking-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     volumes: *enable-banking-volumes
@@ -678,8 +731,12 @@ services:
     build:
       context: .
       dockerfile: services/gateway-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8010:8010"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8010/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       CATEGORIZATION_SERVICE_URL: http://categorization-service:8005
       ACCOUNT_SERVICE_URL: http://account-service:8003
@@ -691,22 +748,26 @@ services:
       ENVIRONMENT: development
     depends_on:
       categorization-service:
-        condition: service_started
+        condition: service_healthy
       account-service:
-        condition: service_started
+        condition: service_healthy
       budget-service:
-        condition: service_started
+        condition: service_healthy
       saga-service:
-        condition: service_started
+        condition: service_healthy
       analytics-service:
-        condition: service_started
+        condition: service_healthy
 
   analytics-service:
     build:
       context: .
       dockerfile: services/analytics-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8012:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       ELASTICSEARCH_URL: http://elasticsearch:9200
       JWT_SECRET: dev-secret-key-change-in-production
@@ -784,8 +845,12 @@ services:
     build:
       context: .
       dockerfile: services/saga-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8011:8011"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8011/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -812,7 +877,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       saga-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -829,7 +894,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       saga-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -846,7 +911,7 @@ services:
       ENVIRONMENT: development
     depends_on:
       saga-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -865,7 +930,7 @@ services:
       TIMEOUT_CHECK_INTERVAL_SECONDS: 30
     depends_on:
       saga-service:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   # mysql_data: preserved but unused — delete with: docker volume rm finance-tracker_mysql_data
