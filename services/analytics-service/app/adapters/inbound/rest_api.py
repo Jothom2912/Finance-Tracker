@@ -8,10 +8,13 @@ from typing import Optional
 
 from elasticsearch import AsyncElasticsearch
 from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, Field, field_validator
 
+from app.adapters.outbound.elasticsearch.mappings import EMBEDDING_DIMS
 from app.adapters.outbound.elasticsearch.query_store import EsAnalyticsQueryStore
 from app.application.dto import (
     FinancialOverviewDTO,
+    HybridSearchResultDTO,
     MonthComparisonDTO,
     MonthlyCashflowDTO,
     MonthlyExpensesDTO,
@@ -122,6 +125,55 @@ async def transactions(
         limit=limit,
         offset=offset,
         sort=sort,
+    )
+
+
+class HybridSearchRequest(BaseModel):
+    """AI-20: query embeddes af KALDEREN (ai-service ejer Ollama på
+    query-siden); analytics-service embedder kun dokumenter."""
+
+    query: str = Field(min_length=1, max_length=1000)
+    query_vector: Optional[list[float]] = None
+    account_id: Optional[int] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    category_id: Optional[int] = None
+    subcategory_id: Optional[int] = None
+    # Interim til AI-21 resolver navne → id'er (eksakt keyword-match).
+    category_name: Optional[str] = None
+    tx_type: Optional[str] = Field(default=None, pattern="^(expense|income)$")
+    amount_min: Optional[float] = Field(default=None, ge=0)
+    amount_max: Optional[float] = Field(default=None, ge=0)
+    limit: int = Field(default=10, ge=1, le=50)
+
+    @field_validator("query_vector")
+    @classmethod
+    def _vector_dims_must_match_mapping(cls, v: Optional[list[float]]) -> Optional[list[float]]:
+        if v is not None and len(v) != EMBEDDING_DIMS:
+            raise ValueError(f"query_vector skal have {EMBEDDING_DIMS} dims (bge-m3), fik {len(v)}")
+        return v
+
+
+@router.post("/search/hybrid", response_model=HybridSearchResultDTO)
+async def hybrid_search(
+    body: HybridSearchRequest,
+    user_id: int = Depends(get_current_user_id),
+    service: AnalyticsQueryService = Depends(get_query_service),
+) -> HybridSearchResultDTO:
+    return await service.hybrid_search_transactions(
+        user_id=user_id,
+        query=body.query,
+        query_vector=body.query_vector,
+        account_id=body.account_id,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        category_id=body.category_id,
+        subcategory_id=body.subcategory_id,
+        category_name=body.category_name,
+        tx_type=body.tx_type,
+        amount_min=body.amount_min,
+        amount_max=body.amount_max,
+        limit=body.limit,
     )
 
 

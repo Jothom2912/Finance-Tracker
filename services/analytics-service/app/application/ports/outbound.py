@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from app.application.dto import (
     FinancialOverviewDTO,
+    HybridSearchResultDTO,
     MonthComparisonDTO,
     MonthlyCashflowDTO,
     MonthlyExpensesDTO,
@@ -243,6 +244,31 @@ class IAnalyticsQueryPort(ABC):
         sort: str = "date_desc",
     ) -> TransactionSearchResultDTO:
         pass
+
+    @abstractmethod
+    async def hybrid_search_transactions(
+        self,
+        *,
+        user_id: int,
+        query: str,
+        query_vector: Optional[list[float]] = None,
+        account_id: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        category_id: Optional[int] = None,
+        subcategory_id: Optional[int] = None,
+        category_name: Optional[str] = None,
+        tx_type: Optional[str] = None,
+        amount_min: Optional[float] = None,
+        amount_max: Optional[float] = None,
+        limit: int = 10,
+    ) -> HybridSearchResultDTO:
+        """AI-20: BM25+kNN med klient-side RRF; BM25-only uden vector.
+
+        ``account_id`` er valgfri (modsat de øvrige queries): chat søger
+        på tværs af brugerens konti, paritet med ChromaDB-tenancy.
+        ``category_name`` er interim til AI-21 resolver navne til id'er.
+        """
 
     @abstractmethod
     async def top_merchants(

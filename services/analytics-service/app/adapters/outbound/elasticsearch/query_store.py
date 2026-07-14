@@ -15,6 +15,7 @@ Tenant-isolation: hvert query filtrerer user_id + account_id.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 from collections.abc import Callable, Coroutine
 from datetime import date, datetime
@@ -32,6 +33,7 @@ from app.application.dto import (
     CategoryDeltaDTO,
     CategoryExpenseDTO,
     FinancialOverviewDTO,
+    HybridSearchResultDTO,
     MonthComparisonDTO,
     MonthlyCashflowDTO,
     MonthlyExpensesDTO,
@@ -47,6 +49,7 @@ from app.domain.budget_period import (
     months_in_period,
 )
 from app.domain.exceptions import ReadStoreUnavailableError
+from app.domain.ranking import rrf_fuse
 
 UNCATEGORIZED_LABEL = "Ukategoriseret"
 NO_SUBCATEGORY_LABEL = "(Ingen underkategori)"
@@ -66,6 +69,10 @@ TRANSACTION_SORTS: dict[str, list[dict[str, Any]]] = {
 # terms-agg kan ikke returnere null-keys; -1 er sentinel for "mangler"
 # (rigtige ids er positive serials).
 MISSING_ID = -1
+
+# Rank-vindue per søgegren (BM25/kNN) før RRF-fusion. 50 er rigeligt
+# når klienten højst beder om ~10 fusionerede resultater.
+RRF_WINDOW = 50
 
 EXPENSE_FILTER: dict[str, Any] = {
     "bool": {
@@ -468,6 +475,127 @@ class EsAnalyticsQueryStore(IAnalyticsQueryPort):
             deltas=deltas,
         )
 
+    @staticmethod
+    def _hit_to_dto(source: dict[str, Any]) -> TransactionProjectionDTO:
+        return TransactionProjectionDTO(
+            id=source["transaction_id"],
+            amount=source["amount"],
+            description=source.get("description"),
+            date=date.fromisoformat(source["tx_date"]),
+            type=source.get("transaction_type", ""),
+            category_id=source.get("category_id"),
+            category_name=source.get("category_name"),
+            subcategory_id=source.get("subcategory_id"),
+            subcategory_name=source.get("subcategory_name"),
+            account_id=source["account_id"],
+            categorization_tier=source.get("categorization_tier"),
+        )
+
+    @_translate_es_errors
+    async def hybrid_search_transactions(
+        self,
+        *,
+        user_id: int,
+        query: str,
+        query_vector: Optional[list[float]] = None,
+        account_id: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        category_id: Optional[int] = None,
+        subcategory_id: Optional[int] = None,
+        category_name: Optional[str] = None,
+        tx_type: Optional[str] = None,
+        amount_min: Optional[float] = None,
+        amount_max: Optional[float] = None,
+        limit: int = 10,
+    ) -> HybridSearchResultDTO:
+        filters: list[dict[str, Any]] = [
+            {"term": {"user_id": user_id}},
+            {"term": {"is_deleted": False}},
+        ]
+        if account_id is not None:
+            filters.append({"term": {"account_id": account_id}})
+        if start_date or end_date:
+            date_range: dict[str, str] = {}
+            if start_date:
+                date_range["gte"] = start_date.isoformat()
+            if end_date:
+                date_range["lte"] = end_date.isoformat()
+            filters.append({"range": {"tx_date": date_range}})
+        if category_id is not None:
+            filters.append({"term": {"category_id": category_id}})
+        if subcategory_id is not None:
+            filters.append({"term": {"subcategory_id": subcategory_id}})
+        if category_name is not None:
+            filters.append({"term": {"category_name": category_name}})
+        if tx_type is not None:
+            filters.append({"term": {"transaction_type": tx_type.strip().lower()}})
+        if amount_min is not None or amount_max is not None:
+            amount_range: dict[str, float] = {}
+            if amount_min is not None:
+                amount_range["gte"] = amount_min
+            if amount_max is not None:
+                amount_range["lte"] = amount_max
+            filters.append({"range": {"amount_abs": amount_range}})
+
+        # BM25 over beskrivelse + kategorinavne (danish-analyzeret) —
+        # "dagligvarer" skal kunne matche uden at stå i beskrivelsen.
+        bm25_search = self._es.search(
+            index=self._tx_alias,
+            query={
+                "bool": {
+                    "filter": filters,
+                    "must": [
+                        {
+                            "multi_match": {
+                                "query": query,
+                                "fields": [
+                                    "description^2",
+                                    "category_name.text",
+                                    "subcategory_name.text",
+                                ],
+                            }
+                        }
+                    ],
+                }
+            },
+            size=RRF_WINDOW,
+        )
+
+        if query_vector is None:
+            responses = [await bm25_search]
+        else:
+            knn_search = self._es.search(
+                index=self._tx_alias,
+                knn={
+                    "field": "description_vector",
+                    "query_vector": query_vector,
+                    "k": RRF_WINDOW,
+                    "num_candidates": RRF_WINDOW * 4,
+                    # Pre-filter: tenancy/slots håndhæves FØR nearest-
+                    # neighbour, ikke som efterfiltrering af top-k.
+                    "filter": {"bool": {"filter": filters}},
+                },
+                size=RRF_WINDOW,
+            )
+            responses = list(await asyncio.gather(bm25_search, knn_search))
+
+        sources: dict[int, dict[str, Any]] = {}
+        rankings: list[list[int]] = []
+        for response in responses:
+            ranking: list[int] = []
+            for hit in response["hits"]["hits"]:
+                tx_id = int(hit["_source"]["transaction_id"])
+                ranking.append(tx_id)
+                sources.setdefault(tx_id, hit["_source"])
+            rankings.append(ranking)
+
+        fused = rrf_fuse(rankings)[:limit]
+        return HybridSearchResultDTO(
+            items=[self._hit_to_dto(sources[tx_id]) for tx_id in fused],
+            used_knn=query_vector is not None,
+        )
+
     @_translate_es_errors
     async def search_transactions(
         self,
@@ -503,27 +631,9 @@ class EsAnalyticsQueryStore(IAnalyticsQueryPort):
             size=limit,
             track_total_hits=True,
         )
-        items = []
-        for hit in response["hits"]["hits"]:
-            source = hit["_source"]
-            items.append(
-                TransactionProjectionDTO(
-                    id=source["transaction_id"],
-                    amount=source["amount"],
-                    description=source.get("description"),
-                    date=date.fromisoformat(source["tx_date"]),
-                    type=source.get("transaction_type", ""),
-                    category_id=source.get("category_id"),
-                    category_name=source.get("category_name"),
-                    subcategory_id=source.get("subcategory_id"),
-                    subcategory_name=source.get("subcategory_name"),
-                    account_id=source["account_id"],
-                    categorization_tier=source.get("categorization_tier"),
-                )
-            )
         return TransactionSearchResultDTO(
             total_count=int(response["hits"]["total"]["value"]),
-            items=items,
+            items=[self._hit_to_dto(hit["_source"]) for hit in response["hits"]["hits"]],
         )
 
     @_translate_es_errors

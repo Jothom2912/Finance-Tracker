@@ -106,6 +106,33 @@ async def test_transactions_search_endpoint(client: httpx.AsyncClient) -> None:
     assert body["items"][0]["description"] == "Groceries"
 
 
+async def test_hybrid_search_bm25_only_happy_path(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/analytics/search/hybrid",
+        json={"query": "groceries"},
+        headers=auth_header(),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["used_knn"] is False
+    assert [i["description"] for i in body["items"]] == ["Groceries"]
+
+
+async def test_hybrid_search_requires_auth(client: httpx.AsyncClient) -> None:
+    response = await client.post("/api/v1/analytics/search/hybrid", json={"query": "groceries"})
+    assert response.status_code == 401
+
+
+async def test_hybrid_search_rejects_wrong_vector_dims(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/analytics/search/hybrid",
+        json={"query": "groceries", "query_vector": [0.1, 0.2, 0.3]},
+        headers=auth_header(),
+    )
+    assert response.status_code == 422
+    assert "1024" in response.text
+
+
 async def test_read_store_unavailable_maps_to_503(index_prefix: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "jwt_secret", TEST_SECRET)
     monkeypatch.setattr(settings, "es_index_prefix", index_prefix)

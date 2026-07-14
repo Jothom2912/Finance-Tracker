@@ -73,6 +73,18 @@ class TransactionSearchResultDTO(BaseModel):
     items: list[TransactionProjectionDTO]
 
 
+class HybridSearchResultDTO(BaseModel):
+    """AI-20: RRF-fusioneret BM25+kNN-resultat.
+
+    Ingen ``total_count`` — fusionerede ranks har ingen meningsfuld
+    totalmængde. ``used_knn=False`` betyder degraderet til ren BM25
+    (intet query_vector medsendt).
+    """
+
+    items: list[TransactionProjectionDTO]
+    used_knn: bool
+
+
 class CategoryDeltaDTO(BaseModel):
     category_id: Optional[int]
     category_name: str

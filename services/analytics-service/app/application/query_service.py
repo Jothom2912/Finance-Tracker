@@ -14,6 +14,7 @@ from typing import Optional
 
 from app.application.dto import (
     FinancialOverviewDTO,
+    HybridSearchResultDTO,
     MonthComparisonDTO,
     MonthlyCashflowDTO,
     MonthlyExpensesDTO,
@@ -167,6 +168,42 @@ class AnalyticsQueryService:
             limit=limit,
             offset=offset,
             sort=sort,
+        )
+
+    @execute_with_logging("analytics.hybrid_search")
+    async def hybrid_search_transactions(
+        self,
+        *,
+        user_id: int,
+        query: str,
+        query_vector: Optional[list[float]] = None,
+        account_id: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        category_id: Optional[int] = None,
+        subcategory_id: Optional[int] = None,
+        category_name: Optional[str] = None,
+        tx_type: Optional[str] = None,
+        amount_min: Optional[float] = None,
+        amount_max: Optional[float] = None,
+        limit: int = 10,
+    ) -> HybridSearchResultDTO:
+        if start_date and end_date and start_date > end_date:
+            raise InvalidPeriodError()
+        return await self._port.hybrid_search_transactions(
+            user_id=user_id,
+            query=query,
+            query_vector=query_vector,
+            account_id=account_id,
+            start_date=start_date,
+            end_date=end_date,
+            category_id=category_id,
+            subcategory_id=subcategory_id,
+            category_name=category_name,
+            tx_type=tx_type,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            limit=limit,
         )
 
     @execute_with_logging("analytics.top_merchants")
