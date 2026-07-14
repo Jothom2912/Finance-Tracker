@@ -92,6 +92,15 @@ Ordered = priority order. Steps 1–3 are independent of each other after step 1
    they guard regressions but won't discriminate AI-20 improvements; add distractor docs
    + harder cases when discrimination is needed. Floors set at 0.95/0.95/0.90.
    Aggregation cases are data-only until a live-backend numeric eval exists.)*
+   *(2026-07-13: **hardened for AI-20 discrimination** — 22 distractor txs (ids 100+,
+   real Danish orthography, semantically adjacent categories without CATEGORY_SYNONYMS
+   coverage), 15 hard retrieval cases (cross-spelling "Føtex"→"Foetex", world-knowledge
+   "musik"→Spotify, near-distractor discrimination), 6 harder intent phrasings, and
+   **recall@3** added as the sharp metric. New baseline (35 retrieval / 22 intent cases):
+   recall@10 = 1.000 (still saturated), **recall@3 = 0.967, MRR = 0.981, intent = 0.955**
+   — signal carried by "tøj shopping" (recall@3 0.33), "el og vand regninger" (0.50) and
+   the "bid af samlede forbrug" intent miss. AI-20 cutover gate: compare recall@3/MRR,
+   not recall@10. Floors 0.95/0.95/0.95, intent 0.90.)*
 
 ### 1. AI-19 — structured intents → analytics-service (S)
 
