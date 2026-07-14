@@ -29,12 +29,13 @@ K_STRICT = 3
 
 # Baseline 2026-07-13 (ChromaDB + bge-m3, distractor-korpus ~67 docs, 35 cases):
 # mean recall@10 = 1.000, mean recall@3 = 0.967, mean MRR = 0.981.
-# recall@10 er stadig mættet over det lille korpus — diskriminationen ved
-# AI-20-cutoveret ligger i recall@3 og MRR, hvor nær-distractors nu koster
-# rangering ("tøj shopping" recall@3 0.33/RR 0.33; "el og vand regninger"
-# recall@3 0.50). Floors ligger lige under målt baseline så regressioner
-# fejler højt (ét fuldt case-drop koster ~0.029 i mean); hæv dem når en
-# ændring løfter metrikken.
+# ES hybrid målt 2026-07-14 (cutover-gaten): recall@10 = 0.996,
+# recall@3 = 0.971, MRR = 0.967 — bedre på den skarpe metrik; MRR-tabet
+# er én case ("toej shopping", hvor BM25 matcher Shopping-KATEGORIEN
+# leksikalsk; AI-21 kategori-resolve er modtrækket). Cutover udført.
+# Floors ligger lige under målt baseline så regressioner fejler højt
+# (ét fuldt case-drop koster ~0.029 i mean); hæv dem når en ændring
+# løfter metrikken.
 MEAN_RECALL_FLOOR = 0.95
 MEAN_MRR_FLOOR = 0.95
 MEAN_RECALL_STRICT_FLOOR = 0.95
