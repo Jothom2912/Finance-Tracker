@@ -9,14 +9,18 @@ regressions fail loudly; raise them when a change lifts the metrics.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 import pytest
-from app.adapters.outbound.chromadb_search import ChromaDBSearch
+from app.application.ports.semantic_search_port import ISemanticSearchPort
+from app.config import settings
 
 from .fixtures import EVAL_USER_ID, OTHER_USER_ID
 from .golden import RETRIEVAL_CASES, RetrievalCase
 
 logger = logging.getLogger(__name__)
+
+SearchFactory = Callable[[int], ISemanticSearchPort]
 
 pytestmark = pytest.mark.eval
 
@@ -36,9 +40,9 @@ MEAN_MRR_FLOOR = 0.95
 MEAN_RECALL_STRICT_FLOOR = 0.95
 
 
-def _run_case(case: RetrievalCase) -> tuple[float, float, float]:
+def _run_case(case: RetrievalCase, search_factory: SearchFactory) -> tuple[float, float, float]:
     """Returns (recall@TOP_K, recall@K_STRICT, reciprocal rank) for one case."""
-    search = ChromaDBSearch(user_id=EVAL_USER_ID)
+    search = search_factory(EVAL_USER_ID)
     items, _ = search.search(case.question, period=case.period, top_k=TOP_K)
     retrieved = [i.id for i in items]
 
@@ -56,13 +60,13 @@ def _run_case(case: RetrievalCase) -> tuple[float, float, float]:
     return recall, recall_strict, rr
 
 
-def test_retrieval_golden_set(eval_collection: None) -> None:
+def test_retrieval_golden_set(search_factory: SearchFactory) -> None:
     rows = []
     for case in RETRIEVAL_CASES:
-        recall, recall_strict, rr = _run_case(case)
+        recall, recall_strict, rr = _run_case(case, search_factory)
         rows.append((case, recall, recall_strict, rr))
 
-    print("\n--- Retrieval eval (ChromaDB baseline) ---")
+    print(f"\n--- Retrieval eval (backend={settings.SEARCH_BACKEND}) ---")
     print(f"{'question':<45} {'period':<9} {'recall@10':>9} {'recall@3':>9} {'RR':>6}")
     for case, recall, recall_strict, rr in sorted(rows, key=lambda r: (r[2], r[1])):
         print(f"{case.question:<45} {case.period or '-':<9} {recall:>9.2f} {recall_strict:>9.2f} {rr:>6.2f}")
@@ -83,10 +87,10 @@ def test_retrieval_golden_set(eval_collection: None) -> None:
     assert mean_mrr >= MEAN_MRR_FLOOR, f"mean MRR {mean_mrr:.3f} under floor {MEAN_MRR_FLOOR}"
 
 
-def test_tenant_isolation_no_cross_user_results(eval_collection: None) -> None:
+def test_tenant_isolation_no_cross_user_results(search_factory: SearchFactory) -> None:
     """User 9001's queries must never surface user 9002's documents (and v.v.)."""
-    own = ChromaDBSearch(user_id=EVAL_USER_ID)
-    other = ChromaDBSearch(user_id=OTHER_USER_ID)
+    own = search_factory(EVAL_USER_ID)
+    other = search_factory(OTHER_USER_ID)
 
     items_own, _ = own.search("dagligvarer Bilka McDonalds", top_k=50)
     items_other, _ = other.search("dagligvarer Bilka McDonalds", top_k=50)

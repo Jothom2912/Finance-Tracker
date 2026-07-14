@@ -28,6 +28,9 @@ test-unit: ## Run unit tests only
 test-eval: ## Run the AI-01 quality eval (needs live Ollama with bge-m3 + qwen3:4b, e.g. OLLAMA_BASE_URL=http://localhost:11435)
 	uv run pytest tests/eval/ -v -m eval -s
 
+test-eval-retrieval: ## Retrieval-eval alene; sæt SEARCH_BACKEND=es for AI-20 ES-gaten (kræver seed — se tests/eval/es_seed.py)
+	uv run pytest tests/eval/test_retrieval_eval.py -v -m eval -s
+
 lint: ## Run ruff linter
 	uv run ruff check .
 
