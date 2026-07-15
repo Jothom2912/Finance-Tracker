@@ -16,6 +16,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "finans-tracker-contracts",
     "finans-tracker-auth",
+    "finans-tracker-messaging",
 ]
 
 [dependency-groups]
@@ -32,6 +33,7 @@ dev = [
 [tool.uv.sources]
 finans-tracker-contracts = { path = "../shared/contracts" }
 finans-tracker-auth = { path = "../shared/auth" }
+finans-tracker-messaging = { path = "../shared/messaging" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

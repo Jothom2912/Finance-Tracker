@@ -553,6 +553,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "finans-tracker-auth" },
     { name = "finans-tracker-contracts" },
+    { name = "finans-tracker-messaging" },
     { name = "psycopg2-binary" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -580,6 +581,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "finans-tracker-auth", directory = "../shared/auth" },
     { name = "finans-tracker-contracts", directory = "../shared/contracts" },
+    { name = "finans-tracker-messaging", directory = "../shared/messaging" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
@@ -611,6 +613,25 @@ dependencies = [
 requires-dist = [
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "finans-tracker-messaging"
+version = "0.1.0"
+source = { directory = "../shared/messaging" }
+dependencies = [
+    { name = "aio-pika" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aio-pika", specifier = ">=9.4.0" },
+    { name = "aiosqlite", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
 provides-extras = ["dev"]
 

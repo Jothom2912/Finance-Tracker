@@ -12,12 +12,16 @@ sync /categorize HTTP endpoint uses, so rule/subcategory changes take effect
 here within the provider's TTL without a consumer restart, and any future
 ML/LLM tier wired into the orchestrator runs here too.
 
-All three writes (categorization_results, outbox_events, processed_events)
-happen in a single DB transaction.  This guarantees atomicity: either all
-three are committed, or none are.  The UNIQUE constraint on
-(message_id, consumer_name) in processed_events is the last line of
-defense against duplicates — even if two consumer instances race on the
-same message, one will fail with IntegrityError and roll back.
+Connection/topology/retry/DLQ boilerplate lives in the shared
+``messaging.ConsumerBase``.  Deduplication deliberately does NOT use the
+base's ``InboxDeduplicator`` hook: the inbox row must commit atomically with
+the result + outbox rows, so it is written inside ``handle``'s own DB
+transaction.  All three writes (categorization_results, outbox_events,
+processed_events) happen in a single transaction — either all three commit,
+or none do.  The UNIQUE constraint on (message_id, consumer_name) in
+processed_events is the last line of defense against duplicates — even if
+two consumer instances race on the same message, one fails with
+IntegrityError, rolls back, and the message is ACKed as a benign duplicate.
 
 Run as a standalone process::
 
@@ -27,18 +31,16 @@ Run as a standalone process::
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+from typing import Any
 
-import aio_pika
-from aio_pika import ExchangeType
-from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractIncomingMessage
+from aio_pika.abc import AbstractIncomingMessage
 from contracts.events.transaction import TransactionCategorizedEvent
+from messaging import ConsumerBase, OutboxRepository, setup_worker_logging
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.adapters.outbound.postgres_result_repository import PostgresCategorizationResultRepository
 from app.application.categorization_service import CategorizationService
 from app.application.dto import CategorizeRequestDTO
@@ -46,25 +48,19 @@ from app.config import settings
 from app.database import async_session_factory
 from app.domain.entities import CategorizationResultRecord
 from app.domain.value_objects import CategorizationResult, CategorizationTier, Confidence
-from app.models import CategoryModel, ProcessedEventModel, SubCategoryModel
+from app.models import CategoryModel, OutboxEventModel, ProcessedEventModel, SubCategoryModel
 from app.rule_engine_provider import RuleEngineProvider, rule_engine_provider
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
-)
 logger = logging.getLogger(__name__)
 
-EXCHANGE_NAME = "finans_tracker.events"
 QUEUE_NAME = "categorization.transaction_created"
 ROUTING_KEY = "transaction.created"
 MODEL_VERSION = "rules-keyword-v1"
-MAX_RETRIES = 3
 CLEANUP_DAYS = 30
 _CLEANUP_SAFETY_THRESHOLD = 0.9
 
 
-class TransactionCreatedConsumer:
+class TransactionCreatedConsumer(ConsumerBase):
     """Async consumer for transaction.created events.
 
     Uses inbox pattern (processed_events table) for deduplication.
@@ -72,90 +68,42 @@ class TransactionCreatedConsumer:
     """
 
     def __init__(self, rule_engine_provider: RuleEngineProvider) -> None:
+        super().__init__(
+            rabbitmq_url=settings.RABBITMQ_URL,
+            queue_name=QUEUE_NAME,
+            routing_keys=ROUTING_KEY,
+        )
         self._rule_engine_provider = rule_engine_provider
-        self._connection: AbstractConnection | None = None
-        self._channel: AbstractChannel | None = None
 
     async def run(self) -> None:
         await self._cleanup_old_inbox_rows()
-        self._connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
-        self._channel = await self._connection.channel()
-        await self._channel.set_qos(prefetch_count=1)
+        await super().run()
 
-        exchange = await self._channel.declare_exchange(
-            EXCHANGE_NAME,
-            ExchangeType.TOPIC,
-            durable=True,
-        )
+    async def handle(self, payload: dict[str, Any], message: AbstractIncomingMessage) -> None:
+        message_id = payload.get("correlation_id", "")
+        event_type = payload.get("event_type", "")
 
-        dlx = await self._channel.declare_exchange(
-            f"{EXCHANGE_NAME}.dlx",
-            ExchangeType.DIRECT,
-            durable=True,
-        )
-        dlq = await self._channel.declare_queue(f"{QUEUE_NAME}.dlq", durable=True)
-        await dlq.bind(dlx, routing_key=QUEUE_NAME)
+        async with async_session_factory() as session:
+            if message_id and await self._is_duplicate(session, message_id):
+                logger.info("Skipping duplicate (message_id=%s)", message_id)
+                return
 
-        queue = await self._channel.declare_queue(
-            QUEUE_NAME,
-            durable=True,
-            arguments={
-                "x-dead-letter-exchange": f"{EXCHANGE_NAME}.dlx",
-                "x-dead-letter-routing-key": QUEUE_NAME,
-            },
-        )
-        await queue.bind(exchange, routing_key=ROUTING_KEY)
+            await self._handle(session, payload)
 
-        await queue.consume(self._on_message)
-        logger.info("Consumer %s listening on %s", QUEUE_NAME, ROUTING_KEY)
-        await asyncio.Future()
+            if message_id:
+                self._add_inbox_row(session, message_id, event_type)
 
-    async def _on_message(self, message: AbstractIncomingMessage) -> None:
-        body = json.loads(message.body.decode("utf-8"))
-        message_id = body.get("correlation_id", "")
-        event_type = body.get("event_type", "")
-
-        try:
-            async with async_session_factory() as session:
-                if message_id and await self._is_duplicate(session, message_id):
-                    logger.info("Skipping duplicate (message_id=%s)", message_id)
-                    await message.ack()
+            try:
+                await session.commit()
+            except IntegrityError as exc:
+                await session.rollback()
+                if "processed_events" in str(exc).lower() or "uq_processed_events" in str(exc).lower():
+                    logger.info(
+                        "Duplicate detected on commit (message_id=%s) — benign race, acking",
+                        message_id,
+                    )
                     return
-
-                await self._handle(session, body)
-
-                if message_id:
-                    self._add_inbox_row(session, message_id, event_type)
-
-                try:
-                    await session.commit()
-                except IntegrityError as exc:
-                    await session.rollback()
-                    if "processed_events" in str(exc).lower() or "uq_processed_events" in str(exc).lower():
-                        logger.info(
-                            "Duplicate detected on commit (message_id=%s) — benign race, acking",
-                            message_id,
-                        )
-                        await message.ack()
-                        return
-                    raise
-
-            await message.ack()
-
-        except Exception:
-            retry_count = int((message.headers or {}).get("x-retry-count", 0))
-            if retry_count < MAX_RETRIES:
-                logger.warning(
-                    "Handler failed (retry=%d/%d) — republishing",
-                    retry_count + 1,
-                    MAX_RETRIES,
-                    exc_info=True,
-                )
-                await self._republish(message, retry_count + 1)
-                await message.ack()
-            else:
-                logger.error("Max retries reached — sending to DLQ", exc_info=True)
-                await message.nack(requeue=False)
+                raise
 
     async def _handle(self, session: AsyncSession, event_data: dict) -> None:
         """Run pipeline and write result + outbox within the caller's session."""
@@ -179,7 +127,7 @@ class TransactionCreatedConsumer:
             category_name = (await session.execute(stmt)).scalar_one_or_none() or ""
 
         result_repo = PostgresCategorizationResultRepository(session)
-        outbox_repo = PostgresOutboxRepository(session)
+        outbox_repo = OutboxRepository(session, OutboxEventModel)
 
         await result_repo.save(
             CategorizationResultRecord(
@@ -259,23 +207,6 @@ class TransactionCreatedConsumer:
             ),
         )
 
-    async def _republish(self, original: AbstractIncomingMessage, retry_count: int) -> None:
-        assert self._channel is not None
-        exchange = await self._channel.declare_exchange(
-            EXCHANGE_NAME,
-            ExchangeType.TOPIC,
-            durable=True,
-        )
-        headers = dict(original.headers or {})
-        headers["x-retry-count"] = retry_count
-        msg = aio_pika.Message(
-            body=original.body,
-            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-            content_type="application/json",
-            headers=headers,
-        )
-        await exchange.publish(msg, routing_key=ROUTING_KEY)
-
     async def _cleanup_old_inbox_rows(self) -> None:
         async with async_session_factory() as session:
             try:
@@ -315,6 +246,7 @@ class TransactionCreatedConsumer:
 
 
 async def main() -> None:
+    setup_worker_logging(__name__)
     await rule_engine_provider.warmup()
     consumer = TransactionCreatedConsumer(rule_engine_provider)
     await consumer.run()
