@@ -38,4 +38,11 @@ app.include_router(saga_router, prefix="/api/v1")
 app.include_router(create_graphql_router(), prefix="/api/v1/graphql")
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8010, reload=ENVIRONMENT == "development")
+    # Bind-all is intentional: the containerized service must listen on
+    # 0.0.0.0 for Docker port mapping to work (mirrors the Dockerfile CMD).
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",  # nosec B104
+        port=8010,
+        reload=ENVIRONMENT == "development",
+    )

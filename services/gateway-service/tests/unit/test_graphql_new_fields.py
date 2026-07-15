@@ -13,7 +13,7 @@ from app.application.dto import (
     MonthlyCashflow,
     TransactionProjection,
 )
-from app.shared.budget_period import determine_budget_month
+from domain import determine_budget_month
 
 
 class FakeFinancialPort:

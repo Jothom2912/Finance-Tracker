@@ -2,29 +2,28 @@ SHELL := /bin/bash
 .PHONY: install-deps test test-unit test-integration lint format format-check security check clean
 
 install-deps:
-	python -m pip install --upgrade pip
-	python -m pip install -r requirements.txt pytest ruff bandit
+	uv sync --dev
 
 test:
-	PYTHONPATH=../shared/contracts:../shared:. pytest tests -v
+	uv run pytest tests -v
 
 test-unit:
-	PYTHONPATH=../shared/contracts:../shared:. pytest tests/unit -v
+	uv run pytest tests/unit -v
 
 test-integration:
-	PYTHONPATH=../shared/contracts:../shared:. pytest tests/integration -v
+	uv run pytest tests/integration -v
 
 lint:
-	ruff check .
+	uv run ruff check .
 
 format:
-	ruff format .
+	uv run ruff format .
 
 format-check:
-	ruff format --check .
+	uv run ruff format --check .
 
 security:
-	bandit -r app -x tests
+	uv run bandit -r app -x tests
 
 check: lint format-check security test
 

@@ -5,6 +5,7 @@ from datetime import date
 from typing import Any, Optional
 
 import strawberry
+from domain import budget_period, determine_budget_month
 from fastapi import Depends, Request
 from strawberry.fastapi import GraphQLRouter
 from strawberry.types import Info
@@ -19,7 +20,6 @@ from app.application.ports.outbound import (
     IFinancialAnalyticsPort,
 )
 from app.auth import get_account_id_from_headers
-from app.shared.budget_period import budget_period, determine_budget_month
 
 logger = logging.getLogger(__name__)
 
