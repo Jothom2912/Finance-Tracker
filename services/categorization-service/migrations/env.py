@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -21,7 +22,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+# Read DATABASE_URL lazily from the environment (not the import-time-cached
+# Settings): app.config may have been imported earlier in the process with a
+# stale/dummy URL, and tests set DATABASE_URL right before invoking alembic
+# programmatically. Falls back to Settings for alembic CLI usage.
+db_url = os.getenv("DATABASE_URL", settings.DATABASE_URL)
+sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
 config.set_main_option("sqlalchemy.url", sync_url)
 
 target_metadata = Base.metadata

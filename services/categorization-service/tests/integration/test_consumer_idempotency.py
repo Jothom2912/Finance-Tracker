@@ -37,6 +37,22 @@ def _make_rule_engine():
     )
 
 
+class _StaticRuleEngineProvider:
+    """Duck-typed stand-in for RuleEngineProvider with a fixed engine.
+
+    Avoids the real provider's TTL-based DB reload so tests control the
+    rule set explicitly instead of depending on seeded taxonomy rows.
+    """
+
+    def __init__(self, engine, fallback_subcategory_id: int, fallback_category_id: int) -> None:
+        self._engine = engine
+        self.fallback_subcategory_id = fallback_subcategory_id
+        self.fallback_category_id = fallback_category_id
+
+    async def get(self):
+        return self._engine
+
+
 def _make_message(payload: dict, message_id: str) -> AsyncMock:
     """Create a mock AbstractIncomingMessage."""
     msg = AsyncMock()
@@ -93,7 +109,8 @@ async def consumer(session_factory):
     tc_module.async_session_factory = session_factory
 
     engine, fallback_sub, fallback_cat = _make_rule_engine()
-    c = tc_module.TransactionCreatedConsumer(engine, fallback_sub, fallback_cat)
+    provider = _StaticRuleEngineProvider(engine, fallback_sub, fallback_cat)
+    c = tc_module.TransactionCreatedConsumer(provider)
 
     yield c
 
