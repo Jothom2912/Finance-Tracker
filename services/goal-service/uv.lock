@@ -422,6 +422,24 @@ wheels = [
 ]
 
 [[package]]
+name = "finans-tracker-auth"
+version = "0.1.0"
+source = { directory = "../shared/auth" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "python-jose", extra = ["cryptography"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "httpx", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "finans-tracker-contracts"
 version = "0.1.0"
 source = { directory = "../shared/contracts" }
@@ -445,6 +463,7 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "fastapi" },
+    { name = "finans-tracker-auth" },
     { name = "finans-tracker-contracts" },
     { name = "httpx" },
     { name = "psycopg2-binary" },
@@ -471,6 +490,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.13.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "fastapi", specifier = ">=0.110.0" },
+    { name = "finans-tracker-auth", directory = "../shared/auth" },
     { name = "finans-tracker-contracts", directory = "../shared/contracts" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
