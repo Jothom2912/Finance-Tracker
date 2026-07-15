@@ -17,13 +17,14 @@ import aio_pika
 from aio_pika import ExchangeType
 from aio_pika.abc import AbstractIncomingMessage
 from contracts.events.bank import BankSyncCompletedEvent
+from messaging import OutboxRepository
 from sqlalchemy import select
 
 from app.adapters.outbound.enable_banking_client import EnableBankingClient, EnableBankingConfig
-from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.config import settings
 from app.database import async_session_factory
 from app.models import BankConnectionModel
+from app.models.outbox import OutboxEventModel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -85,7 +86,14 @@ class BankingSagaCommandConsumer:
         await asyncio.Future()
 
     async def _on_message(self, message: AbstractIncomingMessage) -> None:
-        body = json.loads(message.body.decode("utf-8"))
+        # Parse inside error handling: a malformed body is dead-lettered
+        # instead of crashing the consumer callback.
+        try:
+            body = json.loads(message.body.decode("utf-8"))
+        except Exception:
+            logger.error("Invalid JSON on %s — sending to DLQ", QUEUE_NAME, exc_info=True)
+            await message.nack(requeue=False)
+            return
         event_type = body.get("event_type", "")
         saga_id = body.get("saga_id", "")
         step_name = body.get("step_name", "")
@@ -205,7 +213,7 @@ class BankingSagaCommandConsumer:
                 # direct timestamp (not injected clock) is acceptable here.
                 conn.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
-                outbox_repo = PostgresOutboxRepository(session)
+                outbox_repo = OutboxRepository(session, OutboxEventModel)
                 event = BankSyncCompletedEvent(
                     connection_id=connection_id,
                     account_id=conn.account_id,

@@ -13,4 +13,5 @@ PyJWT[crypto]>=2.8.0
 # Shared JWT validation (P2-02). Path resolves from the service dir locally/CI
 # and from /app in Docker (both land on services/shared/auth via the COPY).
 ../shared/auth
+../shared/messaging
 cryptography>=41.0.0

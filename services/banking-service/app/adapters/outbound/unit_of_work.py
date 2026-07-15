@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Self
 
+from messaging import OutboxRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.postgres_account_projection_repository import (
@@ -10,11 +11,11 @@ from app.adapters.outbound.postgres_account_projection_repository import (
 from app.adapters.outbound.postgres_bank_connection_repository import (
     PostgresBankConnectionRepository,
 )
-from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.adapters.outbound.postgres_pending_auth_repository import (
     PostgresPendingAuthRepository,
 )
 from app.application.ports.outbound import IUnitOfWork
+from app.models.outbox import OutboxEventModel
 
 
 class SQLAlchemyUnitOfWork(IUnitOfWork):
@@ -23,7 +24,7 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
         self.connections = PostgresBankConnectionRepository(session)
         self.pending_auth = PostgresPendingAuthRepository(session)
         self.accounts = PostgresAccountProjectionRepository(session)
-        self.outbox = PostgresOutboxRepository(session)
+        self.outbox = OutboxRepository(session, OutboxEventModel)
 
     async def __aenter__(self) -> Self:
         return self
