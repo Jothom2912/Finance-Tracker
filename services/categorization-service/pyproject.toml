@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "finans-tracker-contracts",
+    "finans-tracker-auth",
 ]
 
 [dependency-groups]
@@ -30,6 +31,7 @@ dev = [
 
 [tool.uv.sources]
 finans-tracker-contracts = { path = "../shared/contracts" }
+finans-tracker-auth = { path = "../shared/auth" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
