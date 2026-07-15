@@ -3,6 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY services/shared/auth /shared/auth
+COPY services/shared/messaging /shared/messaging
 COPY services/account-service/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
