@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aio_pika import DeliveryMode, Message
-
 from messaging.rabbitmq import EXCHANGE_NAME, RabbitMQPublisher
+
 from tests.conftest import FakeEvent
 
 

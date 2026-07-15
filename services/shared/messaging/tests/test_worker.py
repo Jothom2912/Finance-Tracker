@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 from aio_pika import Message
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from messaging.outbox import OutboxRepository, OutboxStatus
 from messaging.time import utcnow_naive
 from messaging.worker import OutboxPublisherWorker
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from tests.conftest import FakeEvent, OutboxEventModel
 
 

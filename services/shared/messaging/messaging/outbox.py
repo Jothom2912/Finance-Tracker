@@ -27,8 +27,7 @@ from datetime import datetime, timedelta
 from typing import Iterable
 from uuid import uuid4
 
-from sqlalchemy import Index, Integer, String, Text, delete, func, update
-from sqlalchemy import select
+from sqlalchemy import Index, Integer, String, Text, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 

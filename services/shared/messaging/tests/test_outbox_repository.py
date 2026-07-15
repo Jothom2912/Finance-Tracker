@@ -7,12 +7,9 @@ tests cover predicates, ordering, limits and status transitions.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from messaging.outbox import (
     MAX_BACKOFF_S,
     OutboxRepository,
@@ -20,6 +17,9 @@ from messaging.outbox import (
     compute_backoff,
 )
 from messaging.time import utcnow_naive
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from tests.conftest import FakeEvent, OutboxEventModel
 
 

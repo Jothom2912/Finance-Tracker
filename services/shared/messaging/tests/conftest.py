@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator, Callable
 from uuid import uuid4
 
 import pytest_asyncio
+from messaging.outbox import OutboxEventMixin
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -21,8 +22,6 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool
-
-from messaging.outbox import OutboxEventMixin
 
 
 class Base(DeclarativeBase):

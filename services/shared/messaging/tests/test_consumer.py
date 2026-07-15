@@ -11,9 +11,7 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from aio_pika.abc import AbstractIncomingMessage
-
 from messaging.consumer import (
     RETRY_HEADER,
     ConsumerBase,
