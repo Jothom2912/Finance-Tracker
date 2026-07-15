@@ -10,6 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     PATH="/app/.venv/bin:$PATH"
 
+COPY services/shared/auth /shared/auth
 COPY services/ai-service/pyproject.toml services/ai-service/uv.lock ./
 RUN uv sync --frozen --no-dev
 

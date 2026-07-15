@@ -14,7 +14,11 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "sse-starlette>=2.0.0",
     "anyio>=4.0.0",
+    "finans-tracker-auth",
 ]
+
+[tool.uv.sources]
+finans-tracker-auth = { path = "../shared/auth" }
 
 [dependency-groups]
 dev = [

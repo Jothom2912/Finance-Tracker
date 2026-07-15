@@ -1,38 +1,20 @@
 """JWT token validation — ai-service is a token consumer, not an issuer.
 
 Tokens are created by user-service. All services share the same JWT_SECRET.
+Decoding is delegated to the shared finans-tracker-auth package (P2-02).
+
+Raw-token forwarding to analytics-/transaction-service (AI-19) is unaffected:
+the inbound adapters read the Authorization header directly off the Request
+and never depend on this module for credential extraction.
 """
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from auth.fastapi import make_current_user_dependency
 
 from app.config import settings
 
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/users/login",
+get_current_user_id = make_current_user_dependency(
+    lambda: settings.JWT_SECRET,
+    algorithms=(settings.JWT_ALGORITHM,),
 )
-
-
-async def get_current_user_id(
-    token: str = Depends(oauth2_scheme),
-) -> int:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired token",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
-        user_id_str = payload.get("sub") or str(payload.get("user_id", ""))
-        if not user_id_str:
-            raise credentials_exception
-        return int(user_id_str)
-    except (JWTError, KeyError, ValueError) as err:
-        raise credentials_exception from err
