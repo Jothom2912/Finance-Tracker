@@ -44,14 +44,13 @@ pre-existing test bug found along the way, and updated the stale BACKLOG.md P2 s
 
 | Package | Adopted | Remaining |
 |---------|---------|-----------|
-| auth | ai, gateway, user | transaction, account, budget, goal, banking, categorization, saga (7) |
+| auth | **ALL 10 (done 2026-07-15, this session's second half)** | — |
 | messaging | user | account, budget, transaction, banking, goal, categorization, saga (7 — all still carry local `postgres_outbox_repository.py`/`rabbitmq_publisher.py` copies; consumer-base/DLQ migration = P2-19/20 lands here too) |
 | domain (budget_period) | gateway | account (`app/shared/`), budget (`app/domain/`), analytics (`app/domain/`) (3) |
 
 ## Remaining plan (agreed with user)
 
-1. **Fase 1 — auth sweep** (S–M): 7 services, mechanical per `services/shared/auth/MIGRATION.md`,
-   ai-service commit `b04fac72` is the template. Commit per service.
+1. **Fase 1 — auth sweep**: DONE later this session (commits f85dcb50..fe9a8ca5, one per service). Notable: categorization's missing-header response changed 403→401 (HTTPBearer dropped) and it now accepts user_id-only tokens; account-service's dead password/monolith code deleted with the swap; banking+account (pip-based) get the shared package via a `../shared/auth` path line in requirements.txt (cwd-relative: works from service dir locally/CI and from /app in Docker) — both images build and import auth.fastapi.
 2. **Fase 2 — messaging** (M–L): one service at a time, user-service diff (`5cfde6f0`) is the
    template. Order by increasing complexity: goal → budget → categorization → banking →
    transaction → account → saga. Domain adoption (3 services) taken as cheap side work.
