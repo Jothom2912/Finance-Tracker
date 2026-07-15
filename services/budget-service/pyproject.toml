@@ -18,7 +18,11 @@ dependencies = [
     "redis>=8.0.0",
     "fastapi-cache2>=0.2.2",
     "jinja2>=3.1.0",
+    "finans-tracker-auth",
 ]
+
+[tool.uv.sources]
+finans-tracker-auth = { path = "../shared/auth" }
 
 [dependency-groups]
 dev = [

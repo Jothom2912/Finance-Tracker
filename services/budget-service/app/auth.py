@@ -1,14 +1,20 @@
+"""Budget-service auth: shared JWT validation + local S2S token minting.
+
+Validation of inbound tokens is delegated to the shared finans-tracker-auth
+package (P2-02). ``make_service_auth_header`` stays local on purpose: it
+*mints* tokens for service-to-service calls, which the shared package
+deliberately does not do — and the forged-user-token approach itself is
+slated for replacement by real S2S credentials (P3-02).
+"""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from auth.fastapi import make_current_user_dependency
+from jose import jwt
 
 from app.config import settings
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/login")
 
 
 def make_service_auth_header(user_id: int = 0) -> dict[str, str]:
@@ -22,17 +28,7 @@ def make_service_auth_header(user_id: int = 0) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired token",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        user_id_str = payload.get("sub") or str(payload.get("user_id", ""))
-        if not user_id_str:
-            raise credentials_exception
-        return int(user_id_str)
-    except (JWTError, KeyError, ValueError) as err:
-        raise credentials_exception from err
+get_current_user_id = make_current_user_dependency(
+    lambda: settings.JWT_SECRET,
+    algorithms=(settings.JWT_ALGORITHM,),
+)
