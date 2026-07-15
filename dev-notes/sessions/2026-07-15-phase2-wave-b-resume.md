@@ -45,15 +45,23 @@ pre-existing test bug found along the way, and updated the stale BACKLOG.md P2 s
 | Package | Adopted | Remaining |
 |---------|---------|-----------|
 | auth | **ALL 10 (done 2026-07-15, this session's second half)** | — |
-| messaging | user | account, budget, transaction, banking, goal, categorization, saga (7 — all still carry local `postgres_outbox_repository.py`/`rabbitmq_publisher.py` copies; consumer-base/DLQ migration = P2-19/20 lands here too) |
-| domain (budget_period) | gateway | account (`app/shared/`), budget (`app/domain/`), analytics (`app/domain/`) (3) |
+| messaging | **ALL 8 (done 2026-07-15)** | carve-outs: saga-command-consumers in banking/transaction keep own retry (saga failure-reply ≠ base contract); account's SyncOutboxRepository until P3-01 |
+| domain (budget_period) | **ALL 4 (done 2026-07-15)** | analytics keeps histogram_bucket_to_budget_month + months_in_period locally (analytics-only) |
 
 ## Remaining plan (agreed with user)
 
 1. **Fase 1 — auth sweep**: DONE later this session (commits f85dcb50..fe9a8ca5, one per service). Notable: categorization's missing-header response changed 403→401 (HTTPBearer dropped) and it now accepts user_id-only tokens; account-service's dead password/monolith code deleted with the swap; banking+account (pip-based) get the shared package via a `../shared/auth` path line in requirements.txt (cwd-relative: works from service dir locally/CI and from /app in Docker) — both images build and import auth.fastapi.
-2. **Fase 2 — messaging** (M–L): one service at a time, user-service diff (`5cfde6f0`) is the
-   template. Order by increasing complexity: goal → budget → categorization → banking →
-   transaction → account → saga. Domain adoption (3 services) taken as cheap side work.
+2. **Fase 2 — messaging**: DONE later this session (commits aa674f28..e1124c64, one per
+   service). Key decisions along the way: (a) consumers whose atomic inbox-dedup commits in
+   the same transaction as their writes keep that logic inside `handle()` — the base's
+   `InboxDeduplicator` hook would break atomicity (categorization, banking-projection,
+   both tx read-copy consumers); (b) saga-command-consumers were NOT ported to ConsumerBase —
+   their max-retry outcome is a failure REPLY to the saga (P1-12 honesty), not a DLQ;
+   (c) the tx categorized-consumer's stale-retry backoff (sleep 2**retry when the tx row
+   isn't persisted yet — observed live) is preserved via a sleep in handle() before raising;
+   (d) ConsumerBase adoption silently fixes the republish-to-topic-exchange fanout bug that
+   goal/categorization/taxonomy consumers all had. Queue/DLX topology is byte-identical to
+   before, so NO RabbitMQ queue deletion/recreation is needed for this rollout.
 3. **Fase 3 — P2-09** alone (3-service contract change: `entry_reference`/`currency`
    through saga, dedupe on `(account_id, external_id)`), then **P2-15** (k8s secrets) anytime.
 
