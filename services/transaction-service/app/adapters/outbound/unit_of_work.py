@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from typing import Self
 
+from messaging import OutboxRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.postgres_category_repository import (
     PostgresCategoryRepository,
-)
-from app.adapters.outbound.postgres_outbox_repository import (
-    PostgresOutboxRepository,
 )
 from app.adapters.outbound.postgres_planned_repository import (
     PostgresPlannedTransactionRepository,
@@ -20,6 +18,7 @@ from app.adapters.outbound.postgres_transaction_repository import (
     PostgresTransactionRepository,
 )
 from app.application.ports.outbound import IUnitOfWork
+from app.models import OutboxEventModel
 
 
 class SQLAlchemyUnitOfWork(IUnitOfWork):
@@ -37,7 +36,7 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
         self.planned = PostgresPlannedTransactionRepository(session)
         self.categories = PostgresCategoryRepository(session)
         self.subcategories = PostgresSubCategoryReadRepository(session)
-        self.outbox = PostgresOutboxRepository(session)
+        self.outbox = OutboxRepository(session, OutboxEventModel)
 
     async def __aenter__(self) -> Self:
         return self

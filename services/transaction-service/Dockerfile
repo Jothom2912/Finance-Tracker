@@ -12,6 +12,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 COPY services/shared/contracts /shared/contracts
 COPY services/shared/auth /shared/auth
+COPY services/shared/messaging /shared/messaging
 
 COPY services/transaction-service/pyproject.toml services/transaction-service/uv.lock ./
 RUN uv sync --frozen --no-dev

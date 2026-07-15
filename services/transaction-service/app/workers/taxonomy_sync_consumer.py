@@ -13,6 +13,12 @@ ordering is a presentation concern served by categorization-service.
 Atomicity: upsert/delete + inbox row committed in one DB transaction.
 Idempotency: inbox pattern on (message_id, consumer_name) with UNIQUE constraint.
 
+Connection/topology/retry/DLQ boilerplate lives in the shared
+``messaging.ConsumerBase`` (max_retries=5 preserved).  Deduplication
+deliberately does NOT use the base's ``InboxDeduplicator`` hook: the inbox
+row must commit atomically with the read-copy write, so it is written
+inside ``handle``'s own DB transaction.
+
 Run as a standalone process::
 
     python -m app.workers.taxonomy_sync_consumer
@@ -21,12 +27,11 @@ Run as a standalone process::
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+from typing import Any
 
-import aio_pika
-from aio_pika import ExchangeType
-from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractIncomingMessage
+from aio_pika.abc import AbstractIncomingMessage
+from messaging import ConsumerBase, setup_worker_logging
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,105 +40,47 @@ from app.config import settings
 from app.database import async_session_factory
 from app.models import CategoryModel, ProcessedEventModel, SubCategoryModel
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
-)
 logger = logging.getLogger(__name__)
 
-EXCHANGE_NAME = "finans_tracker.events"
 QUEUE_NAME = "transaction_service.taxonomy_sync"
 ROUTING_KEYS = ("category.*", "subcategory.*")
 MAX_RETRIES = 5
 
 
-class TaxonomySyncConsumer:
+class TaxonomySyncConsumer(ConsumerBase):
     def __init__(self) -> None:
-        self._connection: AbstractConnection | None = None
-        self._channel: AbstractChannel | None = None
-
-    async def run(self) -> None:
-        self._connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
-        self._channel = await self._connection.channel()
-        await self._channel.set_qos(prefetch_count=1)
-
-        exchange = await self._channel.declare_exchange(
-            EXCHANGE_NAME,
-            ExchangeType.TOPIC,
-            durable=True,
+        super().__init__(
+            rabbitmq_url=settings.RABBITMQ_URL,
+            queue_name=QUEUE_NAME,
+            routing_keys=ROUTING_KEYS,
+            max_retries=MAX_RETRIES,
         )
 
-        dlx = await self._channel.declare_exchange(
-            f"{EXCHANGE_NAME}.dlx",
-            ExchangeType.DIRECT,
-            durable=True,
-        )
-        dlq = await self._channel.declare_queue(f"{QUEUE_NAME}.dlq", durable=True)
-        await dlq.bind(dlx, routing_key=QUEUE_NAME)
+    async def handle(self, payload: dict[str, Any], message: AbstractIncomingMessage) -> None:
+        message_id = payload.get("correlation_id", "")
+        event_type = payload.get("event_type", "")
 
-        queue = await self._channel.declare_queue(
-            QUEUE_NAME,
-            durable=True,
-            arguments={
-                "x-dead-letter-exchange": f"{EXCHANGE_NAME}.dlx",
-                "x-dead-letter-routing-key": QUEUE_NAME,
-            },
-        )
-        for routing_key in ROUTING_KEYS:
-            await queue.bind(exchange, routing_key=routing_key)
+        async with async_session_factory() as session:
+            if message_id and await self._is_duplicate(session, message_id):
+                logger.info("Skipping duplicate (message_id=%s)", message_id)
+                return
 
-        await queue.consume(self._on_message)
-        logger.info("Consumer %s listening on %s", QUEUE_NAME, ", ".join(ROUTING_KEYS))
-        await asyncio.Future()
+            handled = await self._dispatch(session, event_type, payload)
+            if not handled:
+                logger.warning("Unknown event_type %r — acking without action", event_type)
+                return
 
-    async def _on_message(self, message: AbstractIncomingMessage) -> None:
-        body = json.loads(message.body.decode("utf-8"))
-        message_id = body.get("correlation_id", "")
-        event_type = body.get("event_type", "")
+            if message_id:
+                self._add_inbox_row(session, message_id, event_type)
 
-        try:
-            async with async_session_factory() as session:
-                if message_id and await self._is_duplicate(session, message_id):
-                    logger.info("Skipping duplicate (message_id=%s)", message_id)
-                    await message.ack()
+            try:
+                await session.commit()
+            except IntegrityError as exc:
+                await session.rollback()
+                if "processed_events" in str(exc).lower() or "uq_processed_events" in str(exc).lower():
+                    logger.info("Duplicate on commit (message_id=%s) — benign race", message_id)
                     return
-
-                handled = await self._dispatch(session, event_type, body)
-                if not handled:
-                    logger.warning("Unknown event_type %r — acking without action", event_type)
-                    await message.ack()
-                    return
-
-                if message_id:
-                    self._add_inbox_row(session, message_id, event_type)
-
-                try:
-                    await session.commit()
-                except IntegrityError as exc:
-                    await session.rollback()
-                    if "processed_events" in str(exc).lower() or "uq_processed_events" in str(exc).lower():
-                        logger.info("Duplicate on commit (message_id=%s) — benign race", message_id)
-                        await message.ack()
-                        return
-                    raise
-
-            await message.ack()
-
-        except Exception:
-            retry_count = int((message.headers or {}).get("x-retry-count", 0))
-            if retry_count < MAX_RETRIES:
-                logger.warning(
-                    "Handler failed for %s (retry=%d/%d)",
-                    event_type,
-                    retry_count + 1,
-                    MAX_RETRIES,
-                    exc_info=True,
-                )
-                await self._republish(message, retry_count + 1)
-                await message.ack()
-            else:
-                logger.error("Max retries reached for %s — DLQ", event_type, exc_info=True)
-                await message.nack(requeue=False)
+                raise
 
     async def _dispatch(self, session: AsyncSession, event_type: str, body: dict) -> bool:
         if event_type in ("category.created", "category.updated"):
@@ -224,28 +171,10 @@ class TaxonomySyncConsumer:
             )
         )
 
-    async def _republish(self, original: AbstractIncomingMessage, retry_count: int) -> None:
-        assert self._channel is not None
-        exchange = await self._channel.declare_exchange(
-            EXCHANGE_NAME,
-            ExchangeType.TOPIC,
-            durable=True,
-        )
-        headers = dict(original.headers or {})
-        headers["x-retry-count"] = retry_count
-        msg = aio_pika.Message(
-            body=original.body,
-            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-            content_type="application/json",
-            headers=headers,
-        )
-        routing_key = json.loads(original.body.decode("utf-8")).get("event_type", "category.updated")
-        await exchange.publish(msg, routing_key=routing_key)
-
 
 async def main() -> None:
-    consumer = TaxonomySyncConsumer()
-    await consumer.run()
+    setup_worker_logging(__name__)
+    await TaxonomySyncConsumer().run()
 
 
 if __name__ == "__main__":

@@ -7,6 +7,19 @@ from an existing categorization (e.g. from a previous categorization run).
 Atomicity: transaction update + inbox row committed in one DB transaction.
 Idempotency: inbox pattern on (message_id, consumer_name) with UNIQUE constraint.
 
+Connection/topology/retry/DLQ boilerplate lives in the shared
+``messaging.ConsumerBase`` (max_retries=5 preserved).  Deduplication
+deliberately does NOT use the base's ``InboxDeduplicator`` hook: the inbox
+row must commit atomically with the transaction update, so it is written
+inside ``handle``'s own DB transaction.
+
+The stale-retry backoff is preserved: when the transaction row is not
+persisted yet (categorized event raced ahead of the tx commit), ``handle``
+sleeps ``2**retry_count`` seconds before raising, and the base's retry
+ladder republishes with an incremented ``x-retry-count`` header.  The
+inline sleep blocks this consumer only (prefetch=1) — same behavior as
+the pre-shared implementation, observed load-bearing in live runs.
+
 Run as a standalone process::
 
     python -m app.workers.categorized_consumer
@@ -15,12 +28,11 @@ Run as a standalone process::
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+from typing import Any
 
-import aio_pika
-from aio_pika import ExchangeType
-from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractIncomingMessage
+from aio_pika.abc import AbstractIncomingMessage
+from messaging import ConsumerBase, PoisonMessageError, setup_worker_logging
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,135 +41,73 @@ from app.config import settings
 from app.database import async_session_factory
 from app.models import CategoryModel, ProcessedEventModel, TransactionModel
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
-)
 logger = logging.getLogger(__name__)
 
-EXCHANGE_NAME = "finans_tracker.events"
 QUEUE_NAME = "transaction_service.transaction_categorized"
 ROUTING_KEY = "transaction.categorized"
 MAX_RETRIES = 5
+RETRY_HEADER = "x-retry-count"
 
 
-class TransactionCategorizedConsumer:
+class TransactionCategorizedConsumer(ConsumerBase):
     def __init__(self) -> None:
-        self._connection: AbstractConnection | None = None
-        self._channel: AbstractChannel | None = None
-
-    async def run(self) -> None:
-        self._connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
-        self._channel = await self._connection.channel()
-        await self._channel.set_qos(prefetch_count=1)
-
-        exchange = await self._channel.declare_exchange(
-            EXCHANGE_NAME,
-            ExchangeType.TOPIC,
-            durable=True,
+        super().__init__(
+            rabbitmq_url=settings.RABBITMQ_URL,
+            queue_name=QUEUE_NAME,
+            routing_keys=ROUTING_KEY,
+            max_retries=MAX_RETRIES,
         )
 
-        dlx = await self._channel.declare_exchange(
-            f"{EXCHANGE_NAME}.dlx",
-            ExchangeType.DIRECT,
-            durable=True,
-        )
-        dlq = await self._channel.declare_queue(f"{QUEUE_NAME}.dlq", durable=True)
-        await dlq.bind(dlx, routing_key=QUEUE_NAME)
-
-        queue = await self._channel.declare_queue(
-            QUEUE_NAME,
-            durable=True,
-            arguments={
-                "x-dead-letter-exchange": f"{EXCHANGE_NAME}.dlx",
-                "x-dead-letter-routing-key": QUEUE_NAME,
-            },
-        )
-        await queue.bind(exchange, routing_key=ROUTING_KEY)
-
-        await queue.consume(self._on_message)
-        logger.info("Consumer %s listening on %s", QUEUE_NAME, ROUTING_KEY)
-        await asyncio.Future()
-
-    async def _on_message(self, message: AbstractIncomingMessage) -> None:
-        body = json.loads(message.body.decode("utf-8"))
-        message_id = body.get("correlation_id", "")
-        transaction_id = body.get("transaction_id")
+    async def handle(self, payload: dict[str, Any], message: AbstractIncomingMessage) -> None:
+        message_id = payload.get("correlation_id", "")
+        transaction_id = payload.get("transaction_id")
 
         if not transaction_id:
-            logger.error("Missing transaction_id in event payload")
-            await message.nack(requeue=False)
-            return
+            raise PoisonMessageError("Missing transaction_id in event payload")
 
-        try:
-            async with async_session_factory() as session:
-                if message_id and await self._is_duplicate(session, message_id):
-                    logger.info("Skipping duplicate (message_id=%s)", message_id)
-                    await message.ack()
+        async with async_session_factory() as session:
+            if message_id and await self._is_duplicate(session, message_id):
+                logger.info("Skipping duplicate (message_id=%s)", message_id)
+                return
+
+            tx = await self._get_transaction(session, transaction_id)
+            if tx is None:
+                await self._stale_backoff(message, transaction_id)
+                raise _TransactionNotFoundYet(transaction_id)
+
+            # v2 events carry the parent name; fall back to a local
+            # lookup for v1/empty payloads.
+            parent_name = payload.get("category_name") or None
+            if parent_name is None:
+                parent_name = await self._lookup_parent_name(session, payload.get("category_id"))
+            self._apply_categorization(tx, payload, parent_name)
+
+            if message_id:
+                self._add_inbox_row(session, message_id, payload.get("event_type", ""))
+
+            try:
+                await session.commit()
+            except IntegrityError as exc:
+                await session.rollback()
+                if "processed_events" in str(exc).lower() or "uq_processed_events" in str(exc).lower():
+                    logger.info("Duplicate on commit (message_id=%s) — benign race", message_id)
                     return
+                raise
 
-                tx = await self._get_transaction(session, transaction_id)
-                if tx is None:
-                    raise _TransactionNotFoundYet(transaction_id)
-
-                # v2 events carry the parent name; fall back to a local
-                # lookup for v1/empty payloads.
-                parent_name = body.get("category_name") or None
-                if parent_name is None:
-                    parent_name = await self._lookup_parent_name(session, body.get("category_id"))
-                self._apply_categorization(tx, body, parent_name)
-
-                if message_id:
-                    self._add_inbox_row(session, message_id, body.get("event_type", ""))
-
-                try:
-                    await session.commit()
-                except IntegrityError as exc:
-                    await session.rollback()
-                    if "processed_events" in str(exc).lower() or "uq_processed_events" in str(exc).lower():
-                        logger.info("Duplicate on commit (message_id=%s) — benign race", message_id)
-                        await message.ack()
-                        return
-                    raise
-
-            await message.ack()
-
-        except _TransactionNotFoundYet:
-            retry_count = int((message.headers or {}).get("x-retry-count", 0))
-            if retry_count < MAX_RETRIES:
-                delay = 2**retry_count
-                logger.warning(
-                    "Transaction %s not found yet (retry=%d/%d, backoff=%ds)",
-                    transaction_id,
-                    retry_count + 1,
-                    MAX_RETRIES,
-                    delay,
-                )
-                await asyncio.sleep(delay)
-                await self._republish(message, retry_count + 1)
-                await message.ack()
-            else:
-                logger.error(
-                    "Transaction %s not found after %d retries — DLQ",
-                    transaction_id,
-                    MAX_RETRIES,
-                )
-                await message.nack(requeue=False)
-
-        except Exception:
-            retry_count = int((message.headers or {}).get("x-retry-count", 0))
-            if retry_count < MAX_RETRIES:
-                logger.warning(
-                    "Handler failed (retry=%d/%d)",
-                    retry_count + 1,
-                    MAX_RETRIES,
-                    exc_info=True,
-                )
-                await self._republish(message, retry_count + 1)
-                await message.ack()
-            else:
-                logger.error("Max retries reached — DLQ", exc_info=True)
-                await message.nack(requeue=False)
+    @staticmethod
+    async def _stale_backoff(message: AbstractIncomingMessage, transaction_id: int) -> None:
+        """Exponential wait before the base republishes a not-found-yet event."""
+        retry_count = int((message.headers or {}).get(RETRY_HEADER, 0))
+        if retry_count < MAX_RETRIES:
+            delay = 2**retry_count
+            logger.warning(
+                "Transaction %s not found yet (retry=%d/%d, backoff=%ds)",
+                transaction_id,
+                retry_count + 1,
+                MAX_RETRIES,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
     @staticmethod
     async def _lookup_parent_name(session: AsyncSession, category_id: int | None) -> str | None:
@@ -266,23 +216,6 @@ class TransactionCategorizedConsumer:
             )
         )
 
-    async def _republish(self, original: AbstractIncomingMessage, retry_count: int) -> None:
-        assert self._channel is not None
-        exchange = await self._channel.declare_exchange(
-            EXCHANGE_NAME,
-            ExchangeType.TOPIC,
-            durable=True,
-        )
-        headers = dict(original.headers or {})
-        headers["x-retry-count"] = retry_count
-        msg = aio_pika.Message(
-            body=original.body,
-            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-            content_type="application/json",
-            headers=headers,
-        )
-        await exchange.publish(msg, routing_key=ROUTING_KEY)
-
 
 class _TransactionNotFoundYet(Exception):
     def __init__(self, transaction_id: int) -> None:
@@ -291,8 +224,8 @@ class _TransactionNotFoundYet(Exception):
 
 
 async def main() -> None:
-    consumer = TransactionCategorizedConsumer()
-    await consumer.run()
+    setup_worker_logging(__name__)
+    await TransactionCategorizedConsumer().run()
 
 
 if __name__ == "__main__":

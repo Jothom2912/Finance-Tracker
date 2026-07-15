@@ -64,7 +64,14 @@ class TransactionSagaCommandConsumer:
         await asyncio.Future()
 
     async def _on_message(self, message: AbstractIncomingMessage) -> None:
-        body = json.loads(message.body.decode("utf-8"))
+        # Parse inside error handling: a malformed body is dead-lettered
+        # instead of crashing the consumer callback.
+        try:
+            body = json.loads(message.body.decode("utf-8"))
+        except Exception:
+            logger.error("Invalid JSON on %s — sending to DLQ", QUEUE_NAME, exc_info=True)
+            await message.nack(requeue=False)
+            return
         event_type = body.get("event_type", "")
         saga_id = body.get("saga_id", "")
         step_name = body.get("step_name", "")
