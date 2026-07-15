@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 import logging
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
-from redis import asyncio as aioredis
 
 from app.adapters.inbound.rest_api import planned_router, transaction_router
 from app.config import settings
@@ -23,26 +19,12 @@ from app.domain.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    redis = aioredis.from_url("redis://redis:6379")
-
-    FastAPICache.init(
-        RedisBackend(redis),
-        prefix="transaction-service",
-    )
-
-    yield
-
-
 app = FastAPI(
     title="Transaction Service",
     version="0.2.0",
     description="Handles financial transactions and planned transactions. "
     "Domain events are persisted via transactional outbox and "
     "published by a separate worker process.",
-    lifespan=lifespan,
 )
 
 app.add_middleware(
