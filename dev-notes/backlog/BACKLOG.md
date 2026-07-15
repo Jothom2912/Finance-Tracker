@@ -6,7 +6,7 @@ Execution strategy: [plans/2026-07-07-refactoring-roadmap.md](../plans/2026-07-0
 
 ## P1 — Critical (security holes, money-corruption, data loss)
 
-**Phase 1 COMPLETE (2026-07-07)** — all items implemented with regression tests, verified green per service. Not yet committed. See [sessions/2026-07-07-phase1-p1-fixes.md](../sessions/2026-07-07-phase1-p1-fixes.md). Two deploy actions required (see session log): delete+recreate the `account_service.account_creation` RabbitMQ queue (new DLQ args), and users must re-ingest AI vectors once (versioned collection).
+**Phase 1 COMPLETE (2026-07-07)** — all items implemented with regression tests, verified green per service; since committed to master (e.g. saga auth/rollback in 3d64643b). See [sessions/2026-07-07-phase1-p1-fixes.md](../sessions/2026-07-07-phase1-p1-fixes.md). Two deploy actions required (see session log): delete+recreate the `account_service.account_creation` RabbitMQ queue (new DLQ args), and users must re-ingest AI vectors once (versioned collection).
 
 | ID | Title | Area | Effort | Status | Links |
 |----|-------|------|--------|--------|-------|
@@ -30,30 +30,30 @@ Execution strategy: [plans/2026-07-07-refactoring-roadmap.md](../plans/2026-07-0
 
 ## P2 — Important (systemic debt, perf, at-least-once hygiene)
 
-**Phase 2 IN PROGRESS (2026-07-07/08)** — 10 agents implemented these in parallel, interrupted by usage limits; nothing committed. Status legend: **done** = verified green; **needs-verification** = edits present + compile clean, service suite not yet re-run; **partial** = known incomplete. See [sessions/2026-07-07-phase2-in-flight.md](../sessions/2026-07-07-phase2-in-flight.md) for the verified survey + resume plan. NOTE: shared packages are BUILT but not yet ADOPTED by services (wave-B migration + MIGRATION.md still to do).
+**Phase 2 MOSTLY DONE (updated 2026-07-15)** — everything below is committed and verified except: wave-B adoption of the shared packages (auth ×7 services, messaging ×7, domain ×3 remaining — see per-row notes), P2-09 (deferred, do alone) and P2-15 (deferred). MIGRATION.md recipes exist in each shared package; adopted so far: auth in ai/gateway/user, messaging in user, domain in gateway. See [sessions/2026-07-15-phase2-wave-b-resume.md](../sessions/2026-07-15-phase2-wave-b-resume.md) for the current survey + remaining plan. (Historical in-flight survey: [sessions/2026-07-07-phase2-in-flight.md](../sessions/2026-07-07-phase2-in-flight.md).)
 
 | ID | Title | Area | Effort | Status | Links |
 |----|-------|------|--------|--------|-------|
-| P2-01 | Extract `services/shared/messaging` (outbox worker, outbox repo, rabbitmq publisher, consumer base with DLQ+delayed retry) — migrate all 8 services | cross | L | package done (44p/1xfail); adoption + MIGRATION.md pending | H18, M1–M5 |
-| P2-02 | Extract `services/shared/auth` (real package; replace 9 copies; kill dead `jwt_utils.py`; `require_exp`) | cross | M | package done (28p, dead file deleted); adoption + MIGRATION.md pending | H18, M4 (gateway L6) |
-| P2-03 | Move `budget_period.py` to shared (3 byte-identical copies) | cross | S | package done (35p); adoption + MIGRATION.md pending | H18 |
+| P2-01 | Extract `services/shared/messaging` (outbox worker, outbox repo, rabbitmq publisher, consumer base with DLQ+delayed retry) — migrate all 8 services | cross | L | package + MIGRATION.md done; adopted: user (2026-07-15). Remaining: account, budget, transaction, banking, goal, categorization, saga | H18, M1–M5 |
+| P2-02 | Extract `services/shared/auth` (real package; replace 9 copies; kill dead `jwt_utils.py`; `require_exp`) | cross | M | package + MIGRATION.md done; adopted: ai, gateway, user (2026-07-15). Remaining: transaction, account, budget, goal, banking, categorization, saga | H18, M4 (gateway L6) |
+| P2-03 | Move `budget_period.py` to shared (3 byte-identical copies) | cross | S | package + MIGRATION.md done; adopted: gateway (2026-07-15). Remaining local copies: account, budget, analytics | H18 |
 | P2-04 | Gateway async rewrite: shared AsyncClient per upstream, `asyncio.gather` for independent calls, per-request memoization of tx/taxonomy fetches, retry+breaker helper | gateway | M | partially done, rest deliberately rolled back (2026-07-12): memoization shipped; the async conversion was reverted to sync because master's ADR-0004 analytics stack is sync and the legacy read path is slated for post-cutover deletion — redo async (if still needed) after that cleanup. Legacy-stien slettet 2026-07-13 (session-log): full-history-fetch + memoization-fundene bortfaldt; async kun ved målt behov | H13, H1/H2-gw, M11 |
-| P2-05 | Import dedup: batch anti-join query + composite index + in-batch set + unique partial index backstop | transaction | M | partial — verify/create index migration | H15 |
+| P2-05 | Import dedup: batch anti-join query + composite index + in-batch set + unique partial index backstop | transaction | M | done (committed e778990b: batch anti-join, in-batch seen-set, migration 011) | H15 |
 | P2-06 | Wire rules DB into rule engine; consumer uses `CategorizationService` + shared provider (TTL) | categorization | M | done (2026-07-12: `main()`/`_categorize` were left half-migrated → NameError crash-loop; finished the provider wiring, verified live + 51 unit tests) | H19, H20 |
-| P2-07 | Async EB client (`httpx.AsyncClient`); page caps; Decimal amounts | banking | M | needs-verification | H16, L, M19 |
-| P2-08 | Persist consent `valid_until`; gate sync on expiry → 409 "reconsent needed" | banking | S | needs-verification | H9 |
+| P2-07 | Async EB client (`httpx.AsyncClient`); page caps; Decimal amounts | banking | M | done (committed 31ae3b6a) | H16, L, M19 |
+| P2-08 | Persist consent `valid_until`; gate sync on expiry → 409 "reconsent needed" | banking | S | done (committed 31ae3b6a) | H9 |
 | P2-09 | Carry `entry_reference` + `currency` through saga import; dedupe on `(account_id, external_id)` | banking, transaction | M | open (deferred — do alone) | H10 |
-| P2-10 | Saga robustness: `FOR UPDATE` on saga rows; timeout → compensation (not abandonment); don't timeout `compensating` (scoped: H17 staging deferred) | saga | L | needs-verification (files intact per agent) | H7, H8 |
-| P2-11 | Sync bcrypt → thread offload; catch IntegrityError → 409 on register | user | S | needs-verification | H1, L |
-| P2-12 | Fix broken response caches (delete them); Redis URL from settings, close on shutdown | transaction, budget | S | needs-verification | M9, M10 |
+| P2-10 | Saga robustness: `FOR UPDATE` on saga rows; timeout → compensation (not abandonment); don't timeout `compensating` (scoped: H17 staging deferred) | saga | L | done (committed 3d64643b, with new lock/status-API tests) | H7, H8 |
+| P2-11 | Sync bcrypt → thread offload; catch IntegrityError → 409 on register | user | S | done (2026-07-15: unit 32p + integration 16p green; conftest bug fixed in fee7a5ea) | H1, L |
+| P2-12 | Fix broken response caches (delete them); Redis URL from settings, close on shutdown | transaction, budget | S | done (committed c8a20088) | M9, M10 |
 | P2-13 | Fix goal event `user_id` (pass resolved owner) | goal | S | done (agent reported green) | H5 |
-| P2-14 | CI: add categorization/banking/saga to matrix; un-neuter bandit; fail e2e job when tests skipped; align root Makefile | infra | S | needs-verification | H12, H27 |
+| P2-14 | CI: add categorization/banking/saga to matrix; un-neuter bandit; fail e2e job when tests skipped; align root Makefile | infra | S | done (committed 02d1dba6: matrix +4 services, bandit -ll -ii hard-fail, e2e health-gate + CI abort-on-unreachable, root Makefile PY_SERVICE_DIRS) | H12, H27 |
 | P2-15 | k8s secrets via secretGenerator/SOPS; remove real EB app id from tracked files | infra | M | open (deferred) | H11 |
-| P2-16 | Compose hardening: healthchecks + restart policies on APIs, restart for account-outbox-publisher, `depends_on: service_healthy`; fix ai-service Ollama drift (models + base URL) | infra | S | needs-verification (Ollama base-URL drift fixed 2026-07-12: ai-service → compose ollama, ingest verified; rest unverified) | M29, H21 |
-| P2-17 | Frontend: delete dead Budget module + dead files; JWT `exp` check at bootstrap; fix login 403 fallback | frontend | S | needs-verification (20 files deleted) | H22–H24 |
-| P2-18 | Frontend: single `useGoals()` hook; centralized invalidation helper for all financial query keys; drop refreshTrigger + sleep-based forceRefresh | frontend | M | needs-verification | H25, M26 |
-| P2-19 | Consumer hygiene sweep (with P2-01): parse inside try, retries to own queue, prefetch >1 where idempotent, no inline sleeps | cross | M | folded into P2-01 package (adoption pending) | M1–M3 |
-| P2-20 | Outbox lifecycle: per-entry commit, max-attempts dead state, purge published rows + prune `processed_events` | cross | M | folded into P2-01 package (adoption pending) | M4, M32 |
+| P2-16 | Compose hardening: healthchecks + restart policies on APIs, restart for account-outbox-publisher, `depends_on: service_healthy`; fix ai-service Ollama drift (models + base URL) | infra | S | done (committed 0a4b50e2, live-verified full stack green) | M29, H21 |
+| P2-17 | Frontend: delete dead Budget module + dead files; JWT `exp` check at bootstrap; fix login 403 fallback | frontend | S | done (committed 4ffb32b9) | H22–H24 |
+| P2-18 | Frontend: single `useGoals()` hook; centralized invalidation helper for all financial query keys; drop refreshTrigger + sleep-based forceRefresh | frontend | M | done (committed 4ffb32b9 + 23f6c6bd) | H25, M26 |
+| P2-19 | Consumer hygiene sweep (with P2-01): parse inside try, retries to own queue, prefetch >1 where idempotent, no inline sleeps | cross | M | folded into P2-01 package; lands per service with messaging adoption | M1–M3 |
+| P2-20 | Outbox lifecycle: per-entry commit, max-attempts dead state, purge published rows + prune `processed_events` | cross | M | folded into P2-01 package; lands per service with messaging adoption | M4, M32 |
 
 ## P3 — Nice-to-have (consistency, hygiene, docs)
 
