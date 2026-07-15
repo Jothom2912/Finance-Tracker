@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from domain import MAX_START_DAY, MIN_START_DAY
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.shared.budget_period import MAX_START_DAY, MIN_START_DAY
 from app.shared.validation_boundaries import ACCOUNT_BVA, ACCOUNT_GROUP_BVA
 
 

@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY services/shared/auth /shared/auth
 COPY services/shared/messaging /shared/messaging
+COPY services/shared/domain /shared/domain
 COPY services/account-service/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt

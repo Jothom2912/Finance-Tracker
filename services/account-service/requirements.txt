@@ -14,3 +14,4 @@ asyncpg
 # and from /app in Docker (both land on services/shared/auth via the COPY).
 ../shared/auth
 ../shared/messaging
+../shared/domain

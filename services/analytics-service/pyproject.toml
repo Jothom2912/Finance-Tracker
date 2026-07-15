@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "finans-tracker-contracts",
+    "finans-tracker-domain",
 ]
 
 [dependency-groups]
@@ -34,6 +35,7 @@ dev = [
 
 [tool.uv.sources]
 finans-tracker-contracts = { path = "../shared/contracts" }
+finans-tracker-domain = { path = "../shared/domain" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
