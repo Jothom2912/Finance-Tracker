@@ -11,9 +11,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy.dialects import postgresql
-
 from app.adapters.outbound.postgres_saga_repository import PostgresSagaRepository
+from sqlalchemy.dialects import postgresql
 
 
 class CapturingSession:

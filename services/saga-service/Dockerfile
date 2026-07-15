@@ -12,6 +12,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
 COPY services/shared/contracts /shared/contracts
+COPY services/shared/auth /shared/auth
 COPY services/saga-service/pyproject.toml services/saga-service/uv.lock ./
 RUN uv sync --frozen --no-dev
 

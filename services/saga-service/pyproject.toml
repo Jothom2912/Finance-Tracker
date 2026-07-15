@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "python-jose[cryptography]>=3.3.0",
     "finans-tracker-contracts",
+    "finans-tracker-auth",
 ]
 
 [dependency-groups]
@@ -33,6 +34,7 @@ dev = [
 
 [tool.uv.sources]
 finans-tracker-contracts = { path = "../shared/contracts" }
+finans-tracker-auth = { path = "../shared/auth" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
