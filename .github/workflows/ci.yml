@@ -23,6 +23,10 @@ jobs:
           - budget-service
           - goal-service
           - ai-service
+          - categorization-service
+          - banking-service
+          - saga-service
+          - analytics-service
 
     defaults:
       run:
@@ -75,11 +79,17 @@ jobs:
             ruff format --check .
           fi
 
+      # -ll -ii: fail on findings that are MEDIUM+ severity AND MEDIUM+
+      # confidence. Low-severity findings (B101 asserts in consumers, B110,
+      # B105 on an empty-string default) are accepted noise for this codebase;
+      # medium+ findings must be fixed or nosec'ed with a justification.
       - name: Bandit security scan
         run: |
-          if [ -d app ]; then
-            bandit -r app -x tests || true
+          if [ ! -d app ]; then
+            echo "::error::services/${{ matrix.service }} has no app/ directory - bandit has nothing to scan"
+            exit 1
           fi
+          bandit -r app -x tests -ll -ii
 
       - name: Run tests
         run: |
@@ -164,11 +174,28 @@ jobs:
       - name: Start system
         run: docker compose up -d --build
 
+      # Poll the same health endpoints tests/e2e/conftest.py gates on, so the
+      # suite never starts against a half-started system. Fails loudly with
+      # compose status instead of silently skipping.
       - name: Wait for system
-        run: sleep 30
+        run: |
+          deadline=$(( $(date +%s) + 180 ))
+          for port in 8001 8002 8003 8004 8006 8010; do
+            until curl -fsS "http://localhost:${port}/health" > /dev/null 2>&1; do
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "::error::Service on port ${port} did not become healthy within 180s"
+                docker compose ps
+                exit 1
+              fi
+              sleep 3
+            done
+            echo "port ${port}: healthy"
+          done
 
+      # conftest.py aborts (instead of skipping) when services are unreachable
+      # and CI is set, so this step can never go green with zero tests run.
       - name: Run E2E tests
-        run: pytest tests/e2e -v
+        run: pytest tests/e2e -v -ra
 
       - name: Show Docker logs on failure
         if: failure()

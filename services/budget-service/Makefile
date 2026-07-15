@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev test test-unit test-integration lint format format-check migrate migrate-down clean
+.PHONY: help install-deps dev test test-unit test-integration lint format format-check check migrate migrate-down clean
 help:
 	@printf 'Available targets:\n'
 	@printf '  install-deps     Install all dependencies\n'
@@ -9,6 +9,7 @@ help:
 	@printf '  test-integration Run integration tests only\n'
 	@printf '  lint             Run ruff linter\n'
 	@printf '  format           Auto-format code with ruff\n'
+	@printf '  check            Run lint + format checks\n'
 	@printf '  migrate          Run database migrations to latest\n'
 	@printf '  migrate-down     Rollback last migration\n'
 	@printf '  clean            Remove generated artifacts\n'
@@ -28,6 +29,8 @@ format:
 
 format-check:
 	uv run ruff format . --check
+
+check: lint format-check
 
 test:
 	PYTHONPATH=../../services/shared/contracts uv run pytest tests/unit/ -v

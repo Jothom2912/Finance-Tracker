@@ -8,7 +8,27 @@ CAT_SERVICE_DIR = services/categorization-service
 ACCOUNT_SERVICE_DIR = services/account-service
 BUDGET_SERVICE_DIR = services/budget-service
 GOAL_SERVICE_DIR = services/goal-service
+GATEWAY_SERVICE_DIR = services/gateway-service
+AI_SERVICE_DIR = services/ai-service
+BANKING_SERVICE_DIR = services/banking-service
+SAGA_SERVICE_DIR = services/saga-service
+ANALYTICS_SERVICE_DIR = services/analytics-service
 FRONTEND_DIR = services/frontend
+
+# All Python services with a Makefile — keep in sync with the CI matrix
+# in .github/workflows/ci.yml.
+PY_SERVICE_DIRS = \
+	$(USER_SERVICE_DIR) \
+	$(TX_SERVICE_DIR) \
+	$(CAT_SERVICE_DIR) \
+	$(ACCOUNT_SERVICE_DIR) \
+	$(BUDGET_SERVICE_DIR) \
+	$(GOAL_SERVICE_DIR) \
+	$(GATEWAY_SERVICE_DIR) \
+	$(AI_SERVICE_DIR) \
+	$(BANKING_SERVICE_DIR) \
+	$(SAGA_SERVICE_DIR) \
+	$(ANALYTICS_SERVICE_DIR)
 
 help: ## Show available targets
 	@printf '\nAvailable targets:\n\n'
@@ -40,11 +60,7 @@ help: ## Show available targets
 # === Setup ===
 
 install-deps: ## Install dependencies for all services
-	$(MAKE) -C $(USER_SERVICE_DIR) install-deps
-	$(MAKE) -C $(TX_SERVICE_DIR) install-deps
-	$(MAKE) -C $(CAT_SERVICE_DIR) install-deps
-	$(MAKE) -C $(BUDGET_SERVICE_DIR) install-deps
-	$(MAKE) -C $(GOAL_SERVICE_DIR) install-deps
+	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir install-deps; done
 	$(MAKE) -C $(FRONTEND_DIR) install-deps
 
 # === Development ===
@@ -96,43 +112,23 @@ build: ## Build all Docker images
 # === Quality ===
 
 test: ## Run tests for all services
-	$(MAKE) -C $(USER_SERVICE_DIR) test
-	$(MAKE) -C $(TX_SERVICE_DIR) test
-	$(MAKE) -C $(CAT_SERVICE_DIR) test
-	$(MAKE) -C $(BUDGET_SERVICE_DIR) test
-	$(MAKE) -C $(GOAL_SERVICE_DIR) test
+	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir test; done
 	$(MAKE) -C $(FRONTEND_DIR) test
 
 test-e2e: ## Run E2E tests (requires Docker services running)
 	uv run pytest tests/e2e/ -v -m e2e
 
 lint: ## Run ruff linter on all Python services
-	$(MAKE) -C $(USER_SERVICE_DIR) lint
-	$(MAKE) -C $(TX_SERVICE_DIR) lint
-	$(MAKE) -C $(CAT_SERVICE_DIR) lint
-	$(MAKE) -C $(BUDGET_SERVICE_DIR) lint
-	$(MAKE) -C $(GOAL_SERVICE_DIR) lint
+	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir lint; done
 
 format: ## Auto-format all Python services
-	$(MAKE) -C $(USER_SERVICE_DIR) format
-	$(MAKE) -C $(TX_SERVICE_DIR) format
-	$(MAKE) -C $(CAT_SERVICE_DIR) format
-	$(MAKE) -C $(BUDGET_SERVICE_DIR) format
-	$(MAKE) -C $(GOAL_SERVICE_DIR) format
+	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir format; done
 
 format-check: ## Check code formatting without changes
-	$(MAKE) -C $(USER_SERVICE_DIR) format-check
-	$(MAKE) -C $(TX_SERVICE_DIR) format-check
-	$(MAKE) -C $(CAT_SERVICE_DIR) format-check
-	$(MAKE) -C $(BUDGET_SERVICE_DIR) format-check
-	$(MAKE) -C $(GOAL_SERVICE_DIR) format-check
+	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir format-check; done
 
 check: ## Run all quality checks (lint + format + tests)
-	$(MAKE) -C $(USER_SERVICE_DIR) check
-	$(MAKE) -C $(TX_SERVICE_DIR) check
-	$(MAKE) -C $(CAT_SERVICE_DIR) check
-	$(MAKE) -C $(BUDGET_SERVICE_DIR) check
-	$(MAKE) -C $(GOAL_SERVICE_DIR) check
+	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir check; done
 	$(MAKE) -C $(FRONTEND_DIR) check
 
 # === Cleanup ===
@@ -142,9 +138,5 @@ clean-test-containers: ## Remove orphaned Testcontainers (Windows/Docker Desktop
 	docker rm -f $$(docker ps -aq --filter "label=org.testcontainers=true") 2>/dev/null || echo "No orphaned test containers found."
 
 clean: ## Remove all generated artifacts
-	$(MAKE) -C $(USER_SERVICE_DIR) clean
-	$(MAKE) -C $(TX_SERVICE_DIR) clean
-	$(MAKE) -C $(CAT_SERVICE_DIR) clean
-	$(MAKE) -C $(BUDGET_SERVICE_DIR) clean
-	$(MAKE) -C $(GOAL_SERVICE_DIR) clean
+	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir clean; done
 	$(MAKE) -C $(FRONTEND_DIR) clean
