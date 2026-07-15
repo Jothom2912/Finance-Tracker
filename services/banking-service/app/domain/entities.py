@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Normalise naive datetimes (stored as UTC wall-clock) to aware UTC."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
 @dataclass
@@ -25,11 +30,16 @@ class BankConnection:
     def is_active(self) -> bool:
         return self.status == "active"
 
-    @property
-    def is_expired(self) -> bool:
+    def is_expired_at(self, now: datetime) -> bool:
+        """True if the bank consent has expired at the given instant.
+
+        ``now`` comes from an injected clock (see app/domain/clock.py) —
+        never call ``datetime.now()`` here. ``expires_at`` may be naive
+        (UTC wall-clock from the DB) or aware; both are normalised.
+        """
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return _as_utc(now) > _as_utc(self.expires_at)
 
 
 @dataclass

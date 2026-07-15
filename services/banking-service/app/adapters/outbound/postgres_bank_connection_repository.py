@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -9,6 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities import BankConnection
 from app.models.bank_connection import BankConnectionModel
+
+
+def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Strip tz at the persistence boundary.
+
+    Application code works with timezone-aware UTC datetimes; the
+    columns are ``TIMESTAMP WITHOUT TIME ZONE`` filled with UTC
+    wall-clock time (repo-wide convention), and asyncpg rejects aware
+    values for them.
+    """
+    if dt is None or dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class PostgresBankConnectionRepository:
@@ -26,7 +39,7 @@ class PostgresBankConnectionRepository:
             bank_account_uid=connection.bank_account_uid,
             bank_account_iban=connection.bank_account_iban,
             status=connection.status,
-            expires_at=connection.expires_at,
+            expires_at=_to_naive_utc(connection.expires_at),
         )
         self._session.add(row)
         await self._session.flush()
@@ -72,7 +85,16 @@ class PostgresBankConnectionRepository:
         await self._session.execute(
             update(BankConnectionModel)
             .where(BankConnectionModel.id == str(connection_id))
-            .values(last_synced_at=synced_at)
+            .values(last_synced_at=_to_naive_utc(synced_at))
+        )
+
+    async def update_consent(
+        self, connection_id: UUID, session_id: str, expires_at: Optional[datetime],
+    ) -> None:
+        await self._session.execute(
+            update(BankConnectionModel)
+            .where(BankConnectionModel.id == str(connection_id))
+            .values(session_id=session_id, expires_at=_to_naive_utc(expires_at))
         )
 
     @staticmethod

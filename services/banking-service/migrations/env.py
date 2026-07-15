@@ -4,14 +4,13 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-
 from app.database import Base
 from app.models.accounts_projection import AccountsProjectionModel  # noqa: F401
 from app.models.bank_connection import BankConnectionModel  # noqa: F401
 from app.models.outbox import OutboxEventModel  # noqa: F401
 from app.models.pending_authorization import PendingAuthorizationModel  # noqa: F401
 from app.models.processed_events import ProcessedEventModel  # noqa: F401
+from sqlalchemy import engine_from_config, pool
 
 config = context.config
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 
@@ -20,6 +22,23 @@ class BankConnectionInactive(BankingDomainException):
         )
         self.connection_id = connection_id
         self.status = status
+
+
+class BankConsentExpired(BankingDomainException):
+    """The Enable Banking consent (valid_until) has lapsed.
+
+    Distinct from BankConnectionInactive: the connection row is still
+    'active', but the bank-side consent window has closed — the user
+    must re-authorize (reconsent) before syncs can run. Mapped to 409
+    in the adapter layer with a Danish reconsent hint.
+    """
+
+    def __init__(self, connection_id: UUID, expires_at: Optional[datetime]) -> None:
+        super().__init__(
+            f"Bank consent for connection {connection_id} expired at {expires_at}"
+        )
+        self.connection_id = connection_id
+        self.expires_at = expires_at
 
 
 class BankAccountNotOwned(BankingDomainException):

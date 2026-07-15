@@ -1,23 +1,36 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from app.config import settings
+from app.dependencies import aclose_banking_client
 from app.domain.exceptions import (
     BankAccountNotOwned,
     BankConnectionInactive,
     BankConnectionNotFound,
+    BankConsentExpired,
     PendingAuthorizationNotFound,
     ProjectionIntegrityError,
 )
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Banking Service", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    yield
+    # Shared Enable Banking AsyncClient holds a connection pool for the
+    # process lifetime — release it on shutdown.
+    await aclose_banking_client()
+
+
+app = FastAPI(title="Banking Service", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,6 +51,12 @@ async def connection_inactive_handler(_request: Request, exc: BankConnectionInac
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
+@app.exception_handler(BankConsentExpired)
+async def consent_expired_handler(_request: Request, exc: BankConsentExpired) -> JSONResponse:
+    logger.warning("Consent expired: %s", exc)
+    return JSONResponse(status_code=409, content={"detail": RECONSENT_DETAIL})
+
+
 @app.exception_handler(BankAccountNotOwned)
 async def account_not_owned_handler(_request: Request, exc: BankAccountNotOwned) -> JSONResponse:
     logger.warning("Authorization failure: %s", exc)
@@ -55,6 +74,7 @@ async def pending_auth_not_found_handler(_request: Request, exc: PendingAuthoriz
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
+from app.adapters.inbound.bank_api import RECONSENT_DETAIL  # noqa: E402
 from app.adapters.inbound.bank_api import router as bank_router
 
 app.include_router(bank_router, prefix="/api/v1/bank")

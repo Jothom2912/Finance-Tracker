@@ -23,8 +23,14 @@ from app.domain.exceptions import (
     BankAccountNotOwned,
     BankConnectionInactive,
     BankConnectionNotFound,
+    BankConsentExpired,
     PendingAuthorizationNotFound,
     ProjectionIntegrityError,
+)
+
+RECONSENT_DETAIL = (
+    "Bankforbindelsens samtykke er udløbet. "
+    "Forny adgangen til banken (nyt samtykke) for at kunne synkronisere igen."
 )
 
 logger = logging.getLogger(__name__)
@@ -214,6 +220,9 @@ async def sync_transactions(
         raise HTTPException(status_code=404, detail=str(exc))
     except BankConnectionInactive as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    except BankConsentExpired as exc:
+        logger.warning("Sync rejected, consent expired: %s", exc)
+        raise HTTPException(status_code=409, detail=RECONSENT_DETAIL)
     except ProjectionIntegrityError as exc:
         logger.exception(
             "Account projection missing during sync start (connection=%s)",

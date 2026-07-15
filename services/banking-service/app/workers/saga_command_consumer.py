@@ -4,26 +4,26 @@ Handles:
 - saga.cmd.bank_fetch_transactions: fetch from Enable Banking API
 - saga.cmd.mark_sync_complete: update last_synced_at + emit BankSyncCompletedEvent
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 import aio_pika
 from aio_pika import ExchangeType
 from aio_pika.abc import AbstractIncomingMessage
 from contracts.events.bank import BankSyncCompletedEvent
+from sqlalchemy import select
 
 from app.adapters.outbound.enable_banking_client import EnableBankingClient, EnableBankingConfig
 from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.config import settings
 from app.database import async_session_factory
 from app.models import BankConnectionModel
-
-from sqlalchemy import select
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -46,9 +46,17 @@ class BankingSagaCommandConsumer:
                 app_id=settings.ENABLE_BANKING_APP_ID,
                 key_path=settings.ENABLE_BANKING_KEY_PATH,
                 redirect_uri=settings.ENABLE_BANKING_REDIRECT_URI,
+                max_tx_pages=settings.MAX_TX_PAGES,
             )
             self._banking_client = EnableBankingClient(config)
         return self._banking_client
+
+    async def aclose(self) -> None:
+        if self._banking_client is not None:
+            await self._banking_client.aclose()
+            self._banking_client = None
+        if self._connection is not None:
+            await self._connection.close()
 
     async def start(self) -> None:
         self._connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
@@ -101,10 +109,14 @@ class BankingSagaCommandConsumer:
                 retry_count = int(retry_count)
             if retry_count >= MAX_RETRIES:
                 logger.error("Max retries for %s saga=%s — sending failure reply", event_type, saga_id, exc_info=True)
-                await self._publish_reply(saga_id, step_name, {
-                    "success": False,
-                    "error_message": str(exc),
-                })
+                await self._publish_reply(
+                    saga_id,
+                    step_name,
+                    {
+                        "success": False,
+                        "error_message": str(exc),
+                    },
+                )
                 await message.ack()
             else:
                 logger.warning("Retrying %s saga=%s (attempt %d)", event_type, saga_id, retry_count + 1, exc_info=True)
@@ -116,8 +128,16 @@ class BankingSagaCommandConsumer:
         bank_account_uid = body.get("bank_account_uid", "")
         date_from = body.get("date_from")
 
+        # Expiry gate mirrors start_sync_saga (audit H9): the API layer
+        # already rejects expired consents, but commands can arrive from
+        # other producers / after a delay — fail fast with a clear
+        # message instead of an opaque EB error deep in the fetch.
+        expired_reply = await self._reject_if_consent_expired(connection_id)
+        if expired_reply is not None:
+            return expired_reply
+
         client = self._get_banking_client()
-        transactions, parse_skipped = client.get_transactions(
+        transactions, parse_skipped = await client.get_transactions(
             account_uid=bank_account_uid,
             date_from=date_from,
         )
@@ -127,12 +147,14 @@ class BankingSagaCommandConsumer:
         for txn in transactions:
             try:
                 tx_type = "income" if txn.amount >= 0 else "expense"
-                items.append({
-                    "amount": str(abs(txn.amount)),
-                    "transaction_type": tx_type,
-                    "date": txn.date.isoformat(),
-                    "description": txn.description,
-                })
+                items.append(
+                    {
+                        "amount": str(abs(txn.amount)),
+                        "transaction_type": tx_type,
+                        "date": txn.date.isoformat(),
+                        "description": txn.description,
+                    }
+                )
             except Exception:
                 errors += 1
                 logger.warning("Failed to prepare transaction for saga", exc_info=True)
@@ -147,6 +169,28 @@ class BankingSagaCommandConsumer:
             },
         }
 
+    async def _reject_if_consent_expired(self, connection_id: str) -> dict | None:
+        """Return a failure reply if the connection's consent has lapsed."""
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(BankConnectionModel).where(BankConnectionModel.id == UUID(connection_id))
+            )
+            conn = result.scalar_one_or_none()
+        if conn is None or conn.expires_at is None:
+            return None
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        if conn.expires_at > now_naive:
+            return None
+        logger.warning(
+            "Rejecting bank_fetch_transactions: consent for connection %s expired at %s",
+            connection_id,
+            conn.expires_at.isoformat(),
+        )
+        return {
+            "success": False,
+            "error_message": (f"Bank consent expired at {conn.expires_at.isoformat()} — reconsent required"),
+        }
+
     async def _handle_mark_sync_complete(self, body: dict) -> dict:
         connection_id = body["connection_id"]
         user_id = body["user_id"]
@@ -157,7 +201,9 @@ class BankingSagaCommandConsumer:
             )
             conn = result.scalar_one_or_none()
             if conn is not None:
-                conn.last_synced_at = datetime.utcnow()
+                # Naive UTC per column convention; not domain logic, so a
+                # direct timestamp (not injected clock) is acceptable here.
+                conn.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
                 outbox_repo = PostgresOutboxRepository(session)
                 event = BankSyncCompletedEvent(
@@ -216,7 +262,10 @@ class BankingSagaCommandConsumer:
 
 async def main() -> None:
     consumer = BankingSagaCommandConsumer()
-    await consumer.start()
+    try:
+        await consumer.start()
+    finally:
+        await consumer.aclose()
 
 
 if __name__ == "__main__":

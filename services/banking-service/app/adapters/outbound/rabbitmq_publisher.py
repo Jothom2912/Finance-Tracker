@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 import aio_pika
-from aio_pika import DeliveryMode, ExchangeType, Message
+from aio_pika import ExchangeType, Message
 from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
 
 logger = logging.getLogger(__name__)

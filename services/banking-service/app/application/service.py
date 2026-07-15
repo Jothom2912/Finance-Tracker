@@ -12,16 +12,18 @@ from contracts.events.bank import (
 from contracts.events.saga import BankSyncSagaStartEvent
 
 from app.application.ports.outbound import (
-    IBankingApiClient,
     IAccountPort,
+    IBankingApiClient,
     IUnitOfWork,
 )
 from app.config import settings
+from app.domain.clock import Clock, utcnow
 from app.domain.entities import BankConnection
 from app.domain.exceptions import (
     BankAccountNotOwned,
     BankConnectionInactive,
     BankConnectionNotFound,
+    BankConsentExpired,
     PendingAuthorizationNotFound,
     ProjectionIntegrityError,
 )
@@ -35,10 +37,12 @@ class BankingService:
         uow: IUnitOfWork,
         account_port: IAccountPort,
         banking_client: IBankingApiClient,
+        clock: Clock = utcnow,
     ) -> None:
         self._uow = uow
         self._account_port = account_port
         self._client = banking_client
+        self._clock = clock
 
     async def _verify_account_access(self, account_id: int, user_id: int) -> None:
         async with self._uow:
@@ -63,8 +67,25 @@ class BankingService:
             await self._uow.commit()
         return account_name
 
+    @staticmethod
+    def _parse_valid_until(session: dict[str, Any]) -> Optional[datetime]:
+        """Extract consent expiry from an EB session payload.
+
+        Enable Banking returns ISO-8601 in ``access.valid_until``.
+        Returns None (never raises) on missing/malformed values — a
+        connection without expiry is worse than one that fails to
+        connect at all, so the caller logs a WARNING instead.
+        """
+        raw = (session.get("access") or {}).get("valid_until")
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
     async def list_banks(self, country: str = "DK") -> list[dict[str, Any]]:
-        return self._client.get_available_banks(country)
+        return await self._client.get_available_banks(country)
 
     async def start_connect(
         self,
@@ -74,8 +95,8 @@ class BankingService:
         user_id: int,
     ) -> dict[str, str]:
         await self._verify_account_access(account_id, user_id)
-        result = self._client.start_authorization(bank_name=bank_name, country=country)
-        expires_at = datetime.utcnow() + timedelta(minutes=settings.PENDING_AUTH_TTL_MINUTES)
+        result = await self._client.start_authorization(bank_name=bank_name, country=country)
+        expires_at = self._clock() + timedelta(minutes=settings.PENDING_AUTH_TTL_MINUTES)
         async with self._uow:
             await self._uow.pending_auth.save(
                 state=result["state"],
@@ -99,9 +120,16 @@ class BankingService:
             account_id, user_id = auth
             await self._uow.commit()
 
-        session = self._client.create_session(auth_code)
+        session = await self._client.create_session(auth_code)
         session_id = session["session_id"]
         accounts = session.get("accounts", [])
+        consent_expires_at = self._parse_valid_until(session)
+        if consent_expires_at is None:
+            logger.warning(
+                "EB session %s carried no parseable access.valid_until — "
+                "expires_at left NULL, expiry gate will not trigger",
+                session_id,
+            )
 
         created: list[dict[str, Any]] = []
         async with self._uow:
@@ -112,6 +140,12 @@ class BankingService:
                 existing = await self._uow.connections.get_active_by_uid(uid, account_id)
                 if existing is not None:
                     await self._uow.connections.update_status(existing.id, "active")
+                    # Reconsent produced a fresh EB session: refresh the
+                    # stored session_id and consent expiry, otherwise the
+                    # expiry gate would keep rejecting a renewed consent.
+                    await self._uow.connections.update_consent(
+                        existing.id, session_id, consent_expires_at,
+                    )
                     connection_id = str(existing.id)
                     status = "reconnected"
                     bank_name = existing.bank_name
@@ -126,6 +160,7 @@ class BankingService:
                         bank_account_uid=uid,
                         bank_account_iban=iban,
                         status="active",
+                        expires_at=consent_expires_at,
                     )
                     await self._uow.connections.save(conn)
                     connection_id = str(conn.id)
@@ -193,6 +228,8 @@ class BankingService:
             raise BankConnectionInactive(connection_id, conn.status)
         if conn.user_id != user_id:
             raise BankAccountNotOwned(conn.account_id)
+        if conn.is_expired_at(self._clock()):
+            raise BankConsentExpired(connection_id, conn.expires_at)
 
         try:
             account_name = await self._resolve_account_name(conn.account_id)
@@ -232,7 +269,7 @@ class BankingService:
         if conn.user_id != user_id:
             raise BankAccountNotOwned(conn.account_id)
         try:
-            self._client.delete_session(conn.session_id)
+            await self._client.delete_session(conn.session_id)
         except Exception:
             logger.warning("Failed to delete remote session %s", conn.session_id)
 

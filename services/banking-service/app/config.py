@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     ENABLE_BANKING_APP_ID: str = ""
     ENABLE_BANKING_KEY_PATH: str = ""
     ENABLE_BANKING_REDIRECT_URI: str = ""
+    # Cap on continuation-key pagination per transaction fetch; a hit
+    # logs a WARNING and truncates rather than looping unbounded.
+    MAX_TX_PAGES: int = 20
 
     FRONTEND_URL: str = "http://localhost:3000"
 

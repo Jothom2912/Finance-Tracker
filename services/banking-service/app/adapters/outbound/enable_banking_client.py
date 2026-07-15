@@ -4,6 +4,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -36,10 +37,15 @@ class EnableBankingConfig:
     app_id: str
     key_path: str
     redirect_uri: str
+    # Upper bound on continuation-key pagination per account fetch —
+    # protects the event loop / saga step from unbounded EB responses.
+    max_tx_pages: int = 20
 
     def __post_init__(self) -> None:
         if not self.app_id:
             raise BankConfigError("ENABLE_BANKING_APP_ID is required")
+        if self.max_tx_pages < 1:
+            raise BankConfigError("max_tx_pages must be >= 1")
         path = Path(self.key_path)
         if not path.exists():
             raise BankConfigError(f"PEM key not found at {path.resolve()}")
@@ -48,7 +54,7 @@ class EnableBankingConfig:
 @dataclass
 class BankTransaction:
     transaction_id: str
-    amount: float
+    amount: Decimal
     currency: str
     description: str
     date: date
@@ -67,13 +73,17 @@ class EnableBankingClient:
             raise BankConfigError(
                 f"Cannot read PEM at {config.key_path}: {exc!r}"
             ) from exc
-        self._http = httpx.Client(base_url=API_ORIGIN, timeout=30.0)
+        # AsyncClient so calls from async handlers/consumers never block
+        # the event loop (audit H16). One client per EnableBankingClient
+        # instance: reuses the TCP/TLS connection pool across requests
+        # and is closed via aclose() on process shutdown.
+        self._http = httpx.AsyncClient(base_url=API_ORIGIN, timeout=30.0)
         # Smoke-test: verify PEM can actually sign a JWT at startup,
         # not at first user request after bank authorization.
         self._generate_jwt()
 
-    def close(self) -> None:
-        self._http.close()
+    async def aclose(self) -> None:
+        await self._http.aclose()
 
     def _generate_jwt(self) -> str:
         iat = int(datetime.now(timezone.utc).timestamp())
@@ -114,9 +124,9 @@ class EnableBankingClient:
 
     # ── Authorization flow ──────────────────────────────────────────
 
-    def get_available_banks(self, country: str = "DK") -> list[dict[str, Any]]:
+    async def get_available_banks(self, country: str = "DK") -> list[dict[str, Any]]:
         try:
-            resp = self._http.get(
+            resp = await self._http.get(
                 "/aspsps",
                 params={"country": country},
                 headers=self._headers(),
@@ -126,7 +136,7 @@ class EnableBankingClient:
         except httpx.HTTPError as exc:
             raise self._wrap_upstream_error(exc, "get_available_banks") from exc
 
-    def start_authorization(
+    async def start_authorization(
         self,
         bank_name: str,
         country: str = "DK",
@@ -145,7 +155,7 @@ class EnableBankingClient:
             "psu_type": "personal",
         }
         try:
-            resp = self._http.post("/auth", json=body, headers=self._headers())
+            resp = await self._http.post("/auth", json=body, headers=self._headers())
             resp.raise_for_status()
             data = resp.json()
         except httpx.HTTPError as exc:
@@ -158,9 +168,9 @@ class EnableBankingClient:
         )
         return {"url": data["url"], "state": state}
 
-    def create_session(self, auth_code: str) -> dict[str, Any]:
+    async def create_session(self, auth_code: str) -> dict[str, Any]:
         try:
-            resp = self._http.post(
+            resp = await self._http.post(
                 "/sessions",
                 json={"code": auth_code},
                 headers=self._headers(),
@@ -184,9 +194,9 @@ class EnableBankingClient:
         )
         return session
 
-    def delete_session(self, session_id: str) -> None:
+    async def delete_session(self, session_id: str) -> None:
         try:
-            resp = self._http.delete(
+            resp = await self._http.delete(
                 f"/sessions/{session_id}", headers=self._headers()
             )
             resp.raise_for_status()
@@ -196,7 +206,7 @@ class EnableBankingClient:
 
     # ── Transaction data ────────────────────────────────────────────
 
-    def get_transactions(
+    async def get_transactions(
         self,
         account_uid: str,
         date_from: Optional[str] = None,
@@ -214,12 +224,13 @@ class EnableBankingClient:
         all_transactions: list[BankTransaction] = []
         total_skipped = 0
         continuation_key: str | None = None
+        pages_fetched = 0
 
         while True:
             if continuation_key:
                 params["continuation_key"] = continuation_key
             try:
-                resp = self._http.get(
+                resp = await self._http.get(
                     f"/accounts/{account_uid}/transactions",
                     params=params,
                     headers=self._headers(),
@@ -234,9 +245,21 @@ class EnableBankingClient:
             batch, skipped = self._parse_batch(data.get("transactions", []))
             all_transactions.extend(batch)
             total_skipped += skipped
+            pages_fetched += 1
 
             continuation_key = data.get("continuation_key")
             if not continuation_key:
+                break
+            if pages_fetched >= self._config.max_tx_pages:
+                logger.warning(
+                    "Transaction pagination for account %s capped at %d pages "
+                    "(MAX_TX_PAGES) — upstream still returned a "
+                    "continuation_key, result set is TRUNCATED "
+                    "(%d transactions fetched)",
+                    account_uid,
+                    self._config.max_tx_pages,
+                    len(all_transactions),
+                )
                 break
 
         logger.info(
@@ -281,7 +304,12 @@ class EnableBankingClient:
         amount_str = amount_data.get("amount", "0")
         currency = amount_data.get("currency", "DKK")
 
-        amount = float(amount_str)
+        # Decimal end-to-end (audit M19): bank amounts are exact decimal
+        # strings — float would introduce binary rounding artefacts.
+        try:
+            amount = Decimal(str(amount_str))
+        except InvalidOperation as exc:
+            raise ValueError(f"Unparseable amount {amount_str!r}") from exc
         if raw.get("credit_debit_indicator") == "DBIT":
             amount = -abs(amount)
 

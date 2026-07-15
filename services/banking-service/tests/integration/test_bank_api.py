@@ -21,9 +21,12 @@ os.environ.setdefault("ENABLE_BANKING_KEY_PATH", "dummy.pem")
 os.environ.setdefault("ENABLE_BANKING_REDIRECT_URI", "http://localhost/callback")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/test")
 
+from datetime import datetime, timezone
+from uuid import UUID
+
 from app.config import settings
 from app.dependencies import get_banking_service
-from app.domain.exceptions import BankAccountNotOwned
+from app.domain.exceptions import BankAccountNotOwned, BankConsentExpired
 from app.main import app
 from fastapi.testclient import TestClient
 from jose import jwt
@@ -151,6 +154,31 @@ def test_disconnect_passes_user_from_jwt() -> None:
     assert response.status_code == 200
     fake_service.disconnect.assert_awaited_once()
     assert fake_service.disconnect.await_args.kwargs["user_id"] == 42
+
+
+def test_sync_returns_409_with_danish_reconsent_detail_when_consent_expired() -> None:
+    connection_id = "11111111-1111-1111-1111-111111111111"
+    fake_service = FakeBankingService()
+    fake_service.start_sync_saga = AsyncMock(
+        side_effect=BankConsentExpired(
+            UUID(connection_id),
+            datetime(2026, 4, 1, tzinfo=timezone.utc),
+        )
+    )
+    app.dependency_overrides[get_banking_service] = lambda: fake_service
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                f"/api/v1/bank/connections/{connection_id}/sync",
+                headers=make_auth_header(user_id=42),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "samtykke er udløbet" in detail
+    assert "synkronisere" in detail
 
 
 def test_disconnect_denied_for_foreign_connection() -> None:
