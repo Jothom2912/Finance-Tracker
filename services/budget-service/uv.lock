@@ -568,6 +568,8 @@ dependencies = [
     { name = "fastapi" },
     { name = "fastapi-cache2" },
     { name = "finans-tracker-auth" },
+    { name = "finans-tracker-domain" },
+    { name = "finans-tracker-messaging" },
     { name = "httpx" },
     { name = "jinja2" },
     { name = "psycopg2-binary" },
@@ -597,6 +599,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "fastapi-cache2", specifier = ">=0.2.2" },
     { name = "finans-tracker-auth", directory = "../shared/auth" },
+    { name = "finans-tracker-domain", directory = "../shared/domain" },
+    { name = "finans-tracker-messaging", directory = "../shared/messaging" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
@@ -617,6 +621,34 @@ dev = [
     { name = "ruff" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.14.2" },
 ]
+
+[[package]]
+name = "finans-tracker-domain"
+version = "0.1.0"
+source = { directory = "../shared/domain" }
+
+[package.metadata]
+requires-dist = [{ name = "pytest", marker = "extra == 'dev'" }]
+provides-extras = ["dev"]
+
+[[package]]
+name = "finans-tracker-messaging"
+version = "0.1.0"
+source = { directory = "../shared/messaging" }
+dependencies = [
+    { name = "aio-pika" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aio-pika", specifier = ">=9.4.0" },
+    { name = "aiosqlite", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "greenlet"

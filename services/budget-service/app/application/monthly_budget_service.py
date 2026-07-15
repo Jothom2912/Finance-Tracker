@@ -8,6 +8,7 @@ from contracts.events.budget import (
     BudgetMonthClosedEvent,
     make_budget_month_closed_source_key,
 )
+from domain import budget_period
 
 from app.application.dto import (
     BudgetLineResponse,
@@ -23,7 +24,6 @@ from app.application.ports.outbound import (
     ITransactionPort,
     IUnitOfWork,
 )
-from app.domain.budget_period import budget_period
 from app.domain.entities import BudgetLine, MonthlyBudget
 from app.domain.exceptions import (
     AccountRequiredForMonthlyBudget,

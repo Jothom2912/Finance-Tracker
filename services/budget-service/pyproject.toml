@@ -19,10 +19,14 @@ dependencies = [
     "fastapi-cache2>=0.2.2",
     "jinja2>=3.1.0",
     "finans-tracker-auth",
+    "finans-tracker-messaging",
+    "finans-tracker-domain",
 ]
 
 [tool.uv.sources]
 finans-tracker-auth = { path = "../shared/auth" }
+finans-tracker-messaging = { path = "../shared/messaging" }
+finans-tracker-domain = { path = "../shared/domain" }
 
 [dependency-groups]
 dev = [

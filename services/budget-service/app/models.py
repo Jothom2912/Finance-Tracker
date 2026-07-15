@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func
+from messaging import OutboxEventMixin
+from sqlalchemy import Date, ForeignKey, Integer, Numeric, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -59,19 +60,9 @@ class BudgetLineModel(Base):
     __table_args__ = (UniqueConstraint("monthly_budget_id", "category_id", name="uq_budget_line_budget_category"),)
 
 
-class OutboxEventModel(Base):
-    __tablename__ = "outbox_events"
+class OutboxEventModel(OutboxEventMixin, Base):
+    """Service-owned outbox table; columns come from the shared mixin.
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    aggregate_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    aggregate_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
-    correlation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    next_attempt_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    published_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-
-    __table_args__ = (Index("ix_outbox_pending_poll", "status", "next_attempt_at", "created_at"),)
+    Kept as a thin local class so Alembic metadata stays service-owned
+    (columns and ``ix_outbox_pending_poll`` match the outbox migration exactly).
+    """
