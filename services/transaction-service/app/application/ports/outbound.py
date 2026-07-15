@@ -16,6 +16,12 @@ from app.domain.entities import (
     TransactionType,
 )
 
+# Bank-sync dedup key within one user: (account_id, date, amount, description).
+# Matches the cross-service import convention
+# ``(user_id, account_id, date, amount, description)`` — user_id is passed
+# separately since batches are always single-user.
+DedupKey = tuple[int, date, Decimal, str | None]
+
 
 class ITransactionRepository(ABC):
     @abstractmethod
@@ -62,14 +68,17 @@ class ITransactionRepository(ABC):
     async def bulk_create(self, transactions: list[dict]) -> list[Transaction]: ...
 
     @abstractmethod
-    async def find_duplicate(
+    async def find_existing_dedup_keys(
         self,
         user_id: int,
-        account_id: int,
-        tx_date: date,
-        amount: Decimal,
-        description: str | None,
-    ) -> Transaction | None: ...
+        keys: list[DedupKey],
+    ) -> set[DedupKey]:
+        """Return the subset of ``keys`` that already exist for the user.
+
+        One batch anti-join query instead of a per-row lookup — used by
+        the CSV/bulk import paths to skip duplicates.
+        """
+        ...
 
 
 class IPlannedTransactionRepository(ABC):

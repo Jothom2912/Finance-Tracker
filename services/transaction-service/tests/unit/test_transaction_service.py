@@ -185,14 +185,21 @@ class TestCreateTransaction:
         service, uow = _build_service()
         cat_client = AsyncMock()
         cat_client.categorize.return_value = MagicMock(
-            category_id=1, subcategory_id=3, tier="rule", confidence="high",
+            category_id=1,
+            subcategory_id=3,
+            tier="rule",
+            confidence="high",
         )
         service._cat_client = cat_client
         uow.categories.find_by_id.return_value = Category(
-            id=1, name="Mad & drikke", type=CategoryType.EXPENSE,
+            id=1,
+            name="Mad & drikke",
+            type=CategoryType.EXPENSE,
         )
         uow.subcategories.find_by_id.return_value = SubCategory(
-            id=3, name="Takeaway", category_id=1,
+            id=3,
+            name="Takeaway",
+            category_id=1,
         )
         uow.transactions.create.return_value = _make_transaction()
         dto = CreateTransactionDTO(
@@ -220,7 +227,10 @@ class TestCreateTransaction:
         service, uow = _build_service()
         cat_client = AsyncMock()
         cat_client.categorize.return_value = MagicMock(
-            category_id=1, subcategory_id=3, tier="rule", confidence="high",
+            category_id=1,
+            subcategory_id=3,
+            tier="rule",
+            confidence="high",
         )
         service._cat_client = cat_client
         uow.transactions.create.return_value = _make_transaction()
@@ -467,7 +477,9 @@ class TestUpdateTransaction:
         uow.transactions.find_by_id.return_value = existing
         uow.transactions.update.return_value = _make_transaction(subcategory_id=42)
         uow.subcategories.find_by_id.return_value = SubCategory(
-            id=42, name="Dagligvarer", category_id=5,
+            id=42,
+            name="Dagligvarer",
+            category_id=5,
         )
         dto = UpdateTransactionDTO(subcategory_id=42)
 
@@ -484,7 +496,9 @@ class TestUpdateTransaction:
         existing = _make_transaction(category_id=5)
         uow.transactions.find_by_id.return_value = existing
         uow.subcategories.find_by_id.return_value = SubCategory(
-            id=42, name="Husleje", category_id=2,
+            id=42,
+            name="Husleje",
+            category_id=2,
         )
         dto = UpdateTransactionDTO(subcategory_id=42)
 
@@ -499,10 +513,14 @@ class TestUpdateTransaction:
         uow.transactions.find_by_id.return_value = existing
         uow.transactions.update.return_value = _make_transaction(category_id=2, subcategory_id=6)
         uow.subcategories.find_by_id.return_value = SubCategory(
-            id=6, name="Husleje", category_id=2,
+            id=6,
+            name="Husleje",
+            category_id=2,
         )
         uow.categories.find_by_id.return_value = Category(
-            id=2, name="Bolig", type=CategoryType.EXPENSE,
+            id=2,
+            name="Bolig",
+            type=CategoryType.EXPENSE,
         )
         dto = UpdateTransactionDTO(category_id=2, subcategory_id=6)
 
@@ -595,7 +613,7 @@ class TestImportCSV:
     async def test_success_uses_add_batch(self) -> None:
         service, uow = _build_service()
         tx = _make_transaction()
-        uow.transactions.find_duplicate.return_value = None
+        uow.transactions.find_existing_dedup_keys.return_value = set()
         uow.transactions.bulk_create.return_value = [tx]
         csv_content = (
             b"date,amount,transaction_type,account_id,account_name,"
@@ -621,7 +639,7 @@ class TestImportCSV:
     async def test_partial_failure(self) -> None:
         service, uow = _build_service()
         tx = _make_transaction()
-        uow.transactions.find_duplicate.return_value = None
+        uow.transactions.find_existing_dedup_keys.return_value = set()
         uow.transactions.bulk_create.return_value = [tx]
         csv_content = (
             b"date,amount,transaction_type,account_id,account_name\n"
@@ -638,7 +656,11 @@ class TestImportCSV:
     @pytest.mark.asyncio()
     async def test_duplicates_skipped(self) -> None:
         service, uow = _build_service()
-        uow.transactions.find_duplicate.return_value = _make_transaction()
+        # The row's dedup key already exists in the DB (no description
+        # column in this CSV -> description is None in the key).
+        uow.transactions.find_existing_dedup_keys.return_value = {
+            (100, date(2026, 3, 1), Decimal("49.99"), None),
+        }
         csv_content = (
             b"date,amount,transaction_type,account_id,account_name\n2026-03-01,49.99,expense,100,Main Account\n"
         )
@@ -649,6 +671,57 @@ class TestImportCSV:
         assert result.duplicates_skipped == 1
         uow.transactions.bulk_create.assert_not_awaited()
         uow.outbox.add_batch.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_intra_file_duplicate_imported_once(self) -> None:
+        """The same row twice in one file must import once and count the
+        repeat as a skipped duplicate — even when the DB has no match."""
+        service, uow = _build_service()
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [_make_transaction()]
+        csv_content = (
+            b"date,amount,transaction_type,account_id,account_name,"
+            b"category_id,category_name,description\n"
+            b"2026-03-01,49.99,expense,100,Main Account,5,Food,Groceries\n"
+            b"2026-03-01,49.99,expense,100,Main Account,5,Food,Groceries\n"
+        )
+
+        result = await service.import_csv(user_id=10, csv_content=csv_content)
+
+        assert result.imported == 1
+        assert result.duplicates_skipped == 1
+        rows_arg = uow.transactions.bulk_create.call_args[0][0]
+        assert len(rows_arg) == 1
+
+    @pytest.mark.asyncio()
+    async def test_dedup_uses_single_batch_query(self) -> None:
+        """One anti-join query for the whole file — never one per row."""
+        service, uow = _build_service()
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [
+            _make_transaction(id=1),
+            _make_transaction(id=2),
+            _make_transaction(id=3),
+        ]
+        csv_content = (
+            b"date,amount,transaction_type,account_id,account_name,"
+            b"category_id,category_name,description\n"
+            b"2026-03-01,49.99,expense,100,Main Account,5,Food,Netto\n"
+            b"2026-03-02,12.50,expense,100,Main Account,5,Food,Kaffe\n"
+            b"2026-03-03,7.00,expense,100,Main Account,5,Food,Kiosk\n"
+        )
+
+        result = await service.import_csv(user_id=10, csv_content=csv_content)
+
+        assert result.imported == 3
+        uow.transactions.find_existing_dedup_keys.assert_awaited_once()
+        _user_id, keys = uow.transactions.find_existing_dedup_keys.call_args[0]
+        assert _user_id == 10
+        assert keys == [
+            (100, date(2026, 3, 1), Decimal("49.99"), "Netto"),
+            (100, date(2026, 3, 2), Decimal("12.50"), "Kaffe"),
+            (100, date(2026, 3, 3), Decimal("7.00"), "Kiosk"),
+        ]
 
     @pytest.mark.asyncio()
     async def test_all_invalid_no_outbox(self) -> None:
@@ -708,12 +781,14 @@ class TestBulkImport:
     @pytest.mark.asyncio()
     async def test_all_new_items_imported(self) -> None:
         service, uow = _build_service()
-        uow.transactions.find_duplicate.return_value = None
+        uow.transactions.find_existing_dedup_keys.return_value = set()
         uow.transactions.bulk_create.return_value = [
             _make_transaction(id=1),
             _make_transaction(id=2),
         ]
-        dto = BulkCreateTransactionDTO(items=[_bulk_item(), _bulk_item()])
+        dto = BulkCreateTransactionDTO(
+            items=[_bulk_item(description="Netto"), _bulk_item(description="Føtex")],
+        )
 
         result = await service.bulk_import(user_id=10, dto=dto)
 
@@ -727,10 +802,9 @@ class TestBulkImport:
     @pytest.mark.asyncio()
     async def test_duplicates_are_skipped(self) -> None:
         service, uow = _build_service()
-        uow.transactions.find_duplicate.side_effect = [
-            _make_transaction(id=99),
-            None,
-        ]
+        uow.transactions.find_existing_dedup_keys.return_value = {
+            (100, date(2026, 3, 1), Decimal("49.99"), "Netto"),
+        }
         uow.transactions.bulk_create.return_value = [_make_transaction(id=3)]
         dto = BulkCreateTransactionDTO(
             items=[_bulk_item(description="Netto"), _bulk_item(description="Føtex")],
@@ -748,22 +822,70 @@ class TestBulkImport:
         assert bulk_arg[0]["description"] == "Føtex"
 
     @pytest.mark.asyncio()
-    async def test_skip_duplicates_false_bypasses_lookup(self) -> None:
+    async def test_dedup_uses_single_batch_query(self) -> None:
+        """One anti-join query for the whole payload — never per item."""
         service, uow = _build_service()
-        uow.transactions.bulk_create.return_value = [_make_transaction()]
-        dto = BulkCreateTransactionDTO(items=[_bulk_item()], skip_duplicates=False)
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [
+            _make_transaction(id=1),
+            _make_transaction(id=2),
+        ]
+        dto = BulkCreateTransactionDTO(
+            items=[_bulk_item(description="Netto"), _bulk_item(description="Føtex")],
+        )
 
         await service.bulk_import(user_id=10, dto=dto)
 
-        uow.transactions.find_duplicate.assert_not_awaited()
+        uow.transactions.find_existing_dedup_keys.assert_awaited_once()
+        _user_id, keys = uow.transactions.find_existing_dedup_keys.call_args[0]
+        assert _user_id == 10
+        assert keys == [
+            (100, date(2026, 3, 1), Decimal("49.99"), "Netto"),
+            (100, date(2026, 3, 1), Decimal("49.99"), "Føtex"),
+        ]
+
+    @pytest.mark.asyncio()
+    async def test_intra_batch_duplicate_imported_once(self) -> None:
+        """A key repeated within one payload imports once — the repeat
+        counts as a skipped duplicate even with an empty DB."""
+        service, uow = _build_service()
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [_make_transaction(id=1)]
+        dto = BulkCreateTransactionDTO(items=[_bulk_item(), _bulk_item()])
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 1
+        assert result.duplicates_skipped == 1
+        bulk_arg = uow.transactions.bulk_create.call_args[0][0]
+        assert len(bulk_arg) == 1
+
+    @pytest.mark.asyncio()
+    async def test_skip_duplicates_false_bypasses_lookup(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.bulk_create.return_value = [
+            _make_transaction(id=1),
+            _make_transaction(id=2),
+        ]
+        # Identical items: with skip_duplicates=False even intra-batch
+        # repeats must be imported verbatim.
+        dto = BulkCreateTransactionDTO(items=[_bulk_item(), _bulk_item()], skip_duplicates=False)
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        uow.transactions.find_existing_dedup_keys.assert_not_awaited()
         uow.transactions.bulk_create.assert_awaited_once()
+        assert result.duplicates_skipped == 0
+        assert len(uow.transactions.bulk_create.call_args[0][0]) == 2
 
     @pytest.mark.asyncio()
     async def test_all_duplicates_still_commits(self) -> None:
         """If every item is a duplicate we still close the UoW cleanly
         without calling ``bulk_create`` or writing outbox events."""
         service, uow = _build_service()
-        uow.transactions.find_duplicate.return_value = _make_transaction()
+        uow.transactions.find_existing_dedup_keys.return_value = {
+            (100, date(2026, 3, 1), Decimal("49.99"), "Groceries"),
+        }
         dto = BulkCreateTransactionDTO(items=[_bulk_item(), _bulk_item()])
 
         result = await service.bulk_import(user_id=10, dto=dto)
@@ -781,7 +903,7 @@ class TestBulkImport:
         consumed by TransactionSyncConsumer.
         """
         service, uow = _build_service()
-        uow.transactions.find_duplicate.return_value = None
+        uow.transactions.find_existing_dedup_keys.return_value = set()
         uow.transactions.bulk_create.return_value = [_make_transaction()]
         dto = BulkCreateTransactionDTO(items=[_bulk_item()])
 
@@ -802,7 +924,7 @@ class TestBulkImport:
         round-trip all the way to the MySQL projection).
         """
         service, uow = _build_service()
-        uow.transactions.find_duplicate.return_value = None
+        uow.transactions.find_existing_dedup_keys.return_value = set()
         uow.transactions.bulk_create.return_value = [
             _make_transaction(
                 subcategory_id=77,

@@ -72,6 +72,21 @@ class TransactionModel(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now())
 
+    __table_args__ = (
+        # Serves the batch anti-join on the import dedup key
+        # (user_id, account_id, date, amount, description) — migration 011.
+        # Non-unique on purpose: identical keys are legitimate outside
+        # the import paths (see the migration docstring).
+        Index(
+            "ix_transactions_dedup_key",
+            "user_id",
+            "account_id",
+            "date",
+            "amount",
+            "description",
+        ),
+    )
+
 
 class PlannedTransactionModel(Base):
     __tablename__ = "planned_transactions"

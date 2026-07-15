@@ -22,7 +22,7 @@ from app.application.dto import (
     UpdateTransactionDTO,
 )
 from app.application.ports.inbound import ITransactionService
-from app.application.ports.outbound import IUnitOfWork
+from app.application.ports.outbound import DedupKey, IUnitOfWork
 from app.domain.entities import PlannedTransaction, Transaction
 from app.domain.exceptions import (
     CSVImportException,
@@ -294,19 +294,20 @@ class TransactionService(ITransactionService):
         duplicates_skipped = 0
         rows_to_create: list[dict] = []
 
+        # One batch anti-join instead of a SELECT per row (H15), plus an
+        # in-batch seen-set so a row repeated within the same file is
+        # imported once and counted as a duplicate thereafter.
+        keys = [self._row_dedup_key(row) for row in parsed.rows]
         async with self._uow:
-            for row in parsed.rows:
-                duplicate = await self._uow.transactions.find_duplicate(
-                    user_id=user_id,
-                    account_id=row["account_id"],
-                    tx_date=row["tx_date"],
-                    amount=row["amount"],
-                    description=row.get("description"),
-                )
-                if duplicate is not None:
-                    duplicates_skipped += 1
-                    continue
-                rows_to_create.append(row)
+            existing_keys = await self._uow.transactions.find_existing_dedup_keys(user_id, keys)
+
+        seen_keys: set[DedupKey] = set()
+        for row, key in zip(parsed.rows, keys):
+            if key in existing_keys or key in seen_keys:
+                duplicates_skipped += 1
+                continue
+            seen_keys.add(key)
+            rows_to_create.append(row)
 
         if not rows_to_create:
             return CSVImportResultDTO(
@@ -371,40 +372,44 @@ class TransactionService(ITransactionService):
         errors = 0
         rows_to_create: list[dict] = []
 
-        async with self._uow:
-            for item in dto.items:
-                try:
-                    if dto.skip_duplicates:
-                        duplicate = await self._uow.transactions.find_duplicate(
-                            user_id=user_id,
-                            account_id=item.account_id,
-                            tx_date=item.date,
-                            amount=item.amount,
-                            description=item.description,
-                        )
-                        if duplicate is not None:
-                            duplicates_skipped += 1
-                            continue
+        # One batch anti-join instead of a SELECT per item (H15).  The
+        # in-batch seen-set drops payload-internal repeats once — both
+        # only when the caller asked for deduplication.
+        existing_keys: set[DedupKey] = set()
+        if dto.skip_duplicates and dto.items:
+            keys = [(item.account_id, item.date, item.amount, item.description) for item in dto.items]
+            async with self._uow:
+                existing_keys = await self._uow.transactions.find_existing_dedup_keys(user_id, keys)
 
-                    rows_to_create.append(
-                        {
-                            "user_id": user_id,
-                            "account_id": item.account_id,
-                            "account_name": item.account_name,
-                            "category_id": item.category_id,
-                            "category_name": item.category_name,
-                            "amount": item.amount,
-                            "transaction_type": item.transaction_type,
-                            "description": item.description,
-                            "tx_date": item.date,
-                            "subcategory_id": item.subcategory_id,
-                            "categorization_tier": item.categorization_tier,
-                            "categorization_confidence": item.categorization_confidence,
-                        }
-                    )
-                except Exception:
-                    logger.exception("Bulk-import validation failed for item")
-                    errors += 1
+        seen_keys: set[DedupKey] = set()
+        for item in dto.items:
+            try:
+                if dto.skip_duplicates:
+                    key = (item.account_id, item.date, item.amount, item.description)
+                    if key in existing_keys or key in seen_keys:
+                        duplicates_skipped += 1
+                        continue
+                    seen_keys.add(key)
+
+                rows_to_create.append(
+                    {
+                        "user_id": user_id,
+                        "account_id": item.account_id,
+                        "account_name": item.account_name,
+                        "category_id": item.category_id,
+                        "category_name": item.category_name,
+                        "amount": item.amount,
+                        "transaction_type": item.transaction_type,
+                        "description": item.description,
+                        "tx_date": item.date,
+                        "subcategory_id": item.subcategory_id,
+                        "categorization_tier": item.categorization_tier,
+                        "categorization_confidence": item.categorization_confidence,
+                    }
+                )
+            except Exception:
+                logger.exception("Bulk-import validation failed for item")
+                errors += 1
 
         uncategorized = [
             i
@@ -582,6 +587,11 @@ class TransactionService(ITransactionService):
                 row["subcategory_name"] = subcategories[sub_id].name
 
     # ── Mapping helpers ─────────────────────────────────────────────
+
+    @staticmethod
+    def _row_dedup_key(row: dict) -> DedupKey:
+        """Dedup key for a parsed CSV row (user_id is passed separately)."""
+        return (row["account_id"], row["tx_date"], row["amount"], row.get("description"))
 
     @staticmethod
     def _to_response(entity: Transaction) -> TransactionResponse:

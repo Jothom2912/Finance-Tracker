@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.ports.outbound import ITransactionRepository
+from app.application.ports.outbound import DedupKey, ITransactionRepository
 from app.domain.entities import Transaction, TransactionType
 from app.models import TransactionModel
 
@@ -126,28 +126,50 @@ class PostgresTransactionRepository(ITransactionRepository):
         await self._session.flush()
         return True
 
-    async def find_duplicate(
+    # Rows per tuple_(...).in_() batch — 3 bind params per triple keeps
+    # us far below asyncpg's 32767-parameter limit even for large files.
+    _DEDUP_CHUNK_SIZE = 500
+
+    async def find_existing_dedup_keys(
         self,
         user_id: int,
-        account_id: int,
-        tx_date: date,
-        amount: Decimal,
-        description: str | None,
-    ) -> Transaction | None:
-        """Look up an existing transaction matching the bank-sync
-        dedup key ``(user_id, account_id, date, amount, description)``.
-        Returns the first match or ``None``.
+        keys: list[DedupKey],
+    ) -> set[DedupKey]:
+        """Batch anti-join for the bank-sync dedup key
+        ``(user_id, account_id, date, amount, description)``.
+
+        The SQL matches on the ``(account_id, date, amount)`` triples
+        (served by the composite index from migration 011) and the
+        description is compared in Python — ``tuple_(...).in_()`` can't
+        match NULL descriptions, and NULL-vs-None semantics are exact
+        this way.  The candidate set fetched is a small superset of the
+        true matches (rows differing only in description).
         """
-        stmt = select(TransactionModel).where(
-            TransactionModel.user_id == user_id,
-            TransactionModel.account_id == account_id,
-            TransactionModel.date == tx_date,
-            TransactionModel.amount == amount,
-            TransactionModel.description == description,
-        )
-        result = await self._session.execute(stmt)
-        model = result.scalars().first()
-        return self._to_entity(model) if model else None
+        if not keys:
+            return set()
+
+        triples = sorted({(account_id, tx_date, amount) for account_id, tx_date, amount, _ in keys})
+        candidate_keys: set[DedupKey] = set()
+
+        for start in range(0, len(triples), self._DEDUP_CHUNK_SIZE):
+            chunk = triples[start : start + self._DEDUP_CHUNK_SIZE]
+            stmt = select(
+                TransactionModel.account_id,
+                TransactionModel.date,
+                TransactionModel.amount,
+                TransactionModel.description,
+            ).where(
+                TransactionModel.user_id == user_id,
+                tuple_(
+                    TransactionModel.account_id,
+                    TransactionModel.date,
+                    TransactionModel.amount,
+                ).in_(chunk),
+            )
+            result = await self._session.execute(stmt)
+            candidate_keys.update((row.account_id, row.date, row.amount, row.description) for row in result)
+
+        return candidate_keys & set(keys)
 
     async def bulk_create(self, transactions: list[dict]) -> list[Transaction]:
         models = []

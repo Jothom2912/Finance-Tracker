@@ -93,15 +93,87 @@ class TestMigration010SubcategoriesReadModel:
         _upgrade_head(alembic_cfg)
 
         with clean_db.connect() as conn:
-            rows = conn.execute(
-                sa.text("SELECT id, name, category_id FROM subcategories ORDER BY id")
-            ).fetchall()
+            rows = conn.execute(sa.text("SELECT id, name, category_id FROM subcategories ORDER BY id")).fetchall()
 
         assert len(rows) == 41
         assert (rows[0].id, rows[0].name, rows[0].category_id) == (1, "Dagligvarer", 1)
         # The rule engine's fallback subcategory must be present.
         anden = next(r for r in rows if r.name == "Anden")
         assert (anden.id, anden.category_id) == (32, 8)
+
+
+# ─────────────────────────────────────────────────────────────
+# Migration 011 — composite index on the import dedup key (H15)
+# ─────────────────────────────────────────────────────────────
+
+
+class TestMigration011DedupIndex:
+    def test_upgrade_creates_composite_dedup_index(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """The batch anti-join in ``find_existing_dedup_keys`` relies on
+        this index — column order must match the dedup key convention
+        ``(user_id, account_id, date, amount, description)``."""
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.connect() as conn:
+            indexdef = conn.execute(
+                sa.text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE tablename = 'transactions' "
+                    "AND indexname = 'ix_transactions_dedup_key'"
+                )
+            ).scalar()
+
+        assert indexdef is not None
+        assert "(user_id, account_id, date, amount, description)" in indexdef
+
+    def test_dedup_index_is_not_unique(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """Deliberately non-unique: identical keys are legitimate outside
+        the import paths (e.g. two identical manual purchases the same
+        day) — see the migration 011 docstring.  Guard against a future
+        "tightening" that would break those writes."""
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.begin() as conn:
+            for _ in range(2):
+                conn.execute(
+                    sa.text(
+                        "INSERT INTO transactions "
+                        "(user_id, account_id, account_name, amount, transaction_type, date, description) "
+                        "VALUES (1, 1, 'Test', :amt, 'expense', '2026-01-01', 'Kaffe')"
+                    ),
+                    {"amt": Decimal("35.00")},
+                )
+
+        with clean_db.connect() as conn:
+            count = conn.execute(sa.text("SELECT COUNT(*) FROM transactions WHERE description = 'Kaffe'")).scalar()
+        assert count == 2
+
+    def test_downgrade_drops_the_index(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        _upgrade_head(alembic_cfg)
+        _downgrade_to(alembic_cfg, "010")
+
+        with clean_db.connect() as conn:
+            indexdef = conn.execute(
+                sa.text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE tablename = 'transactions' "
+                    "AND indexname = 'ix_transactions_dedup_key'"
+                )
+            ).scalar()
+
+        assert indexdef is None
 
 
 # ─────────────────────────────────────────────────────────────
