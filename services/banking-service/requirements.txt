@@ -10,4 +10,7 @@ httpx==0.27.2
 python-jose[cryptography]==3.3.0
 aio-pika
 PyJWT[crypto]>=2.8.0
+# Shared JWT validation (P2-02). Path resolves from the service dir locally/CI
+# and from /app in Docker (both land on services/shared/auth via the COPY).
+../shared/auth
 cryptography>=41.0.0

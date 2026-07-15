@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 COPY services/shared/contracts /shared/contracts
+COPY services/shared/auth /shared/auth
 COPY services/banking-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt /shared/contracts
 
