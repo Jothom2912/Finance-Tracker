@@ -9,11 +9,12 @@ import Modal from '../components/Modal/Modal';
 import { useCategories } from '../hooks/useCategories';
 import { useNotifications } from '../hooks/useNotifications';
 import { usePeriodOverview } from '../hooks/usePeriodOverview';
+import { invalidateFinancialData } from '../lib/invalidateFinancialData';
 import './CategoriesPage.css';
 
 function CategoriesPage() {
   const queryClient = useQueryClient();
-  const { categories, refresh: refreshCategories } = useCategories();
+  const { categories } = useCategories();
   const { showError, showSuccess, clearMessages } = useNotifications();
   const [showManagementModal, setShowManagementModal] = useState(false);
 
@@ -42,12 +43,10 @@ function CategoriesPage() {
   });
 
   const handleCategoryChange = useCallback(() => {
-    refreshCategories();
-    queryClient.invalidateQueries({ queryKey: ['periodOverview'] });
-    queryClient.invalidateQueries({ queryKey: ['subcategories'] });
+    invalidateFinancialData(queryClient, { scope: 'categories' });
     showSuccess('Handling udført!');
     setShowManagementModal(false);
-  }, [refreshCategories, queryClient, showSuccess]);
+  }, [queryClient, showSuccess]);
 
   const noAccount = !hasAccount;
 

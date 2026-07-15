@@ -9,12 +9,9 @@ import './GoalPage.css';
 function GoalPage() {
   const { showError, showSuccess } = useNotifications();
 
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeView, setActiveView] = useState('overview');
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
-
-  const handleGoalChange = () => setRefreshTrigger((prev) => prev + 1);
 
   const handleViewChange = (view) => {
     setActiveView(view);
@@ -25,8 +22,9 @@ function GoalPage() {
     setShowGoalModal(true);
   };
 
+  // Data-opdatering sker via react-query-invalidering i useGoals-mutationerne;
+  // siden skal kun lukke modalen.
   const handleGoalSaved = () => {
-    handleGoalChange();
     setShowGoalModal(false);
     setEditingGoal(null);
   };
@@ -68,7 +66,6 @@ function GoalPage() {
         {activeView === 'overview' && (
           <div className="single-panel">
             <GoalOverview
-              refreshTrigger={refreshTrigger}
               setError={showError}
               setSuccessMessage={showSuccess}
               onEditGoal={handleEditGoal}
@@ -78,9 +75,6 @@ function GoalPage() {
         {activeView === 'setup' && (
           <div className="single-panel">
             <GoalSetup
-              onGoalAdded={handleGoalChange}
-              onGoalUpdated={handleGoalChange}
-              onGoalDeleted={handleGoalChange}
               setError={showError}
               setSuccessMessage={showSuccess}
             />
@@ -91,7 +85,7 @@ function GoalPage() {
       <Modal
         isOpen={showGoalModal}
         onClose={handleCancelEdit}
-        title={editingGoal?.idGoal ? 'Rediger Mål' : 'Opret Nyt Mål'}
+        title={editingGoal?.id ? 'Rediger Mål' : 'Opret Nyt Mål'}
       >
         <GoalSetup
           onGoalAdded={handleGoalSaved}

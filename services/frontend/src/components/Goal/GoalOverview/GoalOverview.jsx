@@ -1,47 +1,29 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Target } from 'lucide-react';
-import { fetchGoals } from '../../../api/goals';
+import { useGoals } from '../../../hooks/useGoals';
 import MessageDisplay from '../../MessageDisplay';
 import GoalItem from '../GoalItem/GoalItem';
 import './GoalOverview.css';
 
-function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal }) {
-  const [goals, setGoals] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [localError, setLocalError] = useState(null);
+function GoalOverview({ setError, _setSuccessMessage, onEditGoal }) {
+  const { goals, loading, error: localError } = useGoals();
 
+  // Løft fetch-fejlen til side-niveau (toast) — den lokale visning
+  // nedenfor beholdes, så siden aldrig står tom uden forklaring.
   useEffect(() => {
-    const loadGoals = async () => {
-      setLoading(true);
-      setLocalError(null);
-      setError?.(null);
-
-      try {
-        const data = await fetchGoals();
-        setGoals(data);
-      } catch (err) {
-        console.error('Fejl ved hentning af mål:', err);
-        const errorMessage = err.message || 'Der opstod en fejl ved hentning af mål.';
-        setLocalError(errorMessage);
-        setError?.(errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadGoals();
-  }, [refreshTrigger, setError]);
+    if (localError) setError?.(localError);
+  }, [localError, setError]);
 
   const stats = useMemo(() => {
     if (!goals || goals.length === 0) {
       return { total: 0, completed: 0, active: 0, expired: 0, totalTarget: 0, totalCurrent: 0, totalProgress: 0 };
     }
 
-    const completed = goals.filter(g => g.effective_status === 'completed').length;
-    const expired = goals.filter(g => g.effective_status === 'expired').length;
-    const active = goals.filter(g => g.effective_status === 'active' || g.effective_status === 'paused').length;
-    const totalTarget = goals.reduce((sum, g) => sum + (g.target_amount || 0), 0);
-    const totalCurrent = goals.reduce((sum, g) => sum + (g.current_amount || 0), 0);
+    const completed = goals.filter(g => g.status === 'completed').length;
+    const expired = goals.filter(g => g.status === 'expired').length;
+    const active = goals.filter(g => g.status === 'active' || g.status === 'paused').length;
+    const totalTarget = goals.reduce((sum, g) => sum + (g.targetAmount || 0), 0);
+    const totalCurrent = goals.reduce((sum, g) => sum + (g.currentAmount || 0), 0);
     const totalProgress = totalTarget > 0 ? (totalCurrent / totalTarget) * 100 : 0;
 
     return {
@@ -162,7 +144,7 @@ function GoalOverview({ refreshTrigger, setError, _setSuccessMessage, onEditGoal
         <div className="goals-list">
           {goals.map((goal) => (
             <GoalItem
-              key={goal.idGoal}
+              key={goal.id}
               goal={goal}
               onEdit={onEditGoal}
               formatAmount={formatAmount}

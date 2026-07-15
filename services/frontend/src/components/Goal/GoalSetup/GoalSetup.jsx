@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import MessageDisplay from '../../MessageDisplay';
-import { fetchGoals as apiFetchGoals, createGoal, updateGoal, deleteGoal } from '../../../api/goals';
+import { useGoals } from '../../../hooks/useGoals';
 import { useConfirm } from '../../ConfirmDialog/ConfirmDialog';
 import './GoalSetup.css';
 
@@ -21,6 +21,10 @@ function GoalSetup({
     initialGoal
 }) {
     const confirm = useConfirm();
+    // Mål-listen (UI-formen fra mapGoalFromRest) og mutationerne deler
+    // react-query-cachen med resten af appen; mutationerne invaliderer
+    // selv 'goals'-scope, så alle views opdateres uden parent-callbacks.
+    const { goals, error: goalsError, create, update, remove } = useGoals();
     const [goalName, setGoalName] = useState('');
     const [targetAmount, setTargetAmount] = useState('');
     const [currentAmount, setCurrentAmount] = useState('');
@@ -28,18 +32,17 @@ function GoalSetup({
     const [status, setStatus] = useState('active');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [goals, setGoals] = useState([]);
-    const [, setLoading] = useState(false);
     const [localError, setLocalError] = useState(null);
     const [localSuccessMessage, setLocalSuccessMessage] = useState(null);
 
+    // initialGoal er UI-formen fra useGoals (id, targetAmount, storedStatus, ...).
     useEffect(() => {
         if (initialGoal) {
             setGoalName(initialGoal.name || '');
-            setTargetAmount(String(initialGoal.target_amount || ''));
-            setCurrentAmount(String(initialGoal.current_amount || '0'));
-            setTargetDate(initialGoal.target_date || '');
-            setStatus(initialGoal.status || 'active');
+            setTargetAmount(String(initialGoal.targetAmount || ''));
+            setCurrentAmount(String(initialGoal.currentAmount || '0'));
+            setTargetDate(initialGoal.targetDate || '');
+            setStatus(initialGoal.storedStatus || 'active');
         } else {
             setGoalName('');
             setTargetAmount('');
@@ -51,25 +54,10 @@ function GoalSetup({
         setLocalSuccessMessage(null);
     }, [initialGoal]);
 
-    const loadGoals = useCallback(async () => {
-        setLoading(true);
-        setLocalError(null);
-        try {
-            const data = await apiFetchGoals();
-            setGoals(data);
-        } catch (err) {
-            console.error("Fejl ved hentning af mål:", err);
-            setLocalError(err.message);
-            setError?.(err.message);
-            setGoals([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [setError]);
-
+    // Løft fetch-fejlen til side-niveau (toast); den vises også lokalt nedenfor.
     useEffect(() => {
-        loadGoals();
-    }, [loadGoals]);
+        if (goalsError) setError?.(goalsError);
+    }, [goalsError, setError]);
 
     const clearMessages = useCallback(() => {
         setLocalError(null);
@@ -132,13 +120,13 @@ function GoalSetup({
                 Account_idAccount: parseInt(accountId)
             };
 
-            if (initialGoal?.idGoal) {
-                await updateGoal(initialGoal.idGoal, goalData);
+            if (initialGoal?.id) {
+                await update(initialGoal.id, goalData);
                 setLocalSuccessMessage('Mål opdateret succesfuldt!');
                 setSuccessMessage?.('Mål opdateret succesfuldt!');
                 onGoalUpdated?.();
             } else {
-                await createGoal(goalData);
+                await create(goalData);
                 setLocalSuccessMessage('Mål oprettet succesfuldt!');
                 setSuccessMessage?.('Mål oprettet succesfuldt!');
                 onGoalAdded?.();
@@ -149,8 +137,6 @@ function GoalSetup({
             setCurrentAmount('0');
             setTargetDate('');
             setStatus('active');
-
-            await loadGoals();
         } catch (err) {
             console.error('Fejl ved oprettelse/opdatering af mål:', err);
             const errorMessage = err.message || 'Der opstod en fejl ved oprettelse/opdatering af mål.';
@@ -162,7 +148,7 @@ function GoalSetup({
     };
 
     const handleDelete = async () => {
-        if (!initialGoal?.idGoal) return;
+        if (!initialGoal?.id) return;
 
         const ok = await confirm({
             title: 'Slet mål?',
@@ -176,7 +162,7 @@ function GoalSetup({
         setIsSubmitting(true);
 
         try {
-            await deleteGoal(initialGoal.idGoal);
+            await remove(initialGoal.id);
 
             setLocalSuccessMessage('Mål slettet succesfuldt!');
             setSuccessMessage?.('Mål slettet succesfuldt!');
@@ -187,8 +173,6 @@ function GoalSetup({
             setCurrentAmount('0');
             setTargetDate('');
             setStatus('active');
-
-            await loadGoals();
         } catch (err) {
             console.error('Fejl ved sletning af mål:', err);
             const errorMessage = err.message || 'Der opstod en fejl ved sletning af mål.';
@@ -201,6 +185,7 @@ function GoalSetup({
 
     return (
         <div className="goal-setup-container">
+            {goalsError && <MessageDisplay message={goalsError} type="error" />}
             {localError && <MessageDisplay message={localError} type="error" />}
             {localSuccessMessage && <MessageDisplay message={localSuccessMessage} type="success" />}
 
@@ -273,7 +258,7 @@ function GoalSetup({
                 </div>
 
                 <div className="form-actions">
-                    {initialGoal?.idGoal && (
+                    {initialGoal?.id && (
                         <button
                             type="button"
                             onClick={handleDelete}
@@ -299,7 +284,7 @@ function GoalSetup({
                             className="submit-button"
                             disabled={isSubmitting}
                         >
-                            {isSubmitting ? 'Gemmer...' : (initialGoal?.idGoal ? 'Opdater Mål' : 'Opret Mål')}
+                            {isSubmitting ? 'Gemmer...' : (initialGoal?.id ? 'Opdater Mål' : 'Opret Mål')}
                         </button>
                     </div>
                 </div>
@@ -310,7 +295,7 @@ function GoalSetup({
                     <h3>Eksisterende Mål ({goals.length})</h3>
                     <div className="goals-list">
                         {goals.map((goal) => (
-                            <div key={goal.idGoal} className="goal-list-item">
+                            <div key={goal.id} className="goal-list-item">
                                 <div className="goal-list-info">
                                     <div className="goal-list-name">{goal.name || 'Unavngivet Mål'}</div>
                                     <div className="goal-list-amount">
@@ -318,16 +303,16 @@ function GoalSetup({
                                             style: 'currency',
                                             currency: 'DKK',
                                             minimumFractionDigits: 0
-                                        }).format(goal.current_amount || 0)} / {new Intl.NumberFormat('da-DK', {
+                                        }).format(goal.currentAmount || 0)} / {new Intl.NumberFormat('da-DK', {
                                             style: 'currency',
                                             currency: 'DKK',
                                             minimumFractionDigits: 0
-                                        }).format(goal.target_amount || 0)}
+                                        }).format(goal.targetAmount || 0)}
                                     </div>
                                 </div>
                                 <div className="goal-list-status">
-                                    <span className={`status-badge ${goal.effective_status || 'active'}`}>
-                                        {STATUS_LABELS[goal.effective_status] || goal.effective_status || 'Aktiv'}
+                                    <span className={`status-badge ${goal.status || 'active'}`}>
+                                        {STATUS_LABELS[goal.status] || goal.status || 'Aktiv'}
                                     </span>
                                 </div>
                             </div>

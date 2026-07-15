@@ -12,6 +12,7 @@ import BankConnectionWidget from '../BankConnectionWidget/BankConnectionWidget';
 import MonthlyExpensesTrend from '../MonthlyExpensesTrend/MonthlyExpensesTrend';
 import MonthComparison from '../MonthComparison/MonthComparison';
 import { useDashboardData } from '../../hooks/useDashboardData/useDashboardData';
+import { invalidateAfterBankSync } from '../../lib/invalidateFinancialData';
 import { MONTH_OPTIONS, getYearOptions, getMonthLabel, formatDate } from '../../lib/formatters';
 import './DashboardOverview.css';
 
@@ -24,15 +25,10 @@ function DashboardOverview() {
   const [drilldownCategoryId, setDrilldownCategoryId] = useState(null);
   const yearOptions = useMemo(() => getYearOptions(3), []);
 
-  const forceRefresh = useCallback(async () => {
-    const refresh = () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    };
-    refresh();
-    // Gateway aggregates data from multiple services; allow brief propagation delay.
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    refresh();
+  // Invaliderer nu + én bounded opfølgning (analytics-læsesiden halter kort
+  // efter sync-sagaen) — uden at blokere widget'ens sync-UI imens.
+  const handleSyncComplete = useCallback(() => {
+    invalidateAfterBankSync(queryClient);
   }, [queryClient]);
 
   const {
@@ -151,7 +147,7 @@ function DashboardOverview() {
         formatAmount={formatAmount}
       />
 
-      <BankConnectionWidget onSyncComplete={forceRefresh} />
+      <BankConnectionWidget onSyncComplete={handleSyncComplete} />
 
       <div className="dashboard-grid">
         <div className="dashboard-col-left">

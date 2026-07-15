@@ -8,18 +8,19 @@ const STATUS_CONFIG = {
   active:    { label: 'Aktiv', color: '#4299e1', badgeClass: 'active' },
 };
 
+// Forventer UI-formen fra useGoals' mapGoalFromRest — ikke den rå REST-form.
 function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
-  const progress = goal.progress_percent ?? (
-    goal.target_amount > 0
-      ? Math.min((goal.current_amount / goal.target_amount) * 100, 100)
+  const progress = goal.percentComplete ?? (
+    goal.targetAmount > 0
+      ? Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)
       : 0
   );
 
-  const effectiveStatus = goal.effective_status || goal.status || 'active';
+  const effectiveStatus = goal.status || 'active';
   const config = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.active;
-  const remaining = Math.max(goal.target_amount - goal.current_amount, 0);
-  const daysRemaining = goal.target_date
-    ? Math.ceil((new Date(goal.target_date) - new Date()) / (1000 * 60 * 60 * 24))
+  const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
+  const daysRemaining = goal.targetDate
+    ? Math.ceil((new Date(goal.targetDate) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
 
   const getProgressColor = () => {
@@ -61,9 +62,9 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
       <div className="goal-progress-section">
         <div className="progress-info">
           <div className="amount-info">
-            <span className="current-amount">{formatAmount(goal.current_amount)}</span>
+            <span className="current-amount">{formatAmount(goal.currentAmount)}</span>
             <span className="separator">/</span>
-            <span className="target-amount">{formatAmount(goal.target_amount)}</span>
+            <span className="target-amount">{formatAmount(goal.targetAmount)}</span>
           </div>
           <div className="progress-percentage">{Math.min(progress, 100).toFixed(1)}%</div>
         </div>
@@ -85,11 +86,11 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
           <span className="detail-value">{formatAmount(remaining)}</span>
         </div>
 
-        {goal.target_date && (
+        {goal.targetDate && (
           <div className="detail-item">
             <span className="detail-label">Deadline:</span>
             <span className={`detail-value ${daysRemaining < 0 ? 'overdue' : daysRemaining <= 30 ? 'warning' : ''}`}>
-              {formatDate(goal.target_date)}
+              {formatDate(goal.targetDate)}
               {daysRemaining !== null && (
                 <span className="days-remaining">
                   {daysRemaining < 0

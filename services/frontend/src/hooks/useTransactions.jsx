@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as transactionsApi from '../api/transactions';
+import { invalidateFinancialData } from '../lib/invalidateFinancialData';
 
 export function transactionsQueryKey(accountId, filters) {
   return ['transactions', { accountId, filters }];
@@ -15,8 +16,7 @@ export function useTransactions(filters) {
   });
 
   const invalidateTransactionViews = () => {
-    queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    invalidateFinancialData(queryClient, { scope: 'transactions' });
   };
 
   const removeMutation = useMutation({

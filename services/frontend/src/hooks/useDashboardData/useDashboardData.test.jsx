@@ -9,6 +9,9 @@ vi.mock('../../api/graphqlClient', () => ({
 
 vi.mock('../../api/goals', () => ({
   fetchGoals: vi.fn(),
+  createGoal: vi.fn(),
+  updateGoal: vi.fn(),
+  deleteGoal: vi.fn(),
 }));
 
 import { gqlRequest } from '../../api/graphqlClient';
@@ -104,6 +107,7 @@ describe('useDashboardData', () => {
         target_amount: 10000,
         current_amount: 2500,
         target_date: '2026-12-01',
+        status: 'active',
         effective_status: 'active',
         progress_percent: 25,
       },
@@ -128,6 +132,7 @@ describe('useDashboardData', () => {
         currentAmount: 2500,
         targetDate: '2026-12-01',
         status: 'active',
+        storedStatus: 'active',
         percentComplete: 25,
       },
     ]);

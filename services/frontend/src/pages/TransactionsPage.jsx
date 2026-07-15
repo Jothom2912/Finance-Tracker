@@ -13,6 +13,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useConfirm } from '../components/ConfirmDialog/ConfirmDialog';
 import { formatLocalISODate } from '../lib/formatters';
 import { BANK_FORMAT_OPTIONS } from '../lib/bankFormats';
+import { invalidateFinancialData } from '../lib/invalidateFinancialData';
 
 import '../components/FilterComponent/FilterComponent.css';
 import './TransactionsPage.css';
@@ -75,9 +76,7 @@ function TransactionsPage() {
   } = useTransactionSearch(debouncedSearchTerm);
 
   const invalidateTransactionViews = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    queryClient.invalidateQueries({ queryKey: ['transactionSearch'] });
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    invalidateFinancialData(queryClient, { scope: 'transactions' });
   }, [queryClient]);
 
   const handleTransactionSaved = useCallback((isEdit) => {
