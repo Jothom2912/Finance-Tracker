@@ -8,8 +8,9 @@ from app.adapters.outbound.postgres_goal_allocation_repository import (
     PostgresUnallocatedBudgetSurplusRepository,
 )
 from app.adapters.outbound.postgres_goal_repository import AsyncPostgresGoalRepository
-from app.adapters.outbound.postgres_outbox_repository import PostgresOutboxRepository
 from app.application.ports.outbound import IBudgetMonthClosedUnitOfWork, IUnitOfWork
+from app.models import OutboxEventModel
+from messaging import OutboxRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -17,7 +18,7 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self.goals = AsyncPostgresGoalRepository(session)
-        self.outbox = PostgresOutboxRepository(session)
+        self.outbox = OutboxRepository(session, OutboxEventModel)
 
     async def __aenter__(self) -> Self:
         return self

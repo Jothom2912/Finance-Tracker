@@ -22,6 +22,7 @@ dependencies = [
     "httpx>=0.27.0",
     "finans-tracker-contracts",
     "finans-tracker-auth",
+    "finans-tracker-messaging",
 ]
 
 [dependency-groups]
@@ -36,6 +37,7 @@ dev = [
 [tool.uv.sources]
 finans-tracker-contracts = { path = "../shared/contracts" }
 finans-tracker-auth = { path = "../shared/auth" }
+finans-tracker-messaging = { path = "../shared/messaging" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

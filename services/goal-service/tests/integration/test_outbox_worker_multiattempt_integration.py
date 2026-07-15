@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock
 import pytest
 from app.database import Base
 from app.models import OutboxEventModel
-from app.workers import outbox_publisher as worker_module
+from messaging import OutboxPublisherWorker
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 
 @pytest.mark.asyncio()
-async def test_worker_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_worker_retries_until_success() -> None:
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -39,13 +39,16 @@ async def test_worker_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> 
             )
             await session.commit()
 
-        monkeypatch.setattr(worker_module, "async_session_factory", session_factory)
-
         # publisher: fail twice, then succeed
         publisher = AsyncMock()
         publisher.publish_raw.side_effect = [RuntimeError("err1"), RuntimeError("err2"), None]
 
-        worker = worker_module.OutboxPublisherWorker(publisher=publisher, batch_size=10)
+        worker = OutboxPublisherWorker(
+            session_factory=session_factory,
+            repository_or_model=OutboxEventModel,
+            publisher=publisher,
+            batch_size=10,
+        )
 
         # Run three processing cycles; after failures, force next_attempt_at into the past to allow immediate retry
         for i in range(3):

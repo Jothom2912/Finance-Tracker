@@ -5,14 +5,14 @@ from unittest.mock import AsyncMock
 import pytest
 from app.database import Base
 from app.models import OutboxEventModel
-from app.workers import outbox_publisher as worker_module
+from messaging import OutboxPublisherWorker
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 
 @pytest.mark.asyncio()
-async def test_worker_marks_failed_and_increments_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_worker_marks_failed_and_increments_attempts() -> None:
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -38,13 +38,16 @@ async def test_worker_marks_failed_and_increments_attempts(monkeypatch: pytest.M
             )
             await session.commit()
 
-        monkeypatch.setattr(worker_module, "async_session_factory", session_factory)
-
         # publisher that raises to simulate failure
         publisher = AsyncMock()
         publisher.publish_raw.side_effect = RuntimeError("connection error")
 
-        worker = worker_module.OutboxPublisherWorker(publisher=publisher, batch_size=10)
+        worker = OutboxPublisherWorker(
+            session_factory=session_factory,
+            repository_or_model=OutboxEventModel,
+            publisher=publisher,
+            batch_size=10,
+        )
 
         processed = await worker._process_batch()
         assert processed == 1
