@@ -93,11 +93,10 @@ class TestRegister:
         the pre-checks and only trips the DB's unique constraint on
         insert, the API must still respond 409, not an unhandled 500.
         """
-        from sqlalchemy.exc import IntegrityError
-
         from app.adapters.outbound.postgres_user_repository import (
             PostgresUserRepository,
         )
+        from sqlalchemy.exc import IntegrityError
 
         async def _racing_create(self: PostgresUserRepository, *args: object, **kwargs: object) -> None:
             raise IntegrityError(
