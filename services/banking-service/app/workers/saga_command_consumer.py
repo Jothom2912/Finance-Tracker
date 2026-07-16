@@ -155,12 +155,17 @@ class BankingSagaCommandConsumer:
         for txn in transactions:
             try:
                 tx_type = "income" if txn.amount >= 0 else "expense"
+                # entry_reference-based identity + currency (P2-09/H10).
+                # Blank ids are normalized to None so transaction-service
+                # never dedupes on "" — it falls back to the fuzzy key.
                 items.append(
                     {
                         "amount": str(abs(txn.amount)),
                         "transaction_type": tx_type,
                         "date": txn.date.isoformat(),
                         "description": txn.description,
+                        "external_id": (txn.transaction_id or "").strip() or None,
+                        "currency": txn.currency or "DKK",
                     }
                 )
             except Exception:

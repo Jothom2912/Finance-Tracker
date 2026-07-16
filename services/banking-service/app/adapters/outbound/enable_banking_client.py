@@ -302,7 +302,7 @@ class EnableBankingClient:
     def _parse_transaction(raw: dict[str, Any]) -> BankTransaction:
         amount_data = raw.get("transaction_amount", {})
         amount_str = amount_data.get("amount", "0")
-        currency = amount_data.get("currency", "DKK")
+        currency = amount_data.get("currency") or "DKK"
 
         # Decimal end-to-end (audit M19): bank amounts are exact decimal
         # strings — float would introduce binary rounding artefacts.
@@ -350,9 +350,11 @@ class EnableBankingClient:
         booking_date = date.fromisoformat(booking_date_raw)
 
         return BankTransaction(
-            transaction_id=raw.get(
-                "entry_reference", raw.get("transaction_id", "")
-            ),
+            # `or`-chain, not nested .get()-defaults: EB can send the key
+            # present-but-null, which a default would pass through as None.
+            transaction_id=raw.get("entry_reference")
+            or raw.get("transaction_id")
+            or "",
             amount=amount,
             currency=currency,
             description=description,
