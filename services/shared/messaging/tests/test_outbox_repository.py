@@ -63,6 +63,21 @@ class TestAdd:
         assert len(rows) == 3
         assert {r.event_type for r in rows} == {"thing.evt0", "thing.evt1", "thing.evt2"}
 
+    async def test_add_entries_carries_per_entry_aggregates(
+        self, repo: OutboxRepository, session: AsyncSession
+    ) -> None:
+        """Bulk-import shape: one event per distinct aggregate row."""
+        entries = [
+            (FakeEvent("transaction.created"), "transaction", "101"),
+            (FakeEvent("transaction.created"), "transaction", "102"),
+        ]
+        await repo.add_entries(entries)
+
+        rows = (await session.execute(select(OutboxEventModel))).scalars().all()
+        assert len(rows) == 2
+        assert {r.aggregate_id for r in rows} == {"101", "102"}
+        assert all(r.status == OutboxStatus.PENDING for r in rows)
+
 
 class TestFetchPending:
     async def test_returns_pending_and_failed_due_now(

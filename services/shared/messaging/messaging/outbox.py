@@ -144,6 +144,23 @@ class OutboxRepository:
         )
         await self._session.flush()
 
+    async def add_entries(
+        self,
+        entries: Iterable[tuple[SerializableEvent, str, str]],
+    ) -> None:
+        """Insert several ``(event, aggregate_type, aggregate_id)`` entries
+        in a single flush.
+
+        Unlike ``add_batch`` each entry carries its own aggregate — the
+        shape bulk imports need, where every event belongs to a distinct
+        row (e.g. one ``transaction.created`` per imported transaction).
+        """
+        self._session.add_all(
+            self._build(event, aggregate_type, aggregate_id)
+            for event, aggregate_type, aggregate_id in entries
+        )
+        await self._session.flush()
+
     async def fetch_pending(self, batch_size: int = 10) -> list[OutboxEntry]:
         """Fetch due pending/failed rows, locked with ``SKIP LOCKED``.
 
