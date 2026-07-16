@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
 import sqlalchemy as sa
 from sqlalchemy.engine import Engine
 
@@ -174,6 +175,136 @@ class TestMigration011DedupIndex:
             ).scalar()
 
         assert indexdef is None
+
+
+# ─────────────────────────────────────────────────────────────
+# Migration 012 — external_id + currency (P2-09, H10)
+# ─────────────────────────────────────────────────────────────
+
+
+class TestMigration012ExternalIdCurrency:
+    def test_columns_added_and_currency_backfilled(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """A row that exists before 012 runs must come out with
+        currency='DKK' (server_default backfill) and external_id NULL."""
+        from alembic import command
+
+        command.upgrade(alembic_cfg, "011")
+
+        with clean_db.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO transactions "
+                    "(user_id, account_id, account_name, amount, transaction_type, date, description) "
+                    "VALUES (1, 1, 'Test', :amt, 'expense', '2026-01-01', 'Pre-012')"
+                ),
+                {"amt": Decimal("10.00")},
+            )
+
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.connect() as conn:
+            row = conn.execute(
+                sa.text("SELECT external_id, currency FROM transactions WHERE description = 'Pre-012'")
+            ).one()
+        assert row.external_id is None
+        assert row.currency == "DKK"
+
+    def test_partial_unique_index_definition(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.connect() as conn:
+            indexdef = conn.execute(
+                sa.text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE tablename = 'transactions' "
+                    "AND indexname = 'uq_transactions_account_external_id'"
+                )
+            ).scalar()
+
+        assert indexdef is not None
+        assert "UNIQUE" in indexdef
+        assert "(account_id, external_id)" in indexdef
+        assert "WHERE (external_id IS NOT NULL)" in indexdef
+
+    def test_duplicate_external_id_rejected_null_duplicates_allowed(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """The unique index is the concurrent-import backstop — but ONLY
+        for id-bearing rows: NULL external_ids (manual/CSV) must stay
+        freely duplicable, or migration 011's guarantee breaks."""
+        from sqlalchemy.exc import IntegrityError
+
+        _upgrade_head(alembic_cfg)
+
+        insert = sa.text(
+            "INSERT INTO transactions "
+            "(user_id, account_id, account_name, amount, transaction_type, date, description, external_id) "
+            "VALUES (1, 1, 'Test', :amt, 'expense', '2026-01-01', 'Bank', :ext)"
+        )
+
+        with clean_db.begin() as conn:
+            conn.execute(insert, {"amt": Decimal("10.00"), "ext": "EB-1"})
+
+        with pytest.raises(IntegrityError):
+            with clean_db.begin() as conn:
+                conn.execute(insert, {"amt": Decimal("10.00"), "ext": "EB-1"})
+
+        # Same external_id on ANOTHER account is fine …
+        with clean_db.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO transactions "
+                    "(user_id, account_id, account_name, amount, transaction_type, date, external_id) "
+                    "VALUES (1, 2, 'Other', :amt, 'expense', '2026-01-01', 'EB-1')"
+                ),
+                {"amt": Decimal("10.00")},
+            )
+            # … and NULL external_id duplicates stay legal.
+            for _ in range(2):
+                conn.execute(insert, {"amt": Decimal("10.00"), "ext": None})
+
+        with clean_db.connect() as conn:
+            count = conn.execute(sa.text("SELECT COUNT(*) FROM transactions")).scalar()
+        assert count == 4
+
+    def test_downgrade_drops_index_and_columns(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        _upgrade_head(alembic_cfg)
+        _downgrade_to(alembic_cfg, "011")
+
+        with clean_db.connect() as conn:
+            indexdef = conn.execute(
+                sa.text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE tablename = 'transactions' "
+                    "AND indexname = 'uq_transactions_account_external_id'"
+                )
+            ).scalar()
+            columns = {
+                r.column_name
+                for r in conn.execute(
+                    sa.text(
+                        "SELECT column_name FROM information_schema.columns WHERE table_name = 'transactions'"
+                    )
+                )
+            }
+
+        assert indexdef is None
+        assert "external_id" not in columns
+        assert "currency" not in columns
 
 
 # ─────────────────────────────────────────────────────────────

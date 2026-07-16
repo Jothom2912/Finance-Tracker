@@ -123,6 +123,11 @@ class TransactionSagaCommandConsumer:
                 transaction_type=item["transaction_type"],
                 date=item["date"],
                 description=item.get("description", ""),
+                # .get()-with-default keeps old in-flight messages (and
+                # producers not yet redeployed) on the pure fuzzy-dedup
+                # path; ""/null external_ids must never become dedup keys.
+                external_id=(item.get("external_id") or "").strip() or None,
+                currency=item.get("currency") or "DKK",
             )
             for item in items_raw
         ]

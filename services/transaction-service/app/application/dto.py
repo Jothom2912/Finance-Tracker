@@ -55,6 +55,8 @@ class TransactionResponse(BaseModel):
     subcategory_name: str | None = None
     categorization_tier: str | None = None
     categorization_confidence: str | None = None
+    external_id: str | None = None
+    currency: str = "DKK"
 
 
 class UpdateTransactionDTO(BaseModel):
@@ -92,9 +94,10 @@ class CSVImportResultDTO(BaseModel):
 class BulkCreateTransactionItemDTO(BaseModel):
     """Single transaction in a bulk-create request.
 
-    Identical field set to :class:`CreateTransactionDTO`; kept as a
-    separate class so the bulk endpoint can evolve independently
-    (e.g. carry source-system identifiers for idempotent imports).
+    Extends :class:`CreateTransactionDTO`'s field set with the
+    source-system identity for idempotent imports (P2-09):
+    ``external_id`` is Enable Banking's ``entry_reference`` — None for
+    producers without a stable id (CSV, manual bulk).
     """
 
     account_id: int = Field(gt=0)
@@ -111,6 +114,8 @@ class BulkCreateTransactionItemDTO(BaseModel):
         default=None,
         max_length=CATEGORIZATION_CONFIDENCE_MAX,
     )
+    external_id: str | None = Field(default=None, max_length=128)
+    currency: str = Field(default="DKK", min_length=3, max_length=3)
 
 
 class BulkCreateTransactionDTO(BaseModel):
@@ -122,9 +127,14 @@ class BulkCreateTransactionDTO(BaseModel):
     skip_duplicates: bool = Field(
         default=True,
         description=(
-            "If true, items matching an existing transaction on "
-            "(account_id, date, amount, description) are skipped "
-            "rather than creating a duplicate."
+            "If true, duplicates are skipped rather than re-created: "
+            "items carrying an external_id dedupe on "
+            "(account_id, external_id) — falling back to the fuzzy key "
+            "(account_id, date, amount, description) against rows "
+            "without an external_id — while items without one use the "
+            "fuzzy key alone. With skip_duplicates=false, re-sending an "
+            "already-imported external_id fails on the unique index by "
+            "design."
         ),
     )
 

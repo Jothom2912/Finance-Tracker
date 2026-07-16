@@ -12,6 +12,7 @@ from app.application.csv_parsers.registry import get_parser
 from app.application.dto import (
     BulkCreateResultDTO,
     BulkCreateTransactionDTO,
+    BulkCreateTransactionItemDTO,
     CreatePlannedTransactionDTO,
     CreateTransactionDTO,
     CSVImportResultDTO,
@@ -22,7 +23,7 @@ from app.application.dto import (
     UpdateTransactionDTO,
 )
 from app.application.ports.inbound import ITransactionService
-from app.application.ports.outbound import DedupKey, IUnitOfWork
+from app.application.ports.outbound import DedupKey, ExternalIdKey, IUnitOfWork
 from app.domain.entities import PlannedTransaction, Transaction
 from app.domain.exceptions import (
     CSVImportException,
@@ -140,6 +141,8 @@ class TransactionService(ITransactionService):
                     subcategory_id=transaction.subcategory_id,
                     categorization_tier=transaction.categorization_tier,
                     categorization_confidence=transaction.categorization_confidence,
+                    external_id=transaction.external_id,
+                    currency=transaction.currency,
                 ),
                 aggregate_type="transaction",
                 aggregate_id=str(transaction.id),
@@ -336,6 +339,8 @@ class TransactionService(ITransactionService):
                         subcategory_id=tx.subcategory_id,
                         categorization_tier=tx.categorization_tier,
                         categorization_confidence=tx.categorization_confidence,
+                        external_id=tx.external_id,
+                        currency=tx.currency,
                     ),
                     "transaction",
                     str(tx.id),
@@ -361,35 +366,76 @@ class TransactionService(ITransactionService):
         """Server-side bulk import used by trusted internal producers
         (e.g. the banking module when syncing bank transactions).
 
-        Performs deduplication on ``(user_id, account_id, date, amount,
-        description)`` and publishes one ``TransactionCreatedEvent``
-        per newly inserted row via the outbox.
+        Deduplication (P2-09): items carrying an ``external_id`` (Enable
+        Banking's ``entry_reference``) are skipped when that
+        ``(account_id, external_id)`` already exists, when the same id
+        repeats within the payload (EB pagination can overlap), or —
+        transition fallback — when the fuzzy key ``(account_id, date,
+        amount, description)`` matches a row *without* an external_id
+        (imported pre-P2-09 or via CSV).  A fuzzy match against a row
+        carrying a different external_id does NOT dedupe: two identical
+        same-day purchases are distinct transactions (audit H10).  Items
+        without an external_id keep the pure fuzzy behavior.  A partial
+        unique index backstops the id key against concurrent imports
+        (migration 012).
 
-        If items lack categorization metadata and a categorization client
-        is available, a batch sync call enriches them before persist.
+        Publishes one ``TransactionCreatedEvent`` per newly inserted row
+        via the outbox.  If items lack categorization metadata and a
+        categorization client is available, a batch sync call enriches
+        them before persist.
         """
         duplicates_skipped = 0
         errors = 0
         rows_to_create: list[dict] = []
 
-        # One batch anti-join instead of a SELECT per item (H15).  The
-        # in-batch seen-set drops payload-internal repeats once — both
-        # only when the caller asked for deduplication.
+        # Batch anti-joins instead of a SELECT per item (H15): one lookup
+        # on (account_id, external_id) for id-bearing items plus one
+        # fuzzy lookup — scoped to external_id-IS-NULL rows for the
+        # transition fallback, unscoped for id-less items.
+        existing_ext: set[ExternalIdKey] = set()
+        legacy_keys: set[DedupKey] = set()
         existing_keys: set[DedupKey] = set()
         if dto.skip_duplicates and dto.items:
-            keys = [(item.account_id, item.date, item.amount, item.description) for item in dto.items]
+            ext_items = [item for item in dto.items if item.external_id]
+            plain_items = [item for item in dto.items if not item.external_id]
             async with self._uow:
-                existing_keys = await self._uow.transactions.find_existing_dedup_keys(user_id, keys)
+                if ext_items:
+                    existing_ext = await self._uow.transactions.find_existing_external_ids(
+                        user_id,
+                        [(item.account_id, item.external_id) for item in ext_items],
+                    )
+                    legacy_keys = await self._uow.transactions.find_existing_dedup_keys(
+                        user_id,
+                        [self._item_dedup_key(item) for item in ext_items],
+                        only_missing_external_id=True,
+                    )
+                if plain_items:
+                    existing_keys = await self._uow.transactions.find_existing_dedup_keys(
+                        user_id,
+                        [self._item_dedup_key(item) for item in plain_items],
+                    )
 
         seen_keys: set[DedupKey] = set()
+        seen_ext: set[ExternalIdKey] = set()
         for item in dto.items:
             try:
                 if dto.skip_duplicates:
-                    key = (item.account_id, item.date, item.amount, item.description)
-                    if key in existing_keys or key in seen_keys:
-                        duplicates_skipped += 1
-                        continue
-                    seen_keys.add(key)
+                    if item.external_id:
+                        ext_key = (item.account_id, item.external_id)
+                        if (
+                            ext_key in existing_ext
+                            or ext_key in seen_ext
+                            or self._item_dedup_key(item) in legacy_keys
+                        ):
+                            duplicates_skipped += 1
+                            continue
+                        seen_ext.add(ext_key)
+                    else:
+                        key = self._item_dedup_key(item)
+                        if key in existing_keys or key in seen_keys:
+                            duplicates_skipped += 1
+                            continue
+                        seen_keys.add(key)
 
                 rows_to_create.append(
                     {
@@ -405,6 +451,8 @@ class TransactionService(ITransactionService):
                         "subcategory_id": item.subcategory_id,
                         "categorization_tier": item.categorization_tier,
                         "categorization_confidence": item.categorization_confidence,
+                        "external_id": item.external_id,
+                        "currency": item.currency,
                     }
                 )
             except Exception:
@@ -472,6 +520,8 @@ class TransactionService(ITransactionService):
                         subcategory_id=tx.subcategory_id,
                         categorization_tier=tx.categorization_tier,
                         categorization_confidence=tx.categorization_confidence,
+                        external_id=tx.external_id,
+                        currency=tx.currency,
                     ),
                     "transaction",
                     str(tx.id),
@@ -594,6 +644,11 @@ class TransactionService(ITransactionService):
         return (row["account_id"], row["tx_date"], row["amount"], row.get("description"))
 
     @staticmethod
+    def _item_dedup_key(item: BulkCreateTransactionItemDTO) -> DedupKey:
+        """Fuzzy dedup key for a bulk-import item (user_id passed separately)."""
+        return (item.account_id, item.date, item.amount, item.description)
+
+    @staticmethod
     def _to_response(entity: Transaction) -> TransactionResponse:
         return TransactionResponse(
             id=entity.id,
@@ -611,6 +666,8 @@ class TransactionService(ITransactionService):
             subcategory_name=entity.subcategory_name,
             categorization_tier=entity.categorization_tier,
             categorization_confidence=entity.categorization_confidence,
+            external_id=entity.external_id,
+            currency=entity.currency,
         )
 
     @staticmethod

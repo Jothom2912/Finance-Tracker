@@ -954,6 +954,151 @@ class TestBulkImport:
         assert event.categorization_tier == "rule"
         assert event.categorization_confidence == "high"
 
+    # ── P2-09: external_id-based dedup ──────────────────────────────
+
+    @pytest.mark.asyncio()
+    async def test_existing_external_id_is_skipped(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.find_existing_external_ids.return_value = {(100, "EB-1")}
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [_make_transaction(id=2, external_id="EB-2")]
+        dto = BulkCreateTransactionDTO(
+            items=[
+                _bulk_item(description="Netto", external_id="EB-1"),
+                _bulk_item(description="Føtex", external_id="EB-2"),
+            ],
+        )
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 1
+        assert result.duplicates_skipped == 1
+        bulk_arg = uow.transactions.bulk_create.call_args[0][0]
+        assert [row["external_id"] for row in bulk_arg] == ["EB-2"]
+
+    @pytest.mark.asyncio()
+    async def test_legacy_fallback_skips_fuzzy_match_against_null_rows(self) -> None:
+        """Transition: an id-bearing item whose fuzzy key matches a
+        pre-P2-09 row (external_id IS NULL) is skipped — and the fuzzy
+        lookup for id-bearing items must be scoped with
+        only_missing_external_id=True."""
+        service, uow = _build_service()
+        uow.transactions.find_existing_external_ids.return_value = set()
+        uow.transactions.find_existing_dedup_keys.return_value = {
+            (100, date(2026, 3, 1), Decimal("49.99"), "Netto"),
+        }
+        dto = BulkCreateTransactionDTO(items=[_bulk_item(description="Netto", external_id="EB-1")])
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 0
+        assert result.duplicates_skipped == 1
+        uow.transactions.bulk_create.assert_not_awaited()
+        assert uow.transactions.find_existing_dedup_keys.call_args.kwargs == {
+            "only_missing_external_id": True,
+        }
+
+    @pytest.mark.asyncio()
+    async def test_identical_fuzzy_key_with_different_external_id_imports(self) -> None:
+        """H10 regression: two identical same-day purchases are distinct
+        transactions when they carry distinct external_ids — a fuzzy
+        match against an id-bearing row must NOT dedupe (the repo query
+        is scoped to NULL rows, so it returns nothing here)."""
+        service, uow = _build_service()
+        uow.transactions.find_existing_external_ids.return_value = set()
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [_make_transaction(id=9, external_id="EB-2")]
+        dto = BulkCreateTransactionDTO(items=[_bulk_item(external_id="EB-2")])
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 1
+        assert result.duplicates_skipped == 0
+
+    @pytest.mark.asyncio()
+    async def test_same_external_id_twice_in_payload_imports_once(self) -> None:
+        """EB pagination can overlap — a repeated external_id within one
+        payload must import once, or the whole flush would die on the
+        partial unique index."""
+        service, uow = _build_service()
+        uow.transactions.find_existing_external_ids.return_value = set()
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [_make_transaction(id=1, external_id="EB-1")]
+        dto = BulkCreateTransactionDTO(
+            items=[
+                _bulk_item(description="Netto", external_id="EB-1"),
+                _bulk_item(description="Netto (drift)", external_id="EB-1"),
+            ],
+        )
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 1
+        assert result.duplicates_skipped == 1
+        assert len(uow.transactions.bulk_create.call_args[0][0]) == 1
+
+    @pytest.mark.asyncio()
+    async def test_external_id_and_currency_reach_rows_and_events(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.find_existing_external_ids.return_value = set()
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [
+            _make_transaction(id=1, external_id="EB-1", currency="EUR"),
+        ]
+        dto = BulkCreateTransactionDTO(items=[_bulk_item(external_id="EB-1", currency="EUR")])
+
+        await service.bulk_import(user_id=10, dto=dto)
+
+        row = uow.transactions.bulk_create.call_args[0][0][0]
+        assert row["external_id"] == "EB-1"
+        assert row["currency"] == "EUR"
+
+        event, _, _ = uow.outbox.add_batch.call_args[0][0][0]
+        assert event.external_id == "EB-1"
+        assert event.currency == "EUR"
+
+    @pytest.mark.asyncio()
+    async def test_items_without_external_id_never_query_external_ids(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [_make_transaction()]
+        dto = BulkCreateTransactionDTO(items=[_bulk_item()])
+
+        await service.bulk_import(user_id=10, dto=dto)
+
+        uow.transactions.find_existing_external_ids.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_mixed_batch_queries_each_path_once(self) -> None:
+        """One external-id lookup + one NULL-scoped fuzzy lookup for the
+        id-bearing items, one plain fuzzy lookup for the rest — never
+        per item."""
+        service, uow = _build_service()
+        uow.transactions.find_existing_external_ids.return_value = set()
+        uow.transactions.find_existing_dedup_keys.return_value = set()
+        uow.transactions.bulk_create.return_value = [
+            _make_transaction(id=1, external_id="EB-1"),
+            _make_transaction(id=2),
+        ]
+        dto = BulkCreateTransactionDTO(
+            items=[
+                _bulk_item(description="Netto", external_id="EB-1"),
+                _bulk_item(description="Føtex"),
+            ],
+        )
+
+        result = await service.bulk_import(user_id=10, dto=dto)
+
+        assert result.imported == 2
+        uow.transactions.find_existing_external_ids.assert_awaited_once_with(10, [(100, "EB-1")])
+        fuzzy_calls = uow.transactions.find_existing_dedup_keys.await_args_list
+        assert len(fuzzy_calls) == 2
+        scoped = [c for c in fuzzy_calls if c.kwargs.get("only_missing_external_id")]
+        plain = [c for c in fuzzy_calls if not c.kwargs.get("only_missing_external_id")]
+        assert len(scoped) == len(plain) == 1
+        assert scoped[0].args[1] == [(100, date(2026, 3, 1), Decimal("49.99"), "Netto")]
+        assert plain[0].args[1] == [(100, date(2026, 3, 1), Decimal("49.99"), "Føtex")]
+
 
 class TestCreatePlanned:
     @pytest.mark.asyncio()

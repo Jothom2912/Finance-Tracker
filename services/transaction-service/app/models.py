@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from messaging import OutboxEventMixin
-from sqlalchemy import Boolean, Date, Index, Integer, Numeric, String, func
+from sqlalchemy import Boolean, Date, Index, Integer, Numeric, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -59,6 +59,12 @@ class TransactionModel(Base):
     transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    # Source-system identity for bank-imported rows (Enable Banking
+    # entry_reference); NULL for manual/CSV rows.  Currency is implicitly
+    # DKK everywhere until F3-03 — the server default keeps the manual
+    # insert path unchanged.  See migration 012.
+    external_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="DKK")
     # Categorization pipeline metadata (nullable; populated by the
     # banking module's rule engine today, future ML/LLM adapters
     # tomorrow).  See migration 004_add_categorization_metadata.
@@ -85,6 +91,16 @@ class TransactionModel(Base):
             "date",
             "amount",
             "description",
+        ),
+        # Idempotency key for bank imports — unique only where an
+        # external_id exists, so manual/CSV duplicates stay legal.
+        # Doubles as the concurrent-saga backstop (migration 012).
+        Index(
+            "uq_transactions_account_external_id",
+            "account_id",
+            "external_id",
+            unique=True,
+            postgresql_where=text("external_id IS NOT NULL"),
         ),
     )
 

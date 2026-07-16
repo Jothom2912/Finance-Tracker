@@ -1,10 +1,97 @@
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from app.application.dto import BulkCreateResultDTO
 from app.domain.exceptions import TransactionNotFoundException
 from app.workers.saga_command_consumer import TransactionSagaCommandConsumer
+
+
+async def _run_bulk_import(items: list[dict]) -> AsyncMock:
+    """Drive _handle_bulk_import with mocked persistence; return the
+    service mock so tests can inspect the DTO it received."""
+    consumer = TransactionSagaCommandConsumer()
+    mock_service = AsyncMock()
+    mock_service.bulk_import.return_value = BulkCreateResultDTO(
+        imported=len(items),
+        duplicates_skipped=0,
+        errors=0,
+        imported_ids=list(range(1, len(items) + 1)),
+    )
+
+    with (
+        patch("app.workers.saga_command_consumer.async_session_factory") as session_factory,
+        patch("app.workers.saga_command_consumer.SQLAlchemyUnitOfWork"),
+        patch("app.workers.saga_command_consumer.TransactionService", return_value=mock_service),
+    ):
+        session_factory.return_value.__aenter__.return_value = MagicMock()
+        await consumer._handle_bulk_import(
+            {
+                "user_id": 10,
+                "account_id": 100,
+                "account_name": "Main Account",
+                "items": items,
+            },
+        )
+    return mock_service
+
+
+@pytest.mark.asyncio
+async def test_bulk_import_maps_external_id_and_currency_to_dto() -> None:
+    service = await _run_bulk_import(
+        [
+            {
+                "amount": "49.99",
+                "transaction_type": "expense",
+                "date": "2026-03-01",
+                "description": "Netto",
+                "external_id": "EB-REF-1",
+                "currency": "EUR",
+            },
+        ],
+    )
+
+    dto = service.bulk_import.await_args.kwargs["dto"]
+    item = dto.items[0]
+    assert item.account_id == 100
+    assert item.amount == Decimal("49.99")
+    assert item.date == date(2026, 3, 1)
+    assert item.external_id == "EB-REF-1"
+    assert item.currency == "EUR"
+
+
+@pytest.mark.asyncio
+async def test_bulk_import_normalizes_blank_or_missing_external_id() -> None:
+    """""/null/whitespace external_ids must map to None (never a dedup
+    key) and missing currency defaults to DKK — old in-flight messages
+    keep the pure fuzzy path."""
+    service = await _run_bulk_import(
+        [
+            {"amount": "1.00", "transaction_type": "expense", "date": "2026-03-01", "description": "a"},
+            {
+                "amount": "2.00",
+                "transaction_type": "expense",
+                "date": "2026-03-01",
+                "description": "b",
+                "external_id": "",
+                "currency": None,
+            },
+            {
+                "amount": "3.00",
+                "transaction_type": "expense",
+                "date": "2026-03-01",
+                "description": "c",
+                "external_id": "   ",
+            },
+        ],
+    )
+
+    dto = service.bulk_import.await_args.kwargs["dto"]
+    assert [item.external_id for item in dto.items] == [None, None, None]
+    assert [item.currency for item in dto.items] == ["DKK", "DKK", "DKK"]
 
 
 @pytest.mark.asyncio

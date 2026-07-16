@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.ports.outbound import DedupKey, ITransactionRepository
+from app.application.ports.outbound import DedupKey, ExternalIdKey, ITransactionRepository
 from app.domain.entities import Transaction, TransactionType
 from app.models import TransactionModel
 
@@ -134,6 +134,8 @@ class PostgresTransactionRepository(ITransactionRepository):
         self,
         user_id: int,
         keys: list[DedupKey],
+        *,
+        only_missing_external_id: bool = False,
     ) -> set[DedupKey]:
         """Batch anti-join for the bank-sync dedup key
         ``(user_id, account_id, date, amount, description)``.
@@ -144,6 +146,10 @@ class PostgresTransactionRepository(ITransactionRepository):
         match NULL descriptions, and NULL-vs-None semantics are exact
         this way.  The candidate set fetched is a small superset of the
         true matches (rows differing only in description).
+
+        ``only_missing_external_id`` scopes the match to rows with no
+        external_id (legacy/manual/CSV) — the transition fallback for
+        id-bearing bank imports (see the port docstring).
         """
         if not keys:
             return set()
@@ -166,10 +172,45 @@ class PostgresTransactionRepository(ITransactionRepository):
                     TransactionModel.amount,
                 ).in_(chunk),
             )
+            if only_missing_external_id:
+                stmt = stmt.where(TransactionModel.external_id.is_(None))
             result = await self._session.execute(stmt)
             candidate_keys.update((row.account_id, row.date, row.amount, row.description) for row in result)
 
         return candidate_keys & set(keys)
+
+    async def find_existing_external_ids(
+        self,
+        user_id: int,
+        keys: list[ExternalIdKey],
+    ) -> set[ExternalIdKey]:
+        """Batch anti-join on ``(account_id, external_id)`` — served by
+        the partial unique index from migration 012.  Keys never contain
+        NULL external_ids (callers filter), so no Python-side matching
+        is needed.
+        """
+        if not keys:
+            return set()
+
+        pairs = sorted(set(keys))
+        existing: set[ExternalIdKey] = set()
+
+        for start in range(0, len(pairs), self._DEDUP_CHUNK_SIZE):
+            chunk = pairs[start : start + self._DEDUP_CHUNK_SIZE]
+            stmt = select(
+                TransactionModel.account_id,
+                TransactionModel.external_id,
+            ).where(
+                TransactionModel.user_id == user_id,
+                tuple_(
+                    TransactionModel.account_id,
+                    TransactionModel.external_id,
+                ).in_(chunk),
+            )
+            result = await self._session.execute(stmt)
+            existing.update((row.account_id, row.external_id) for row in result)
+
+        return existing
 
     async def bulk_create(self, transactions: list[dict]) -> list[Transaction]:
         models = []
@@ -192,6 +233,8 @@ class PostgresTransactionRepository(ITransactionRepository):
                     subcategory_name=tx.get("subcategory_name"),
                     categorization_tier=tx.get("categorization_tier"),
                     categorization_confidence=tx.get("categorization_confidence"),
+                    external_id=tx.get("external_id"),
+                    currency=tx.get("currency", "DKK"),
                 )
             )
         self._session.add_all(models)
@@ -218,4 +261,6 @@ class PostgresTransactionRepository(ITransactionRepository):
             subcategory_name=model.subcategory_name,
             categorization_tier=model.categorization_tier,
             categorization_confidence=model.categorization_confidence,
+            external_id=model.external_id,
+            currency=model.currency,
         )

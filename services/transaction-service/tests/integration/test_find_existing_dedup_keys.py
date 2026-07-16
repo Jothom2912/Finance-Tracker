@@ -88,6 +88,36 @@ async def repo(postgres, _migrated_db):  # type: ignore[no-untyped-def]
             description="Netto",
             tx_date=date(2026, 2, 1),
         )
+        # Bank-imported rows (P2-09): carry an external_id, so the
+        # NULL-scoped fuzzy lookup must ignore them while the
+        # external-id lookup finds them.  Seeded via bulk_create — the
+        # only path that accepts external_id.
+        await repository.bulk_create(
+            [
+                {
+                    "user_id": _USER,
+                    "account_id": 1,
+                    "account_name": "Checking",
+                    "amount": Decimal("77.00"),
+                    "transaction_type": TransactionType.EXPENSE,
+                    "description": "Bager",
+                    "tx_date": date(2026, 2, 3),
+                    "external_id": "EB-1",
+                    "currency": "DKK",
+                },
+                {
+                    "user_id": _USER,
+                    "account_id": 1,
+                    "account_name": "Checking",
+                    "amount": Decimal("88.00"),
+                    "transaction_type": TransactionType.EXPENSE,
+                    "description": "Slagter",
+                    "tx_date": date(2026, 2, 4),
+                    "external_id": "EB-2",
+                    "currency": "EUR",
+                },
+            ],
+        )
         # Rows stay uncommitted — visible to the repo within this session
         # and rolled back automatically when it closes, so each test gets
         # a clean slate.
@@ -162,3 +192,43 @@ async def test_batch_returns_only_existing_subset(repo) -> None:  # type: ignore
 
 async def test_empty_key_list_returns_empty_set(repo) -> None:  # type: ignore[no-untyped-def]
     assert await repo.find_existing_dedup_keys(_USER, []) == set()
+
+
+# ── P2-09: external_id-aware lookups ────────────────────────────────
+
+
+async def test_null_scope_excludes_id_bearing_rows(repo) -> None:  # type: ignore[no-untyped-def]
+    """only_missing_external_id must hide bank-imported rows (they have
+    an external_id) while still matching legacy/CSV rows — including the
+    NULL-description one."""
+    id_bearing_key = (1, date(2026, 2, 3), Decimal("77.00"), "Bager")
+    legacy_keys = [
+        (1, date(2026, 2, 1), Decimal("100.00"), "Netto"),
+        (1, date(2026, 2, 1), Decimal("100.00"), None),
+    ]
+
+    unscoped = await repo.find_existing_dedup_keys(_USER, [id_bearing_key, *legacy_keys])
+    scoped = await repo.find_existing_dedup_keys(
+        _USER,
+        [id_bearing_key, *legacy_keys],
+        only_missing_external_id=True,
+    )
+
+    assert id_bearing_key in unscoped
+    assert scoped == set(legacy_keys)
+
+
+async def test_find_existing_external_ids_returns_existing_subset(repo) -> None:  # type: ignore[no-untyped-def]
+    existing = await repo.find_existing_external_ids(
+        _USER,
+        [(1, "EB-1"), (1, "EB-2"), (1, "EB-NY"), (2, "EB-1")],
+    )
+    assert existing == {(1, "EB-1"), (1, "EB-2")}
+
+
+async def test_find_existing_external_ids_scoped_to_user(repo) -> None:  # type: ignore[no-untyped-def]
+    assert await repo.find_existing_external_ids(999, [(1, "EB-1")]) == set()
+
+
+async def test_find_existing_external_ids_empty_list(repo) -> None:  # type: ignore[no-untyped-def]
+    assert await repo.find_existing_external_ids(_USER, []) == set()

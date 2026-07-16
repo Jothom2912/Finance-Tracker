@@ -22,6 +22,11 @@ from app.domain.entities import (
 # separately since batches are always single-user.
 DedupKey = tuple[int, date, Decimal, str | None]
 
+# Bank-origin idempotency key: (account_id, external_id).  Accounts are
+# single-owner, so account_id already scopes the source-system reference;
+# a matching partial unique index backstops it in the DB (migration 012).
+ExternalIdKey = tuple[int, str]
+
 
 class ITransactionRepository(ABC):
     @abstractmethod
@@ -72,11 +77,32 @@ class ITransactionRepository(ABC):
         self,
         user_id: int,
         keys: list[DedupKey],
+        *,
+        only_missing_external_id: bool = False,
     ) -> set[DedupKey]:
         """Return the subset of ``keys`` that already exist for the user.
 
         One batch anti-join query instead of a per-row lookup — used by
         the CSV/bulk import paths to skip duplicates.
+
+        With ``only_missing_external_id`` the match is scoped to rows
+        whose ``external_id`` IS NULL (legacy/manual/CSV rows).  This is
+        the transition fallback for id-bearing bank imports: a fuzzy
+        match against a row that carries a *different* external_id must
+        NOT dedupe — that is exactly the identical-same-day-purchase
+        false positive P2-09 fixes.
+        """
+        ...
+
+    @abstractmethod
+    async def find_existing_external_ids(
+        self,
+        user_id: int,
+        keys: list[ExternalIdKey],
+    ) -> set[ExternalIdKey]:
+        """Return the subset of ``(account_id, external_id)`` keys that
+        already exist for the user — batch anti-join, chunked like
+        ``find_existing_dedup_keys``.
         """
         ...
 

@@ -56,6 +56,10 @@ class Transaction:
     subcategory_name: str | None = None
     categorization_tier: str | None = None
     categorization_confidence: str | None = None
+    # Source-system identity (Enable Banking entry_reference) — None for
+    # manual/CSV rows.  Currency is implicitly DKK until F3-03.
+    external_id: str | None = None
+    currency: str = "DKK"
 
 
 @dataclass(frozen=True)
