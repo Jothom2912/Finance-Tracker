@@ -45,6 +45,24 @@ change); design decisions + accepted artifacts recorded in
 - banking-service is not runnable test-wise on Python 3.14 locally (psycopg2-binary has no
   wheel); used `uv run --python 3.12` with dummy `DATABASE_URL`/`JWT_SECRET` env (settings
   fail fast per P1-06) — same shape as CI.
+- **Root `make check` was red on master before P2-09** — swept clean this session:
+  ruff-format drift in user/transaction/categorization/banking/gateway/saga (3 style
+  commits, all affected suites re-run green) and a bandit B110 (silent except-pass) in
+  account-service `database.py` (fixed with a debug-log, `b221c907`).
+- **Bandit config divergence, unresolved**: CI runs `bandit -r app -x tests -ll -ii`
+  (P2-14), but account/banking/gateway Makefiles run bare `bandit -r app -x tests` —
+  the local gate is STRICTER than CI and will hard-fail on any future Low finding.
+  Aligning the Makefile flags with CI was deliberately left to a user decision (it reads
+  as loosening a security gate). Either add `-ll -ii` to the three Makefiles or accept
+  divergence.
+- Local `make check` for the pip-based services (account, banking) additionally needs
+  `ruff`/`bandit`/`pytest` on PATH (`uv tool install ruff bandit`; pytest ran via
+  `uv run --with-requirements` instead). CI installs these explicitly.
+- goal-service `make test` is red on the KNOWN open finding (migration 004 Postgres-only
+  vs sqlite migration tests, [findings/2026-07-12-goal-migration-004-sqlite.md](../findings/2026-07-12-goal-migration-004-sqlite.md)) —
+  unrelated to P2-09. All other 10 services' suites verified green this session
+  (user 32, tx 158+35+15, cat 51, account 22, budget 42, gateway 23, ai 98, banking 25,
+  saga 49, analytics 122, contracts 39+2).
 
 ## Open ends
 
