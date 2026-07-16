@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timezone
 
 import pytest
@@ -291,6 +292,46 @@ class TestTransactionCreatedEvent:
         assert event.description == ""
         assert event.subcategory_id is None
         assert event.categorization_tier is None
+        assert event.external_id is None
+        assert event.currency == "DKK"
+
+    def test_external_id_and_currency_roundtrip(self) -> None:
+        """P2-09 fields survive serialization."""
+        event = TransactionCreatedEvent(
+            transaction_id=1,
+            account_id=1,
+            user_id=1,
+            amount="10.00",
+            transaction_type="expense",
+            tx_date=date(2026, 1, 1),
+            external_id="EB-REF-2026-001",
+            currency="EUR",
+        )
+
+        restored = TransactionCreatedEvent.from_json(event.to_json())
+
+        assert restored.external_id == "EB-REF-2026-001"
+        assert restored.currency == "EUR"
+
+    def test_payload_without_p209_fields_still_validates(self) -> None:
+        """Backwards compat: pre-P2-09 payloads (no external_id/currency)
+        must keep validating — event_version stayed 1 on purpose."""
+        event = TransactionCreatedEvent(
+            transaction_id=1,
+            account_id=1,
+            user_id=1,
+            amount="10.00",
+            transaction_type="expense",
+            tx_date=date(2026, 1, 1),
+        )
+        payload = json.loads(event.to_json())
+        del payload["external_id"]
+        del payload["currency"]
+
+        restored = TransactionCreatedEvent.model_validate(payload)
+
+        assert restored.external_id is None
+        assert restored.currency == "DKK"
 
 
 class TestTransactionDeletedEvent:

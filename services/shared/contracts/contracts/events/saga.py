@@ -35,7 +35,25 @@ class BankFetchTransactionsCommand(SagaCommand):
 
 
 class BulkImportTransactionsCommand(SagaCommand):
-    """Command to transaction-service: bulk import fetched transactions."""
+    """Command to transaction-service: bulk import fetched transactions.
+
+    ``items`` is deliberately untyped — the saga round-trips it through
+    JSON context, so a typed model here would never be instantiated on
+    the consume path.  Item shape (producer: banking-service's fetch
+    handler; consumer: transaction-service's bulk-import handler)::
+
+        {
+            "amount": str,               # abs value, Decimal-parseable
+            "transaction_type": str,     # "income" | "expense"
+            "date": str,                 # ISO date
+            "description": str,
+            "external_id": str | None,   # EB entry_reference (P2-09)
+            "currency": str,             # ISO 4217, default "DKK"
+        }
+
+    Consumers MUST read item keys with ``.get()`` and defaults so old
+    in-flight messages (or not-yet-redeployed producers) keep working.
+    """
 
     event_type: str = "saga.cmd.bulk_import_transactions"
     user_id: int

@@ -14,6 +14,12 @@ class TransactionCreatedEvent(BaseEvent):
     The payload is denormalised: both ``category_id`` and ``category``
     (name) are included so downstream projections don't need lookups.
     ``tx_date`` is the date of the transaction (not event emission).
+
+    ``external_id``/``currency`` (P2-09, audit H10): source-system
+    identity (Enable Banking ``entry_reference``; None for manual/CSV
+    rows) and ISO 4217 currency.  Purely additive with defaults, so
+    event_version stays 1 — read-side projections (ES mapping, gateway)
+    ignore them until multi-currency lands (F3-03).
     """
 
     event_type: str = "transaction.created"
@@ -32,6 +38,8 @@ class TransactionCreatedEvent(BaseEvent):
     subcategory_id: int | None = None
     categorization_tier: str | None = None
     categorization_confidence: str | None = None
+    external_id: str | None = None
+    currency: str = "DKK"
 
 
 class TransactionUpdatedEvent(BaseEvent):
