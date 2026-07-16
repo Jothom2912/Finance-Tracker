@@ -32,6 +32,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue `analytics.embeddings`, partial-update of `description_vector`.
+- [decisions/2026-07-16-p209-dedup-semantics.md](decisions/2026-07-16-p209-dedup-semantics.md) — P2-09: three-way dedup rule (external_id + in-batch set + NULL-scoped fuzzy fallback), IntegrityError-as-honest-saga-failure, event_version stays 1, accepted transition artifacts.
 
 ## Sessions
 - [sessions/2026-07-07-architecture-audit.md](sessions/2026-07-07-architecture-audit.md) — audit session: what was done, method, open ends.
@@ -42,6 +43,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-13-ai20-gates.md](sessions/2026-07-13-ai20-gates.md) — AI-20's two gates closed: embed-worker decision recorded; eval set hardened (distractors, recall@3) — new baseline recall@3 0.967 / MRR 0.981 / intent 0.955; cutover gate is recall@3+MRR.
 - [sessions/2026-07-14-ai20-hybrid-cutover.md](sessions/2026-07-14-ai20-hybrid-cutover.md) — AI-20 shipped + cut over: transactions_v2 (auto-migration), embedding-consumer, hybrid-endpoint (RRF), EsSearch bag SEARCH_BACKEND=es; ES recall@3 0.971 vs chroma 0.967; ChromaDB-sletning venter på bake.
 - [sessions/2026-07-15-phase2-wave-b-resume.md](sessions/2026-07-15-phase2-wave-b-resume.md) — rate-limit resume: in-flight wave-B (gateway+user) + P2-14 CI committed & verified; pre-existing user-conftest bug fixed; wave-B scoreboard + remaining plan.
+- [sessions/2026-07-16-p209-external-id-currency.md](sessions/2026-07-16-p209-external-id-currency.md) — P2-09 shipped in 4 commits: contracts + tx-service dedup/migration 012 + banking producer; Phase 2 code-complete, only P2-15 left; P3-15 found.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)

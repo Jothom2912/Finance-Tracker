@@ -30,7 +30,7 @@ Execution strategy: [plans/2026-07-07-refactoring-roadmap.md](../plans/2026-07-0
 
 ## P2 — Important (systemic debt, perf, at-least-once hygiene)
 
-**Phase 2 DONE except two deferred items (updated 2026-07-15)** — wave-B adoption is COMPLETE (auth + messaging + domain in all services; see P2-01/02/03 rows for the two documented carve-outs). Remaining: P2-09 (do alone) and P2-15. See [sessions/2026-07-15-phase2-wave-b-resume.md](../sessions/2026-07-15-phase2-wave-b-resume.md) for the current survey + remaining plan. (Historical in-flight survey: [sessions/2026-07-07-phase2-in-flight.md](../sessions/2026-07-07-phase2-in-flight.md).)
+**Phase 2 code-COMPLETE (updated 2026-07-16)** — wave-B adoption done 2026-07-15, P2-09 shipped 2026-07-16 ([sessions/2026-07-16-p209-external-id-currency.md](../sessions/2026-07-16-p209-external-id-currency.md)). Only P2-15 (k8s secrets, pure infra) remains. (Historical surveys: [sessions/2026-07-15-phase2-wave-b-resume.md](../sessions/2026-07-15-phase2-wave-b-resume.md), [sessions/2026-07-07-phase2-in-flight.md](../sessions/2026-07-07-phase2-in-flight.md).)
 
 | ID | Title | Area | Effort | Status | Links |
 |----|-------|------|--------|--------|-------|
@@ -42,7 +42,7 @@ Execution strategy: [plans/2026-07-07-refactoring-roadmap.md](../plans/2026-07-0
 | P2-06 | Wire rules DB into rule engine; consumer uses `CategorizationService` + shared provider (TTL) | categorization | M | done (2026-07-12: `main()`/`_categorize` were left half-migrated → NameError crash-loop; finished the provider wiring, verified live + 51 unit tests) | H19, H20 |
 | P2-07 | Async EB client (`httpx.AsyncClient`); page caps; Decimal amounts | banking | M | done (committed 31ae3b6a) | H16, L, M19 |
 | P2-08 | Persist consent `valid_until`; gate sync on expiry → 409 "reconsent needed" | banking | S | done (committed 31ae3b6a) | H9 |
-| P2-09 | Carry `entry_reference` + `currency` through saga import; dedupe on `(account_id, external_id)` | banking, transaction | M | open (deferred — do alone) | H10 |
+| P2-09 | Carry `entry_reference` + `currency` through saga import; dedupe on `(account_id, external_id)` | banking, transaction | M | **done 2026-07-16** (commits 9d80a7a6..e913e44a: migration 012 partial-unique index, three-way dedup with transition fallback, saga items carry both fields; semantics + accepted artifacts in [decisions/2026-07-16-p209-dedup-semantics.md](../decisions/2026-07-16-p209-dedup-semantics.md)) | H10 |
 | P2-10 | Saga robustness: `FOR UPDATE` on saga rows; timeout → compensation (not abandonment); don't timeout `compensating` (scoped: H17 staging deferred) | saga | L | done (committed 3d64643b, with new lock/status-API tests) | H7, H8 |
 | P2-11 | Sync bcrypt → thread offload; catch IntegrityError → 409 on register | user | S | done (2026-07-15: unit 32p + integration 16p green; conftest bug fixed in fee7a5ea) | H1, L |
 | P2-12 | Fix broken response caches (delete them); Redis URL from settings, close on shutdown | transaction, budget | S | done (committed c8a20088) | M9, M10 |
@@ -73,3 +73,4 @@ Execution strategy: [plans/2026-07-07-refactoring-roadmap.md](../plans/2026-07-0
 | P3-12 | Gateway: rename `AnalyticsService`→`DashboardReadService`; GraphiQL gated to dev; depth limits; 401 semantics; REST exception mapping | gateway | M | open | M15, M25, L |
 | P3-13 | E2E coverage: bank-sync saga, categorization outcomes, ai-service smoke; health-gate all 10 services | tests | M | open | H12 |
 | P3-14 | Serialize bank-sync sagas per connection (deterministic correlation id) | banking | S | open | M8 |
+| P3-15 | Bulk-import item-count limits vs saga: `BulkCreateTransactionDTO.items` is 1..500 — an EB fetch with 0 or >500 items raises ValidationError in `_handle_bulk_import` → 3 retries → saga failure. Chunk in the consumer (or relax bounds for the internal path) | transaction | S | open (found during P2-09) | — |
