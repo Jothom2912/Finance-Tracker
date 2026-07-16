@@ -194,9 +194,7 @@ class TestSubcategorySync:
                 str(uuid4()),
             )
         )
-        row = await _fetch_one(
-            session_factory, "SELECT name, category_id FROM subcategories WHERE id = 101"
-        )
+        row = await _fetch_one(session_factory, "SELECT name, category_id FROM subcategories WHERE id = 101")
         assert row == ("B", 2)
 
     async def test_updated_for_missing_row_creates_it(self, consumer, session_factory) -> None:

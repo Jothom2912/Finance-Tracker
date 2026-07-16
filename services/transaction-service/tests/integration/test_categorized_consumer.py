@@ -129,9 +129,7 @@ class TestConsumerUpdatesTransaction:
 
         msg.ack.assert_awaited()
 
-    async def test_v2_event_category_name_applied_without_local_lookup(
-        self, consumer, session_factory
-    ) -> None:
+    async def test_v2_event_category_name_applied_without_local_lookup(self, consumer, session_factory) -> None:
         """v2 events carry the parent name — it must be applied even when
         the category_id is unknown in the local read copy (the old
         stale-name window)."""
@@ -162,9 +160,7 @@ class TestConsumerUpdatesTransaction:
 
         msg.ack.assert_awaited()
 
-    async def test_v1_event_without_category_name_resolves_locally(
-        self, consumer, session_factory
-    ) -> None:
+    async def test_v1_event_without_category_name_resolves_locally(self, consumer, session_factory) -> None:
         """Old payloads (empty category_name) fall back to the local
         categories read copy for the parent name."""
         from app.models import TransactionModel

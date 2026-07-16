@@ -65,7 +65,7 @@ async def test_bulk_import_maps_external_id_and_currency_to_dto() -> None:
 
 @pytest.mark.asyncio
 async def test_bulk_import_normalizes_blank_or_missing_external_id() -> None:
-    """""/null/whitespace external_ids must map to None (never a dedup
+    """ ""/null/whitespace external_ids must map to None (never a dedup
     key) and missing currency defaults to DKK — old in-flight messages
     keep the pure fuzzy path."""
     service = await _run_bulk_import(

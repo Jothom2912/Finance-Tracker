@@ -422,11 +422,7 @@ class TransactionService(ITransactionService):
                 if dto.skip_duplicates:
                     if item.external_id:
                         ext_key = (item.account_id, item.external_id)
-                        if (
-                            ext_key in existing_ext
-                            or ext_key in seen_ext
-                            or self._item_dedup_key(item) in legacy_keys
-                        ):
+                        if ext_key in existing_ext or ext_key in seen_ext or self._item_dedup_key(item) in legacy_keys:
                             duplicates_skipped += 1
                             continue
                         seen_ext.add(ext_key)

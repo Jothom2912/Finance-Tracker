@@ -296,9 +296,7 @@ class TestMigration012ExternalIdCurrency:
             columns = {
                 r.column_name
                 for r in conn.execute(
-                    sa.text(
-                        "SELECT column_name FROM information_schema.columns WHERE table_name = 'transactions'"
-                    )
+                    sa.text("SELECT column_name FROM information_schema.columns WHERE table_name = 'transactions'")
                 )
             }
 
