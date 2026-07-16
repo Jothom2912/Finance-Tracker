@@ -64,6 +64,22 @@ change); design decisions + accepted artifacts recorded in
   (user 32, tx 158+35+15, cat 51, account 22, budget 42, gateway 23, ai 98, banking 25,
   saga 49, analytics 122, contracts 39+2).
 
+## Live-smoke fallout: wave-B saga regression found & fixed (`e76bc896`)
+
+First live sync after the stack restart 404'd on saga-status polling. Root cause was NOT
+P2-09: the P2-01 wave-B port of saga-service wired shared `messaging.OutboxRepository`
+directly in as the `IOutboxRepository` port implementation, but the orchestrator's two
+`outbox.add(...)` call sites use the port's dict signature (`event_type=`, `payload_json=`,
+…) → `TypeError` inside `start_saga` → saga instance never created → every bank sync dead
+since the wave-B rollout. All 49 unit tests were green because the in-memory fake
+implements the *port*, not the wired adapter — textbook "unit-tested handler ≠ working
+event path". Fix: `SagaOutboxAdapter` (adapter layer) satisfies the port and translates to
+the shared `add(event, …)` via a `SerializableEvent` envelope; port/orchestrator/tests
+untouched. NEW `test_saga_outbox_wiring.py` drives the orchestrator through the REAL
+`SQLAlchemyUnitOfWork` on sqlite so this seam is covered from now on. **Lesson for the
+remaining wave-B surface: any service where a shared-package class was wired directly as a
+port implementation should get one real-UoW wiring test.**
+
 ## Open ends
 
 - F3-03 (multi-currency display) now unblocked: currency is stored + on events, but ES
