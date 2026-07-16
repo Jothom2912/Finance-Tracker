@@ -201,9 +201,7 @@ class TestRegister:
         """
         uow.users.find_by_email.return_value = None
         uow.users.find_by_username.return_value = None
-        uow.users.create.return_value = _make_user_with_creds(
-            user_id=99, username="carol", email="carol@example.com"
-        )
+        uow.users.create.return_value = _make_user_with_creds(user_id=99, username="carol", email="carol@example.com")
 
         def slow_hash(password: str) -> str:
             time.sleep(0.2)
