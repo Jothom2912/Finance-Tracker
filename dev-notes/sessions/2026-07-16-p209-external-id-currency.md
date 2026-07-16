@@ -80,6 +80,38 @@ untouched. NEW `test_saga_outbox_wiring.py` drives the orchestrator through the 
 remaining wave-B surface: any service where a shared-package class was wired directly as a
 port implementation should get one real-UoW wiring test.**
 
+## Live-smoke fallout #2: same wave-B bug class in transaction-service (`7674de13`+`9021d877`)
+
+Retry after the saga fix got further — banking fetched 212 transactions (step 0 OK,
+P2-09 fields flowing) — then the import step crashed: `OutboxRepository.add_batch()
+missing 2 required positional arguments`. Same root cause as the saga regression: the tx
+port's `add_batch` takes per-entry `(event, aggregate_type, aggregate_id)` tuples (every
+imported transaction is its own aggregate), the directly-wired shared repo binds ONE
+aggregate to all events. **Both bulk paths (CSV import + bank-sync bulk import) were dead
+since wave-B**; single-creates worked, masking it. The saga failed honestly at the import
+step — P1-12 semantics working as designed.
+
+Fix: new `add_entries` (per-entry batch) in shared messaging + `TransactionOutboxAdapter`
+implementing the port on top of it; wiring test drives `bulk_import` through the real UoW
+on sqlite. Audited ALL other services' outbox call sites: budget/banking/categorization/
+goal/user use `add(event=…, aggregate_type=…, aggregate_id=…)` which matches the shared
+signature — only saga + transaction had mismatches, both now fixed and wiring-tested.
+
+**Deploy gotcha (cost one debugging round):** every consumer/worker compose service has
+its OWN `build:` block → own image tag. `docker compose build <api-service>` does NOT
+refresh the consumers — they force-recreate onto their stale images. Rebuild the full
+per-service image family (e.g. `saga-start-consumer`, `transaction-saga-command-consumer`)
+whenever service code changes.
+
+## Live e2e verification (real EB connection, 2026-07-16)
+
+Replayed the DLQ'd `saga.bank_sync.start` (correlation `8268295a…`) after all images were
+rebuilt: saga `completed` through all 3 steps — `total_fetched: 212, new_imported: 5,
+duplicates_skipped: 207, errors: 0`. The 207 skips are the transition fallback matching
+pre-P2-09 history (external_id IS NULL); the 5 new rows all carry `external_id` +
+`currency`. P2-09 verified end-to-end against the live bank. (Second-sync dedup-on-id
+check: next sync should skip all 212.)
+
 ## Open ends
 
 - F3-03 (multi-currency display) now unblocked: currency is stored + on events, but ES
