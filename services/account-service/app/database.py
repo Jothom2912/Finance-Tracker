@@ -39,7 +39,9 @@ def _is_test_environment():
             if filename and ("test" in filename.lower() or "pytest" in filename.lower()):
                 return True
     except Exception:
-        pass
+        # Stack inspection is best-effort — fall through to the other
+        # heuristics, but leave a trace instead of swallowing silently.
+        logger.debug("Call-stack inspection failed during test-env detection", exc_info=True)
 
     # Check command line arguments
     if any("pytest" in str(arg).lower() for arg in sys.argv):
