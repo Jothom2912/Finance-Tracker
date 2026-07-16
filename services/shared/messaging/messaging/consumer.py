@@ -88,9 +88,7 @@ class ConsumerBase:
     ) -> None:
         self._rabbitmq_url = rabbitmq_url
         self._queue_name = queue_name
-        self._routing_keys: tuple[str, ...] = (
-            (routing_keys,) if isinstance(routing_keys, str) else tuple(routing_keys)
-        )
+        self._routing_keys: tuple[str, ...] = (routing_keys,) if isinstance(routing_keys, str) else tuple(routing_keys)
         self._exchange_name = exchange_name
         self._max_retries = max_retries
         self._prefetch_count = prefetch_count

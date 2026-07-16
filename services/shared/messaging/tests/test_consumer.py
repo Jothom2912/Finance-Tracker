@@ -36,9 +36,7 @@ class RecordingConsumer(ConsumerBase):
         self.error = error
         self.handled: list[dict[str, Any]] = []
 
-    async def handle(
-        self, payload: dict[str, Any], message: AbstractIncomingMessage
-    ) -> None:
+    async def handle(self, payload: dict[str, Any], message: AbstractIncomingMessage) -> None:
         if self.error is not None:
             raise self.error
         self.handled.append(payload)
@@ -125,9 +123,7 @@ class TestRetry:
 
     async def test_existing_retry_header_is_incremented(self) -> None:
         consumer = _make_consumer(error=RuntimeError("db down"))
-        message = _make_message(
-            {"event_type": "thing.happened"}, headers={RETRY_HEADER: 1}
-        )
+        message = _make_message({"event_type": "thing.happened"}, headers={RETRY_HEADER: 1})
 
         await consumer._on_message(message)
 
@@ -136,9 +132,7 @@ class TestRetry:
 
     async def test_failure_after_max_retries_goes_to_dlq(self) -> None:
         consumer = _make_consumer(error=RuntimeError("db down"))
-        message = _make_message(
-            {"event_type": "thing.happened"}, headers={RETRY_HEADER: MAX_RETRIES}
-        )
+        message = _make_message({"event_type": "thing.happened"}, headers={RETRY_HEADER: MAX_RETRIES})
 
         await consumer._on_message(message)
 
@@ -148,9 +142,7 @@ class TestRetry:
 
     async def test_republish_failure_nacks_with_requeue(self) -> None:
         consumer = _make_consumer(error=RuntimeError("db down"))
-        consumer._channel.default_exchange.publish = AsyncMock(
-            side_effect=ConnectionError("channel gone")
-        )
+        consumer._channel.default_exchange.publish = AsyncMock(side_effect=ConnectionError("channel gone"))
         message = _make_message({"event_type": "thing.happened"})
 
         await consumer._on_message(message)
@@ -176,9 +168,7 @@ class TestInboxDedup:
     async def test_duplicate_is_acked_without_handling(self) -> None:
         dedup = FakeDedup(seen={"c-42"})
         consumer = _make_consumer(deduplicator=dedup)
-        message = _make_message(
-            {"event_type": "thing.happened", "correlation_id": "c-42"}
-        )
+        message = _make_message({"event_type": "thing.happened", "correlation_id": "c-42"})
 
         await consumer._on_message(message)
 
@@ -190,9 +180,7 @@ class TestInboxDedup:
     async def test_fresh_message_is_handled_and_marked(self) -> None:
         dedup = FakeDedup()
         consumer = _make_consumer(deduplicator=dedup)
-        message = _make_message(
-            {"event_type": "thing.happened", "correlation_id": "c-7"}
-        )
+        message = _make_message({"event_type": "thing.happened", "correlation_id": "c-7"})
 
         await consumer._on_message(message)
 

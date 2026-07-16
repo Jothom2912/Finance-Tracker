@@ -59,9 +59,7 @@ class OutboxRepositoryLike(Protocol):
 
     async def fetch_pending(self, batch_size: int = ...) -> list[OutboxEntry]: ...
     async def mark_published(self, event_id: str) -> None: ...
-    async def record_failure(
-        self, entry: OutboxEntry, *, max_attempts: int | None = ...
-    ) -> object: ...
+    async def record_failure(self, entry: OutboxEntry, *, max_attempts: int | None = ...) -> object: ...
 
 
 RepositoryFactory = Callable[[AsyncSession], OutboxRepositoryLike]
@@ -100,9 +98,7 @@ class OutboxPublisherWorker:
         self._session_factory = session_factory
         if isinstance(repository_or_model, type):
             model = repository_or_model
-            self._repo_factory: RepositoryFactory = lambda session: OutboxRepository(
-                session, model
-            )
+            self._repo_factory: RepositoryFactory = lambda session: OutboxRepository(session, model)
         else:
             self._repo_factory = repository_or_model
 
@@ -134,9 +130,7 @@ class OutboxPublisherWorker:
                 published = await self._process_batch()
                 await self._maybe_purge()
             except Exception:
-                logger.exception(
-                    "Outbox batch failed — retrying in %.1fs", self._error_backoff
-                )
+                logger.exception("Outbox batch failed — retrying in %.1fs", self._error_backoff)
                 await asyncio.sleep(self._error_backoff)
                 continue
             if published == 0:
@@ -237,10 +231,7 @@ class OutboxPublisherWorker:
         if self._purge_after_days is None:
             return
         now = time.monotonic()
-        if (
-            self._last_purge_monotonic is not None
-            and now - self._last_purge_monotonic < self._purge_interval
-        ):
+        if self._last_purge_monotonic is not None and now - self._last_purge_monotonic < self._purge_interval:
             return
         self._last_purge_monotonic = now
         async with self._session_factory() as session:

@@ -29,16 +29,12 @@ def repo(session: AsyncSession) -> OutboxRepository:
 
 
 async def _get(session: AsyncSession, event_id: str) -> OutboxEventModel:
-    result = await session.execute(
-        select(OutboxEventModel).where(OutboxEventModel.id == event_id)
-    )
+    result = await session.execute(select(OutboxEventModel).where(OutboxEventModel.id == event_id))
     return result.scalar_one()
 
 
 class TestAdd:
-    async def test_add_creates_pending_row(
-        self, repo: OutboxRepository, session: AsyncSession
-    ) -> None:
+    async def test_add_creates_pending_row(self, repo: OutboxRepository, session: AsyncSession) -> None:
         event = FakeEvent("user.created", user_id=7)
         await repo.add(event, aggregate_type="user", aggregate_id="7")
 
@@ -53,9 +49,7 @@ class TestAdd:
         assert row.correlation_id == event.correlation_id
         assert row.payload_json == event.to_json()
 
-    async def test_add_batch_inserts_all(
-        self, repo: OutboxRepository, session: AsyncSession
-    ) -> None:
+    async def test_add_batch_inserts_all(self, repo: OutboxRepository, session: AsyncSession) -> None:
         events = [FakeEvent(f"thing.evt{i}") for i in range(3)]
         await repo.add_batch(events, aggregate_type="thing", aggregate_id="1")
 
@@ -80,9 +74,7 @@ class TestAdd:
 
 
 class TestFetchPending:
-    async def test_returns_pending_and_failed_due_now(
-        self, repo: OutboxRepository, session: AsyncSession
-    ) -> None:
+    async def test_returns_pending_and_failed_due_now(self, repo: OutboxRepository, session: AsyncSession) -> None:
         await repo.add(FakeEvent("a.one"), "a", "1")
         await repo.add(FakeEvent("a.two"), "a", "2")
         rows = (await session.execute(select(OutboxEventModel))).scalars().all()
@@ -94,9 +86,7 @@ class TestFetchPending:
         entries = await repo.fetch_pending(batch_size=10)
         assert {e.event_type for e in entries} == {"a.one", "a.two"}
 
-    async def test_excludes_future_published_and_dead(
-        self, repo: OutboxRepository, session: AsyncSession
-    ) -> None:
+    async def test_excludes_future_published_and_dead(self, repo: OutboxRepository, session: AsyncSession) -> None:
         for name in ("future", "published", "dead", "due"):
             await repo.add(FakeEvent(f"x.{name}"), "x", name)
         rows = (await session.execute(select(OutboxEventModel))).scalars().all()
@@ -110,9 +100,7 @@ class TestFetchPending:
         entries = await repo.fetch_pending(batch_size=10)
         assert [e.event_type for e in entries] == ["x.due"]
 
-    async def test_orders_by_created_at_and_respects_limit(
-        self, repo: OutboxRepository, session: AsyncSession
-    ) -> None:
+    async def test_orders_by_created_at_and_respects_limit(self, repo: OutboxRepository, session: AsyncSession) -> None:
         base = utcnow_naive() - timedelta(minutes=10)
         for i in range(5):
             await repo.add(FakeEvent(f"o.e{i}"), "o", str(i))
@@ -127,9 +115,7 @@ class TestFetchPending:
 
 
 class TestStatusTransitions:
-    async def test_mark_published(
-        self, repo: OutboxRepository, session: AsyncSession
-    ) -> None:
+    async def test_mark_published(self, repo: OutboxRepository, session: AsyncSession) -> None:
         await repo.add(FakeEvent(), "t", "1")
         entry = (await repo.fetch_pending())[0]
 
@@ -165,9 +151,7 @@ class TestStatusTransitions:
         assert next_at is not None
         expected_backoff = compute_backoff(entry.attempts)  # attempts=0 → 5s
         assert expected_backoff == 5
-        assert timedelta(seconds=expected_backoff - 1) <= (next_at - before) <= timedelta(
-            seconds=expected_backoff + 1
-        )
+        assert timedelta(seconds=expected_backoff - 1) <= (next_at - before) <= timedelta(seconds=expected_backoff + 1)
         row = await _get(session, entry.id)
         assert row.status == OutboxStatus.FAILED
         assert row.attempts == 1
@@ -204,9 +188,7 @@ class TestStatusTransitions:
 
 
 class TestPurgePublished:
-    async def test_purges_only_old_published_rows(
-        self, repo: OutboxRepository, session: AsyncSession
-    ) -> None:
+    async def test_purges_only_old_published_rows(self, repo: OutboxRepository, session: AsyncSession) -> None:
         for name in ("old_published", "new_published", "pending"):
             await repo.add(FakeEvent(f"p.{name}"), "p", name)
         rows = (await session.execute(select(OutboxEventModel))).scalars().all()

@@ -139,9 +139,7 @@ class OutboxRepository:
         aggregate_id: str,
     ) -> None:
         """Insert several events for one aggregate in a single flush."""
-        self._session.add_all(
-            self._build(event, aggregate_type, aggregate_id) for event in events
-        )
+        self._session.add_all(self._build(event, aggregate_type, aggregate_id) for event in events)
         await self._session.flush()
 
     async def add_entries(
@@ -156,8 +154,7 @@ class OutboxRepository:
         row (e.g. one ``transaction.created`` per imported transaction).
         """
         self._session.add_all(
-            self._build(event, aggregate_type, aggregate_id)
-            for event, aggregate_type, aggregate_id in entries
+            self._build(event, aggregate_type, aggregate_id) for event, aggregate_type, aggregate_id in entries
         )
         await self._session.flush()
 

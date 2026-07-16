@@ -66,20 +66,14 @@ class TestConstruction:
         with pytest.raises(ValueError):
             OutboxPublisherWorker(session_factory, OutboxEventModel)
 
-    def test_accepts_repository_factory(
-        self, session_factory: Callable[[], AsyncSession]
-    ) -> None:
+    def test_accepts_repository_factory(self, session_factory: Callable[[], AsyncSession]) -> None:
         factory = lambda session: OutboxRepository(session, OutboxEventModel)  # noqa: E731
-        worker = OutboxPublisherWorker(
-            session_factory, factory, publisher=FakePublisher()
-        )
+        worker = OutboxPublisherWorker(session_factory, factory, publisher=FakePublisher())
         assert worker is not None
 
 
 class TestProcessBatch:
-    async def test_publishes_pending_and_marks_published(
-        self, session_factory: Callable[[], AsyncSession]
-    ) -> None:
+    async def test_publishes_pending_and_marks_published(self, session_factory: Callable[[], AsyncSession]) -> None:
         event = FakeEvent("user.created")
         await _seed(session_factory, event)
         publisher = FakePublisher()
@@ -118,9 +112,7 @@ class TestProcessBatch:
         assert by_type["a.first"].status == OutboxStatus.PUBLISHED
         assert by_type["a.second"].status == OutboxStatus.PENDING
 
-    async def test_legacy_batch_mode_single_commit(
-        self, session_factory: Callable[[], AsyncSession]
-    ) -> None:
+    async def test_legacy_batch_mode_single_commit(self, session_factory: Callable[[], AsyncSession]) -> None:
         await _seed(session_factory, FakeEvent("b.one"), FakeEvent("b.two"))
         publisher = FakePublisher()
         worker = _make_worker(session_factory, publisher, commit_per_entry=False)
@@ -131,9 +123,7 @@ class TestProcessBatch:
         assert len(publisher.published) == 2
         assert all(r.status == OutboxStatus.PUBLISHED for r in await _rows(session_factory))
 
-    async def test_publish_failure_marks_failed_with_backoff(
-        self, session_factory: Callable[[], AsyncSession]
-    ) -> None:
+    async def test_publish_failure_marks_failed_with_backoff(self, session_factory: Callable[[], AsyncSession]) -> None:
         await _seed(session_factory, FakeEvent("c.fail"))
         publisher = FakePublisher(fail_times=1)
         worker = _make_worker(session_factory, publisher)
@@ -148,9 +138,7 @@ class TestProcessBatch:
         delta = (row.next_attempt_at - before).total_seconds()
         assert 4 <= delta <= 6
 
-    async def test_max_attempts_reached_marks_dead(
-        self, session_factory: Callable[[], AsyncSession]
-    ) -> None:
+    async def test_max_attempts_reached_marks_dead(self, session_factory: Callable[[], AsyncSession]) -> None:
         await _seed(session_factory, FakeEvent("d.dead"))
         async with session_factory() as session:
             row = (await session.execute(select(OutboxEventModel))).scalar_one()
@@ -184,9 +172,7 @@ class TestRunForever:
         ),
         strict=False,
     )
-    async def test_survives_transient_errors_and_recovers(
-        self, session_factory: Callable[[], AsyncSession]
-    ) -> None:
+    async def test_survives_transient_errors_and_recovers(self, session_factory: Callable[[], AsyncSession]) -> None:
         """run_forever must not die on a failing session factory."""
         await _seed(session_factory, FakeEvent("e.recover"))
         publisher = FakePublisher()
@@ -214,9 +200,7 @@ class TestRunForever:
         rows = await _rows(session_factory)
         assert rows[0].status == OutboxStatus.PUBLISHED
 
-    async def test_periodic_purge_runs(
-        self, session_factory: Callable[[], AsyncSession]
-    ) -> None:
+    async def test_periodic_purge_runs(self, session_factory: Callable[[], AsyncSession]) -> None:
         from datetime import timedelta
 
         await _seed(session_factory, FakeEvent("f.old"))

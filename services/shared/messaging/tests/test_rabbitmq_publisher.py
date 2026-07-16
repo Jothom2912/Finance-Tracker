@@ -54,9 +54,7 @@ class TestPublish:
 
         await publisher.publish_raw(message, routing_key="a.b")
 
-        publisher._exchange.publish.assert_awaited_once_with(
-            message, routing_key="a.b"
-        )
+        publisher._exchange.publish.assert_awaited_once_with(message, routing_key="a.b")
 
     async def test_close_without_connection_is_noop(self) -> None:
         publisher = RabbitMQPublisher("amqp://test")
