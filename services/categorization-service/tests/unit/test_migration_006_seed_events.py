@@ -40,8 +40,7 @@ def test_row_count_is_ten_categories_plus_41_subcategories() -> None:
 
 def test_build_seed_events_is_deterministic() -> None:
     assert _rows() == _rows(), (
-        "build_seed_events must be deterministic so ON CONFLICT(id) "
-        "idempotency holds across repeated upgrades."
+        "build_seed_events must be deterministic so ON CONFLICT(id) idempotency holds across repeated upgrades."
     )
 
 
@@ -78,9 +77,7 @@ def test_routing_keys_match_event_types() -> None:
 
 def test_fallback_anden_is_seeded() -> None:
     by_id = {
-        int(r["aggregate_id"]): json.loads(r["payload_json"])
-        for r in _rows()
-        if r["aggregate_type"] == "subcategory"
+        int(r["aggregate_id"]): json.loads(r["payload_json"]) for r in _rows() if r["aggregate_type"] == "subcategory"
     }
     assert by_id[32]["name"] == "Anden"
     assert by_id[32]["category_id"] == 8

@@ -17,9 +17,7 @@ class BankConnectionNotFound(BankingDomainException):
 
 class BankConnectionInactive(BankingDomainException):
     def __init__(self, connection_id: UUID, status: str) -> None:
-        super().__init__(
-            f"Bank connection {connection_id} is not active (status={status})"
-        )
+        super().__init__(f"Bank connection {connection_id} is not active (status={status})")
         self.connection_id = connection_id
         self.status = status
 
@@ -34,9 +32,7 @@ class BankConsentExpired(BankingDomainException):
     """
 
     def __init__(self, connection_id: UUID, expires_at: Optional[datetime]) -> None:
-        super().__init__(
-            f"Bank consent for connection {connection_id} expired at {expires_at}"
-        )
+        super().__init__(f"Bank consent for connection {connection_id} expired at {expires_at}")
         self.connection_id = connection_id
         self.expires_at = expires_at
 

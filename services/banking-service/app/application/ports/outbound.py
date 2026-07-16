@@ -17,7 +17,9 @@ class IBankConnectionRepository(Protocol):
 
     async def get_by_id(self, connection_id: UUID) -> Optional[BankConnection]: ...
     async def get_active_by_uid(
-        self, bank_account_uid: str, account_id: int,
+        self,
+        bank_account_uid: str,
+        account_id: int,
     ) -> Optional[BankConnection]:
         """Find non-disconnected connection for this uid+account."""
         ...
@@ -26,7 +28,10 @@ class IBankConnectionRepository(Protocol):
     async def update_status(self, connection_id: UUID, status: str) -> None: ...
     async def update_last_synced(self, connection_id: UUID, synced_at: datetime) -> None: ...
     async def update_consent(
-        self, connection_id: UUID, session_id: str, expires_at: Optional[datetime],
+        self,
+        connection_id: UUID,
+        session_id: str,
+        expires_at: Optional[datetime],
     ) -> None:
         """Refresh session + consent expiry after a reconsent (flush, no commit)."""
         ...

@@ -235,7 +235,8 @@ class CategoryService:
 
             if (target_name, target_category_id) != (existing.name, existing.category_id):
                 duplicate = await self._uow.subcategories.find_by_name_and_category(
-                    target_name, target_category_id,
+                    target_name,
+                    target_category_id,
                 )
                 if duplicate is not None and duplicate.id != subcategory_id:
                     raise DuplicateSubCategoryName(target_name)

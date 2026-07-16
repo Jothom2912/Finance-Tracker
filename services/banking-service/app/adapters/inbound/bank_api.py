@@ -29,8 +29,7 @@ from app.domain.exceptions import (
 )
 
 RECONSENT_DETAIL = (
-    "Bankforbindelsens samtykke er udløbet. "
-    "Forny adgangen til banken (nyt samtykke) for at kunne synkronisere igen."
+    "Bankforbindelsens samtykke er udløbet. Forny adgangen til banken (nyt samtykke) for at kunne synkronisere igen."
 )
 
 logger = logging.getLogger(__name__)
@@ -133,7 +132,9 @@ async def bank_callback(
         ref = str(uuid.uuid4())[:8]
         logger.error(
             "Bank authorization failed [%s]: error=%s, state=%s",
-            ref, error, state,
+            ref,
+            error,
+            state,
         )
         return _callback_redirect("error", code="auth_rejected", ref=ref)
 
@@ -141,37 +142,44 @@ async def bank_callback(
         ref = str(uuid.uuid4())[:8]
         logger.warning(
             "Bank callback missing authorization code [%s]: state=%s",
-            ref, state,
+            ref,
+            state,
         )
         return _callback_redirect("error", code="missing_code", ref=ref)
 
     try:
         connections = await service.complete_connect(
-            auth_code=auth_code, state=state,
+            auth_code=auth_code,
+            state=state,
         )
     except PendingAuthorizationNotFound:
         ref = str(uuid.uuid4())[:8]
         logger.warning(
             "Unknown/expired state in bank callback [%s]: state=%s",
-            ref, state,
+            ref,
+            state,
         )
         return _callback_redirect("error", code="unknown_state", ref=ref)
     except BankAuthorizationError as exc:
         ref = str(uuid.uuid4())[:8]
         logger.warning(
-            "Enable Banking rejected auth code [%s]: %s", ref, exc,
+            "Enable Banking rejected auth code [%s]: %s",
+            ref,
+            exc,
         )
         return _callback_redirect("error", code="auth_rejected", ref=ref)
     except BankConfigError:
         ref = str(uuid.uuid4())[:8]
         logger.exception(
-            "Enable Banking misconfigured during callback [%s]", ref,
+            "Enable Banking misconfigured during callback [%s]",
+            ref,
         )
         return _callback_redirect("error", code="config_error", ref=ref)
     except BankApiUnavailable:
         ref = str(uuid.uuid4())[:8]
         logger.exception(
-            "Enable Banking upstream error during callback [%s]", ref,
+            "Enable Banking upstream error during callback [%s]",
+            ref,
         )
         return _callback_redirect("error", code="upstream_unavailable", ref=ref)
     except Exception:
@@ -179,7 +187,8 @@ async def bank_callback(
         # would leave the user stuck on a blank page.
         ref = str(uuid.uuid4())[:8]
         logger.exception(
-            "Unexpected error in bank callback [%s]", ref,
+            "Unexpected error in bank callback [%s]",
+            ref,
         )
         return _callback_redirect("error", code="internal_error", ref=ref)
 

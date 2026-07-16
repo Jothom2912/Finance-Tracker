@@ -29,9 +29,7 @@ class PostgresAccountProjectionRepository:
             return None
         return row.user_id, row.account_name
 
-    async def upsert(
-        self, account_id: int, user_id: int, account_name: str
-    ) -> None:
+    async def upsert(self, account_id: int, user_id: int, account_name: str) -> None:
         stmt = (
             pg_insert(AccountsProjectionModel)
             .values(

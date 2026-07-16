@@ -54,7 +54,9 @@ class PostgresBankConnectionRepository:
         return self._to_entity(row) if row else None
 
     async def get_active_by_uid(
-        self, bank_account_uid: str, account_id: int,
+        self,
+        bank_account_uid: str,
+        account_id: int,
     ) -> Optional[BankConnection]:
         result = await self._session.execute(
             select(BankConnectionModel).where(
@@ -68,17 +70,13 @@ class PostgresBankConnectionRepository:
 
     async def list_by_account(self, account_id: int) -> list[BankConnection]:
         result = await self._session.execute(
-            select(BankConnectionModel).where(
-                BankConnectionModel.account_id == account_id
-            )
+            select(BankConnectionModel).where(BankConnectionModel.account_id == account_id)
         )
         return [self._to_entity(row) for row in result.scalars().all()]
 
     async def update_status(self, connection_id: UUID, status: str) -> None:
         await self._session.execute(
-            update(BankConnectionModel)
-            .where(BankConnectionModel.id == str(connection_id))
-            .values(status=status)
+            update(BankConnectionModel).where(BankConnectionModel.id == str(connection_id)).values(status=status)
         )
 
     async def update_last_synced(self, connection_id: UUID, synced_at: datetime) -> None:
@@ -89,7 +87,10 @@ class PostgresBankConnectionRepository:
         )
 
     async def update_consent(
-        self, connection_id: UUID, session_id: str, expires_at: Optional[datetime],
+        self,
+        connection_id: UUID,
+        session_id: str,
+        expires_at: Optional[datetime],
     ) -> None:
         await self._session.execute(
             update(BankConnectionModel)

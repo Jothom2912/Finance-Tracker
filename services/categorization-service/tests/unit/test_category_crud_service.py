@@ -76,7 +76,9 @@ class TestCreateCategory:
         result = await service.create_category(dto)
 
         uow.categories.create.assert_awaited_once_with(
-            "Mad & drikke", CategoryType.EXPENSE, display_order=1,
+            "Mad & drikke",
+            CategoryType.EXPENSE,
+            display_order=1,
         )
         event = uow.outbox.add.call_args[1]["event"]
         assert event.event_type == "category.created"

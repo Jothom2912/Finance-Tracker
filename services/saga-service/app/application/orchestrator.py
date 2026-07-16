@@ -204,9 +204,7 @@ class SagaOrchestrator:
             updated_at = updated_at.replace(tzinfo=timezone.utc)
         return updated_at <= cutoff
 
-    async def _handle_stale_execution(
-        self, saga: SagaInstance, definition: SagaDefinition, max_age: timedelta
-    ) -> None:
+    async def _handle_stale_execution(self, saga: SagaInstance, definition: SagaDefinition, max_age: timedelta) -> None:
         """A saga stuck in STARTED timed out: compensate if there is anything
         to undo, otherwise mark it timed_out as before."""
         timeout_seconds = max_age.total_seconds()
@@ -247,18 +245,14 @@ class SagaOrchestrator:
                 f"{saga.error_detail}; compensation timed out" if saga.error_detail else "compensation timed out"
             )
             saga.completed_at = datetime.now(timezone.utc)
-            logger.error(
-                "Saga compensation timed out: id=%s step=%s", saga.id, step.name if step else "<none>"
-            )
+            logger.error("Saga compensation timed out: id=%s step=%s", saga.id, step.name if step else "<none>")
             return
 
         assert step_def.compensate_event_type is not None
         await self._outbox_compensation_command(saga, step, step_def.compensate_event_type, payload)
         note = f"{self._COMPENSATION_REEMIT_MARKER} after {max_age.total_seconds()}s"
         saga.error_detail = f"{saga.error_detail}; {note}" if saga.error_detail else note
-        logger.warning(
-            "Saga compensation stale, re-emitting compensation command: id=%s step=%s", saga.id, step.name
-        )
+        logger.warning("Saga compensation stale, re-emitting compensation command: id=%s step=%s", saga.id, step.name)
 
     def _has_compensatable_work(self, saga: SagaInstance, definition: SagaDefinition) -> bool:
         for step in saga.steps:

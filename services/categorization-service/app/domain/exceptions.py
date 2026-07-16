@@ -39,9 +39,7 @@ class CategoryHasSubcategories(CategorizationException):
     def __init__(self, category_id: int, count: int):
         self.category_id = category_id
         self.count = count
-        super().__init__(
-            f"Category {category_id} still has {count} subcategories — delete or move them first"
-        )
+        super().__init__(f"Category {category_id} still has {count} subcategories — delete or move them first")
 
 
 class SubCategoryInUse(CategorizationException):

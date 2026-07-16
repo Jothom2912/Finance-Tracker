@@ -61,8 +61,7 @@ class PostgresPendingAuthRepository:
         audit_cutoff = now - timedelta(hours=24)
         result = await self._session.execute(
             delete(PendingAuthorizationModel).where(
-                (PendingAuthorizationModel.expires_at < now)
-                | (PendingAuthorizationModel.consumed_at < audit_cutoff)
+                (PendingAuthorizationModel.expires_at < now) | (PendingAuthorizationModel.consumed_at < audit_cutoff)
             )
         )
         await self._session.flush()

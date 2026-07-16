@@ -39,6 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.on_event("startup")
 async def startup_warmup() -> None:
     """Preload rule engine and warm DB pool to eliminate cold-start latency."""
@@ -68,16 +69,12 @@ async def duplicate_category_handler(_request: Request, exc: DuplicateCategoryNa
 
 
 @app.exception_handler(DuplicateSubCategoryName)
-async def duplicate_subcategory_handler(
-    _request: Request, exc: DuplicateSubCategoryName
-) -> JSONResponse:
+async def duplicate_subcategory_handler(_request: Request, exc: DuplicateSubCategoryName) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.exception_handler(CategoryHasSubcategories)
-async def category_has_subcategories_handler(
-    _request: Request, exc: CategoryHasSubcategories
-) -> JSONResponse:
+async def category_has_subcategories_handler(_request: Request, exc: CategoryHasSubcategories) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
@@ -87,9 +84,7 @@ async def subcategory_in_use_handler(_request: Request, exc: SubCategoryInUse) -
 
 
 @app.exception_handler(InvalidCategoryType)
-async def invalid_category_type_handler(
-    _request: Request, exc: InvalidCategoryType
-) -> JSONResponse:
+async def invalid_category_type_handler(_request: Request, exc: InvalidCategoryType) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 

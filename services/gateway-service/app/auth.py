@@ -28,9 +28,7 @@ logger = logging.getLogger(__name__)
 # Shared three-message 401 flow (Missing token / Invalid format / Invalid or
 # expired token, all with WWW-Authenticate: Bearer). Routers keep importing
 # this name — zero router changes.
-get_user_id_from_headers = make_current_user_dependency(
-    lambda: SECRET_KEY, algorithms=(JWT_ALGORITHM,)
-)
+get_user_id_from_headers = make_current_user_dependency(lambda: SECRET_KEY, algorithms=(JWT_ALGORITHM,))
 
 
 def _decode_user_id(token: str) -> Optional[int]:

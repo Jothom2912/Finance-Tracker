@@ -125,9 +125,7 @@ def build_seed_events() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
 
     for cat_id, name, type_, display_order in _DEFAULT_CATEGORIES:
-        outbox_id = str(
-            uuid.uuid5(_SEED_NAMESPACE, f"categorization-service.seed.006.outbox.category.{cat_id}")
-        )
+        outbox_id = str(uuid.uuid5(_SEED_NAMESPACE, f"categorization-service.seed.006.outbox.category.{cat_id}"))
         correlation_id = str(
             uuid.uuid5(_SEED_NAMESPACE, f"categorization-service.seed.006.correlation.category.{cat_id}")
         )
@@ -151,9 +149,7 @@ def build_seed_events() -> list[dict[str, str]]:
         )
 
     for sub_id, name, category_id in _SUBCATEGORIES:
-        outbox_id = str(
-            uuid.uuid5(_SEED_NAMESPACE, f"categorization-service.seed.006.outbox.subcategory.{sub_id}")
-        )
+        outbox_id = str(uuid.uuid5(_SEED_NAMESPACE, f"categorization-service.seed.006.outbox.subcategory.{sub_id}"))
         correlation_id = str(
             uuid.uuid5(_SEED_NAMESPACE, f"categorization-service.seed.006.correlation.subcategory.{sub_id}")
         )
@@ -185,10 +181,7 @@ def upgrade() -> None:
     # 1. Heal display_order drift (only rows still at the consumer default 0).
     for cat_id, _name, _type, display_order in _DEFAULT_CATEGORIES:
         bind.execute(
-            sa.text(
-                "UPDATE categories SET display_order = :display_order "
-                "WHERE id = :id AND display_order = 0"
-            ),
+            sa.text("UPDATE categories SET display_order = :display_order WHERE id = :id AND display_order = 0"),
             {"id": cat_id, "display_order": display_order},
         )
 

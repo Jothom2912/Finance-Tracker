@@ -176,9 +176,7 @@ class TransactionCreatedConsumer(ConsumerBase):
             fallback_subcategory_id=self._rule_engine_provider.fallback_subcategory_id,
             fallback_category_id=self._rule_engine_provider.fallback_category_id,
         )
-        response = await service.categorize(
-            CategorizeRequestDTO(description=description, amount=amount)
-        )
+        response = await service.categorize(CategorizeRequestDTO(description=description, amount=amount))
         return CategorizationResult(
             category_id=response.category_id,
             subcategory_id=response.subcategory_id,

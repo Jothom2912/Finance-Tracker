@@ -144,7 +144,9 @@ class BankingService:
                     # stored session_id and consent expiry, otherwise the
                     # expiry gate would keep rejecting a renewed consent.
                     await self._uow.connections.update_consent(
-                        existing.id, session_id, consent_expires_at,
+                        existing.id,
+                        session_id,
+                        consent_expires_at,
                     )
                     connection_id = str(existing.id)
                     status = "reconnected"
@@ -179,17 +181,21 @@ class BankingService:
                     aggregate_type="bank_connection",
                     aggregate_id=connection_id,
                 )
-                created.append({
-                    "id": connection_id,
-                    "bank_account_uid": uid,
-                    "iban": iban,
-                    "status": status,
-                })
+                created.append(
+                    {
+                        "id": connection_id,
+                        "bank_account_uid": uid,
+                        "iban": iban,
+                        "status": status,
+                    }
+                )
 
             await self._uow.commit()
 
         logger.info(
-            "Connected %d bank accounts (session=%s)", len(created), session_id,
+            "Connected %d bank accounts (session=%s)",
+            len(created),
+            session_id,
         )
         return created
 

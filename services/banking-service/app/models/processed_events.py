@@ -16,6 +16,4 @@ class ProcessedEventModel(Base):
     consumer_name: Mapped[str] = mapped_column(String(100), nullable=False)
     processed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    __table_args__ = (
-        UniqueConstraint("correlation_id", "consumer_name", name="uq_processed_event"),
-    )
+    __table_args__ = (UniqueConstraint("correlation_id", "consumer_name", name="uq_processed_event"),)

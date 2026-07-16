@@ -91,9 +91,7 @@ class TestCategorySeed:
         CategorySyncConsumer — after upgrade the canonical ordering from
         migration 002 must hold."""
         with engine.connect() as conn:
-            rows = conn.execute(
-                text("SELECT id, display_order FROM categories ORDER BY id")
-            ).fetchall()
+            rows = conn.execute(text("SELECT id, display_order FROM categories ORDER BY id")).fetchall()
             expected = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 10, 10: 20}
             assert dict(rows) == expected
 
@@ -201,14 +199,10 @@ class TestInfrastructureTables:
         41 subcategories) as pending outbox events for downstream read
         copies — nothing else may be in the outbox after upgrade."""
         with engine.connect() as conn:
-            rows = conn.execute(
-                text("SELECT event_type, COUNT(*) FROM outbox_events GROUP BY event_type")
-            ).fetchall()
+            rows = conn.execute(text("SELECT event_type, COUNT(*) FROM outbox_events GROUP BY event_type")).fetchall()
             counts = dict(rows)
             assert counts == {"category.created": 10, "subcategory.created": 41}
-            pending = conn.execute(
-                text("SELECT COUNT(*) FROM outbox_events WHERE status = 'pending'")
-            ).scalar()
+            pending = conn.execute(text("SELECT COUNT(*) FROM outbox_events WHERE status = 'pending'")).scalar()
             assert pending == 51
 
     def test_processed_events_is_empty(self, engine) -> None:

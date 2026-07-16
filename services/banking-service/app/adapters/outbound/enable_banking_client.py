@@ -70,9 +70,7 @@ class EnableBankingClient:
         try:
             self._private_key = Path(config.key_path).read_bytes()
         except OSError as exc:
-            raise BankConfigError(
-                f"Cannot read PEM at {config.key_path}: {exc!r}"
-            ) from exc
+            raise BankConfigError(f"Cannot read PEM at {config.key_path}: {exc!r}") from exc
         # AsyncClient so calls from async handlers/consumers never block
         # the event loop (audit H16). One client per EnableBankingClient
         # instance: reuses the TCP/TLS connection pool across requests
@@ -101,26 +99,19 @@ class EnableBankingClient:
                 headers={"kid": self._config.app_id},
             )
         except (pyjwt.PyJWTError, ValueError) as exc:
-            raise BankConfigError(
-                f"Failed to sign Enable Banking JWT: {exc!r}"
-            ) from exc
+            raise BankConfigError(f"Failed to sign Enable Banking JWT: {exc!r}") from exc
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._generate_jwt()}"}
 
     @staticmethod
-    def _wrap_upstream_error(
-        exc: httpx.HTTPError, context: str
-    ) -> BankApiUnavailable:
+    def _wrap_upstream_error(exc: httpx.HTTPError, context: str) -> BankApiUnavailable:
         if isinstance(exc, httpx.HTTPStatusError):
             body_preview = exc.response.text[:200] if exc.response.text else ""
             return BankApiUnavailable(
-                f"Enable Banking {context} returned HTTP "
-                f"{exc.response.status_code}: {body_preview}"
+                f"Enable Banking {context} returned HTTP {exc.response.status_code}: {body_preview}"
             )
-        return BankApiUnavailable(
-            f"Enable Banking {context} unreachable: {exc!r}"
-        )
+        return BankApiUnavailable(f"Enable Banking {context} unreachable: {exc!r}")
 
     # ── Authorization flow ──────────────────────────────────────────
 
@@ -145,9 +136,7 @@ class EnableBankingClient:
         state = str(uuid.uuid4())
         body = {
             "access": {
-                "valid_until": (
-                    datetime.now(timezone.utc) + timedelta(days=valid_days)
-                ).isoformat(),
+                "valid_until": (datetime.now(timezone.utc) + timedelta(days=valid_days)).isoformat(),
             },
             "aspsp": {"name": bank_name, "country": country},
             "state": state,
@@ -184,9 +173,7 @@ class EnableBankingClient:
                 f"or already been used"
             ) from exc
         except httpx.RequestError as exc:
-            raise BankApiUnavailable(
-                f"Enable Banking create_session unreachable: {exc!r}"
-            ) from exc
+            raise BankApiUnavailable(f"Enable Banking create_session unreachable: {exc!r}") from exc
         logger.info(
             "Session created: %s with %d accounts",
             session.get("session_id", "?"),
@@ -196,9 +183,7 @@ class EnableBankingClient:
 
     async def delete_session(self, session_id: str) -> None:
         try:
-            resp = await self._http.delete(
-                f"/sessions/{session_id}", headers=self._headers()
-            )
+            resp = await self._http.delete(f"/sessions/{session_id}", headers=self._headers())
             resp.raise_for_status()
         except httpx.HTTPError as exc:
             raise self._wrap_upstream_error(exc, "delete_session") from exc
@@ -213,9 +198,7 @@ class EnableBankingClient:
         date_to: Optional[str] = None,
     ) -> tuple[list[BankTransaction], int]:
         if date_from is None:
-            date_from = (
-                datetime.now(timezone.utc) - timedelta(days=90)
-            ).date().isoformat()
+            date_from = (datetime.now(timezone.utc) - timedelta(days=90)).date().isoformat()
 
         params: dict[str, str] = {"date_from": date_from}
         if date_to:
@@ -238,9 +221,7 @@ class EnableBankingClient:
                 resp.raise_for_status()
                 data = resp.json()
             except httpx.HTTPError as exc:
-                raise self._wrap_upstream_error(
-                    exc, "get_transactions"
-                ) from exc
+                raise self._wrap_upstream_error(exc, "get_transactions") from exc
 
             batch, skipped = self._parse_batch(data.get("transactions", []))
             all_transactions.extend(batch)
@@ -313,12 +294,8 @@ class EnableBankingClient:
         if raw.get("credit_debit_indicator") == "DBIT":
             amount = -abs(amount)
 
-        creditor = raw.get("creditor_name", "") or (
-            raw.get("creditor") or {}
-        ).get("name", "")
-        debtor = raw.get("debtor_name", "") or (
-            raw.get("debtor") or {}
-        ).get("name", "")
+        creditor = raw.get("creditor_name", "") or (raw.get("creditor") or {}).get("name", "")
+        debtor = raw.get("debtor_name", "") or (raw.get("debtor") or {}).get("name", "")
         human_name = creditor.strip() or debtor.strip()
 
         remittance_candidates = [
@@ -326,14 +303,9 @@ class EnableBankingClient:
             (raw.get("remittance_information_unstructured_array") or [""])[0],
             " ".join(raw.get("remittance_information") or []),
         ]
-        remittance = next(
-            (c.strip() for c in remittance_candidates if c and c.strip()), ""
-        )
+        remittance = next((c.strip() for c in remittance_candidates if c and c.strip()), "")
 
-        if human_name and (
-            not remittance
-            or EnableBankingClient._is_reference_number(remittance)
-        ):
+        if human_name and (not remittance or EnableBankingClient._is_reference_number(remittance)):
             description = human_name
         elif remittance:
             description = remittance
@@ -344,17 +316,13 @@ class EnableBankingClient:
 
         booking_date_raw = raw.get("booking_date") or raw.get("value_date")
         if not booking_date_raw:
-            raise ValueError(
-                "Bank transaction has neither booking_date nor value_date"
-            )
+            raise ValueError("Bank transaction has neither booking_date nor value_date")
         booking_date = date.fromisoformat(booking_date_raw)
 
         return BankTransaction(
             # `or`-chain, not nested .get()-defaults: EB can send the key
             # present-but-null, which a default would pass through as None.
-            transaction_id=raw.get("entry_reference")
-            or raw.get("transaction_id")
-            or "",
+            transaction_id=raw.get("entry_reference") or raw.get("transaction_id") or "",
             amount=amount,
             currency=currency,
             description=description,
