@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from messaging import OutboxRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.outbound.outbox_adapter import SagaOutboxAdapter
 from app.adapters.outbound.postgres_saga_repository import PostgresSagaRepository
 from app.application.ports.outbound import IUnitOfWork
-from app.models import OutboxEventModel
 
 
 class SQLAlchemyUnitOfWork(IUnitOfWork):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self.sagas = PostgresSagaRepository(session)
-        self.outbox = OutboxRepository(session, OutboxEventModel)
+        # Port-conforming adapter over the shared outbox — do NOT wire
+        # messaging.OutboxRepository in directly; its add() signature
+        # differs from the saga port's (see SagaOutboxAdapter).
+        self.outbox = SagaOutboxAdapter(session)
 
     async def __aenter__(self) -> "SQLAlchemyUnitOfWork":
         return self
