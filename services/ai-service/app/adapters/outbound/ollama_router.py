@@ -21,7 +21,7 @@ from datetime import datetime
 import anyio
 from pydantic import ValidationError
 
-from app.adapters.outbound.vectorstore import get_ollama_client
+from app.adapters.outbound.ollama_client import get_ollama_client
 from app.config import settings
 from app.domain.models import IntentName, ResolvedIntent
 

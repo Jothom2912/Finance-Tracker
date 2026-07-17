@@ -1,4 +1,5 @@
-"""ES hybrid search adapter (AI-20) — erstatter ChromaDB bag SEARCH_BACKEND-flaget.
+"""ES hybrid search adapter (AI-20) — eneste semantic-search-backend
+(ChromaDB slettet efter cutover-bake, plan 2026-07-12 trin 12).
 
 Implements ISemanticSearchPort mod analytics-services hybrid-endpoint:
 adapteren embedder selv queryen via Ollama (ai-service ejer query-sidens
@@ -98,7 +99,7 @@ class EsSearch:
         --- Domain→analytics-API boundary ---
         user_id sendes ikke: analytics-service udleder tenant af JWT'en.
         Et user_id-filter der afviger fra konstruktørens er en
-        dispatcher-bug (samme kontrakt som ChromaDBSearch).
+        dispatcher-bug.
         """
         params: dict[str, Any] = {}
 

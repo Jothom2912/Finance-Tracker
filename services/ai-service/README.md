@@ -1,6 +1,6 @@
 # AI Service — Finans Q&A (Streaming Pipeline)
 
-Streaming chat service der lader brugere stille spørgsmål om deres finansielle transaktioner. Bruger en 3-trins pipeline (router → dispatcher → responder) med lokale LLM'er via Ollama og ChromaDB til semantisk søgning.
+Streaming chat service der lader brugere stille spørgsmål om deres finansielle transaktioner. Bruger en 3-trins pipeline (router → dispatcher → responder) med lokale LLM'er via Ollama og Elasticsearch hybrid-søgning (BM25+kNN via analytics-service) til semantisk søgning.
 
 ## Quick Start
 
@@ -38,7 +38,7 @@ POST /api/v1/chat/stream (SSE)
     |    → yields IntentResolvedEvent
     |
     +--> Step 2: Dispatcher
-    |    Henter data fra transaction-service / monolith
+    |    Henter data fra analytics-service (ES) / budget-service
     |    → yields DataReadyEvent
     |
     +--> Step 3: Responder (qwen3:8b, streaming)
@@ -53,17 +53,16 @@ DoneEvent (med latency metadata)
 
 | Intent | Beskrivelse | Data source |
 |--------|-------------|-------------|
-| `largest_expense` | Største udgift i periode | transaction-service |
-| `category_breakdown` | Udgiftsfordeling per kategori | monolith dashboard |
-| `transaction_search` | Semantisk søgning | ChromaDB |
-| `budget_status` | Budget vs. faktisk forbrug | monolith budgets |
+| `largest_expense` | Største udgift i periode | analytics-service (ES) |
+| `category_breakdown` | Udgiftsfordeling per kategori | analytics-service (ES) |
+| `transaction_search` | Semantisk søgning | analytics-service ES hybrid (BM25+kNN, RRF) |
+| `budget_status` | Budget vs. faktisk forbrug | budget-service |
 
 ## Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/api/v1/chat/stream` | JWT | SSE streaming chat pipeline |
-| `POST` | `/api/v1/ingest` | JWT | Embed brugerens transaktioner i ChromaDB |
 | `GET` | `/health` | None | Health check |
 
 ## Configuration
@@ -73,11 +72,9 @@ DoneEvent (med latency metadata)
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama server URL |
 | `LLM_ROUTER_MODEL` | `qwen3:4b` | Model til intent classification |
 | `LLM_RESPONDER_MODEL` | `qwen3:8b` | Model til prose generation |
-| `EMBEDDING_MODEL` | `bge-m3` | Model til text embeddings |
-| `TRANSACTION_SERVICE_URL` | `http://transaction-service:8002` | Transaction service URL (kun ingest) |
+| `EMBEDDING_MODEL` | `bge-m3` | Model til query-embeddings (hybrid search) |
 | `ANALYTICS_SERVICE_URL` | `http://analytics-service:8000` | Analytics-service (ES read-store) — largest_expense + category_breakdown |
 | `BUDGET_SERVICE_URL` | `http://budget-service:8003` | Budget service URL |
-| `CHROMADB_PATH` | `/data/chromadb` | Persistent ChromaDB storage path |
 | `RETRIEVAL_TOP_K` | `10` | Antal resultater ved semantisk søgning |
 | `JWT_SECRET` | — | Shared JWT secret (required) |
 | `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Allowed CORS origins |
@@ -88,7 +85,7 @@ DoneEvent (med latency metadata)
 |---------|-------|------------|
 | Intent routing | `qwen3:4b` | `LLM_ROUTER_MODEL` |
 | Prose generation | `qwen3:8b` | `LLM_RESPONDER_MODEL` |
-| Text embeddings | `bge-m3` | `EMBEDDING_MODEL` |
+| Query embeddings | `bge-m3` | `EMBEDDING_MODEL` |
 
 ## Known Limitations
 

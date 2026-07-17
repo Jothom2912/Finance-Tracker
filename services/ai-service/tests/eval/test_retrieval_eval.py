@@ -13,7 +13,6 @@ from collections.abc import Callable
 
 import pytest
 from app.application.ports.semantic_search_port import ISemanticSearchPort
-from app.config import settings
 
 from .fixtures import EVAL_USER_ID, OTHER_USER_ID
 from .golden import RETRIEVAL_CASES, RetrievalCase
@@ -67,7 +66,7 @@ def test_retrieval_golden_set(search_factory: SearchFactory) -> None:
         recall, recall_strict, rr = _run_case(case, search_factory)
         rows.append((case, recall, recall_strict, rr))
 
-    print(f"\n--- Retrieval eval (backend={settings.SEARCH_BACKEND}) ---")
+    print("\n--- Retrieval eval (backend=es-hybrid) ---")
     print(f"{'question':<45} {'period':<9} {'recall@10':>9} {'recall@3':>9} {'RR':>6}")
     for case, recall, recall_strict, rr in sorted(rows, key=lambda r: (r[2], r[1])):
         print(f"{case.question:<45} {case.period or '-':<9} {recall:>9.2f} {recall_strict:>9.2f} {rr:>6.2f}")

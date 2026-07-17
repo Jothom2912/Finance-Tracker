@@ -12,7 +12,6 @@ from typing import Any
 import httpx
 import pytest
 from app.adapters.outbound.es_search import EsSearch
-from app.config import settings
 
 HYBRID_RESPONSE = {
     "items": [
@@ -130,17 +129,12 @@ def test_response_maps_to_transaction_items_with_fallbacks(fake_http: FakeHttp) 
     assert items[0].category == "Dagligvarer"
     assert items[0].amount == -300.0
     assert items[0].date == "2026-06-05"
-    # Manglende felter må aldrig crashe — fallback-labels som ChromaDB.
+    # Manglende felter må aldrig crashe — fallback-labels.
     assert items[1].category == "Ukategoriseret"
     assert items[1].description == ""
 
 
-def test_search_backend_flag_selects_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.adapters.outbound.chromadb_search import ChromaDBSearch
+def test_build_search_returns_es_adapter() -> None:
     from app.application.pipeline import build_search
 
-    monkeypatch.setattr(settings, "SEARCH_BACKEND", "chroma")
-    assert isinstance(build_search(user_id=1, token="t"), ChromaDBSearch)
-
-    monkeypatch.setattr(settings, "SEARCH_BACKEND", "es")
     assert isinstance(build_search(user_id=1, token="t"), EsSearch)

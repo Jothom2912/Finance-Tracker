@@ -5,7 +5,7 @@ Flow (fra services/ai-service, med compose-stakken oppe)::
     1. uv run python -m tests.eval.es_seed
     2. (fra repo-roden) docker compose run --rm analytics-service \\
            python -m app.tools.backfill_embeddings --user-id 9001 --user-id 9002
-    3. SEARCH_BACKEND=es make test-eval-retrieval
+    3. make test-eval-retrieval
 
 Skriver BEVIDST direkte i ES (udenom analytics-service): eval-brugerne
 9001/9002 findes ikke i kildeservices, så event-/backfill-stien kan ikke

@@ -34,13 +34,6 @@ spec:
               port: 8004
             initialDelaySeconds: 40
             periodSeconds: 20
-          volumeMounts:
-            - name: data
-              mountPath: /data/chromadb
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: ai-chromadb
 ---
 apiVersion: v1
 kind: Service

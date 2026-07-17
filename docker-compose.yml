@@ -533,24 +533,15 @@ services:
       # qwen3:4b + bge-m3) — ikke en evt. Ollama på host-maskinen (P2-16 drift).
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_MODEL: bge-m3
-      TRANSACTION_SERVICE_URL: http://transaction-service:8002
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
       BUDGET_SERVICE_URL: http://budget-service:8003
-      CHROMADB_PATH: /data/chromadb
       RETRIEVAL_TOP_K: "10"
-      # AI-20 cutover udført 2026-07-14 (eval: ES recall@3 0.971 vs
-      # chroma 0.967; MRR-delta = én case). Rollback = flip til chroma.
-      SEARCH_BACKEND: es
       JWT_SECRET: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
-    volumes:
-      - ai_chromadb_data:/data/chromadb
     depends_on:
       ollama-pull:
         condition: service_completed_successfully
-      transaction-service:
-        condition: service_healthy
       analytics-service:
         condition: service_healthy
       budget-service:
@@ -939,7 +930,6 @@ volumes:
   postgres_budget_data:
   rabbitmq_data:
   ollama_models:
-  ai_chromadb_data:
   postgres_banking_data:
   postgres_saga_data:
   es_data:

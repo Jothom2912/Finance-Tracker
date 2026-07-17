@@ -76,7 +76,7 @@ async def _collect_events(pipeline) -> list:
 @patch("app.application.pipeline.dispatch")
 @patch("app.application.pipeline.OllamaResponder")
 @patch("app.application.pipeline.AnalyticsClient")
-@patch("app.application.pipeline.ChromaDBSearch")
+@patch("app.application.pipeline.EsSearch")
 async def test_full_event_sequence(
     mock_search_cls: MagicMock,
     mock_analytics_cls: MagicMock,
@@ -119,7 +119,7 @@ async def test_full_event_sequence(
 @patch("app.application.pipeline.dispatch")
 @patch("app.application.pipeline.OllamaResponder")
 @patch("app.application.pipeline.AnalyticsClient")
-@patch("app.application.pipeline.ChromaDBSearch")
+@patch("app.application.pipeline.EsSearch")
 async def test_cancel_after_routing(
     mock_search_cls: MagicMock,
     mock_analytics_cls: MagicMock,
@@ -144,7 +144,7 @@ async def test_cancel_after_routing(
 @patch("app.application.pipeline.dispatch")
 @patch("app.application.pipeline.OllamaResponder")
 @patch("app.application.pipeline.AnalyticsClient")
-@patch("app.application.pipeline.ChromaDBSearch")
+@patch("app.application.pipeline.EsSearch")
 async def test_cancel_after_dispatch(
     mock_search_cls: MagicMock,
     mock_analytics_cls: MagicMock,
@@ -168,7 +168,7 @@ async def test_cancel_after_dispatch(
 
 @patch("app.application.pipeline.OllamaRouter")
 @patch("app.application.pipeline.AnalyticsClient")
-@patch("app.application.pipeline.ChromaDBSearch")
+@patch("app.application.pipeline.EsSearch")
 async def test_analytics_auth_error_emits_error_event(
     mock_search_cls: MagicMock,
     mock_analytics_cls: MagicMock,
@@ -193,7 +193,7 @@ async def test_analytics_auth_error_emits_error_event(
 
 @patch("app.application.pipeline.OllamaRouter")
 @patch("app.application.pipeline.AnalyticsClient")
-@patch("app.application.pipeline.ChromaDBSearch")
+@patch("app.application.pipeline.EsSearch")
 async def test_service_unavailable_emits_error_event(
     mock_search_cls: MagicMock,
     mock_analytics_cls: MagicMock,
@@ -220,7 +220,7 @@ async def test_service_unavailable_emits_error_event(
 @patch("app.application.pipeline.dispatch")
 @patch("app.application.pipeline.OllamaResponder")
 @patch("app.application.pipeline.AnalyticsClient")
-@patch("app.application.pipeline.ChromaDBSearch")
+@patch("app.application.pipeline.EsSearch")
 async def test_empty_responder_yields_fallback(
     mock_search_cls: MagicMock,
     mock_analytics_cls: MagicMock,
@@ -252,7 +252,7 @@ async def test_empty_responder_yields_fallback(
 @patch("app.application.pipeline.dispatch")
 @patch("app.application.pipeline.OllamaResponder")
 @patch("app.application.pipeline.AnalyticsClient")
-@patch("app.application.pipeline.ChromaDBSearch")
+@patch("app.application.pipeline.EsSearch")
 async def test_latency_metadata_populated(
     mock_search_cls: MagicMock,
     mock_analytics_cls: MagicMock,

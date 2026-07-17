@@ -22,9 +22,6 @@ resources:
   - infra/ollama-model-pull-job.yaml
   - infra/elasticsearch.yaml
 
-  # Persistent volumes for app data
-  - apps/ai-chromadb-pvc.yaml
-
   # Backend/API applications
   - apps/user-service.yaml
   - apps/transaction-service.yaml

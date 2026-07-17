@@ -17,7 +17,6 @@ RUN uv sync --frozen --no-dev
 COPY services/ai-service/app/ ./app/
 
 RUN useradd --create-home --uid 10001 appuser
-RUN mkdir -p /data/chromadb && chown appuser:appuser /data/chromadb
 USER appuser
 
 EXPOSE 8004

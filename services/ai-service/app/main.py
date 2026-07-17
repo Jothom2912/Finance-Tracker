@@ -5,7 +5,6 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.adapters.inbound.ingest_api import ingest_router
 from app.adapters.inbound.stream_api import stream_router
 from app.config import settings
 
@@ -15,7 +14,7 @@ app = FastAPI(
     title="AI Service",
     version="0.1.0",
     description="RAG-based Q&A chat service for personal finance data. "
-    "Uses Ollama (local LLM) with ChromaDB vector store.",
+    "Uses Ollama (local LLM) with Elasticsearch hybrid search via analytics-service.",
 )
 
 app.add_middleware(
@@ -27,7 +26,6 @@ app.add_middleware(
 )
 
 
-app.include_router(ingest_router)
 app.include_router(stream_router)
 
 

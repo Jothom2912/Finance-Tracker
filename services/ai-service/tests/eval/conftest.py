@@ -1,4 +1,4 @@
-"""Eval-harness plumbing: Ollama-gating, isolated ChromaDB, one-time ingest.
+"""Eval-harness plumbing: Ollama-gating + ES-backend probes.
 
 Eval tests are marked `eval` and excluded from the default `make test` run —
 they need a live Ollama with the configured models. Run them with:
@@ -8,6 +8,10 @@ they need a live Ollama with the configured models. Run them with:
 (11435 = compose-ollama's host port; ollama-pull has bge-m3 + qwen3:4b there.)
 The retrieval eval needs EMBEDDING_MODEL; the intent eval needs
 LLM_ROUTER_MODEL — each skips independently if its model is missing.
+
+Retrieval-evalen kører mod ES-hybrid via analytics-service (eneste
+backend efter ChromaDB-sletningen) og kræver compose-stakken + seedede
+eval-docs — se tests/eval/es_seed.py for seed-flowet.
 """
 
 from __future__ import annotations
@@ -19,17 +23,11 @@ from typing import Any
 
 import httpx
 import pytest
-from app.adapters.outbound.chromadb_search import ChromaDBSearch
 from app.application.ports.semantic_search_port import ISemanticSearchPort
 from app.config import settings
 
 from .es_seed import ES_ID_OFFSET
-from .fixtures import (
-    EVAL_TRANSACTIONS,
-    EVAL_USER_ID,
-    OTHER_USER_ID,
-    OTHER_USER_TRANSACTIONS,
-)
+from .fixtures import EVAL_USER_ID
 
 
 def _available_models() -> list[str] | None:
@@ -70,17 +68,16 @@ def router_model(ollama_models: list[str]) -> str:
 
 
 @pytest.fixture(scope="session")
-def search_factory(request: pytest.FixtureRequest) -> Callable[[int], ISemanticSearchPort]:
-    """Backend-valg for retrieval-evalen — styret af SEARCH_BACKEND som i prod.
+def search_factory(
+    request: pytest.FixtureRequest,
+    embedding_model: str,
+) -> Callable[[int], ISemanticSearchPort]:
+    """ES-hybrid search-factory til retrieval-evalen.
 
-    chroma: fixtures ingestes i en session-temporær ChromaDB (som hidtil).
-    es: kræver compose-stakken + seedede/embeddede eval-docs — se
+    Kræver compose-stakken + seedede/embeddede eval-docs — se
     tests/eval/es_seed.py for flowet. Skipper med instruks hvis noget mangler.
     """
-    if settings.SEARCH_BACKEND == "es":
-        return _es_search_factory(request)
-    request.getfixturevalue("eval_collection")
-    return lambda user_id: ChromaDBSearch(user_id=user_id)
+    return _es_search_factory(request)
 
 
 def _make_eval_jwt(user_id: int) -> str:
@@ -140,35 +137,3 @@ def _es_search_factory(request: pytest.FixtureRequest) -> Callable[[int], ISeman
         )
 
     return lambda user_id: _OffsetSearch(EsSearch(user_id=user_id, token=_make_eval_jwt(user_id)))
-
-
-@pytest.fixture(scope="session")
-def eval_collection(
-    tmp_path_factory: pytest.TempPathFactory,
-    embedding_model: str,
-) -> None:
-    """Ingest the fixture dataset into a session-temporary ChromaDB."""
-    from app.adapters.outbound import vectorstore
-    from app.application.ingest_service import (
-        _format_transaction_text,
-        _make_doc_id,
-        _make_metadata,
-    )
-
-    chroma_dir = tmp_path_factory.mktemp("eval-chromadb")
-    # Isolér fra en evt. rigtig CHROMADB_PATH; nulstil den procesglobale klient.
-    settings.CHROMADB_PATH = str(chroma_dir)
-    vectorstore._chroma = None
-
-    collection = vectorstore.get_collection()
-    for user_id, transactions in (
-        (EVAL_USER_ID, EVAL_TRANSACTIONS),
-        (OTHER_USER_ID, OTHER_USER_TRANSACTIONS),
-    ):
-        documents = [_format_transaction_text(t) for t in transactions]
-        collection.upsert(
-            ids=[_make_doc_id(user_id, t.id) for t in transactions],
-            documents=documents,
-            embeddings=vectorstore.embed_texts(documents),
-            metadatas=[_make_metadata(user_id, t) for t in transactions],
-        )

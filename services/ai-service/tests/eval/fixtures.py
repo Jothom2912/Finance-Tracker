@@ -21,10 +21,28 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from app.adapters.outbound.transaction_client import TransactionDTO
+from pydantic import BaseModel, ConfigDict
 
 EVAL_USER_ID = 9001
 OTHER_USER_ID = 9002
+
+
+class TransactionDTO(BaseModel):
+    """Fixture-transaktionens form (arvet fra det slettede
+    transaction_client.py — eval-datasættet er dens sidste consumer)."""
+
+    model_config = ConfigDict(coerce_numbers_to_str=False)
+
+    id: int
+    user_id: int
+    account_id: int
+    account_name: str
+    category_id: int | None = None
+    category_name: str | None = None
+    amount: Decimal
+    transaction_type: str
+    description: str | None = None
+    date: date
 
 
 def _tx(

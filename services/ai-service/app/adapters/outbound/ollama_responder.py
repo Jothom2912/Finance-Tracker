@@ -20,7 +20,7 @@ from collections.abc import AsyncIterator
 import anyio
 import anyio.from_thread
 
-from app.adapters.outbound.vectorstore import get_ollama_client
+from app.adapters.outbound.ollama_client import get_ollama_client
 from app.config import settings
 
 logger = logging.getLogger(__name__)
