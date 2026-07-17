@@ -1,4 +1,6 @@
-import { Pencil } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronUp, Pencil, Star } from 'lucide-react';
+import GoalAllocationHistory from './GoalAllocationHistory';
 import './GoalItem.css';
 
 const STATUS_CONFIG = {
@@ -9,7 +11,8 @@ const STATUS_CONFIG = {
 };
 
 // Forventer UI-formen fra useGoals' mapGoalFromRest — ikke den rå REST-form.
-function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
+function GoalItem({ goal, onEdit, onSetDefault, formatAmount, formatDate }) {
+  const [showHistory, setShowHistory] = useState(false);
   const progress = goal.percentComplete ?? (
     goal.targetAmount > 0
       ? Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)
@@ -48,15 +51,37 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
           <span className={`goal-status-badge ${config.badgeClass}`}>
             {config.label}
           </span>
+          {goal.isDefaultSavingsGoal && (
+            <span className="goal-status-badge default-savings">Standardmål</span>
+          )}
         </div>
-        <button
-          className="edit-goal-button"
-          onClick={() => onEdit?.(goal)}
-          title="Rediger mål"
-          aria-label="Rediger mål"
-        >
-          <Pencil aria-hidden="true" size={16} />
-        </button>
+        <div className="goal-item-actions">
+          <button
+            className={`default-goal-button ${goal.isDefaultSavingsGoal ? 'is-default' : ''}`}
+            onClick={() => onSetDefault?.(goal)}
+            title={
+              goal.isDefaultSavingsGoal
+                ? 'Fjern som standardopsparingsmål'
+                : 'Sæt som standardopsparingsmål — budgetoverskud opspares her automatisk'
+            }
+            aria-label={
+              goal.isDefaultSavingsGoal
+                ? 'Fjern som standardopsparingsmål'
+                : 'Sæt som standardopsparingsmål'
+            }
+            aria-pressed={goal.isDefaultSavingsGoal}
+          >
+            <Star aria-hidden="true" size={16} fill={goal.isDefaultSavingsGoal ? 'currentColor' : 'none'} />
+          </button>
+          <button
+            className="edit-goal-button"
+            onClick={() => onEdit?.(goal)}
+            title="Rediger mål"
+            aria-label="Rediger mål"
+          >
+            <Pencil aria-hidden="true" size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="goal-progress-section">
@@ -109,6 +134,20 @@ function GoalItem({ goal, onEdit, formatAmount, formatDate }) {
             {getProgressText()}
           </span>
         </div>
+      </div>
+
+      <div className="goal-allocation-section">
+        <button
+          className="allocation-history-toggle"
+          onClick={() => setShowHistory((current) => !current)}
+          aria-expanded={showHistory}
+        >
+          {showHistory ? <ChevronUp aria-hidden="true" size={14} /> : <ChevronDown aria-hidden="true" size={14} />}
+          Automatiske opsparinger
+        </button>
+        {showHistory && (
+          <GoalAllocationHistory goalId={goal.id} formatAmount={formatAmount} formatDate={formatDate} />
+        )}
       </div>
     </div>
   );

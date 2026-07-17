@@ -21,6 +21,7 @@ export function mapGoalFromRest(g) {
     // som valgmulighed i formularen.
     storedStatus: g.status,
     percentComplete: g.progress_percent,
+    isDefaultSavingsGoal: g.is_default_savings_goal ?? false,
   };
 }
 
@@ -57,6 +58,12 @@ export function useGoals() {
     onSuccess: invalidateGoalViews,
   });
 
+  const setDefaultMutation = useMutation({
+    mutationFn: ({ id, isDefault }) =>
+      isDefault ? goalsApi.setDefaultGoal(id) : goalsApi.clearDefaultGoal(id),
+    onSuccess: invalidateGoalViews,
+  });
+
   return {
     goals: data ?? [],
     loading: isLoading,
@@ -64,5 +71,7 @@ export function useGoals() {
     create: createMutation.mutateAsync,
     update: (id, goalData) => updateMutation.mutateAsync({ id, data: goalData }),
     remove: removeMutation.mutateAsync,
+    setDefault: (id, isDefault = true) => setDefaultMutation.mutateAsync({ id, isDefault }),
+    settingDefault: setDefaultMutation.isPending,
   };
 }

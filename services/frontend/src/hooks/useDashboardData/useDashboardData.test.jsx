@@ -134,6 +134,7 @@ describe('useDashboardData', () => {
         status: 'active',
         storedStatus: 'active',
         percentComplete: 25,
+        isDefaultSavingsGoal: false,
       },
     ]);
     expect(result.current.recentTransactions).toEqual(mockGraphQLResponse.transactions);

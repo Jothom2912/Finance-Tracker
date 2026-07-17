@@ -20,6 +20,7 @@ const restGoal = {
   status: 'active',
   effective_status: 'active',
   progress_percent: 25,
+  is_default_savings_goal: false,
 };
 
 const uiGoal = {
@@ -31,6 +32,7 @@ const uiGoal = {
   status: 'active',
   storedStatus: 'active',
   percentComplete: 25,
+  isDefaultSavingsGoal: false,
 };
 
 describe('mapGoalFromRest', () => {
@@ -38,6 +40,14 @@ describe('mapGoalFromRest', () => {
     expect(
       mapGoalFromRest({ ...restGoal, status: 'active', effective_status: 'completed' }),
     ).toEqual({ ...uiGoal, status: 'completed', storedStatus: 'active' });
+  });
+
+  it('maps the default-savings flag and defaults to false when absent', () => {
+    expect(
+      mapGoalFromRest({ ...restGoal, is_default_savings_goal: true }).isDefaultSavingsGoal,
+    ).toBe(true);
+    const { is_default_savings_goal: _omitted, ...withoutFlag } = restGoal;
+    expect(mapGoalFromRest(withoutFlag).isDefaultSavingsGoal).toBe(false);
   });
 });
 
@@ -158,6 +168,42 @@ describe('useGoals', () => {
 
       expect(goalsApi.deleteGoal.mock.calls[0][0]).toBe(7);
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['goals'] });
+    });
+
+    it('setDefault delegates to setDefaultGoal and invalidates the goals cache', async () => {
+      goalsApi.fetchGoals.mockResolvedValue([]);
+      goalsApi.setDefaultGoal.mockResolvedValue({ idGoal: 7, is_default_savings_goal: true });
+
+      const { wrapper, client } = createQueryClientWrapper();
+      const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+      const { result } = renderHook(() => useGoals(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      invalidateSpy.mockClear();
+
+      await act(async () => {
+        await result.current.setDefault(7);
+      });
+
+      expect(goalsApi.setDefaultGoal).toHaveBeenCalledWith(7);
+      expect(goalsApi.clearDefaultGoal).not.toHaveBeenCalled();
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['goals'] });
+    });
+
+    it('setDefault with isDefault=false delegates to clearDefaultGoal', async () => {
+      goalsApi.fetchGoals.mockResolvedValue([]);
+      goalsApi.clearDefaultGoal.mockResolvedValue({ idGoal: 7, is_default_savings_goal: false });
+
+      const { wrapper } = createQueryClientWrapper();
+      const { result } = renderHook(() => useGoals(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.setDefault(7, false);
+      });
+
+      expect(goalsApi.clearDefaultGoal).toHaveBeenCalledWith(7);
+      expect(goalsApi.setDefaultGoal).not.toHaveBeenCalled();
     });
 
     it('rejects with the underlying error when API fails', async () => {
