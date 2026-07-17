@@ -49,6 +49,13 @@ export async function copyMonthlyBudget({
   return response.json();
 }
 
+export async function closeMonthlyBudget({ month, year, budgetStartDay = 1 }) {
+  const response = await apiClient.post(
+    `${BASE}/close?account_id=${getAccountId()}&month=${month}&year=${year}&budget_start_day=${budgetStartDay}`
+  );
+  if (!response.ok) throw await parseApiError(response);
+}
+
 export async function fetchMonthlyBudgetSummary({ month, year }) {
   const response = await apiClient.get(
     `${BASE}/summary?account_id=${getAccountId()}&month=${month}&year=${year}`

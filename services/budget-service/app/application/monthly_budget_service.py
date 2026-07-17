@@ -338,6 +338,7 @@ class MonthlyBudgetService:
             year=budget.year,
             total_budget=round(budget.total_budget, 2),
             created_at=budget.created_at,
+            closed_at=budget.closed_at,
             lines=[
                 BudgetLineResponse(
                     id=line.id or 0,

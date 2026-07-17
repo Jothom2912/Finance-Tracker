@@ -1,16 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   fetchMonthlyBudget,
   createMonthlyBudget,
   updateMonthlyBudget,
   deleteMonthlyBudget,
   copyMonthlyBudget,
+  closeMonthlyBudget,
   fetchMonthlyBudgetSummary,
 } from '../../api/monthlyBudgets';
 import { useCategories } from '../../hooks/useCategories';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useConfirm } from '../../components/ConfirmDialog/ConfirmDialog';
+import { invalidateFinancialData } from '../../lib/invalidateFinancialData';
 import { getMonthName, MONTH_OPTIONS } from '../../lib/formatters';
 import './BudgetPage.css';
 
@@ -22,6 +25,7 @@ function BudgetPage() {
   const { categories, loading: catsLoading } = useCategories();
   const { showError, showSuccess } = useNotifications();
   const confirm = useConfirm();
+  const queryClient = useQueryClient();
 
   const [budget, setBudget] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -143,6 +147,35 @@ function BudgetPage() {
       await loadData();
     } catch (err) {
       showError(err.message || 'Kunne ikke kopiere budget.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCloseMonth = async () => {
+    const ok = await confirm({
+      title: `Luk ${getMonthName(month)} ${year}?`,
+      message:
+        'Overskuddet (budget minus forbrug) opspares automatisk på dit standardmål. ' +
+        'Banktransaktioner kan være 1-3 dage forsinkede — luk først når månedens ' +
+        'transaktioner er synkroniseret. Lukningen kan ikke fortrydes.',
+      confirmLabel: 'Luk måned',
+    });
+    if (!ok) return;
+    setSaving(true);
+    try {
+      await closeMonthlyBudget({ month, year });
+      showSuccess('Måneden er lukket — eventuelt overskud er sendt til dine mål.');
+      invalidateFinancialData(queryClient, { scope: 'goals' });
+      await loadData();
+    } catch (err) {
+      if (err.status === 409) {
+        showError('Måneden er allerede lukket.');
+      } else if (err.status === 503) {
+        showError('Forbruget kunne ikke hentes — måneden er IKKE lukket. Prøv igen om lidt.');
+      } else {
+        showError(err.message || 'Kunne ikke lukke måneden.');
+      }
     } finally {
       setSaving(false);
     }
@@ -321,6 +354,21 @@ function BudgetPage() {
                       {saving ? 'Gemmer...' : 'Gem ændringer'}
                     </button>
                   </>
+                )}
+                {budget?.id && !isEditing && budget.closed_at && (
+                  <span className="month-closed-badge" title="Måneden er lukket og overskuddet behandlet">
+                    Måned lukket
+                  </span>
+                )}
+                {budget?.id && !isEditing && !budget.closed_at && (
+                  <button
+                    className="btn-secondary"
+                    onClick={handleCloseMonth}
+                    disabled={saving}
+                    title="Beregn overskud og opspar det automatisk på dit standardmål"
+                  >
+                    {saving ? 'Lukker...' : 'Luk måned'}
+                  </button>
                 )}
                 {budget?.id && !isEditing && (
                   <button

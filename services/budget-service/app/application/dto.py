@@ -85,6 +85,8 @@ class MonthlyBudgetResponse(BaseModel):
     lines: list[BudgetLineResponse]
     total_budget: float
     created_at: Optional[datetime] = None
+    # None = åben; sat = måneden er lukket og overskud sendt til goal-service.
+    closed_at: Optional[datetime] = None
 
 
 class MonthlyBudgetSummaryItem(BaseModel):
