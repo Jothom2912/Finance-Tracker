@@ -1,7 +1,7 @@
 ---
 title: F1-04 — complete the goal-allocation flow (ADR-0003): surplus → goal, end-to-end incl. UI
 date: 2026-07-17
-status: draft
+status: done
 backlog-items: [F1-04]
 related:
   - ../backlog/FEATURES.md
@@ -78,65 +78,65 @@ close (pairs with F1-05).
 
 ### Wave 0 — drive-by: goal migration tests green again
 
-1. [ ] Fix finding F-2026-07-12-01: rewrite migration
+1. [x] *(2026-07-17, `1a693117`)* Fix finding F-2026-07-12-01: rewrite migration
    `004_widen_correlation_id_to_varchar.py` with `op.batch_alter_table` (sqlite-safe,
    same result on Postgres). Verify `tests/migrations/` green on sqlite AND
    `alembic upgrade head` against compose Postgres. Own commit; set finding resolved.
 
 ### Wave 1 — goal-service: default-goal write + allocation read APIs
 
-2. [ ] **Expose the flag**: `is_default_savings_goal` on `GoalResponse`
+2. [x] *(2026-07-17, `00431978`)* **Expose the flag**: `is_default_savings_goal` on `GoalResponse`
    (`app/application/dto.py`) + `_to_dto` mapping (`service.py`). NOT settable via
    create/update DTOs — only via the dedicated endpoint (the partial unique index makes
    a DTO-flag toggle a 500-trap on the second default).
-3. [ ] **Set/unset default**: `PUT /api/v1/goals/{goal_id}/default` +
+3. [x] *(2026-07-17, `00431978`)* **Set/unset default**: `PUT /api/v1/goals/{goal_id}/default` +
    `DELETE /api/v1/goals/{goal_id}/default` in `app/main.py` (house pattern: routes in
    main.py, ownership via account-service owner lookup like existing routes). Repo
    method `set_default_savings_goal(goal_id, account_id)` — one transaction: clear
    existing default for the account, set the new one; IntegrityError from the partial
    index → 409. Emits `goal.updated` (existing event, full state).
-4. [ ] **Read APIs**: `GET /api/v1/goals/{goal_id}/allocation-history` (per ADR) →
+4. [x] *(2026-07-17, `00431978`)* **Read APIs**: `GET /api/v1/goals/{goal_id}/allocation-history` (per ADR) →
    `[{amount, source_key, applied_at}]` newest-first; `GET
    /api/v1/goals/unallocated-surplus?account_id=` (declared BEFORE `/{goal_id}` routes —
    int path converter 422s otherwise) → `{total, entries: [{amount, reason,
    observed_at}]}`. New read methods on `postgres_goal_allocation_repository.py`.
-5. [ ] Tests: unit (set-default switches atomically, second default impossible,
+5. [x] *(2026-07-17, `00431978` — 15 nye)* Tests: unit (set-default switches atomically, second default impossible,
    ownership denied 403/404, response includes flag) + integration router tests on
    sqlite UoW (mirror existing `test_goal_api*.py`); allocation-history/unallocated
    read tests seeded via the existing handler (reuses its fixtures).
 
 ### Wave 2 — frontend: goals UI
 
-6. [ ] `api/goals.jsx`: `setDefaultGoal(goalId)` / `clearDefaultGoal(goalId)`,
+6. [x] *(2026-07-17, `1d436832`)* `api/goals.jsx`: `setDefaultGoal(goalId)` / `clearDefaultGoal(goalId)`,
    `fetchAllocationHistory(goalId)`, `fetchUnallocatedSurplus()` (account fra
    `getAccountId()`). `useGoals`: map `is_default_savings_goal`; `setDefault` mutation
    invalidating `['goals']`.
-7. [ ] `GoalItem`: "Standard opsparingsmål"-badge + "Sæt som standard"-handling
+7. [x] *(2026-07-17, `1d436832`)* `GoalItem`: "Standard opsparingsmål"-badge + "Sæt som standard"-handling
    (star-toggle); allocation-history som udvidbar sektion/modal med lazy
    `useAllocationHistory(goalId)` (enabled-on-open). `GoalOverview`: "Uallokeret
    overskud"-kort (total + rækker med reason på dansk) + hint "Vælg et standardmål for
    at fremtidigt overskud opspares automatisk" når intet default findes.
-8. [ ] Component/hook tests (mirror `useGoals.test.jsx` + GoalItem tests).
+8. [x] *(2026-07-17, `1d436832`)* Component/hook tests (mirror `useGoals.test.jsx` + GoalItem tests).
 
 ### Wave 3 — frontend: close month from BudgetPage
 
-9. [ ] `api/monthlyBudgets.jsx`: `closeMonthlyBudget({month, year})` → `POST
+9. [x] *(2026-07-17, `97953860` — plus closed_at paa MonthlyBudgetResponse, lille scope-afvigelse)* `api/monthlyBudgets.jsx`: `closeMonthlyBudget({month, year})` → `POST
    /monthly-budgets/close`. BudgetPage: "Luk måned"-knap for den valgte måned med
    ConfirmDialog (ADR-0002 imperative API; teksten forklarer at banktransaktioner kan
    være 1-3 dage forsinkede), `useMutation` med pending-state; danske fejlbeskeder for
    404 (intet budget) / 409 (allerede lukket) / 503 (prøv igen senere); succes →
    invalider budget-, summary- og goals-queries + toast der peger på GoalPage.
-10. [ ] Tests: mutation-hook + knap-flow (confirm → kald → invalidation), fejl-mapning.
+10. [x] *(2026-07-17, `97953860` — API-level tests; BudgetPage har ingen eksisterende komponent-test-scaffolding)* Tests: mutation-hook + knap-flow (confirm → kald → invalidation), fejl-mapning.
 
 ### Wave 4 — verification + bookkeeping
 
-11. [ ] `make -C services/goal-service test` (+ migrations-suiten nu grøn), frontend
+11. [x] *(2026-07-17)* `make -C services/goal-service test` (+ migrations-suiten nu grøn), frontend
     `npm test` + lint, ruff. Live e2e på compose (goal-service image family rebuild!):
     opret mål → sæt som standard (stjerne synlig) → luk måned med overskud fra UI →
     målbalance vokser + historik-række synlig; luk en måned uden default-goal (andet
     account/mål-opsætning) → uallokeret-kort viser beløbet; gen-luk → 409-besked.
     Syntetisk testdata, ryd op bagefter.
-12. [ ] dev-notes: decision note (manual close supersedes ADR-0003 out-of-scope-linjen;
+12. [x] *(2026-07-17)* dev-notes: decision note (manual close supersedes ADR-0003 out-of-scope-linjen;
     day-7 job → nyt backlog-item koblet til F1-05), FEATURES F1-04 → done, arch doc
     opdateres (goal-service ruter, fjern stale ⚠ user_id-bug-linje, budget close-UI),
     session log, opdater memory-noten `default-savings-goal-gap` → resolved.
@@ -156,6 +156,21 @@ close (pairs with F1-05).
 - Alt nyt er additivt (ingen konsumer/handler/skema-ændringer) — rollback = revert af
   vave-commits enkeltvist.
 
-## Outcome (fill in when done)
+## Outcome
 
-—
+Shipped 2026-07-17 in 4 code commits (`1a693117` wave 0, `00431978` wave 1, `1d436832`
+wave 2, `97953860` wave 3) + docs. Live e2e on compose PASSED (rebuilt goal+budget image
+families): set-default via API → close month → **goal +150 kr in ~2s** with
+allocation-history row visible via the new endpoint; without default goal → unallocated
+row (total 75, reason `no_default_goal`) on the new surplus endpoint; re-close → 409.
+Synthetic data cleaned up.
+
+Deviations from plan: (1) `closed_at` added to `MonthlyBudgetResponse` (budget-service
+was nominally untouched) so the UI shows "Måned lukket" instead of discovering via 409;
+(2) BudgetPage close-flow tested at API level only — the page has no pre-existing
+component-test scaffolding (uses local state, not hooks); (3) wave 0 uncovered TWO extra
+root causes beyond the finding (test fixture migrated the wrong DB via env.py's
+DATABASE_URL preference; downgrade was Postgres-broken too) — both fixed.
+
+Spawned: F1-07 (scheduled day-7 close), P3-16 + finding (goal hard-delete with
+allocation history → FK 500, found live in e2e cleanup).

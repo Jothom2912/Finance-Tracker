@@ -1,7 +1,7 @@
 ---
 title: account-service + budget-service + goal-service
-updated: 2026-07-07
-source: architecture audit 2026-07-07
+updated: 2026-07-17
+source: architecture audit 2026-07-07; F1-04 update 2026-07-17
 ---
 
 # account-service (8004) / budget-service (8003) / goal-service (8006)
@@ -29,8 +29,9 @@ Three sibling CRUD services with the heaviest copy-paste duplication in the repo
 
 - Async; routes defined directly in `app/main.py` (no inbound adapter module). Ownership enforced per request via account-service internal endpoints.
 - `goals` (partial unique idx: one default per account), `goal_allocation_history` (unique `(source_key, goal_id)`), `unallocated_budget_surplus`.
-- `budget_month_closed_consumer`: DLQ + header-based retry — the best consumer pattern in the repo; dedup on `source_key` backed by DB constraints.
-- ⚠ Goal events publish `account_id` in the contract's `user_id` field (HIGH). Balance update is read-modify-write without locking (safe only at single consumer instance).
+- `budget_month_closed_consumer`: DLQ + header-based retry — the best consumer pattern in the repo; dedup on `source_key` backed by DB constraints. Handler allocates the FULL surplus (overshoot past target allowed; "already complete" is an all-or-nothing pre-check).
+- *(F1-04, 2026-07-17)* **Allocation surface is now reachable**: `PUT/DELETE /api/v1/goals/{id}/default` (atomic clear-then-set per account; partial unique index as race backstop → 409; emits `goal.updated`), `GET /api/v1/goals/{id}/allocation-history`, `GET /api/v1/goals/unallocated-surplus` (static route declared before `/{goal_id}`). `is_default_savings_goal` on `GoalResponse`; deliberately NOT settable via create/update DTOs. Frontend: star-toggle + historik + uallokeret-kort på GoalPage, "Luk måned"-knap på BudgetPage ([decision](../../decisions/2026-07-17-manual-month-close-button.md)).
+- ~~⚠ Goal events publish `account_id` in the contract's `user_id` field (HIGH)~~ **fixed on master** (verified 2026-07-17: all events built with `user_id=owner_id` from account-service lookup). Balance update is read-modify-write without locking (safe only at single consumer instance). ⚠ NEW (LOW): hard-delete of a goal with allocation history → FK 500 ([finding](../../findings/2026-07-17-goal-delete-fk-500.md), P3-16).
 
 ## Duplication (measured)
 
@@ -40,7 +41,7 @@ Three sibling CRUD services with the heaviest copy-paste duplication in the repo
 ## Key flows
 
 - `user.created` → default account (fast-path skip + partial unique index + swallowed unique-violation = idempotent).
-- `POST /monthly-budgets/close` → surplus → `budget.month_closed` → goal allocation to default savings goal or `unallocated_budget_surplus`.
+- `POST /monthly-budgets/close` → surplus → `budget.month_closed` → goal allocation to default savings goal or `unallocated_budget_surplus`. *(F1-04)* Triggeres nu fra BudgetPage-knappen (manual-only; scheduled day-7 = F1-07); `closed_at` eksponeret på `MonthlyBudgetResponse` til "Måned lukket"-badge. E2e-verified live 2026-07-17: close → mål +150 på ~2s + historik-række; uden default-goal → unallocated-række; gen-luk → 409.
 
 ## Open problems
 

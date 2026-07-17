@@ -32,6 +32,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 ## Findings
 - [findings/2026-07-07-architecture-audit.md](findings/2026-07-07-architecture-audit.md) — full codebase audit: 10 CRITICAL, 27 HIGH, ~45 MEDIUM, ~40 LOW, with file:line evidence.
 - [findings/2026-07-12-goal-migration-004-sqlite.md](findings/2026-07-12-goal-migration-004-sqlite.md) — goal migration 004 Postgres-only + fixture migrated wrong DB; resolved 2026-07-17 (F1-04 wave 0).
+- [findings/2026-07-17-goal-delete-fk-500.md](findings/2026-07-17-goal-delete-fk-500.md) — goal hard-delete with allocation history → FK 500 (LOW, open, P3-16); soft-delete is the likely fix.
 
 ## Backlog & plans
 - [backlog/BACKLOG.md](backlog/BACKLOG.md) — technical backlog (P1 security/money → P2 systemic → P3 consistency), linked to finding IDs. P1 done 2026-07-07.
@@ -49,6 +50,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue `analytics.embeddings`, partial-update of `description_vector`.
 - [decisions/2026-07-16-p209-dedup-semantics.md](decisions/2026-07-16-p209-dedup-semantics.md) — P2-09: three-way dedup rule (external_id + in-batch set + NULL-scoped fuzzy fallback), IntegrityError-as-honest-saga-failure, event_version stays 1, accepted transition artifacts.
 - [decisions/2026-07-17-learned-corrections-as-rules.md](decisions/2026-07-17-learned-corrections-as-rules.md) — F1-03: corrections stored as auto-managed user rules (priority ladder 10/50/100), not merchant rows; `is_user_confirmed` superseded; consumer cache TTL-only.
+- [decisions/2026-07-17-manual-month-close-button.md](decisions/2026-07-17-manual-month-close-button.md) — F1-04: manual "Luk måned"-knap supersedes ADR-0003 out-of-scope; scheduled day-7 close → F1-07.
 
 ## Sessions
 - [sessions/2026-07-07-architecture-audit.md](sessions/2026-07-07-architecture-audit.md) — audit session: what was done, method, open ends.
@@ -62,6 +64,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-16-p209-external-id-currency.md](sessions/2026-07-16-p209-external-id-currency.md) — P2-09 shipped in 4 commits: contracts + tx-service dedup/migration 012 + banking producer; Phase 2 code-complete, only P2-15 left; P3-15 found.
 - [sessions/2026-07-17-loose-ends-p315-chromadb-secondsync.md](sessions/2026-07-17-loose-ends-p315-chromadb-secondsync.md) — P3-15 chunking shipped; ChromaDB deleted (plan step 12); live second-sync dedup PASSED (214/214 skipped); exam done, EB sandbox PEM gotcha.
 - [sessions/2026-07-17-f102-03-wave5-verification.md](sessions/2026-07-17-f102-03-wave5-verification.md) — F1-02/03 wave 5: all suites green, live e2e PASSED (correction→rule ~2s, learned beats seed, KEYWORD post-TTL); root make check local-runnability gotchas.
+- [sessions/2026-07-17-f104-goal-allocation.md](sessions/2026-07-17-f104-goal-allocation.md) — F1-04 shipped in 4 commits: default-goal API + read APIs + UI + close-knap; live e2e PASSED (goal +150 på ~2s, unallocated, 409); spawned F1-07 + P3-16.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)
