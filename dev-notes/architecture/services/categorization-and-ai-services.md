@@ -1,18 +1,19 @@
 ---
 title: categorization-service + ai-service
-updated: 2026-07-07
-source: architecture audit 2026-07-07
+updated: 2026-07-17
+source: architecture audit 2026-07-07; F1-02/03 update 2026-07-17
 ---
 
 # categorization-service (8005) & ai-service (8007)
 
 ## categorization-service — multi-tier pipeline & taxonomy owner (ADR-003)
 
-- **Inbound**: `categorize_api.py` (`POST /api/v1/categorize/` + `/batch`, sync tier-1, called by transaction-service — **no auth on these endpoints**), `category_api.py` (taxonomy CRUD, JWT, sole taxonomy writer, full-state `category.*`/`subcategory.*` events via outbox).
-- **Application**: `categorization_service.py` — tier orchestrator (rules → ML → LLM → fallback), but ML/LLM ports are `Optional` and **nothing implements them**; in practice rules → fallback. `category_service.py` — taxonomy CRUD with "Anden" fallback delete-protection.
-- **Rule engine**: in-memory longest-match keyword matching with Danish transliteration. ⚠ Keywords come from hardcoded `SEED_MERCHANT_MAPPINGS` in `app/domain/taxonomy.py` — the seeded `categorization_rules` DB table + `PostgresRuleRepository` are **dead**; editing rules in DB has zero effect. `rule_engine_provider.py` has 60s TTL reload (of the name→id lookup only).
-- **Workers**: `transaction_consumer.py` (consumes `transaction.created`; **re-implements** the tier logic inline, builds its own engine once at startup — no TTL, bypasses `CategorizationService`), `outbox_publisher.py` (standard poll/SKIP LOCKED copy).
+- **Inbound**: `categorize_api.py` (`POST /api/v1/categorize/` + `/batch`, sync tier-1, called by transaction-service — **no auth on these endpoints**, `user_id` in body), `category_api.py` (taxonomy CRUD, JWT, sole taxonomy writer, full-state `category.*`/`subcategory.*` events via outbox), `rules_api.py` *(F1-02, 2026-07-17)* — `/api/v1/rules` user-scoped rule CRUD (JWT via shared auth; KEYWORD only, priority default 50 clamped to [20,90]).
+- **Application**: `categorization_service.py` — tier orchestrator (rules → ML → LLM → fallback), but ML/LLM ports are `Optional` and **nothing implements them**; in practice rules → fallback. `category_service.py` — taxonomy CRUD with "Anden" fallback delete-protection. `rule_service.py` *(F1-02)* — user rule CRUD, invalidates the per-user engine overlay (API process only).
+- **Rule engine** *(rewired 2026-07-17, F1-02)*: `TieredRuleEngine` — DB-backed rules via `PostgresRuleRepository` (P2-06 wired it; seed rules live in `categorization_rules` with `user_id NULL`, priority 100). Priority ladder **10 = learned / 50 = user / 100 = seed**; tiers matched in priority order, longest-match within a tier — user intent beats seed keyword length. `rule_engine_provider.py`: cached global engine + per-user TTL overlay (60s); `get(user_id)`. Danish transliteration/normalization unchanged.
+- **Workers**: `transaction_consumer.py` (consumes `transaction.created`; uses `CategorizationService` + shared provider since P2-06 — user rules apply on the event path, picked up within the 60s TTL), `category_corrected_consumer.py` *(F1-03, 2026-07-17)* — consumes `transaction.category_corrected` (queue `categorization.category_corrected`, own DLQ + inbox), upserts a learned user rule (`MERCHANT`, priority 10, normalized description; partial unique index from migration 007). Parent-only corrections (no subcategory) are skipped. `outbox_publisher.py` (standard poll/SKIP LOCKED copy).
 - Result path: `categorization_results` + outbox `TransactionCategorizedEvent` + inbox row in one transaction.
+- **Feedback loop** *(F1-03)*: manual category change in tx-service (`update_transaction`, same condition that sets `tier="manual"`) → outbox `TransactionCategoryCorrectedEvent` → corrected-consumer writes a learned rule → next import of that merchant auto-categorizes correctly. Consumer writes *rules only*, never transactions — no event cycle. See [decisions/2026-07-17-learned-corrections-as-rules.md](../../decisions/2026-07-17-learned-corrections-as-rules.md). E2e-verified live 2026-07-17 (correction → rule ~2s; re-import lands in corrected category).
 
 ## ai-service — streaming RAG chat
 

@@ -47,6 +47,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue `analytics.embeddings`, partial-update of `description_vector`.
 - [decisions/2026-07-16-p209-dedup-semantics.md](decisions/2026-07-16-p209-dedup-semantics.md) — P2-09: three-way dedup rule (external_id + in-batch set + NULL-scoped fuzzy fallback), IntegrityError-as-honest-saga-failure, event_version stays 1, accepted transition artifacts.
+- [decisions/2026-07-17-learned-corrections-as-rules.md](decisions/2026-07-17-learned-corrections-as-rules.md) — F1-03: corrections stored as auto-managed user rules (priority ladder 10/50/100), not merchant rows; `is_user_confirmed` superseded; consumer cache TTL-only.
 
 ## Sessions
 - [sessions/2026-07-07-architecture-audit.md](sessions/2026-07-07-architecture-audit.md) — audit session: what was done, method, open ends.
@@ -59,6 +60,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-15-phase2-wave-b-resume.md](sessions/2026-07-15-phase2-wave-b-resume.md) — rate-limit resume: in-flight wave-B (gateway+user) + P2-14 CI committed & verified; pre-existing user-conftest bug fixed; wave-B scoreboard + remaining plan.
 - [sessions/2026-07-16-p209-external-id-currency.md](sessions/2026-07-16-p209-external-id-currency.md) — P2-09 shipped in 4 commits: contracts + tx-service dedup/migration 012 + banking producer; Phase 2 code-complete, only P2-15 left; P3-15 found.
 - [sessions/2026-07-17-loose-ends-p315-chromadb-secondsync.md](sessions/2026-07-17-loose-ends-p315-chromadb-secondsync.md) — P3-15 chunking shipped; ChromaDB deleted (plan step 12); live second-sync dedup PASSED (214/214 skipped); exam done, EB sandbox PEM gotcha.
+- [sessions/2026-07-17-f102-03-wave5-verification.md](sessions/2026-07-17-f102-03-wave5-verification.md) — F1-02/03 wave 5: all suites green, live e2e PASSED (correction→rule ~2s, learned beats seed, KEYWORD post-TTL); root make check local-runnability gotchas.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)

@@ -1,7 +1,7 @@
 ---
 title: F1-02 + F1-03 — user categorization rules (CRUD + UI) and the correction feedback loop
 date: 2026-07-17
-status: in-progress
+status: done
 backlog-items: [F1-02, F1-03]
 related:
   - ../backlog/FEATURES.md
@@ -148,15 +148,21 @@ longest-match preserved *within* a tier, user intent beats seed length *across* 
 
 ### Wave 5 — verification + bookkeeping
 
-10. [ ] Per-service: `make -C services/<svc> test` green (contracts, transaction,
-    categorization), `npm test` + lint (frontend), ruff everywhere; root `make check`.
-11. [ ] Live e2e on compose (rebuild image families!): correct a transaction's category
-    in the UI → learned rule row appears on RulesPage → import a CSV with the same
-    merchant → lands in corrected category without manual touch. Also: create a KEYWORD
-    rule → new import respects it within TTL (≤60s, no restart).
-12. [ ] dev-notes: decision note (learned-corrections-as-rules), FEATURES F1-02/03 →
-    done, architecture doc update (rules pipeline + new consumer + event-catalog),
-    session log. Commit per wave (5-6 commits).
+10. [x] *(2026-07-17)* Per-service: contracts 44 / transaction (unit+35 int) /
+    categorization 109 / frontend 239 + lint — green; all other uv services `make check`
+    green; account+banking linted via `uvx ruff` (pip-based Makefiles — root `make check`
+    can't run locally as-is: bare `ruff` in those two + gateway bandit B105 false
+    positive w/o CI's `-ll -ii` flags; both pre-existing, noted in session log).
+11. [x] *(2026-07-17)* Live e2e on compose PASSED (images rebuilt 13:11 > last code
+    commit 12:20): correction → learned rule visible on `/api/v1/rules/` in ~2s →
+    re-import lands in corrected category (learned rule beat longer seed keyword);
+    KEYWORD rule respected after TTL expiry, no restart (an import *seconds* after
+    rule-creation hit the stale 60s consumer cache — expected, decision note §6).
+    Synthetic data only, cleaned up after.
+12. [x] *(2026-07-17)* dev-notes done: [decision](../decisions/2026-07-17-learned-corrections-as-rules.md),
+    FEATURES F1-02/03 → done, architecture docs (categorization + transaction — no
+    event-catalog.md exists; documented in service docs instead),
+    [session log](../sessions/2026-07-17-f102-03-wave5-verification.md).
 
 ## Risks & rollback
 
@@ -174,6 +180,13 @@ longest-match preserved *within* a tier, user intent beats seed length *across* 
 - **New consumer = new compose/k8s service**: deploy gotcha from 2026-07-16 (own image
   tag) — wave 6 rebuild checklist covers it.
 
-## Outcome (fill in when done)
+## Outcome
 
-—
+Shipped 2026-07-17 in 5 code commits (`83ce7769`, `24d5a926`, `4e9e25d4`, `bb1a110f`,
+`5b2bcc6d`) + docs. Both features e2e-verified live on compose: correction → learned rule
+in ~2s → re-import auto-categorizes to the corrected target (learned tier beats seed
+longest-match); user KEYWORD rules effective within the 60s TTL without restart. Key
+deviation from the original F1-03 sketch recorded in
+[decisions/2026-07-17-learned-corrections-as-rules.md](../decisions/2026-07-17-learned-corrections-as-rules.md)
+(rules, not merchant rows; `is_user_confirmed` superseded). Known limitation: consumer
+cache is TTL-only (cross-process invalidation deliberately not built).

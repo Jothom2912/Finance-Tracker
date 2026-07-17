@@ -1,7 +1,7 @@
 ---
 title: transaction-service
-updated: 2026-07-07
-source: architecture audit 2026-07-07
+updated: 2026-07-17
+source: architecture audit 2026-07-07; F1-03 update 2026-07-17
 ---
 
 # transaction-service (port 8002)
@@ -21,6 +21,7 @@ Largest service: transaction CRUD, CSV import, bulk import, planned transactions
 ## Data flows
 
 - **Manual create**: POST → optional sync categorization HTTP (500ms, caller's category wins) → UoW: denormalize names from local read copies → insert row + `TransactionCreatedEvent` outbox → outbox worker → `transaction.created` → categorization pipeline → `transaction.categorized` → categorized_consumer updates row.
+- **Manual correction** *(F1-03, 2026-07-17)*: PUT with category-field change → `categorization_tier="manual"` + second outbox event `TransactionCategoryCorrectedEvent` (`transaction.category_corrected`, skipped when the correction clears the category) → categorization-service's corrected-consumer learns a user rule. See [decisions/2026-07-17-learned-corrections-as-rules.md](../../decisions/2026-07-17-learned-corrections-as-rules.md).
 - **CSV import**: whole file into memory → parser registry → per-row `find_duplicate` SELECT (dedup key `(user_id, account_id, date, amount, description)`) → bulk insert + batch outbox in one commit.
 - **Saga bulk import**: `saga.cmd.bulk_import_transactions` → `bulk_import` (no sync categorization) → reply with `imported_ids`. Compensation `rollback_import` = per-id **hard** delete, failures swallowed, always replies success (⚠).
 - **Taxonomy sync**: categorization-service owns taxonomy (ADR-003); full-state `category.*`/`subcategory.*` events upserted into local read copies.
