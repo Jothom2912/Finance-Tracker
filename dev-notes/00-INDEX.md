@@ -47,6 +47,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [plans/2026-07-17-f104-goal-allocation-completion.md](plans/2026-07-17-f104-goal-allocation-completion.md) — F1-04: make the shipped allocation backend reachable — default-goal API, history/unallocated read APIs, close-month button + goals UI.
 - [plans/2026-07-17-p316-goal-soft-delete.md](plans/2026-07-17-p316-goal-soft-delete.md) — P3-16: goal soft-delete (deleted_at) fixes FK 500 on delete-with-history; default-flag cleared atomically so the consumer never allocates to a dead goal.
 - [plans/2026-07-17-f107-scheduled-month-close.md](plans/2026-07-17-f107-scheduled-month-close.md) — F1-07: day-7 auto-close worker (domain due-rule, repo sweep-query, scheduler container); new trigger only, close semantics untouched.
+- [plans/2026-07-17-p314-serialize-bank-sync-sagas.md](plans/2026-07-17-p314-serialize-bank-sync-sagas.md) — P3-14: in-flight sync-claim på bank_connections (atomic claim/steal/TTL, status-check ved konflikt); F1-05-prerequisite.
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue `analytics.embeddings`, partial-update of `description_vector`.
@@ -70,6 +71,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-17-f104-goal-allocation.md](sessions/2026-07-17-f104-goal-allocation.md) — F1-04 shipped in 4 commits: default-goal API + read APIs + UI + close-knap; live e2e PASSED (goal +150 på ~2s, unallocated, 409); spawned F1-07 + P3-16.
 - [sessions/2026-07-17-p316-goal-soft-delete.md](sessions/2026-07-17-p316-goal-soft-delete.md) — P3-16 shipped: goal soft-delete (migration 005), delete-with-history 500→204, live e2e PASSED; sqlite-FK-pragma gotcha.
 - [sessions/2026-07-17-f107-scheduled-month-close.md](sessions/2026-07-17-f107-scheduled-month-close.md) — F1-07 shipped: day-7 auto-close worker + scheduler-pattern decision; live e2e PASSED (auto-close +120, manual-close skip, idempotent tick); sqlite-create_all + PYTHONPATH gotchas.
+- [sessions/2026-07-17-p314-sync-claim.md](sessions/2026-07-17-p314-sync-claim.md) — P3-14 shipped: in-flight sync-claim (design-pivot fra deterministisk correlation-id); live e2e PASSED (concurrent → samme saga_id, claim roterer); banking local-test gotchas. F1-05 fuldt unblocked.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)

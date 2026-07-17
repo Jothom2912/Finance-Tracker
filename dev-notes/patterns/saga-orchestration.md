@@ -44,6 +44,9 @@ Full detail: [architecture/services/banking-and-saga-services.md](../architectur
   (HIGH, open).
 - **Saga context as payload bus**: bank fetch replies with *all transactions inline* →
   multi-MB context rows re-serialized on every update (HIGH, open).
-- Double-click on sync ⇒ two concurrent sagas (fresh saga_id per request); serializing
-  sagas per connection is P3-14 in [backlog/BACKLOG.md](../backlog/BACKLOG.md).
+- ~~Double-click on sync ⇒ two concurrent sagas~~ **fixed by P3-14 (2026-07-17)**:
+  in-flight claim on `bank_connections` (atomic claim + start-event in one transaction;
+  conflict → status-check via saga-service with the caller's JWT, terminal claims are
+  stolen, unknown status fails active with a 600 s TTL backstop). Concurrent requests
+  get the same `saga_id` back (`already_running: true`).
 - Status API is unauthenticated (CRITICAL finding; check status before building on it).
