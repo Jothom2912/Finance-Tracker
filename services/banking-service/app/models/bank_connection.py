@@ -25,6 +25,10 @@ class BankConnectionModel(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # In-flight sync-claim (P3-14): sat atomisk når en sync-saga startes,
+    # ryddet ved mark_sync_complete; serialiserer sagas per connection.
+    sync_saga_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    sync_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     __table_args__ = (

@@ -93,3 +93,87 @@ async def test_existing_mapping_contract_unchanged() -> None:
     assert items[0]["description"] == "Netto"
     assert items[1]["amount"] == "15000.00"
     assert items[1]["transaction_type"] == "income"
+
+
+# ── P3-14: mark_sync_complete frigiver sync-claimet ──────────────────
+
+
+class _FakeSession:
+    """Minimal async-session-stand-in for _handle_mark_sync_complete."""
+
+    def __init__(self, conn) -> None:
+        self._conn = conn
+        self.committed = False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+    async def execute(self, *_args, **_kwargs):
+        conn = self._conn
+
+        class _Result:
+            @staticmethod
+            def scalar_one_or_none():
+                return conn
+
+        return _Result()
+
+    async def commit(self) -> None:
+        self.committed = True
+
+
+def _connection_row(saga_id: str | None):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        id=uuid4(),
+        account_id=1,
+        last_synced_at=None,
+        sync_saga_id=saga_id,
+        sync_started_at=object(),
+    )
+
+
+async def _run_mark_sync_complete(conn, body: dict) -> None:
+    consumer = BankingSagaCommandConsumer()
+    session = _FakeSession(conn)
+    with (
+        patch("app.workers.saga_command_consumer.async_session_factory", lambda: session),
+        patch("app.workers.saga_command_consumer.OutboxRepository") as outbox_cls,
+    ):
+        outbox_cls.return_value.add = AsyncMock()
+        reply = await consumer._handle_mark_sync_complete(body)
+    assert reply == {"success": True}
+    assert session.committed
+
+
+@pytest.mark.asyncio
+async def test_mark_sync_complete_clears_matching_claim() -> None:
+    conn = _connection_row(saga_id="saga-1")
+
+    await _run_mark_sync_complete(
+        conn,
+        {"connection_id": str(conn.id), "user_id": 2, "saga_id": "saga-1"},
+    )
+
+    assert conn.sync_saga_id is None
+    assert conn.sync_started_at is None
+    assert conn.last_synced_at is not None
+
+
+@pytest.mark.asyncio
+async def test_mark_sync_complete_leaves_newer_claim_untouched() -> None:
+    # En gammel/duplikeret reply maa ikke rydde en NYERE sagas claim.
+    conn = _connection_row(saga_id="newer-saga")
+
+    await _run_mark_sync_complete(
+        conn,
+        {"connection_id": str(conn.id), "user_id": 2, "saga_id": "old-saga"},
+    )
+
+    assert conn.sync_saga_id == "newer-saga"
+    assert conn.sync_started_at is not None
+    assert conn.last_synced_at is not None

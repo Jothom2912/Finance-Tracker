@@ -27,5 +27,11 @@ class Settings(BaseSettings):
 
     PENDING_AUTH_TTL_MINUTES: int = 15
 
+    # P3-14 sync-claim: status-opslag ved claim-konflikt + TTL-backstop
+    # (600s = 2x saga-timeout-workerens 300s idle-graense).
+    SAGA_SERVICE_URL: str = "http://saga-service:8011"
+    SAGA_SERVICE_TIMEOUT: float = 2.0
+    SYNC_CLAIM_TTL_SECONDS: int = 600
+
 
 settings = Settings()

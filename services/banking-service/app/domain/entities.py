@@ -24,7 +24,20 @@ class BankConnection:
     status: str = "active"
     expires_at: Optional[datetime] = None
     last_synced_at: Optional[datetime] = None
+    sync_saga_id: Optional[str] = None
+    sync_started_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+
+    def sync_claim_is_stale(self, now: datetime, ttl_seconds: int) -> bool:
+        """True if the in-flight sync-claim is older than the TTL backstop.
+
+        Used only as fallback when the claimed saga's status cannot be
+        checked — a crashed/never-resolved saga must not block syncs forever.
+        """
+        if self.sync_started_at is None:
+            return True
+        age = _as_utc(now) - _as_utc(self.sync_started_at)
+        return age.total_seconds() > ttl_seconds
 
     @property
     def is_active(self) -> bool:

@@ -14,6 +14,7 @@ from contracts.events.saga import BankSyncSagaStartEvent
 from app.application.ports.outbound import (
     IAccountPort,
     IBankingApiClient,
+    ISagaStatusPort,
     IUnitOfWork,
 )
 from app.config import settings
@@ -31,6 +32,11 @@ from app.domain.exceptions import (
 logger = logging.getLogger(__name__)
 
 
+# Statusser hvor sagaen med sikkerhed ikke længere arbejder — dens
+# sync-claim kan overtages (P3-14).
+_TERMINAL_SAGA_STATUSES = frozenset({"completed", "failed", "timed_out"})
+
+
 class BankingService:
     def __init__(
         self,
@@ -38,11 +44,13 @@ class BankingService:
         account_port: IAccountPort,
         banking_client: IBankingApiClient,
         clock: Clock = utcnow,
+        saga_status_port: Optional[ISagaStatusPort] = None,
     ) -> None:
         self._uow = uow
         self._account_port = account_port
         self._client = banking_client
         self._clock = clock
+        self._saga_status = saga_status_port
 
     async def _verify_account_access(self, account_id: int, user_id: int) -> None:
         async with self._uow:
@@ -221,10 +229,16 @@ class BankingService:
         connection_id: UUID,
         user_id: int,
         date_from: Optional[str] = None,
-    ) -> str:
-        """Start an async bank-sync saga via outbox event.
+        bearer_token: Optional[str] = None,
+    ) -> tuple[str, bool]:
+        """Start an async bank-sync saga — at most one in-flight per connection (P3-14).
 
-        Returns the saga_id (same as correlation_id) for frontend polling.
+        Returns ``(saga_id, already_running)``. The atomic claim on
+        ``bank_connections`` decides om vi starter en ny saga eller afleverer
+        den kørende. ``bearer_token`` (kaldens eget JWT) bruges til status-
+        opslag ved konflikt: terminal saga → claim steales; ukendt status →
+        fail ACTIVE, så saga-service-nedetid aldrig giver duplikat-sagas
+        (TTL'en i ``try_claim_sync`` er backstop mod claims der aldrig løses).
         """
         async with self._uow:
             conn = await self._uow.connections.get_by_id(connection_id)
@@ -243,29 +257,96 @@ class BankingService:
             raise ProjectionIntegrityError(conn.account_id)
 
         saga_id = str(uuid4())
+        now = self._clock()
+
+        # Claim + start-event i SAMME transaktion: vinder claimet, findes
+        # eventet; taber det, persisteres intet.
         async with self._uow:
-            await self._uow.outbox.add(
-                event=BankSyncSagaStartEvent(
-                    correlation_id=saga_id,
-                    connection_id=str(connection_id),
-                    user_id=user_id,
-                    account_id=conn.account_id,
-                    account_name=account_name,
-                    bank_account_uid=conn.bank_account_uid,
-                    date_from=date_from,
-                ),
-                aggregate_type="bank_connection",
-                aggregate_id=str(connection_id),
-            )
-            await self._uow.commit()
+            if await self._uow.connections.try_claim_sync(
+                connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS
+            ):
+                await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
+                await self._uow.commit()
+                logger.info(
+                    "Bank sync saga started: saga_id=%s connection=%s user=%s",
+                    saga_id,
+                    connection_id,
+                    user_id,
+                )
+                return saga_id, False
+            await self._uow.rollback()
+
+        # Konflikt: der er et in-flight claim.
+        existing_id = await self._current_claim(connection_id)
+        if existing_id is None:
+            # Claimet forsvandt mellem forsøgene (sync afsluttet netop nu) —
+            # prøv claim én gang til; taber vi igen, afleverer vi vinderens id.
+            async with self._uow:
+                if await self._uow.connections.try_claim_sync(
+                    connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS
+                ):
+                    await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
+                    await self._uow.commit()
+                    return saga_id, False
+                await self._uow.rollback()
+            return (await self._current_claim(connection_id)) or saga_id, True
+
+        status = None
+        if self._saga_status is not None:
+            status = await self._saga_status.get_status(existing_id, bearer_token)
+
+        if status in _TERMINAL_SAGA_STATUSES:
+            async with self._uow:
+                if await self._uow.connections.steal_sync_claim(connection_id, existing_id, saga_id, now):
+                    await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
+                    await self._uow.commit()
+                    logger.info(
+                        "Bank sync saga started (stole %s claim %s): saga_id=%s connection=%s",
+                        status,
+                        existing_id,
+                        saga_id,
+                        connection_id,
+                    )
+                    return saga_id, False
+                await self._uow.rollback()
+            # Tabt steal-kapløb — aflever vinderens claim.
+            return (await self._current_claim(connection_id)) or existing_id, True
 
         logger.info(
-            "Bank sync saga started: saga_id=%s connection=%s user=%s",
-            saga_id,
+            "Bank sync already running: saga_id=%s (status=%s) connection=%s",
+            existing_id,
+            status or "unknown",
             connection_id,
-            user_id,
         )
-        return saga_id
+        return existing_id, True
+
+    async def _current_claim(self, connection_id: UUID) -> Optional[str]:
+        async with self._uow:
+            conn = await self._uow.connections.get_by_id(connection_id)
+        return conn.sync_saga_id if conn else None
+
+    async def _add_sync_start_event(
+        self,
+        saga_id: str,
+        conn: BankConnection,
+        connection_id: UUID,
+        user_id: int,
+        account_name: str,
+        date_from: Optional[str],
+    ) -> None:
+        await self._uow.outbox.add(
+            event=BankSyncSagaStartEvent(
+                correlation_id=saga_id,
+                connection_id=str(connection_id),
+                user_id=user_id,
+                account_id=conn.account_id,
+                account_name=account_name,
+                bank_account_uid=conn.bank_account_uid,
+                date_from=date_from,
+            ),
+            aggregate_type="bank_connection",
+            aggregate_id=str(connection_id),
+        )
 
     async def disconnect(self, connection_id: UUID, user_id: int) -> bool:
         async with self._uow:

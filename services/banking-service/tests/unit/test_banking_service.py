@@ -22,10 +22,14 @@ def uow() -> MagicMock:
     mock.__aenter__ = AsyncMock(return_value=mock)
     mock.__aexit__ = AsyncMock(return_value=None)
     mock.commit = AsyncMock()
+    mock.rollback = AsyncMock()
     mock.accounts = AsyncMock()
     mock.connections = AsyncMock()
     mock.pending_auth = AsyncMock()
     mock.outbox = AsyncMock()
+    # P3-14: claim vindes som default, saa eksisterende happy-path-tests
+    # raser gennem claim-grenen.
+    mock.connections.try_claim_sync.return_value = True
     return mock
 
 
@@ -43,16 +47,25 @@ def banking_client() -> AsyncMock:
 
 
 @pytest.fixture
+def saga_status() -> AsyncMock:
+    port = AsyncMock()
+    port.get_status.return_value = None
+    return port
+
+
+@pytest.fixture
 def service(
     uow: MagicMock,
     account_port: AsyncMock,
     banking_client: AsyncMock,
+    saga_status: AsyncMock,
 ) -> BankingService:
     return BankingService(
         uow=uow,
         account_port=account_port,
         banking_client=banking_client,
         clock=lambda: FROZEN_NOW,
+        saga_status_port=saga_status,
     )
 
 
@@ -223,9 +236,10 @@ async def test_start_sync_saga_emits_bank_sync_start_event(
     uow.connections.get_by_id.return_value = conn
     uow.accounts.get_projection.return_value = (2, "Main Account")
 
-    saga_id = await service.start_sync_saga(connection_id, user_id=2)
+    saga_id, already_running = await service.start_sync_saga(connection_id, user_id=2)
 
     assert saga_id
+    assert already_running is False
     uow.outbox.add.assert_awaited_once()
     event = uow.outbox.add.await_args.kwargs["event"]
     assert isinstance(event, BankSyncSagaStartEvent)
@@ -347,7 +361,7 @@ async def test_start_sync_saga_allows_unexpired_consent(
     uow.connections.get_by_id.return_value = conn
     uow.accounts.get_projection.return_value = (2, "Main Account")
 
-    saga_id = await service.start_sync_saga(connection_id, user_id=2)
+    saga_id, _ = await service.start_sync_saga(connection_id, user_id=2)
 
     assert saga_id
     uow.outbox.add.assert_awaited_once()
@@ -367,3 +381,144 @@ async def test_start_sync_saga_handles_naive_expiry_from_db(
 
     with pytest.raises(BankConsentExpired):
         await service.start_sync_saga(connection_id, user_id=2)
+
+
+# ── P3-14: in-flight sync-claim (serialisering per connection) ──────
+
+
+def _claimed_connection(connection_id, claim_saga_id: str) -> BankConnection:
+    conn = _make_connection(connection_id)
+    conn.sync_saga_id = claim_saga_id
+    conn.sync_started_at = FROZEN_NOW - timedelta(seconds=30)
+    return conn
+
+
+@pytest.mark.asyncio
+async def test_sync_conflict_with_active_saga_returns_existing_id_without_event(
+    service: BankingService,
+    uow: MagicMock,
+    saga_status: AsyncMock,
+) -> None:
+    connection_id = uuid4()
+    uow.connections.get_by_id.return_value = _claimed_connection(connection_id, "running-saga")
+    uow.connections.try_claim_sync.return_value = False
+    saga_status.get_status.return_value = "started"
+
+    saga_id, already_running = await service.start_sync_saga(connection_id, user_id=2, bearer_token="Bearer x")
+
+    assert saga_id == "running-saga"
+    assert already_running is True
+    uow.outbox.add.assert_not_awaited()
+    uow.connections.steal_sync_claim.assert_not_awaited()
+    saga_status.get_status.assert_awaited_once_with("running-saga", "Bearer x")
+
+
+@pytest.mark.asyncio
+async def test_sync_conflict_with_terminal_saga_steals_claim_and_starts_new(
+    service: BankingService,
+    uow: MagicMock,
+    saga_status: AsyncMock,
+) -> None:
+    connection_id = uuid4()
+    uow.connections.get_by_id.return_value = _claimed_connection(connection_id, "dead-saga")
+    uow.accounts.get_projection.return_value = (2, "Main Account")
+    uow.connections.try_claim_sync.return_value = False
+    uow.connections.steal_sync_claim.return_value = True
+    saga_status.get_status.return_value = "failed"
+
+    saga_id, already_running = await service.start_sync_saga(connection_id, user_id=2, bearer_token="Bearer x")
+
+    assert already_running is False
+    assert saga_id != "dead-saga"
+    uow.outbox.add.assert_awaited_once()
+    steal_args = uow.connections.steal_sync_claim.await_args.args
+    assert steal_args[0] == connection_id
+    assert steal_args[1] == "dead-saga"
+    assert steal_args[2] == saga_id
+
+
+@pytest.mark.asyncio
+async def test_sync_conflict_with_unknown_status_fails_active(
+    service: BankingService,
+    uow: MagicMock,
+    saga_status: AsyncMock,
+) -> None:
+    # Saga-service unreachable → status None → behold eksisterende claim
+    # (aldrig duplikat-saga pga. nedetid).
+    connection_id = uuid4()
+    uow.connections.get_by_id.return_value = _claimed_connection(connection_id, "unknown-saga")
+    uow.connections.try_claim_sync.return_value = False
+    saga_status.get_status.return_value = None
+
+    saga_id, already_running = await service.start_sync_saga(connection_id, user_id=2, bearer_token="Bearer x")
+
+    assert saga_id == "unknown-saga"
+    assert already_running is True
+    uow.outbox.add.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_conflict_lost_steal_race_returns_winner(
+    service: BankingService,
+    uow: MagicMock,
+    saga_status: AsyncMock,
+) -> None:
+    connection_id = uuid4()
+    uow.connections.get_by_id.side_effect = [
+        _claimed_connection(connection_id, "dead-saga"),   # validering
+        _claimed_connection(connection_id, "dead-saga"),   # konflikt-læsning
+        _claimed_connection(connection_id, "winner-saga"),  # efter tabt steal
+    ]
+    uow.connections.try_claim_sync.return_value = False
+    uow.connections.steal_sync_claim.return_value = False
+    saga_status.get_status.return_value = "completed"
+
+    saga_id, already_running = await service.start_sync_saga(connection_id, user_id=2, bearer_token="Bearer x")
+
+    assert saga_id == "winner-saga"
+    assert already_running is True
+    uow.outbox.add.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_claim_vanished_between_attempts_reclaims(
+    service: BankingService,
+    uow: MagicMock,
+) -> None:
+    # Claimet ryddes (sync afsluttet) mellem første tab og genlæsning —
+    # andet claim-forsøg vinder og starter en frisk saga.
+    connection_id = uuid4()
+    unclaimed = _make_connection(connection_id)
+    uow.connections.get_by_id.return_value = unclaimed
+    uow.accounts.get_projection.return_value = (2, "Main Account")
+    uow.connections.try_claim_sync.side_effect = [False, True]
+
+    saga_id, already_running = await service.start_sync_saga(connection_id, user_id=2)
+
+    assert already_running is False
+    assert saga_id
+    uow.outbox.add.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sync_conflict_without_status_port_fails_active(
+    uow: MagicMock,
+    account_port: AsyncMock,
+    banking_client: AsyncMock,
+) -> None:
+    service = BankingService(
+        uow=uow,
+        account_port=account_port,
+        banking_client=banking_client,
+        clock=lambda: FROZEN_NOW,
+        saga_status_port=None,
+    )
+    connection_id = uuid4()
+    uow.connections.get_by_id.return_value = _claimed_connection(connection_id, "running-saga")
+    uow.connections.try_claim_sync.return_value = False
+
+    saga_id, already_running = await service.start_sync_saga(connection_id, user_id=2)
+
+    assert saga_id == "running-saga"
+    assert already_running is True
+    uow.outbox.add.assert_not_awaited()

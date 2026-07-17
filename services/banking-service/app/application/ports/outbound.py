@@ -27,6 +27,18 @@ class IBankConnectionRepository(Protocol):
     async def list_by_account(self, account_id: int) -> list[BankConnection]: ...
     async def update_status(self, connection_id: UUID, status: str) -> None: ...
     async def update_last_synced(self, connection_id: UUID, synced_at: datetime) -> None: ...
+    async def try_claim_sync(self, connection_id: UUID, saga_id: str, now: datetime, ttl_seconds: int) -> bool:
+        """Atomic in-flight sync-claim; True iff this caller won (P3-14)."""
+        ...
+
+    async def steal_sync_claim(self, connection_id: UUID, old_saga_id: str, new_saga_id: str, now: datetime) -> bool:
+        """Take over a known-terminal claim; scoped to old_saga_id (one winner)."""
+        ...
+
+    async def clear_sync_claim(self, connection_id: UUID, saga_id: str) -> None:
+        """Release the claim iff it still belongs to saga_id."""
+        ...
+
     async def update_consent(
         self,
         connection_id: UUID,
@@ -108,3 +120,12 @@ class IAccountPort(ABC):
 
     @abstractmethod
     async def get_account_info(self, account_id: int) -> tuple[int, str]: ...
+
+
+class ISagaStatusPort(ABC):
+    """Read-only status lookup used by the sync-claim conflict path (P3-14)."""
+
+    @abstractmethod
+    async def get_status(self, saga_id: str, bearer_token: str | None) -> str | None:
+        """Saga status string, or None when unknown/unreachable (fail-active)."""
+        ...

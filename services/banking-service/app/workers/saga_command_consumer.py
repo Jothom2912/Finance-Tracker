@@ -207,6 +207,7 @@ class BankingSagaCommandConsumer:
     async def _handle_mark_sync_complete(self, body: dict) -> dict:
         connection_id = body["connection_id"]
         user_id = body["user_id"]
+        saga_id = body.get("saga_id", "")
 
         async with async_session_factory() as session:
             result = await session.execute(
@@ -217,6 +218,11 @@ class BankingSagaCommandConsumer:
                 # Naive UTC per column convention; not domain logic, so a
                 # direct timestamp (not injected clock) is acceptable here.
                 conn.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                # P3-14: frigiv sync-claimet — kun hvis det stadig er VORES
+                # (en nyere sagas claim må ikke ryddes af en gammel reply).
+                if saga_id and conn.sync_saga_id == saga_id:
+                    conn.sync_saga_id = None
+                    conn.sync_started_at = None
 
                 outbox_repo = OutboxRepository(session, OutboxEventModel)
                 event = BankSyncCompletedEvent(

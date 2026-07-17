@@ -6,7 +6,7 @@ from typing import Optional
 from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
@@ -55,6 +55,9 @@ class SyncRequest(BaseModel):
 class SyncSagaResponse(BaseModel):
     saga_id: str
     status: str = "started"
+    # P3-14: True naar en anden sync allerede koerer for forbindelsen —
+    # saga_id peger saa paa DEN koerende saga (poll den i stedet).
+    already_running: bool = False
 
 
 def _callback_redirect(
@@ -217,13 +220,17 @@ async def sync_transactions(
     req: SyncRequest | None = None,
     user_id: int = Depends(get_current_user_id),
     service: BankingService = Depends(get_banking_service),
+    authorization: str | None = Header(None),
 ) -> SyncSagaResponse:
     date_from = req.date_from if req else None
     try:
-        saga_id = await service.start_sync_saga(
+        # Kaldens eget JWT videresendes til saga-status-opslag ved
+        # claim-konflikt (P3-14) — status-API'et er owner-checked.
+        saga_id, already_running = await service.start_sync_saga(
             connection_id=connection_id,
             user_id=user_id,
             date_from=date_from,
+            bearer_token=authorization,
         )
     except BankConnectionNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -238,7 +245,11 @@ async def sync_transactions(
             connection_id,
         )
         raise HTTPException(status_code=500, detail=str(exc))
-    return SyncSagaResponse(saga_id=saga_id, status="started")
+    return SyncSagaResponse(
+        saga_id=saga_id,
+        status="already_running" if already_running else "started",
+        already_running=already_running,
+    )
 
 
 @router.delete("/connections/{connection_id}")

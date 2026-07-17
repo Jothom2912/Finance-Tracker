@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities import BankConnection
@@ -86,6 +86,61 @@ class PostgresBankConnectionRepository:
             .values(last_synced_at=_to_naive_utc(synced_at))
         )
 
+    async def try_claim_sync(
+        self,
+        connection_id: UUID,
+        saga_id: str,
+        now: datetime,
+        ttl_seconds: int,
+    ) -> bool:
+        """Atomic in-flight claim (P3-14): wins iff no claim exists or the
+        existing one is older than the TTL backstop. Exactly one concurrent
+        caller gets rowcount 1."""
+        naive_now = _to_naive_utc(now)
+        cutoff = naive_now - timedelta(seconds=ttl_seconds)
+        result = await self._session.execute(
+            update(BankConnectionModel)
+            .where(
+                BankConnectionModel.id == str(connection_id),
+                or_(
+                    BankConnectionModel.sync_started_at.is_(None),
+                    BankConnectionModel.sync_started_at < cutoff,
+                ),
+            )
+            .values(sync_saga_id=saga_id, sync_started_at=naive_now)
+        )
+        return result.rowcount == 1
+
+    async def steal_sync_claim(
+        self,
+        connection_id: UUID,
+        old_saga_id: str,
+        new_saga_id: str,
+        now: datetime,
+    ) -> bool:
+        """Take over a claim whose saga is known-terminal. Scoped to the old
+        saga_id so only one of several concurrent stealers wins."""
+        result = await self._session.execute(
+            update(BankConnectionModel)
+            .where(
+                BankConnectionModel.id == str(connection_id),
+                BankConnectionModel.sync_saga_id == old_saga_id,
+            )
+            .values(sync_saga_id=new_saga_id, sync_started_at=_to_naive_utc(now))
+        )
+        return result.rowcount == 1
+
+    async def clear_sync_claim(self, connection_id: UUID, saga_id: str) -> None:
+        """Release only our own claim — a newer saga's claim must survive."""
+        await self._session.execute(
+            update(BankConnectionModel)
+            .where(
+                BankConnectionModel.id == str(connection_id),
+                BankConnectionModel.sync_saga_id == saga_id,
+            )
+            .values(sync_saga_id=None, sync_started_at=None)
+        )
+
     async def update_consent(
         self,
         connection_id: UUID,
@@ -112,5 +167,7 @@ class PostgresBankConnectionRepository:
             status=row.status,
             expires_at=row.expires_at,
             last_synced_at=row.last_synced_at,
+            sync_saga_id=row.sync_saga_id,
+            sync_started_at=row.sync_started_at,
             created_at=row.created_at,
         )
