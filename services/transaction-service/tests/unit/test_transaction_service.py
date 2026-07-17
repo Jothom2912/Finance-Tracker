@@ -403,9 +403,10 @@ class TestUpdateTransaction:
 
         await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
 
-        uow.outbox.add.assert_awaited_once()
-        event = uow.outbox.add.call_args[1]["event"]
-        assert event.event_type == "transaction.updated"
+        events = [call.kwargs["event"] for call in uow.outbox.add.await_args_list]
+        updated_events = [e for e in events if e.event_type == "transaction.updated"]
+        assert len(updated_events) == 1
+        event = updated_events[0]
         assert event.amount == "75.00"
         assert event.previous_amount == "49.99"
         assert event.category == "Transport"
@@ -466,6 +467,91 @@ class TestUpdateTransaction:
 
         fields = uow.transactions.update.call_args.kwargs
         assert "categorization_tier" not in fields
+
+    @pytest.mark.asyncio()
+    async def test_category_correction_emits_corrected_event(self) -> None:
+        """F1-03: a manual category change must emit
+        transaction.category_corrected (alongside transaction.updated) so
+        the categorization feedback loop can learn the merchant."""
+        service, uow = _build_service()
+        existing = _make_transaction(category_id=5, subcategory_id=42, description="Netto Vesterbro")
+        uow.transactions.find_by_id.return_value = existing
+        uow.transactions.update.return_value = _make_transaction(
+            category_id=10,
+            category_name="Transport",
+            subcategory_id=None,
+            description="Netto Vesterbro",
+        )
+        dto = UpdateTransactionDTO(category_id=10, category_name="Transport")
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        events = [call.kwargs["event"] for call in uow.outbox.add.await_args_list]
+        assert [e.event_type for e in events] == [
+            "transaction.updated",
+            "transaction.category_corrected",
+        ]
+        corrected = events[1]
+        assert corrected.transaction_id == 1
+        assert corrected.user_id == 10
+        assert corrected.description == "Netto Vesterbro"
+        assert corrected.category_id == 10
+        assert corrected.category_name == "Transport"
+        assert corrected.subcategory_id is None
+        assert corrected.previous_category_id == 5
+        assert corrected.previous_subcategory_id == 42
+
+    @pytest.mark.asyncio()
+    async def test_amount_only_edit_does_not_emit_corrected_event(self) -> None:
+        service, uow = _build_service()
+        uow.transactions.find_by_id.return_value = _make_transaction()
+        uow.transactions.update.return_value = _make_transaction(amount=Decimal("75.00"))
+        dto = UpdateTransactionDTO(amount=Decimal("75.00"))
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        events = [call.kwargs["event"] for call in uow.outbox.add.await_args_list]
+        assert [e.event_type for e in events] == ["transaction.updated"]
+
+    @pytest.mark.asyncio()
+    async def test_clearing_category_does_not_emit_corrected_event(self) -> None:
+        """Clearing the category (explicit null) teaches nothing — the
+        corrected event must be skipped even though the edit pins manual."""
+        service, uow = _build_service()
+        uow.transactions.find_by_id.return_value = _make_transaction(category_id=5)
+        uow.transactions.update.return_value = _make_transaction(category_id=None, category_name=None)
+        dto = UpdateTransactionDTO(category_id=None, category_name=None)
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        events = [call.kwargs["event"] for call in uow.outbox.add.await_args_list]
+        assert [e.event_type for e in events] == ["transaction.updated"]
+
+    @pytest.mark.asyncio()
+    async def test_subcategory_only_correction_emits_corrected_event(self) -> None:
+        """Refining the subcategory (same parent) is also a correction the
+        feedback loop should learn from."""
+        service, uow = _build_service()
+        uow.transactions.find_by_id.return_value = _make_transaction(category_id=5, subcategory_id=None)
+        uow.transactions.update.return_value = _make_transaction(
+            category_id=5,
+            subcategory_id=42,
+            subcategory_name="Dagligvarer",
+        )
+        uow.subcategories.find_by_id.return_value = SubCategory(id=42, name="Dagligvarer", category_id=5)
+        dto = UpdateTransactionDTO(subcategory_id=42)
+
+        await service.update_transaction(transaction_id=1, user_id=10, dto=dto)
+
+        events = [call.kwargs["event"] for call in uow.outbox.add.await_args_list]
+        assert [e.event_type for e in events] == [
+            "transaction.updated",
+            "transaction.category_corrected",
+        ]
+        corrected = events[1]
+        assert corrected.subcategory_id == 42
+        assert corrected.subcategory_name == "Dagligvarer"
+        assert corrected.previous_subcategory_id is None
 
     @pytest.mark.asyncio()
     async def test_subcategory_edit_resolves_name_and_pins_manual(self) -> None:

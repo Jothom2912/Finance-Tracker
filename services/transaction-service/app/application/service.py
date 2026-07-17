@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from contracts.events.transaction import (
+    TransactionCategoryCorrectedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
     TransactionUpdatedEvent,
@@ -191,6 +192,8 @@ class TransactionService(ITransactionService):
 
             previous_amount = existing.amount
             previous_category = existing.category_name or ""
+            previous_category_id = existing.category_id
+            previous_subcategory_id = existing.subcategory_id
 
             # A manual category/subcategory edit pins the choice as
             # tier="manual" so the async categorization consumer won't
@@ -198,7 +201,8 @@ class TransactionService(ITransactionService):
             # changes, any previously-derived subcategory no longer
             # applies, so clear it (unless a new one is chosen in the
             # same request).
-            if "category_id" in fields or "category_name" in fields or "subcategory_id" in fields:
+            is_category_correction = "category_id" in fields or "category_name" in fields or "subcategory_id" in fields
+            if is_category_correction:
                 fields["categorization_tier"] = "manual"
                 if "category_id" in fields and fields["category_id"] != existing.category_id:
                     fields.setdefault("subcategory_id", None)
@@ -244,6 +248,27 @@ class TransactionService(ITransactionService):
                 aggregate_type="transaction",
                 aggregate_id=str(updated.id),
             )
+
+            # F1-03 feedback loop: a manual correction that RESULTS in a
+            # category is worth learning from.  Clearing the category
+            # (updated.category_id is None) teaches nothing — skip.
+            if is_category_correction and updated.category_id is not None:
+                await self._uow.outbox.add(
+                    event=TransactionCategoryCorrectedEvent(
+                        transaction_id=updated.id,
+                        account_id=updated.account_id,
+                        user_id=user_id,
+                        description=updated.description or "",
+                        category_id=updated.category_id,
+                        category_name=updated.category_name or "",
+                        subcategory_id=updated.subcategory_id,
+                        subcategory_name=updated.subcategory_name,
+                        previous_category_id=previous_category_id,
+                        previous_subcategory_id=previous_subcategory_id,
+                    ),
+                    aggregate_type="transaction",
+                    aggregate_id=str(updated.id),
+                )
 
             await self._uow.commit()
 
