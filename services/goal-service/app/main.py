@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from app.application.dto import GoalBase, GoalCreate, GoalResponse
+from app.application.dto import (
+    AllocationHistoryEntryResponse,
+    GoalBase,
+    GoalCreate,
+    GoalResponse,
+    UnallocatedSurplusResponse,
+)
 from app.application.ports.inbound import IGoalService
 from app.auth import get_current_user_id
 from app.config import settings
@@ -9,6 +15,7 @@ from app.domain.exceptions import AccountNotFoundForGoal, NotAccountOwner, Upstr
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 app = FastAPI(title="Goal Service")
 
@@ -54,6 +61,20 @@ async def list_goals(
     return await service.list_goals(account_id, user_id)
 
 
+# NB: statisk rute FØR /{goal_id}-ruterne — int-path-converteren giver ellers 422.
+@app.get("/api/v1/goals/unallocated-surplus", response_model=UnallocatedSurplusResponse)
+async def get_unallocated_surplus(
+    user_id: int = Depends(get_current_user_id),
+    service: IGoalService = Depends(get_goal_service),
+    x_account_id: str = Header(..., alias="X-Account-ID"),
+):
+    try:
+        account_id = int(x_account_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid X-Account-ID header")
+    return await service.get_unallocated_surplus(account_id, user_id)
+
+
 @app.get("/api/v1/goals/{goal_id}")
 async def get_goal(
     goal_id: int,
@@ -61,6 +82,47 @@ async def get_goal(
     service: IGoalService = Depends(get_goal_service),
 ):
     goal = await service.get_goal(goal_id, user_id)
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return goal
+
+
+@app.get("/api/v1/goals/{goal_id}/allocation-history", response_model=list[AllocationHistoryEntryResponse])
+async def get_allocation_history(
+    goal_id: int,
+    user_id: int = Depends(get_current_user_id),
+    service: IGoalService = Depends(get_goal_service),
+):
+    history = await service.get_allocation_history(goal_id, user_id)
+    if history is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return history
+
+
+@app.put("/api/v1/goals/{goal_id}/default", response_model=GoalResponse)
+async def set_default_goal(
+    goal_id: int,
+    user_id: int = Depends(get_current_user_id),
+    service: IGoalService = Depends(get_goal_service),
+):
+    try:
+        goal = await service.set_default_goal(goal_id, user_id)
+    except IntegrityError:
+        # Race mod det partielle unique index (to samtidige set-default);
+        # klienten refetcher og prøver igen.
+        raise HTTPException(status_code=409, detail="Default goal changed concurrently, retry")
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return goal
+
+
+@app.delete("/api/v1/goals/{goal_id}/default", response_model=GoalResponse)
+async def clear_default_goal(
+    goal_id: int,
+    user_id: int = Depends(get_current_user_id),
+    service: IGoalService = Depends(get_goal_service),
+):
+    goal = await service.clear_default_goal(goal_id, user_id)
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
     return goal

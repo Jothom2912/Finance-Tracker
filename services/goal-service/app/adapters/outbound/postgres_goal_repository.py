@@ -5,7 +5,7 @@ from typing import Optional
 from app.application.ports.outbound import IGoalRepository
 from app.domain.entities import Goal
 from app.models import GoalModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -62,6 +62,28 @@ class AsyncPostgresGoalRepository(IGoalRepository):
         await self._db.flush()
         return True
 
+    async def set_default_savings_goal(self, goal_id: int, account_id: int) -> None:
+        # Clear-then-set i samme transaktion; det partielle unique index
+        # (ix_goals_one_default_per_account) er backstop mod races.
+        await self._db.execute(
+            update(GoalModel)
+            .where(
+                GoalModel.Account_idAccount == account_id,
+                GoalModel.is_default_savings_goal.is_(True),
+            )
+            .values(is_default_savings_goal=False)
+        )
+        await self._db.execute(
+            update(GoalModel).where(GoalModel.idGoal == goal_id).values(is_default_savings_goal=True)
+        )
+        await self._db.flush()
+
+    async def clear_default_savings_goal(self, goal_id: int) -> None:
+        await self._db.execute(
+            update(GoalModel).where(GoalModel.idGoal == goal_id).values(is_default_savings_goal=False)
+        )
+        await self._db.flush()
+
     def _to_entity(self, model: GoalModel) -> Goal:
         return Goal(
             id=model.idGoal,
@@ -71,4 +93,5 @@ class AsyncPostgresGoalRepository(IGoalRepository):
             target_date=model.target_date,
             status=model.status,
             account_id=model.Account_idAccount,
+            is_default_savings_goal=model.is_default_savings_goal,
         )

@@ -18,6 +18,8 @@ def make_uow() -> MagicMock:
     uow = MagicMock()
     uow.goals = AsyncMock()
     uow.outbox = AsyncMock()
+    uow.allocations = AsyncMock()
+    uow.unallocated = AsyncMock()
     uow.commit = AsyncMock()
     uow.rollback = AsyncMock()
     uow.__aenter__ = AsyncMock(return_value=uow)
@@ -346,3 +348,121 @@ async def test_dto_includes_progress_percent(
 
     assert result is not None
     assert result.progress_percent == 25.0
+
+
+# --- Default savings goal (F1-04) ---
+
+
+@pytest.mark.asyncio()
+async def test_set_default_goal_switches_and_emits_updated_event(service: GoalService, uow: MagicMock) -> None:
+    uow.goals.get_by_id.side_effect = [
+        _active_goal(),
+        _active_goal(is_default_savings_goal=True),
+    ]
+
+    result = await service.set_default_goal(10, user_id=OWNER_USER_ID)
+
+    assert result is not None
+    assert result.is_default_savings_goal is True
+    uow.goals.set_default_savings_goal.assert_awaited_once_with(10, ACCOUNT_ID)
+    emitted_event = uow.outbox.add.call_args.kwargs["event"]
+    assert emitted_event.user_id == OWNER_USER_ID
+    uow.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_set_default_goal_returns_none_for_non_owner(service: GoalService, uow: MagicMock) -> None:
+    uow.goals.get_by_id.return_value = _active_goal()
+
+    result = await service.set_default_goal(10, user_id=OTHER_USER_ID)
+
+    assert result is None
+    uow.goals.set_default_savings_goal.assert_not_called()
+    uow.commit.assert_not_called()
+
+
+@pytest.mark.asyncio()
+async def test_set_default_goal_returns_none_when_missing(service: GoalService, uow: MagicMock) -> None:
+    uow.goals.get_by_id.return_value = None
+
+    result = await service.set_default_goal(123, user_id=OWNER_USER_ID)
+
+    assert result is None
+    uow.goals.set_default_savings_goal.assert_not_called()
+
+
+@pytest.mark.asyncio()
+async def test_clear_default_goal_clears_and_commits(service: GoalService, uow: MagicMock) -> None:
+    uow.goals.get_by_id.side_effect = [
+        _active_goal(is_default_savings_goal=True),
+        _active_goal(is_default_savings_goal=False),
+    ]
+
+    result = await service.clear_default_goal(10, user_id=OWNER_USER_ID)
+
+    assert result is not None
+    assert result.is_default_savings_goal is False
+    uow.goals.clear_default_savings_goal.assert_awaited_once_with(10)
+    uow.commit.assert_awaited_once()
+
+
+# --- Allocation history + unallocated surplus (F1-04) ---
+
+
+@pytest.mark.asyncio()
+async def test_get_allocation_history_returns_entries_for_owner(service: GoalService, uow: MagicMock) -> None:
+    from datetime import datetime
+
+    from app.domain.entities import AllocationHistoryEntry
+
+    uow.goals.get_by_id.return_value = _active_goal()
+    uow.allocations.list_for_goal.return_value = [
+        AllocationHistoryEntry(
+            amount=250.0,
+            source_key="budget.month_closed:555:2026:6",
+            applied_at=datetime(2026, 7, 7, 12, 0),
+        )
+    ]
+
+    result = await service.get_allocation_history(10, user_id=OWNER_USER_ID)
+
+    assert result is not None
+    assert len(result) == 1
+    assert result[0].amount == 250.0
+    assert result[0].source_key == "budget.month_closed:555:2026:6"
+
+
+@pytest.mark.asyncio()
+async def test_get_allocation_history_returns_none_for_non_owner(service: GoalService, uow: MagicMock) -> None:
+    uow.goals.get_by_id.return_value = _active_goal()
+
+    result = await service.get_allocation_history(10, user_id=OTHER_USER_ID)
+
+    assert result is None
+    uow.allocations.list_for_goal.assert_not_called()
+
+
+@pytest.mark.asyncio()
+async def test_get_unallocated_surplus_sums_entries(service: GoalService, uow: MagicMock) -> None:
+    from datetime import datetime
+
+    from app.domain.entities import UnallocatedSurplusEntry
+
+    uow.unallocated.list_for_account.return_value = [
+        UnallocatedSurplusEntry(amount=100.50, reason="no_default_goal", observed_at=datetime(2026, 6, 7)),
+        UnallocatedSurplusEntry(amount=49.50, reason="goal_already_complete", observed_at=datetime(2026, 7, 7)),
+    ]
+
+    result = await service.get_unallocated_surplus(ACCOUNT_ID, user_id=OWNER_USER_ID)
+
+    assert result.total == 150.0
+    assert len(result.entries) == 2
+    assert result.entries[0].reason == "no_default_goal"
+
+
+@pytest.mark.asyncio()
+async def test_get_unallocated_surplus_rejects_non_owner(service: GoalService, uow: MagicMock) -> None:
+    with pytest.raises(NotAccountOwner):
+        await service.get_unallocated_surplus(ACCOUNT_ID, user_id=OTHER_USER_ID)
+
+    uow.unallocated.list_for_account.assert_not_called()

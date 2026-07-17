@@ -19,6 +19,8 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
         self._session = session
         self.goals = AsyncPostgresGoalRepository(session)
         self.outbox = OutboxRepository(session, OutboxEventModel)
+        self.allocations = PostgresGoalAllocationRepository(session)
+        self.unallocated = PostgresUnallocatedBudgetSurplusRepository(session)
 
     async def __aenter__(self) -> Self:
         return self

@@ -21,6 +21,7 @@ class Goal:
     target_date: date | None
     status: str | None
     account_id: int
+    is_default_savings_goal: bool = False
 
     @property
     def progress_percent(self) -> float:
@@ -37,6 +38,20 @@ class Goal:
         if self.status == GoalStatus.PAUSED:
             return GoalStatus.PAUSED
         return GoalStatus.ACTIVE
+
+
+@dataclass(frozen=True)
+class AllocationHistoryEntry:
+    amount: float
+    source_key: str
+    applied_at: datetime
+
+
+@dataclass(frozen=True)
+class UnallocatedSurplusEntry:
+    amount: float
+    reason: str
+    observed_at: datetime
 
 
 @dataclass

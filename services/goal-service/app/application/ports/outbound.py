@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal, Self
 
-from app.domain.entities import Goal, OutboxEntry
+from app.domain.entities import AllocationHistoryEntry, Goal, OutboxEntry, UnallocatedSurplusEntry
 from contracts.base import BaseEvent
 
 
@@ -24,6 +24,14 @@ class IGoalRepository(ABC):
 
     @abstractmethod
     async def delete(self, goal_id: int) -> bool: ...
+
+    @abstractmethod
+    async def set_default_savings_goal(self, goal_id: int, account_id: int) -> None:
+        """Atomisk: fjern eksisterende default på kontoen, sæt goal_id som ny."""
+        ...
+
+    @abstractmethod
+    async def clear_default_savings_goal(self, goal_id: int) -> None: ...
 
 
 class IAccountPort(ABC):
@@ -57,6 +65,9 @@ class IGoalAllocationRepository(ABC):
         correlation_id: str | None,
     ) -> None: ...
 
+    @abstractmethod
+    async def list_for_goal(self, goal_id: int) -> list[AllocationHistoryEntry]: ...
+
 
 class IUnallocatedBudgetSurplusRepository(ABC):
     @abstractmethod
@@ -72,6 +83,9 @@ class IUnallocatedBudgetSurplusRepository(ABC):
         reason: Literal["no_default_goal", "goal_already_complete"],
         correlation_id: str | None,
     ) -> None: ...
+
+    @abstractmethod
+    async def list_for_account(self, account_id: int) -> list[UnallocatedSurplusEntry]: ...
 
 
 class IOutboxRepository(ABC):
@@ -91,6 +105,8 @@ class IOutboxRepository(ABC):
 class IUnitOfWork(ABC):
     goals: IGoalRepository
     outbox: IOutboxRepository
+    allocations: IGoalAllocationRepository
+    unallocated: IUnallocatedBudgetSurplusRepository
 
     @abstractmethod
     async def __aenter__(self) -> Self: ...

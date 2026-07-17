@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+from app.application.dto import (
+    AllocationHistoryEntryResponse,
+    GoalBase,
+    GoalCreate,
+    UnallocatedSurplusEntryResponse,
+    UnallocatedSurplusResponse,
+)
 from app.application.dto import Goal as GoalDTO
-from app.application.dto import GoalBase, GoalCreate
 from app.application.ports.inbound import IGoalService
 from app.application.ports.outbound import IAccountPort, IUnitOfWork
 from app.domain.entities import Goal, GoalStatus
@@ -123,6 +129,71 @@ class GoalService(IGoalService):
             await self._uow.commit()
         return True
 
+    async def set_default_goal(self, goal_id: int, user_id: int) -> GoalDTO | None:
+        async with self._uow:
+            existing = await self._uow.goals.get_by_id(goal_id)
+            if not existing:
+                return None
+            owner_id = await self._account_port.get_owner_user_id(existing.account_id)
+            if owner_id != user_id:
+                return None
+            await self._uow.goals.set_default_savings_goal(goal_id, existing.account_id)
+            result = await self._uow.goals.get_by_id(goal_id)
+            assert result is not None
+            await self._add_goal_updated_event(result, owner_id)
+            await self._uow.commit()
+        return self._to_dto(result)
+
+    async def clear_default_goal(self, goal_id: int, user_id: int) -> GoalDTO | None:
+        async with self._uow:
+            existing = await self._uow.goals.get_by_id(goal_id)
+            if not existing:
+                return None
+            owner_id = await self._account_port.get_owner_user_id(existing.account_id)
+            if owner_id != user_id:
+                return None
+            await self._uow.goals.clear_default_savings_goal(goal_id)
+            result = await self._uow.goals.get_by_id(goal_id)
+            assert result is not None
+            await self._add_goal_updated_event(result, owner_id)
+            await self._uow.commit()
+        return self._to_dto(result)
+
+    async def get_allocation_history(self, goal_id: int, user_id: int) -> list[AllocationHistoryEntryResponse] | None:
+        async with self._uow:
+            goal = await self._uow.goals.get_by_id(goal_id)
+            if not goal:
+                return None
+            owner_id = await self._account_port.get_owner_user_id(goal.account_id)
+            if owner_id != user_id:
+                return None
+            entries = await self._uow.allocations.list_for_goal(goal_id)
+        return [AllocationHistoryEntryResponse.model_validate(entry) for entry in entries]
+
+    async def get_unallocated_surplus(self, account_id: int, user_id: int) -> UnallocatedSurplusResponse:
+        await self._verify_ownership(account_id, user_id)
+        async with self._uow:
+            entries = await self._uow.unallocated.list_for_account(account_id)
+        return UnallocatedSurplusResponse(
+            total=round(sum(entry.amount for entry in entries), 2),
+            entries=[UnallocatedSurplusEntryResponse.model_validate(entry) for entry in entries],
+        )
+
+    async def _add_goal_updated_event(self, goal: Goal, owner_id: int) -> None:
+        await self._uow.outbox.add(
+            event=GoalUpdatedEvent(
+                goal_id=goal.id or 0,
+                user_id=owner_id,
+                name=goal.name,
+                target_amount=str(goal.target_amount),
+                current_amount=str(goal.current_amount),
+                target_date=goal.target_date,
+                status=goal.status,
+            ),
+            aggregate_type="goal",
+            aggregate_id=str(goal.id or 0),
+        )
+
     def _to_dto(self, goal: Goal) -> GoalDTO:
         return GoalDTO(
             idGoal=goal.id,
@@ -134,4 +205,5 @@ class GoalService(IGoalService):
             effective_status=goal.effective_status,
             progress_percent=goal.progress_percent,
             Account_idAccount=goal.account_id,
+            is_default_savings_goal=goal.is_default_savings_goal,
         )

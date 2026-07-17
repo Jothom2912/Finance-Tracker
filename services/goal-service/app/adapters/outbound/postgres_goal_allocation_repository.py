@@ -9,7 +9,7 @@ from app.application.ports.outbound import (
     IGoalSavingsRepository,
     IUnallocatedBudgetSurplusRepository,
 )
-from app.domain.entities import Goal
+from app.domain.entities import AllocationHistoryEntry, Goal, UnallocatedSurplusEntry
 from app.models import GoalAllocationHistoryModel, GoalModel, UnallocatedBudgetSurplusModel
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,6 +80,21 @@ class PostgresGoalAllocationRepository(IGoalAllocationRepository):
         )
         await self._db.flush()
 
+    async def list_for_goal(self, goal_id: int) -> list[AllocationHistoryEntry]:
+        result = await self._db.execute(
+            select(GoalAllocationHistoryModel)
+            .where(GoalAllocationHistoryModel.goal_id == goal_id)
+            .order_by(GoalAllocationHistoryModel.applied_at.desc())
+        )
+        return [
+            AllocationHistoryEntry(
+                amount=float(row.amount),
+                source_key=row.source_key,
+                applied_at=row.applied_at,
+            )
+            for row in result.scalars().all()
+        ]
+
 
 class PostgresUnallocatedBudgetSurplusRepository(IUnallocatedBudgetSurplusRepository):
     def __init__(self, db: AsyncSession) -> None:
@@ -109,3 +124,18 @@ class PostgresUnallocatedBudgetSurplusRepository(IUnallocatedBudgetSurplusReposi
             )
         )
         await self._db.flush()
+
+    async def list_for_account(self, account_id: int) -> list[UnallocatedSurplusEntry]:
+        result = await self._db.execute(
+            select(UnallocatedBudgetSurplusModel)
+            .where(UnallocatedBudgetSurplusModel.account_id == account_id)
+            .order_by(UnallocatedBudgetSurplusModel.observed_at.desc())
+        )
+        return [
+            UnallocatedSurplusEntry(
+                amount=float(row.amount),
+                reason=row.reason,
+                observed_at=row.observed_at,
+            )
+            for row in result.scalars().all()
+        ]

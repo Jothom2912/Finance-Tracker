@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from app.domain.entities import GoalStatus
@@ -39,7 +39,27 @@ class GoalResponse(BaseModel):
     effective_status: GoalStatus
     progress_percent: float
     Account_idAccount: int
+    is_default_savings_goal: bool = False
     model_config = ConfigDict(from_attributes=True)
+
+
+class AllocationHistoryEntryResponse(BaseModel):
+    amount: float
+    source_key: str
+    applied_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UnallocatedSurplusEntryResponse(BaseModel):
+    amount: float
+    reason: str
+    observed_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UnallocatedSurplusResponse(BaseModel):
+    total: float
+    entries: list[UnallocatedSurplusEntryResponse]
 
 
 # Keep backward-compatible alias used by existing imports in service/tests.

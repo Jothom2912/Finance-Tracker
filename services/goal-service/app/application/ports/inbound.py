@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from app.application.dto import Goal, GoalBase, GoalCreate
+from app.application.dto import (
+    AllocationHistoryEntryResponse,
+    Goal,
+    GoalBase,
+    GoalCreate,
+    UnallocatedSurplusResponse,
+)
 
 
 class IGoalService(ABC):
@@ -20,3 +26,17 @@ class IGoalService(ABC):
 
     @abstractmethod
     async def delete_goal(self, goal_id: int, user_id: int) -> bool: ...
+
+    @abstractmethod
+    async def set_default_goal(self, goal_id: int, user_id: int) -> Goal | None: ...
+
+    @abstractmethod
+    async def clear_default_goal(self, goal_id: int, user_id: int) -> Goal | None: ...
+
+    @abstractmethod
+    async def get_allocation_history(
+        self, goal_id: int, user_id: int
+    ) -> list[AllocationHistoryEntryResponse] | None: ...
+
+    @abstractmethod
+    async def get_unallocated_surplus(self, account_id: int, user_id: int) -> UnallocatedSurplusResponse: ...
