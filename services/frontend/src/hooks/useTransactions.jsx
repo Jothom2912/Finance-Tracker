@@ -19,6 +19,16 @@ export function useTransactions(filters) {
     invalidateFinancialData(queryClient, { scope: 'transactions' });
   };
 
+  const createMutation = useMutation({
+    mutationFn: transactionsApi.createTransaction,
+    onSuccess: invalidateTransactionViews,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => transactionsApi.updateTransaction(id, data),
+    onSuccess: invalidateTransactionViews,
+  });
+
   const removeMutation = useMutation({
     mutationFn: transactionsApi.deleteTransaction,
     onSuccess: invalidateTransactionViews,
@@ -36,7 +46,10 @@ export function useTransactions(filters) {
     error: query.error
       ? query.error.message || 'Kunne ikke hente transaktioner.'
       : null,
+    create: createMutation.mutateAsync,
+    update: updateMutation.mutateAsync,
     remove: removeMutation.mutateAsync,
     uploadCsv: uploadCsvMutation.mutateAsync,
+    isSaving: createMutation.isPending || updateMutation.isPending,
   };
 }

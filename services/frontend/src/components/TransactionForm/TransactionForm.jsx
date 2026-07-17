@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { createTransaction as apiCreateTransaction, updateTransaction as apiUpdateTransaction } from '../../api/transactions';
 import { useSubcategories } from '../../hooks/useSubcategories';
 import './TransactionForm.css';
 
@@ -8,12 +7,13 @@ function TransactionForm({
     categoriesLoading = false,
     categoriesError = null,
     onRetryCategories,
+    onSave,
     onTransactionAdded,
     transactionToEdit,
     onTransactionUpdated,
     onCancelEdit,
+    onCreateRule,
     setError,
-    setSuccessMessage
 }) {
     const [amount, setAmount] = useState('');
     const [category, setCategory] = useState('');
@@ -21,6 +21,7 @@ function TransactionForm({
     const [date, setDate] = useState('');
     const [description, setDescription] = useState('');
     const [isExpense, setIsExpense] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const {
         subcategories,
@@ -55,7 +56,6 @@ function TransactionForm({
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
-        setSuccessMessage(null);
 
         if (!amount || !category || !date || !description) {
             setError('Alle felter skal udfyldes.');
@@ -92,19 +92,31 @@ function TransactionForm({
             type: isExpense ? 'expense' : 'income',
         };
 
+        // Persistensen går gennem sidens TanStack-mutation (onSave), så
+        // cache-invalidering sker ét sted; succes-toasten ejes af parent
+        // (onTransactionAdded/Updated) — ingen dobbelt-besked.
+        setIsSubmitting(true);
         try {
-            const transactionId = transactionToEdit?.id;
             if (transactionToEdit) {
-                await apiUpdateTransaction(transactionId, transactionData);
+                await onSave(transactionToEdit.id, transactionData);
                 onTransactionUpdated();
             } else {
-                await apiCreateTransaction(transactionData);
+                await onSave(null, transactionData);
                 onTransactionAdded();
             }
-            setSuccessMessage(transactionToEdit ? 'Transaktion opdateret!' : 'Transaktion tilføjet!');
         } catch (err) {
             setError(`Fejl: ${err.message}`);
+        } finally {
+            setIsSubmitting(false);
         }
+    };
+
+    const handleCreateRule = () => {
+        onCreateRule({
+            pattern_value: description || transactionToEdit?.description || '',
+            category_id: category ? parseInt(category) : null,
+            subcategory_id: subcategoryId ? parseInt(subcategoryId) : null,
+        });
     };
 
     return (
@@ -221,12 +233,25 @@ function TransactionForm({
                 </div>
 
                 <div className="form-actions"> {/* Gruppe for formular knapper */}
-                    <button type="submit" className="button">
-                        {transactionToEdit ? 'Opdater Transaktion' : 'Tilføj Transaktion'}
+                    <button type="submit" className="button" disabled={isSubmitting}>
+                        {isSubmitting
+                            ? 'Gemmer…'
+                            : transactionToEdit ? 'Opdater Transaktion' : 'Tilføj Transaktion'}
                     </button>
                     {transactionToEdit && (
-                        <button type="button" className="button secondary" onClick={onCancelEdit}>
+                        <button type="button" className="button secondary" onClick={onCancelEdit} disabled={isSubmitting}>
                             Annuller Redigering
+                        </button>
+                    )}
+                    {transactionToEdit && onCreateRule && (
+                        <button
+                            type="button"
+                            className="button secondary"
+                            onClick={handleCreateRule}
+                            disabled={isSubmitting}
+                            title="Opret en regel så lignende transaktioner kategoriseres automatisk"
+                        >
+                            Opret regel fra denne transaktion
                         </button>
                     )}
                 </div>

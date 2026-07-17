@@ -1,11 +1,12 @@
 import { useState, useCallback, useMemo } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import TransactionForm from '../components/TransactionForm/TransactionForm';
 import TransactionsList from '../components/TransactionsList/TransactionsList';
 import FilterComponent from '../components/FilterComponent/FilterComponent';
 import Modal from '../components/Modal/Modal';
 
 import { useCategories } from '../hooks/useCategories';
+import { useAllSubcategories } from '../hooks/useSubcategories';
 import { useTransactions } from '../hooks/useTransactions';
 import { useTransactionSearch } from '../hooks/useTransactionSearch';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -13,19 +14,19 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useConfirm } from '../components/ConfirmDialog/ConfirmDialog';
 import { formatLocalISODate } from '../lib/formatters';
 import { BANK_FORMAT_OPTIONS } from '../lib/bankFormats';
-import { invalidateFinancialData } from '../lib/invalidateFinancialData';
 
 import '../components/FilterComponent/FilterComponent.css';
 import './TransactionsPage.css';
 
 function TransactionsPage() {
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const {
     categories,
     loading: categoriesLoading,
     error: categoriesError,
     refresh: refreshCategories,
   } = useCategories();
+  const { subcategories: allSubcategories } = useAllSubcategories();
   const { showError, showSuccess, clearMessages } = useNotifications();
   const confirm = useConfirm();
 
@@ -59,6 +60,8 @@ function TransactionsPage() {
     transactions,
     loading: txLoading,
     error: txError,
+    create: createTx,
+    update: updateTx,
     remove: removeTx,
     uploadCsv,
   } = useTransactions(filters);
@@ -75,16 +78,37 @@ function TransactionsPage() {
     error: searchError,
   } = useTransactionSearch(debouncedSearchTerm);
 
-  const invalidateTransactionViews = useCallback(() => {
-    invalidateFinancialData(queryClient, { scope: 'transactions' });
-  }, [queryClient]);
+  // Persistens for formularen — mutation-hook'et ejer invalideringen,
+  // så handleTransactionSaved kun lukker modal + toaster.
+  const handleSaveTransaction = useCallback(
+    (id, data) => (id ? updateTx({ id, data }) : createTx(data)),
+    [createTx, updateTx],
+  );
 
   const handleTransactionSaved = useCallback((isEdit) => {
     setShowFormModal(false);
     setTransactionToEdit(null);
-    invalidateTransactionViews();
     showSuccess(isEdit ? 'Transaktion opdateret!' : 'Transaktion tilføjet!');
-  }, [invalidateTransactionViews, showSuccess]);
+  }, [showSuccess]);
+
+  // Inline-rettelse fra listen: samme update-mutation som modal-flowet,
+  // så tier=manual + feedback-loopet trigges server-side.
+  const handleQuickCategorize = useCallback(async (transaction, categorization) => {
+    try {
+      await updateTx({ id: transaction.id, data: categorization });
+      showSuccess(
+        categorization.subcategory_id
+          ? 'Kategori rettet — systemet husker det til fremtidige transaktioner.'
+          : 'Kategori rettet.',
+      );
+    } catch (err) {
+      showError(`Kunne ikke rette kategori: ${err.message}`);
+    }
+  }, [updateTx, showSuccess, showError]);
+
+  const handleCreateRuleFromTransaction = useCallback((prefill) => {
+    navigate('/rules', { state: { prefill } });
+  }, [navigate]);
 
   const handleEditTransaction = useCallback((transaction) => {
     setTransactionToEdit(transaction);
@@ -245,12 +269,13 @@ function TransactionsPage() {
             categoriesLoading={categoriesLoading}
             categoriesError={categoriesError}
             onRetryCategories={refreshCategories}
+            onSave={handleSaveTransaction}
             onTransactionAdded={() => handleTransactionSaved(false)}
             transactionToEdit={transactionToEdit}
             onTransactionUpdated={() => handleTransactionSaved(true)}
             onCancelEdit={handleCancelEdit}
+            onCreateRule={handleCreateRuleFromTransaction}
             setError={showError}
-            setSuccessMessage={showSuccess}
           />
         </Modal>
       )}
@@ -267,7 +292,9 @@ function TransactionsPage() {
             onEdit={handleEditTransaction}
             onDelete={handleDeleteTransaction}
             onCreateTransaction={() => { setShowFormModal(true); clearMessages(); }}
+            onQuickCategorize={handleQuickCategorize}
             categories={categories}
+            allSubcategories={allSubcategories}
           />
         )}
       </div>

@@ -20,6 +20,7 @@ import BudgetPage from './pages/BudgetPage/BudgetPage';
 import GoalPage from './pages/GoalPage/GoalPage';
 import BankCallbackPage from './pages/BankCallbackPage';
 import ChatPage from './pages/ChatPage';
+import RulesPage from './pages/RulesPage';
 
 function AppContent() {
   return (
@@ -32,6 +33,7 @@ function AppContent() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/rules" element={<RulesPage />} />
             <Route path="/budget" element={<BudgetPage />} />
             <Route path="/goals" element={<GoalPage />} />
             <Route path="/chat" element={<ChatPage />} />
