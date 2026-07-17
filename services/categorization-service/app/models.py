@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from messaging import OutboxEventMixin
-from sqlalchemy import Boolean, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -64,8 +64,8 @@ class CategorizationRuleModel(Base):
             "pattern_type",
             "pattern_value",
             unique=True,
-            postgresql_where=("user_id IS NOT NULL"),
-            sqlite_where=("user_id IS NOT NULL"),
+            postgresql_where=text("user_id IS NOT NULL"),
+            sqlite_where=text("user_id IS NOT NULL"),
         ),
     )
 

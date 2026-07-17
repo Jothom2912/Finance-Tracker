@@ -20,7 +20,7 @@ from app.domain.entities import (
     OutboxEntry,
     SubCategory,
 )
-from app.domain.value_objects import CategorizationResult, CategoryType
+from app.domain.value_objects import CategorizationResult, CategoryType, PatternType
 
 
 class ICategoryRepository(ABC):
@@ -94,6 +94,14 @@ class IRuleRepository(ABC):
 
     @abstractmethod
     async def find_by_id(self, rule_id: int) -> Optional[CategorizationRule]: ...
+
+    @abstractmethod
+    async def find_by_user_and_pattern(
+        self,
+        user_id: int,
+        pattern_type: PatternType,
+        pattern_value: str,
+    ) -> Optional[CategorizationRule]: ...
 
     @abstractmethod
     async def find_by_subcategory_id(self, subcategory_id: int) -> list[CategorizationRule]: ...
