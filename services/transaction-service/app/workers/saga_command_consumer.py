@@ -31,6 +31,13 @@ QUEUE_NAME = "transaction_service.saga_commands"
 ROUTING_KEYS = ["saga.cmd.bulk_import_transactions", "saga.cmd.rollback_import"]
 MAX_RETRIES = 3
 
+# BulkCreateTransactionDTO caps items at 500 per call (public-contract
+# bound), but an EB fetch can exceed that — chunk here instead of
+# letting ValidationError kill the saga (P3-15). Each chunk commits in
+# its own UoW; a mid-chunk crash retries the whole command, where the
+# P2-09 dedup keys make already-committed chunks skip as duplicates.
+BULK_IMPORT_CHUNK_SIZE = 500
+
 
 class TransactionSagaCommandConsumer:
     def __init__(self) -> None:
@@ -132,20 +139,44 @@ class TransactionSagaCommandConsumer:
             for item in items_raw
         ]
 
-        dto = BulkCreateTransactionDTO(items=items, skip_duplicates=True)
+        # An EB fetch with nothing new is a successful sync, not an
+        # error — the DTO's min_length=1 must not fail the saga.
+        if not items:
+            return {
+                "success": True,
+                "result_data": {
+                    "imported": 0,
+                    "duplicates_skipped": 0,
+                    "errors": 0,
+                    "imported_ids": [],
+                },
+            }
 
-        async with async_session_factory() as session:
-            uow = SQLAlchemyUnitOfWork(session)
-            service = TransactionService(uow=uow, categorization_client=None)
-            result = await service.bulk_import(user_id=user_id, dto=dto)
+        imported = 0
+        duplicates_skipped = 0
+        errors = 0
+        imported_ids: list[int] = []
+        for start in range(0, len(items), BULK_IMPORT_CHUNK_SIZE):
+            chunk = items[start : start + BULK_IMPORT_CHUNK_SIZE]
+            dto = BulkCreateTransactionDTO(items=chunk, skip_duplicates=True)
+
+            async with async_session_factory() as session:
+                uow = SQLAlchemyUnitOfWork(session)
+                service = TransactionService(uow=uow, categorization_client=None)
+                result = await service.bulk_import(user_id=user_id, dto=dto)
+
+            imported += result.imported
+            duplicates_skipped += result.duplicates_skipped
+            errors += result.errors
+            imported_ids.extend(result.imported_ids)
 
         return {
             "success": True,
             "result_data": {
-                "imported": result.imported,
-                "duplicates_skipped": result.duplicates_skipped,
-                "errors": result.errors,
-                "imported_ids": result.imported_ids,
+                "imported": imported,
+                "duplicates_skipped": duplicates_skipped,
+                "errors": errors,
+                "imported_ids": imported_ids,
             },
         }
 
