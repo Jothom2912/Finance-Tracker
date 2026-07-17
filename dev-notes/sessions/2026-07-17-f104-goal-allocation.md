@@ -53,9 +53,8 @@ Synthetic data (goal 16, budgets 2025-05/06 på konto 1), cleaned up after:
 - goals-DB credentials i compose: `goal_service`/`goals` (ikke postgres/goals_db).
 - Budget create/close/delete virker fint på syntetiske fortidsmåneder (2025-05) —
   praktisk e2e-mønster uden at røre rigtige data.
-- Frontend-verifikation af de nye UI-flows i browseren er IKKE gjort her (API-e2e +
-  component-tests only) — hurtig visuel gennemgang anbefales næste gang dev-serveren
-  kører.
+- Frontend-verifikation af de nye UI-flows: API-e2e + component-tests i sessionen;
+  bruger gennemgik visuelt i browseren samme dag — godkendt.
 
 ## Open ends
 
