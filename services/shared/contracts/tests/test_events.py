@@ -11,6 +11,7 @@ from contracts import (
     BankConnectionDisconnectedEvent,
     BankSyncCompletedEvent,
     BudgetMonthClosedEvent,
+    TransactionCategoryCorrectedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
     UserCreatedEvent,
@@ -362,6 +363,58 @@ class TestTransactionDeletedEvent:
 
         with pytest.raises(ValidationError):
             event.transaction_id = 999  # type: ignore[misc]
+
+
+class TestTransactionCategoryCorrectedEvent:
+    def test_serialization_roundtrip(self) -> None:
+        event = TransactionCategoryCorrectedEvent(
+            transaction_id=42,
+            account_id=1,
+            user_id=7,
+            description="Netto Vesterbro",
+            category_id=3,
+            category_name="Dagligvarer",
+            subcategory_id=31,
+            subcategory_name="Supermarked",
+            previous_category_id=9,
+            previous_subcategory_id=None,
+        )
+
+        restored = TransactionCategoryCorrectedEvent.from_json(event.to_json())
+
+        assert restored.transaction_id == 42
+        assert restored.description == "Netto Vesterbro"
+        assert restored.category_id == 3
+        assert restored.subcategory_id == 31
+        assert restored.previous_category_id == 9
+        assert restored.previous_subcategory_id is None
+        assert restored.correlation_id == event.correlation_id
+
+    def test_event_type_correctness(self) -> None:
+        event = TransactionCategoryCorrectedEvent(transaction_id=1, account_id=1, user_id=1, category_id=2)
+
+        assert event.event_type == "transaction.category_corrected"
+        assert event.event_version == 1
+
+    def test_category_id_is_required(self) -> None:
+        """A correction that clears the category must not be representable —
+        the producer skips clear-to-None instead of emitting a null."""
+        with pytest.raises(ValidationError):
+            TransactionCategoryCorrectedEvent(transaction_id=1, account_id=1, user_id=1)  # type: ignore[call-arg]
+
+    def test_optional_fields_default(self) -> None:
+        event = TransactionCategoryCorrectedEvent(transaction_id=1, account_id=1, user_id=1, category_id=2)
+
+        assert event.description == ""
+        assert event.subcategory_id is None
+        assert event.subcategory_name is None
+        assert event.previous_category_id is None
+
+    def test_immutability(self) -> None:
+        event = TransactionCategoryCorrectedEvent(transaction_id=1, account_id=1, user_id=1, category_id=2)
+
+        with pytest.raises(ValidationError):
+            event.category_id = 999  # type: ignore[misc]
 
 
 class TestBankConnectionCreatedEvent:

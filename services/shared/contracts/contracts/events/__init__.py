@@ -28,6 +28,7 @@ from contracts.events.goal import (
 )
 from contracts.events.transaction import (
     TransactionCategorizedEvent,
+    TransactionCategoryCorrectedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
     TransactionUpdatedEvent,
@@ -51,6 +52,7 @@ __all__ = [
     "SubCategoryDeletedEvent",
     "SubCategoryUpdatedEvent",
     "TransactionCategorizedEvent",
+    "TransactionCategoryCorrectedEvent",
     "TransactionCreatedEvent",
     "TransactionDeletedEvent",
     "TransactionUpdatedEvent",

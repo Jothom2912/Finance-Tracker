@@ -101,6 +101,36 @@ class TransactionCategorizedEvent(BaseEvent):
     model_version: str = ""
 
 
+class TransactionCategoryCorrectedEvent(BaseEvent):
+    """Published by transaction-service when a USER manually corrects a
+    transaction's category (the same edit that pins
+    ``categorization_tier="manual"``).
+
+    Consumed by categorization-service's feedback loop (F1-03), which
+    upserts an auto-managed user rule so the same merchant text is
+    auto-categorized correctly on future imports.  Not emitted when the
+    correction *clears* the category (nothing to learn from None).
+
+    ``description`` is the raw transaction text the correction applies
+    to — the consumer owns normalization.  ``previous_*`` ids let
+    consumers distinguish a re-confirmation from an actual change.
+    """
+
+    event_type: str = "transaction.category_corrected"
+    event_version: int = 1
+
+    transaction_id: int
+    account_id: int
+    user_id: int
+    description: str = ""
+    category_id: int
+    category_name: str = ""
+    subcategory_id: int | None = None
+    subcategory_name: str | None = None
+    previous_category_id: int | None = None
+    previous_subcategory_id: int | None = None
+
+
 class TransactionDeletedEvent(BaseEvent):
     """Published when a financial transaction is removed."""
 

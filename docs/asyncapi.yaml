@@ -275,6 +275,27 @@ channels:
         - service: analytics-service
           queue: analytics.transactions
 
+  transaction.category_corrected:
+    description: >-
+      Published when a user manually corrects a transaction's category
+      (the edit that pins categorization_tier="manual"). Not emitted when
+      the correction clears the category. Feeds the F1-03 learning loop.
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: finans_tracker.events
+          type: topic
+          durable: true
+    publish:
+      summary: transaction-service publishes TransactionCategoryCorrectedEvent.
+      message:
+        $ref: "#/components/messages/TransactionCategoryCorrected"
+      x-producer: transaction-service
+      x-consumers:
+        - service: categorization-service
+          queue: categorization.category_corrected
+
   budget.month_closed:
     description: Published when a budget month is closed.
     bindings:
@@ -601,6 +622,11 @@ components:
       name: TransactionCategorizedEvent
       payload:
         $ref: "#/components/schemas/TransactionCategorizedEvent"
+
+    TransactionCategoryCorrected:
+      name: TransactionCategoryCorrectedEvent
+      payload:
+        $ref: "#/components/schemas/TransactionCategoryCorrectedEvent"
 
     BudgetMonthClosed:
       name: BudgetMonthClosedEvent
@@ -1025,6 +1051,56 @@ components:
             model_version:
               type: string
               example: rules-keyword-v1
+
+    TransactionCategoryCorrectedEvent:
+      allOf:
+        - $ref: "#/components/schemas/BaseEvent"
+        - type: object
+          required:
+            - transaction_id
+            - account_id
+            - user_id
+            - category_id
+          properties:
+            transaction_id:
+              type: integer
+              example: 501
+            account_id:
+              type: integer
+              example: 1
+            user_id:
+              type: integer
+              example: 7
+            description:
+              type: string
+              description: Raw transaction text the correction applies to (consumer owns normalization).
+              example: Netto Vesterbro
+            category_id:
+              type: integer
+              example: 10
+            category_name:
+              type: string
+              example: Dagligvarer
+            subcategory_id:
+              type:
+                - integer
+                - "null"
+              example: 101
+            subcategory_name:
+              type:
+                - string
+                - "null"
+              example: Supermarked
+            previous_category_id:
+              type:
+                - integer
+                - "null"
+              example: 9
+            previous_subcategory_id:
+              type:
+                - integer
+                - "null"
+              example: null
 
     BudgetMonthClosedEvent:
       allOf:
