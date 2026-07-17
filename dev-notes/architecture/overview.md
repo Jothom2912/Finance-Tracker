@@ -27,11 +27,13 @@ Frontend: React/Vite SPA calling **8 services directly** (gateway only for Graph
 
 ## Core patterns (they work — keep them)
 
-- **Transactional outbox**: domain write + `outbox_events` row in one transaction; per-service worker polls with `FOR UPDATE SKIP LOCKED`, publishes to the topic exchange, exponential backoff. At-least-once.
-- **Inbox idempotency**: consumers dedupe via `processed_events` tables (or deterministic `source_key` + unique constraints in goal-service).
-- **CQRS-lite**: REST writes on domain services, GraphQL/REST reads via gateway BFF.
-- **Taxonomy read-copies** (ADR-003): categorization-service owns categories; transaction-service maintains local copies via `category.*`/`subcategory.*` full-state events.
-- **Saga orchestration**: saga-service state machine + command/reply over the topic exchange, compensation on failure, outboxed commands.
+Per-pattern deep-dives with canonical implementations and gotchas live in [../patterns/](../patterns/README.md).
+
+- **[Transactional outbox](../patterns/transactional-outbox.md)**: domain write + `outbox_events` row in one transaction; per-service worker polls with `FOR UPDATE SKIP LOCKED`, publishes to the topic exchange, exponential backoff. At-least-once.
+- **[Inbox idempotency](../patterns/idempotent-consumers.md)**: consumers dedupe via `processed_events` tables (or deterministic `source_key` + unique constraints in goal-service).
+- **[CQRS-lite](../patterns/cqrs-es-read-store.md)**: REST writes on domain services, GraphQL/REST reads via gateway BFF over the ES read-store (ADR-0004).
+- **[Taxonomy read-copies](../patterns/read-copies-and-denormalization.md)** (ADR-003): categorization-service owns categories; transaction-service maintains local copies via `category.*`/`subcategory.*` full-state events.
+- **[Saga orchestration](../patterns/saga-orchestration.md)**: saga-service state machine + command/reply over the topic exchange, compensation on failure, outboxed commands.
 
 ## Data flows (as-built)
 

@@ -13,6 +13,7 @@ Both humans and AI agents read and write here. Agents: follow the `dev-notes` sk
 | Folder | Contents | When to write here |
 |--------|----------|--------------------|
 | `architecture/` | System overview, per-service breakdowns, data flows, event catalog | When the architecture *changes* or understanding deepens |
+| `patterns/` | One file per recurring pattern: what, why, canonical implementation, gotchas | When a pattern is introduced, changes shape, or its gotchas grow |
 | `findings/` | Audit findings: problems, risks, tech debt (severity-tagged) | After any audit/review; mark items `resolved` when fixed |
 | `plans/` | Implementation plans for features/refactors (one file per plan) | Before starting non-trivial work |
 | `backlog/` | Prioritized backlog (`BACKLOG.md`) | When work is identified but not scheduled |

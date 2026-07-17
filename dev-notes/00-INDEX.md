@@ -16,6 +16,19 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [architecture/services/gateway-service.md](architecture/services/gateway-service.md) — read BFF (REST + GraphQL), fan-out reality, stubs, monolith footprint.
 - [architecture/services/frontend.md](architecture/services/frontend.md) — React SPA: TanStack Query (no Redux), 3 API clients, direct service coupling.
 
+## Patterns (living documents)
+- [patterns/README.md](patterns/README.md) — pattern index: table of all patterns with canonical implementations. **Start here for "how do we do X".**
+- [patterns/hexagonal-architecture.md](patterns/hexagonal-architecture.md) — layering, ports/adapters, canonical layout; honest enforcement status (archon only in ai+analytics).
+- [patterns/transactional-outbox.md](patterns/transactional-outbox.md) — atomic write+event, SKIP LOCKED worker mechanics; user-service is the reference.
+- [patterns/idempotent-consumers.md](patterns/idempotent-consumers.md) — inbox dedup, self-healing full-state events, DLQ+retry, consumer anti-patterns.
+- [patterns/saga-orchestration.md](patterns/saga-orchestration.md) — orchestrator + command/reply conventions, compensation, honest-failure rule.
+- [patterns/cqrs-es-read-store.md](patterns/cqrs-es-read-store.md) — ES read-side (ADR-0004), sole-writer rule, hybrid search, trade-offs.
+- [patterns/read-copies-and-denormalization.md](patterns/read-copies-and-denormalization.md) — taxonomy read-copies (ADR-003), denormalized names, cache-not-truth rules.
+- [patterns/categorization-pipeline.md](patterns/categorization-pipeline.md) — tier ladder, rule priority ladder 10/50/100, correction feedback loop.
+- [patterns/csv-parser-registry.md](patterns/csv-parser-registry.md) — BankCSVParser Protocol + registry, danish-format rules, golden files, adding a bank.
+- [patterns/import-dedup.md](patterns/import-dedup.md) — external_id vs fuzzy dedup, three-way rule, accepted gaps (P2-09 digest).
+- [patterns/frontend-data-patterns.md](patterns/frontend-data-patterns.md) — TanStack Query + crudFactory house patterns; which CLAUDE.md bits are aspirational.
+
 ## Findings
 - [findings/2026-07-07-architecture-audit.md](findings/2026-07-07-architecture-audit.md) — full codebase audit: 10 CRITICAL, 27 HIGH, ~45 MEDIUM, ~40 LOW, with file:line evidence.
 - [findings/2026-07-12-goal-migration-004-sqlite.md](findings/2026-07-12-goal-migration-004-sqlite.md) — goal migration 004 is Postgres-only; sqlite migration tests red (LOW, open).
