@@ -21,8 +21,14 @@ def _alembic_config(database_url: str) -> Config:
 
 
 @pytest.fixture()
-def migrated_engine(tmp_path: Path) -> Engine:
+def migrated_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Engine:
     database_url = f"sqlite:///{tmp_path / 'goal_migrations.db'}"
+    # env.py foretrækker DATABASE_URL over alembic-configens sqlalchemy.url
+    # (deploy-pattern); tests/conftest.py sætter den til :memory:, så uden
+    # denne override migrerer alembic en anden database end testens engine.
+    # Async-varianten fordi env.py importerer app.database (async engine);
+    # env.py konverterer selv aiosqlite→sync til alembic-kørslen.
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'goal_migrations.db'}")
     command.upgrade(_alembic_config(database_url), "head")
 
     engine = create_engine(database_url)
@@ -156,8 +162,9 @@ def test_unallocated_budget_surplus_rejects_non_positive_amounts(
             )
 
 
-def test_downgrade_to_002_removes_adr_0003_schema(tmp_path: Path) -> None:
+def test_downgrade_to_002_removes_adr_0003_schema(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     database_url = f"sqlite:///{tmp_path / 'goal_downgrade.db'}"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'goal_downgrade.db'}")
     config = _alembic_config(database_url)
 
     command.upgrade(config, "head")

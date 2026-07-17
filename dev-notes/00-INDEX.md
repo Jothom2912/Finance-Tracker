@@ -31,7 +31,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 
 ## Findings
 - [findings/2026-07-07-architecture-audit.md](findings/2026-07-07-architecture-audit.md) — full codebase audit: 10 CRITICAL, 27 HIGH, ~45 MEDIUM, ~40 LOW, with file:line evidence.
-- [findings/2026-07-12-goal-migration-004-sqlite.md](findings/2026-07-12-goal-migration-004-sqlite.md) — goal migration 004 is Postgres-only; sqlite migration tests red (LOW, open).
+- [findings/2026-07-12-goal-migration-004-sqlite.md](findings/2026-07-12-goal-migration-004-sqlite.md) — goal migration 004 Postgres-only + fixture migrated wrong DB; resolved 2026-07-17 (F1-04 wave 0).
 
 ## Backlog & plans
 - [backlog/BACKLOG.md](backlog/BACKLOG.md) — technical backlog (P1 security/money → P2 systemic → P3 consistency), linked to finding IDs. P1 done 2026-07-07.
@@ -43,6 +43,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [plans/2026-07-11-es-analytics-integration.md](plans/2026-07-11-es-analytics-integration.md) — rebase phase-1-fixes onto master's ES analytics read-side (ADR-0004), bring-up/backfill/dual-read re-verify, + AI-19..21 ES-for-chat proposals.
 - [plans/2026-07-12-ai-service-es-chat.md](plans/2026-07-12-ai-service-es-chat.md) — ai-service onto the ES read-store: AI-01 eval gate → AI-19 structured intents → AI-20 hybrid search replaces ChromaDB → AI-21 slots, + cleanup + chat-UI steps.
 - [plans/2026-07-17-user-rules-and-feedback-loop.md](plans/2026-07-17-user-rules-and-feedback-loop.md) — F1-02+F1-03: rules CRUD/UI + correction feedback loop (learned corrections stored as auto-managed user rules, priority ladder 10/50/100).
+- [plans/2026-07-17-f104-goal-allocation-completion.md](plans/2026-07-17-f104-goal-allocation-completion.md) — F1-04: make the shipped allocation backend reachable — default-goal API, history/unallocated read APIs, close-month button + goals UI.
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue `analytics.embeddings`, partial-update of `description_vector`.
