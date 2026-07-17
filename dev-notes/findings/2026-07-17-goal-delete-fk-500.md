@@ -3,8 +3,8 @@ id: F-2026-07-17-01
 date: 2026-07-17
 severity: LOW
 area: goal-service
-status: open
-resolved-by:
+status: resolved
+resolved-by: P3-16 soft-delete, commit 5cd613e5 (2026-07-17) — see [plans/2026-07-17-p316-goal-soft-delete.md](../plans/2026-07-17-p316-goal-soft-delete.md)
 ---
 
 # Deleting a goal with allocation history returns 500 (FK violation)
