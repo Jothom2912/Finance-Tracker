@@ -8,7 +8,7 @@ from app.application.budget_month_closed_handler import BudgetMonthClosedHandler
 from app.database import Base
 from app.models import GoalAllocationHistoryModel, GoalModel, UnallocatedBudgetSurplusModel
 from contracts.events.budget import BudgetMonthClosedEvent
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -107,6 +107,46 @@ async def test_handler_records_unallocated_when_no_default_goal(
         assert unallocated.account_id == 42
         assert unallocated.amount == Decimal("800.00")
         assert unallocated.reason == "no_default_goal"
+
+
+@pytest.mark.asyncio()
+async def test_handler_records_unallocated_after_default_goal_soft_deleted(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    # P3-16-invariant: et soft-deleted mål må aldrig modtage allokeringer.
+    # Delete via repo'et clearer default-flaget → next close ender unallocated.
+    from app.adapters.outbound.postgres_goal_repository import AsyncPostgresGoalRepository
+
+    async with session_factory() as session:
+        await _insert_goal(session)
+        await AsyncPostgresGoalRepository(session).delete(10)
+        await session.commit()
+
+        result = await BudgetMonthClosedHandler(SQLAlchemyBudgetMonthClosedUnitOfWork(session)).handle(_event())
+
+        assert result.status == "unallocated_no_default_goal"
+
+        goal = await session.get(GoalModel, 10)
+        assert goal is not None
+        assert goal.current_amount == Decimal("1000.00")
+
+
+@pytest.mark.asyncio()
+async def test_handler_ignores_deleted_goal_even_if_default_flag_survives(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    # Defensivt lag: selv hvis flaget skulle overleve (manuel DB-rettelse),
+    # filtrerer get_default_savings_goal på deleted_at.
+    from sqlalchemy import update
+
+    async with session_factory() as session:
+        await _insert_goal(session)
+        await session.execute(update(GoalModel).where(GoalModel.idGoal == 10).values(deleted_at=func.now()))
+        await session.commit()
+
+        result = await BudgetMonthClosedHandler(SQLAlchemyBudgetMonthClosedUnitOfWork(session)).handle(_event())
+
+        assert result.status == "unallocated_no_default_goal"
 
 
 @pytest.mark.asyncio()

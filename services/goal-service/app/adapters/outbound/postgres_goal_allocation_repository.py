@@ -20,10 +20,14 @@ class PostgresGoalSavingsRepository(IGoalSavingsRepository):
         self._db = db
 
     async def get_default_savings_goal(self, account_id: int) -> Goal | None:
+        # deleted_at-filteret er defensivt: delete() clearer flaget atomisk,
+        # men invarianten "allokér aldrig til et slettet mål" skal holde selv
+        # ved manuelle DB-rettelser.
         result = await self._db.execute(
             select(GoalModel).where(
                 GoalModel.Account_idAccount == account_id,
                 GoalModel.is_default_savings_goal.is_(True),
+                GoalModel.deleted_at.is_(None),
             )
         )
         model = result.scalar_one_or_none()

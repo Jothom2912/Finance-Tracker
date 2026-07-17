@@ -162,6 +162,36 @@ def test_unallocated_budget_surplus_rejects_non_positive_amounts(
             )
 
 
+def test_migration_005_adds_deleted_at_and_downgrade_removes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_url = f"sqlite:///{tmp_path / 'goal_005.db'}"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'goal_005.db'}")
+    config = _alembic_config(database_url)
+
+    command.upgrade(config, "head")
+
+    engine = create_engine(database_url)
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("goals")}
+        assert "deleted_at" in columns
+    finally:
+        engine.dispose()
+
+    command.downgrade(config, "004")
+
+    engine = create_engine(database_url)
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns("goals")}
+        assert "deleted_at" not in columns
+        # batch_alter_table genopbygger tabellen på sqlite — det partielle
+        # unique index skal overleve turen.
+        indexes = {index["name"] for index in inspect(engine).get_indexes("goals")}
+        assert "ix_goals_one_default_per_account" in indexes
+    finally:
+        engine.dispose()
+
+
 def test_downgrade_to_002_removes_adr_0003_schema(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     database_url = f"sqlite:///{tmp_path / 'goal_downgrade.db'}"
     monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'goal_downgrade.db'}")

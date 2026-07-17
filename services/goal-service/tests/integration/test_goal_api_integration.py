@@ -84,8 +84,10 @@ async def test_goal_api_round_trip_persists_through_service_and_repository() -> 
             assert missing_response.status_code == 404
 
         async with session_factory() as verify_session:
+            # Soft-delete (P3-16): rækken bevares med deleted_at sat.
             result = await verify_session.execute(select(GoalModel).where(GoalModel.idGoal == goal_id))
-            assert result.scalar_one_or_none() is None
+            model = result.scalar_one()
+            assert model.deleted_at is not None
     finally:
         app.dependency_overrides.clear()
         await session.close()

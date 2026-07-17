@@ -5,7 +5,7 @@ from typing import Optional
 from app.application.ports.outbound import IGoalRepository
 from app.domain.entities import Goal
 from app.models import GoalModel
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -14,12 +14,14 @@ class AsyncPostgresGoalRepository(IGoalRepository):
         self._db = db
 
     async def get_by_id(self, goal_id: int) -> Optional[Goal]:
-        result = await self._db.execute(select(GoalModel).where(GoalModel.idGoal == goal_id))
+        result = await self._db.execute(
+            select(GoalModel).where(GoalModel.idGoal == goal_id, GoalModel.deleted_at.is_(None))
+        )
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
 
     async def get_all(self, account_id: Optional[int] = None) -> list[Goal]:
-        query = select(GoalModel)
+        query = select(GoalModel).where(GoalModel.deleted_at.is_(None))
         if account_id is not None:
             query = query.where(GoalModel.Account_idAccount == account_id)
         result = await self._db.execute(query.order_by(GoalModel.idGoal.desc()))
@@ -40,7 +42,9 @@ class AsyncPostgresGoalRepository(IGoalRepository):
         return self._to_entity(model)
 
     async def update(self, goal: Goal) -> Goal:
-        result = await self._db.execute(select(GoalModel).where(GoalModel.idGoal == goal.id))
+        result = await self._db.execute(
+            select(GoalModel).where(GoalModel.idGoal == goal.id, GoalModel.deleted_at.is_(None))
+        )
         model = result.scalar_one_or_none()
         if model is None:
             raise ValueError(f"Goal with id {goal.id} not found")
@@ -54,13 +58,16 @@ class AsyncPostgresGoalRepository(IGoalRepository):
         return self._to_entity(model)
 
     async def delete(self, goal_id: int) -> bool:
-        result = await self._db.execute(select(GoalModel).where(GoalModel.idGoal == goal_id))
-        model = result.scalar_one_or_none()
-        if model is None:
-            return False
-        await self._db.delete(model)
+        # Soft-delete (P3-16): bevarer goal_allocation_history (audit-trail;
+        # hard-delete gav FK-fejl). Default-flaget cleares i SAMME statement,
+        # så month-close-consumeren aldrig kan allokere til et slettet mål.
+        result = await self._db.execute(
+            update(GoalModel)
+            .where(GoalModel.idGoal == goal_id, GoalModel.deleted_at.is_(None))
+            .values(deleted_at=func.now(), is_default_savings_goal=False)
+        )
         await self._db.flush()
-        return True
+        return result.rowcount == 1
 
     async def set_default_savings_goal(self, goal_id: int, account_id: int) -> None:
         # Clear-then-set i samme transaktion; det partielle unique index
@@ -74,7 +81,9 @@ class AsyncPostgresGoalRepository(IGoalRepository):
             .values(is_default_savings_goal=False)
         )
         await self._db.execute(
-            update(GoalModel).where(GoalModel.idGoal == goal_id).values(is_default_savings_goal=True)
+            update(GoalModel)
+            .where(GoalModel.idGoal == goal_id, GoalModel.deleted_at.is_(None))
+            .values(is_default_savings_goal=True)
         )
         await self._db.flush()
 

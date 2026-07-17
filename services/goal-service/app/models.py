@@ -20,6 +20,9 @@ class GoalModel(Base):
     status: Mapped[str | None] = mapped_column(String(45), nullable=True)
     Account_idAccount: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     is_default_savings_goal: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
+    # Soft-delete (P3-16): rækker med deleted_at bevarer allocation-audit-trailet;
+    # alle read-paths filtrerer på deleted_at IS NULL.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
