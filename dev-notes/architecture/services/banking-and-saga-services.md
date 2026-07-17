@@ -8,7 +8,7 @@ source: architecture audit 2026-07-07
 
 ## banking-service — PSD2 via Enable Banking
 
-Hexagonal-ish: `adapters/inbound/bank_api.py` → `BankingService` → ports → Postgres repos, `AccountServiceAdapter` (HTTP), `EnableBankingClient`. Processes: API, outbox publisher, saga command consumer, account projection consumer.
+Hexagonal-ish: `adapters/inbound/bank_api.py` → `BankingService` → ports → Postgres repos, `AccountServiceAdapter` (HTTP), `EnableBankingClient`. Processes: API, outbox publisher, saga command consumer, account projection consumer, **sync-scheduler** (*F1-05, 2026-07-17*: `app/workers/sync_scheduler.py`, worker-loop pattern — nightly auto-sync når `last_synced_at` er >`SYNC_EVERY_HOURS` (24) gammel, tjekket hvert tick; samme `start_sync_saga` use case som knappen, P3-14-claimet forhindrer races; udløbet consent skippes med reconsent-WARNING = v1-reconsent-fladen).
 
 - Endpoints under `/api/v1/bank`: `available-banks`, `connect` (JWT + ownership check), `callback` (no JWT; single-use `state` consumed via atomic `UPDATE…RETURNING`, TTL 15 min), `connections` list, `connections/{id}/sync` (202 → `saga_id`), `DELETE connections/{id}`.
 - `EnableBankingClient`: **sync** `httpx.Client`; RS256 JWT signed per request with app PEM; paginated `/transactions` via `continuation_key`; startup PEM signing smoke test.

@@ -8,7 +8,7 @@ source: architecture audit 2026-07-07
 
 ## Deployment topology
 
-- **Compose** (802 lines, primary dev runtime): redis, 8× postgres (one per service), rabbitmq, ollama (+ one-shot `ollama-pull`), 10 API services, 16 worker/consumer containers (incl. `budget-month-close-scheduler`, F1-07 — first user of the [worker-loop scheduler pattern](../decisions/2026-07-17-scheduler-pattern-worker-loop.md)). Frontend NOT in compose (`make dev-frontend`).
+- **Compose** (802 lines, primary dev runtime): redis, 8× postgres (one per service), rabbitmq, ollama (+ one-shot `ollama-pull`), 10 API services, 17 worker/consumer containers (incl. the two worker-loop schedulers `budget-month-close-scheduler` (F1-07) + `banking-sync-scheduler` (F1-05) — [pattern decision](../decisions/2026-07-17-scheduler-pattern-worker-loop.md)). Frontend NOT in compose (`make dev-frontend`).
 - **Kubernetes** (`k8s/`, flat Kustomize, no base/overlays): superset of compose — all apps + 19 workers + infra + frontend + KEDA health ScaledJob + HPA (user & transaction only) + in-cluster monitoring. Images `finance-tracker/*:local`, `imagePullPolicy: Never` → local clusters only. `replicas: 1` everywhere.
 - **Monitoring**: dual stacks (compose overlay + `k8s/monitoring/`), black-box only (no app exposes `/metrics`; deliberate per `docs/MONITORING.md`). Only 2 alert rules. Config duplicated between `monitoring/` and `k8s/monitoring/config/`.
 - **CI**: GitHub Actions matrix (ruff + bandit + pytest) for **7 of 10** Python services — categorization, banking, saga missing; bandit neutered with `|| true`; e2e job can pass green with all tests skipped (conftest skips when health endpoints unreachable; the gitignored PEM bind-mount breaks banking-service in CI invisibly).
