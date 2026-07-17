@@ -58,6 +58,15 @@ class CategorizationRuleModel(Base):
     __table_args__ = (
         Index("ix_rules_active_priority", "active", "priority"),
         Index("ix_rules_user", "user_id", postgresql_where=("user_id IS NOT NULL")),
+        Index(
+            "uq_rules_user_pattern",
+            "user_id",
+            "pattern_type",
+            "pattern_value",
+            unique=True,
+            postgresql_where=("user_id IS NOT NULL"),
+            sqlite_where=("user_id IS NOT NULL"),
+        ),
     )
 
 

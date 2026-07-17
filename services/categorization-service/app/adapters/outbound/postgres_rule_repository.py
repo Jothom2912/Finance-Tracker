@@ -32,6 +32,25 @@ class PostgresRuleRepository(IRuleRepository):
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
+    async def find_by_user(self, user_id: int) -> list[CategorizationRule]:
+        stmt = (
+            select(CategorizationRuleModel)
+            .where(CategorizationRuleModel.user_id == user_id)
+            .order_by(
+                CategorizationRuleModel.priority,
+                func.length(CategorizationRuleModel.pattern_value).desc(),
+                CategorizationRuleModel.id,
+            )
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
+    async def find_by_id(self, rule_id: int) -> CategorizationRule | None:
+        stmt = select(CategorizationRuleModel).where(CategorizationRuleModel.id == rule_id)
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return self._to_entity(model) if model else None
+
     async def create(self, rule: CategorizationRule) -> CategorizationRule:
         model = CategorizationRuleModel(
             user_id=rule.user_id,

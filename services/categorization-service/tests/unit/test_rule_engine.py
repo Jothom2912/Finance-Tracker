@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from app.adapters.outbound.rule_engine import RuleEngine
+from app.adapters.outbound.rule_engine import RuleEngine, TieredRuleEngine
 from app.domain.value_objects import CategorizationTier, Confidence
 
 
@@ -105,3 +105,61 @@ class TestDanishNormalization:
         result = engine.match("Køb hos Netto", -75.0)
         assert result is not None
         assert result.subcategory_id == 1
+
+
+class TestTieredRuleEngine:
+    """F1-02: tier order beats keyword length ACROSS tiers; longest-match
+    still applies WITHIN a tier; falls through on no match."""
+
+    def test_user_tier_beats_longer_global_keyword(
+        self,
+        subcategory_lookup: dict[str, tuple[int, int]],
+    ) -> None:
+        # Global has the LONGER keyword — flat longest-match would pick it.
+        user_tier = RuleEngine([("netto", "Restaurant")], subcategory_lookup)
+        global_tier = RuleEngine([("netto vesterbro", "Dagligvarer")], subcategory_lookup)
+        tiered = TieredRuleEngine([user_tier, global_tier])
+
+        result = tiered.match("Netto Vesterbro", -100.0)
+
+        assert result is not None
+        assert result.subcategory_id == 2  # Restaurant — user tier won
+
+    def test_falls_through_to_global_when_user_tier_misses(
+        self,
+        subcategory_lookup: dict[str, tuple[int, int]],
+    ) -> None:
+        user_tier = RuleEngine([("fitness", "Kiosk")], subcategory_lookup)
+        global_tier = RuleEngine([("netto", "Dagligvarer")], subcategory_lookup)
+        tiered = TieredRuleEngine([user_tier, global_tier])
+
+        result = tiered.match("Netto Vesterbro", -100.0)
+
+        assert result is not None
+        assert result.subcategory_id == 1  # Dagligvarer — global fallthrough
+
+    def test_longest_match_preserved_within_a_tier(
+        self,
+        subcategory_lookup: dict[str, tuple[int, int]],
+    ) -> None:
+        user_tier = RuleEngine(
+            [("dsb", "Offentlig transport"), ("dsb 7-eleven", "Kiosk")],
+            subcategory_lookup,
+        )
+        tiered = TieredRuleEngine([user_tier])
+
+        result = tiered.match("DSB 7-Eleven Hovedbanen", -45.0)
+
+        assert result is not None
+        assert result.subcategory_id == 3  # Kiosk — longest match in tier
+
+    def test_no_match_anywhere_returns_none(
+        self,
+        subcategory_lookup: dict[str, tuple[int, int]],
+    ) -> None:
+        tiered = TieredRuleEngine([RuleEngine([("netto", "Dagligvarer")], subcategory_lookup)])
+
+        assert tiered.match("Ukendt butik", -10.0) is None
+
+    def test_empty_engine_list_returns_none(self) -> None:
+        assert TieredRuleEngine([]).match("Netto", -10.0) is None

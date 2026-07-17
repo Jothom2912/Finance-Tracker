@@ -9,8 +9,11 @@ from app.application.dto import (
     CategorizeResponseDTO,
     CategoryResponseDTO,
     CreateCategoryDTO,
+    CreateRuleDTO,
+    RuleResponseDTO,
     SubCategoryResponseDTO,
     UpdateCategoryDTO,
+    UpdateRuleDTO,
 )
 
 
@@ -47,3 +50,19 @@ class ICategoryService(ABC):
 
     @abstractmethod
     async def list_subcategories(self, category_id: int) -> list[SubCategoryResponseDTO]: ...
+
+
+class IRuleService(ABC):
+    """User-scoped CRUD for categorization rules (F1-02)."""
+
+    @abstractmethod
+    async def list_rules(self, user_id: int) -> list[RuleResponseDTO]: ...
+
+    @abstractmethod
+    async def create_rule(self, user_id: int, dto: CreateRuleDTO) -> RuleResponseDTO: ...
+
+    @abstractmethod
+    async def update_rule(self, user_id: int, rule_id: int, dto: UpdateRuleDTO) -> RuleResponseDTO: ...
+
+    @abstractmethod
+    async def delete_rule(self, user_id: int, rule_id: int) -> None: ...

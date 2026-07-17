@@ -8,13 +8,16 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.inbound.categorize_api import categorize_router
 from app.adapters.inbound.category_api import category_router, subcategory_router
+from app.adapters.inbound.rules_api import rules_router
 from app.config import settings
 from app.domain.exceptions import (
     CategoryHasSubcategories,
     CategoryNotFound,
     DuplicateCategoryName,
+    DuplicateRule,
     DuplicateSubCategoryName,
     InvalidCategoryType,
+    RuleNotFound,
     SubCategoryInUse,
     SubCategoryNotFound,
 )
@@ -88,9 +91,20 @@ async def invalid_category_type_handler(_request: Request, exc: InvalidCategoryT
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
+@app.exception_handler(RuleNotFound)
+async def rule_not_found_handler(_request: Request, exc: RuleNotFound) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(DuplicateRule)
+async def duplicate_rule_handler(_request: Request, exc: DuplicateRule) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
 app.include_router(categorize_router)
 app.include_router(category_router)
 app.include_router(subcategory_router)
+app.include_router(rules_router)
 
 
 @app.get("/health")

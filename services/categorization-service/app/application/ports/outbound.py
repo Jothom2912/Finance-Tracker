@@ -88,6 +88,14 @@ class IRuleRepository(ABC):
     async def find_active_rules(self, user_id: int | None = None) -> list[CategorizationRule]: ...
 
     @abstractmethod
+    async def find_by_user(self, user_id: int) -> list[CategorizationRule]:
+        """STRICTLY the user's own rules (never global/seed), all statuses."""
+        ...
+
+    @abstractmethod
+    async def find_by_id(self, rule_id: int) -> Optional[CategorizationRule]: ...
+
+    @abstractmethod
     async def find_by_subcategory_id(self, subcategory_id: int) -> list[CategorizationRule]: ...
 
     @abstractmethod

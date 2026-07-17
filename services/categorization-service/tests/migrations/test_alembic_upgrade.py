@@ -214,3 +214,48 @@ class TestInfrastructureTables:
         with engine.connect() as conn:
             count = conn.execute(text("SELECT COUNT(*) FROM categorization_results")).scalar()
             assert count == 0
+
+
+class TestUserRulesUniqueIndex:
+    """Migration 007 — partial unique index backing user-rule upserts
+    (feedback loop) and duplicate guards (rules API)."""
+
+    def test_index_is_unique_and_partial(self, engine) -> None:
+        with engine.connect() as conn:
+            indexdef = conn.execute(
+                text("SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_rules_user_pattern'")
+            ).scalar()
+            assert indexdef is not None, "uq_rules_user_pattern missing"
+            assert "UNIQUE" in indexdef
+            assert "user_id IS NOT NULL" in indexdef
+
+    def test_duplicate_user_rule_rejected_but_seed_rules_exempt(self, engine) -> None:
+        from sqlalchemy.exc import IntegrityError
+
+        with engine.connect() as conn:
+            sub_id = conn.execute(text("SELECT id FROM subcategories LIMIT 1")).scalar()
+            insert = text(
+                "INSERT INTO categorization_rules "
+                "(user_id, priority, pattern_type, pattern_value, matches_subcategory_id, active, created_at) "
+                "VALUES (:uid, 50, 'keyword', 'uq-test-pattern', :sub, true, now())"
+            )
+            conn.execute(insert, {"uid": 91001, "sub": sub_id})
+            conn.commit()
+            try:
+                with pytest.raises(IntegrityError):
+                    conn.execute(insert, {"uid": 91001, "sub": sub_id})
+                    conn.commit()
+                conn.rollback()
+
+                # NULL user_id is exempt (seeds may repeat patterns)
+                seed_insert = text(
+                    "INSERT INTO categorization_rules "
+                    "(user_id, priority, pattern_type, pattern_value, matches_subcategory_id, active, created_at) "
+                    "VALUES (NULL, 100, 'keyword', 'uq-test-pattern', :sub, true, now())"
+                )
+                conn.execute(seed_insert, {"sub": sub_id})
+                conn.execute(seed_insert, {"sub": sub_id})
+                conn.commit()
+            finally:
+                conn.execute(text("DELETE FROM categorization_rules WHERE pattern_value = 'uq-test-pattern'"))
+                conn.commit()

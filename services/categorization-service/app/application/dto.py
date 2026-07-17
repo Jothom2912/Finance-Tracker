@@ -60,3 +60,41 @@ class SubCategoryResponseDTO(BaseModel):
     name: str
     category_id: int
     is_default: bool = True
+
+
+class CreateRuleDTO(BaseModel):
+    """User-created KEYWORD rule (F1-02). pattern_type is not accepted —
+    the API only authors KEYWORD rules; MERCHANT rules are auto-managed
+    by the feedback loop.
+
+    priority is bounded to [20, 90]: users may not outrank learned
+    corrections (10) or sink below seed rules (100).
+    """
+
+    pattern_value: str = Field(..., min_length=2, max_length=200)
+    subcategory_id: int = Field(..., gt=0)
+    priority: int = Field(default=50, ge=20, le=90)
+    active: bool = True
+
+
+class UpdateRuleDTO(BaseModel):
+    pattern_value: str | None = Field(default=None, min_length=2, max_length=200)
+    subcategory_id: int | None = Field(default=None, gt=0)
+    priority: int | None = Field(default=None, ge=20, le=90)
+    active: bool | None = None
+
+
+class RuleResponseDTO(BaseModel):
+    """Names are denormalized server-side so the rules UI needs no
+    per-row taxonomy lookups."""
+
+    id: int
+    pattern_type: str
+    pattern_value: str
+    subcategory_id: int
+    subcategory_name: str = ""
+    category_id: int | None = None
+    category_name: str = ""
+    priority: int
+    active: bool
+    is_learned: bool = False

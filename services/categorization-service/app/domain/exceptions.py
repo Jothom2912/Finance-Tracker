@@ -53,3 +53,18 @@ class MerchantNotFound(CategorizationException):
     def __init__(self, merchant_id: int):
         self.merchant_id = merchant_id
         super().__init__(f"Merchant with ID {merchant_id} not found")
+
+
+class RuleNotFound(CategorizationException):
+    """Also raised when the rule exists but belongs to another user —
+    ownership must not be leakable through the API."""
+
+    def __init__(self, rule_id: int):
+        self.rule_id = rule_id
+        super().__init__(f"Rule with ID {rule_id} not found")
+
+
+class DuplicateRule(CategorizationException):
+    def __init__(self, pattern_value: str):
+        self.pattern_value = pattern_value
+        super().__init__(f"A rule for '{pattern_value}' already exists")

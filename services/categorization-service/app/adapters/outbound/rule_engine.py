@@ -87,3 +87,24 @@ class RuleEngine:
             return default_subcategory
         positive_name, negative_name = override
         return positive_name if amount > 0 else negative_name
+
+
+class TieredRuleEngine:
+    """Priority-tiered composition of RuleEngines (F1-02).
+
+    Tries each engine in order and returns the first match.  Longest-
+    match applies WITHIN a tier (each RuleEngine's own sorting), while
+    tier order decides ACROSS priorities — so a user's short keyword
+    beats a longer seed keyword, which flat longest-match would not.
+    Satisfies the same IRuleEngine protocol as RuleEngine.
+    """
+
+    def __init__(self, engines: list[RuleEngine]):
+        self._engines = engines
+
+    def match(self, description: str, amount: float) -> Optional[CategorizationResult]:
+        for engine in self._engines:
+            result = engine.match(description, amount)
+            if result is not None:
+                return result
+        return None

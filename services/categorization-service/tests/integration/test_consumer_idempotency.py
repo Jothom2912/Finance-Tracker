@@ -49,7 +49,7 @@ class _StaticRuleEngineProvider:
         self.fallback_subcategory_id = fallback_subcategory_id
         self.fallback_category_id = fallback_category_id
 
-    async def get(self):
+    async def get(self, user_id: int | None = None):
         return self._engine
 
 

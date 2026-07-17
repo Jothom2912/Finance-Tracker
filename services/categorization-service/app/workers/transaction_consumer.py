@@ -111,8 +111,9 @@ class TransactionCreatedConsumer(ConsumerBase):
         description = event_data.get("description", "")
         amount_str = event_data.get("amount", "0")
         amount = float(amount_str)
+        user_id = event_data.get("user_id")
 
-        result = await self._categorize(description, amount)
+        result = await self._categorize(description, amount, user_id)
 
         subcategory_name = ""
         if result.subcategory_id:
@@ -167,10 +168,11 @@ class TransactionCreatedConsumer(ConsumerBase):
             result.confidence.value,
         )
 
-    async def _categorize(self, description: str, amount: float) -> CategorizationResult:
+    async def _categorize(self, description: str, amount: float, user_id: int | None = None) -> CategorizationResult:
         """Run the full pipeline through ``CategorizationService``, built
-        from the shared provider (cached under the hood, TTL-refreshed)."""
-        engine = await self._rule_engine_provider.get()
+        from the shared provider (cached under the hood, TTL-refreshed).
+        With user_id, the user's own rules overlay the global engine."""
+        engine = await self._rule_engine_provider.get(user_id=user_id)
         service = CategorizationService(
             rule_engine=engine,
             fallback_subcategory_id=self._rule_engine_provider.fallback_subcategory_id,
