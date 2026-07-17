@@ -756,6 +756,33 @@ services:
         condition: service_healthy
     volumes: *enable-banking-volumes
 
+  # F1-05: nightly auto-sync — starter en sync-saga per aktiv forbindelse
+  # naar sidste sync er >SYNC_EVERY_HOURS gammel. Foerste tick efter deploy
+  # sweeper ALLE stale forbindelser (sekventielt). Single replica; races
+  # mod manuel sync er ufarlige via P3-14-claimet.
+  banking-sync-scheduler:
+    build:
+      context: .
+      dockerfile: services/banking-service/Dockerfile
+    command: ["python", "-m", "app.workers.sync_scheduler"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      <<: *enable-banking-env
+      ENVIRONMENT: development
+      ACCOUNT_SERVICE_URL: http://account-service:8003
+      SYNC_SCHEDULER_INTERVAL_SECONDS: "3600"
+      SYNC_EVERY_HOURS: "24"
+      SYNC_CONSENT_WARN_DAYS: "7"
+    depends_on:
+      banking-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes: *enable-banking-volumes
+
   gateway-service:
     build:
       context: .

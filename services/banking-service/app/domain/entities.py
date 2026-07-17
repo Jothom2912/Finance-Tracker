@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -27,6 +27,15 @@ class BankConnection:
     sync_saga_id: Optional[str] = None
     sync_started_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+
+    def is_sync_due(self, now: datetime, every_hours: int) -> bool:
+        """True når forbindelsen er moden til scheduled sync (F1-05):
+        aldrig synket, eller sidste sync ældre end ``every_hours``.
+        ``now`` fra injiceret clock; ``last_synced_at`` kan være naiv
+        (UTC wall-clock fra DB) — begge normaliseres."""
+        if self.last_synced_at is None:
+            return True
+        return _as_utc(now) - _as_utc(self.last_synced_at) >= timedelta(hours=every_hours)
 
     def sync_claim_is_stale(self, now: datetime, ttl_seconds: int) -> bool:
         """True if the in-flight sync-claim is older than the TTL backstop.

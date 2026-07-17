@@ -86,6 +86,22 @@ class PostgresBankConnectionRepository:
             .values(last_synced_at=_to_naive_utc(synced_at))
         )
 
+    async def list_active_synced_before(self, cutoff: datetime) -> list[BankConnection]:
+        """Scheduled-sync sweep-kandidater (F1-05): aktive forbindelser der
+        aldrig er synket eller er synket før cutoff. Consent-filtrering sker
+        i workeren via entity'en (særskilt logging)."""
+        naive_cutoff = _to_naive_utc(cutoff)
+        result = await self._session.execute(
+            select(BankConnectionModel).where(
+                BankConnectionModel.status == "active",
+                or_(
+                    BankConnectionModel.last_synced_at.is_(None),
+                    BankConnectionModel.last_synced_at < naive_cutoff,
+                ),
+            )
+        )
+        return [self._to_entity(row) for row in result.scalars().all()]
+
     async def try_claim_sync(
         self,
         connection_id: UUID,

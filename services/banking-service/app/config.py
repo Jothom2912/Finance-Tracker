@@ -33,5 +33,11 @@ class Settings(BaseSettings):
     SAGA_SERVICE_TIMEOUT: float = 2.0
     SYNC_CLAIM_TTL_SECONDS: int = 600
 
+    # F1-05 scheduled bank sync (worker-loop scheduler): sync naar sidste
+    # sync er aeldre end SYNC_EVERY_HOURS, tjekket hvert tick.
+    SYNC_SCHEDULER_INTERVAL_SECONDS: int = 3600
+    SYNC_EVERY_HOURS: int = 24
+    SYNC_CONSENT_WARN_DAYS: int = 7
+
 
 settings = Settings()
