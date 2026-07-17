@@ -29,6 +29,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [plans/2026-07-07-feature-roadmap.md](plans/2026-07-07-feature-roadmap.md) — feature sequencing interleaved with refactor phases + build sketches for the top items.
 - [plans/2026-07-11-es-analytics-integration.md](plans/2026-07-11-es-analytics-integration.md) — rebase phase-1-fixes onto master's ES analytics read-side (ADR-0004), bring-up/backfill/dual-read re-verify, + AI-19..21 ES-for-chat proposals.
 - [plans/2026-07-12-ai-service-es-chat.md](plans/2026-07-12-ai-service-es-chat.md) — ai-service onto the ES read-store: AI-01 eval gate → AI-19 structured intents → AI-20 hybrid search replaces ChromaDB → AI-21 slots, + cleanup + chat-UI steps.
+- [plans/2026-07-17-user-rules-and-feedback-loop.md](plans/2026-07-17-user-rules-and-feedback-loop.md) — F1-02+F1-03: rules CRUD/UI + correction feedback loop (learned corrections stored as auto-managed user rules, priority ladder 10/50/100).
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue `analytics.embeddings`, partial-update of `description_vector`.
