@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ports.outbound import IMonthlyBudgetRepository
@@ -48,6 +48,20 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
         )
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
+
+    async def list_open_before_period(self, year: int, month: int) -> list[MonthlyBudget]:
+        result = await self._session.execute(
+            select(MonthlyBudgetModel)
+            .where(
+                MonthlyBudgetModel.closed_at.is_(None),
+                or_(
+                    MonthlyBudgetModel.year < year,
+                    and_(MonthlyBudgetModel.year == year, MonthlyBudgetModel.month < month),
+                ),
+            )
+            .order_by(MonthlyBudgetModel.year, MonthlyBudgetModel.month, MonthlyBudgetModel.id),
+        )
+        return [self._to_entity(model) for model in result.scalars().all()]
 
     async def create(self, budget: MonthlyBudget) -> MonthlyBudget:
         model = MonthlyBudgetModel(

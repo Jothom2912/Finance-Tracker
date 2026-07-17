@@ -629,6 +629,30 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # F1-07: day-7 auto-close af aabne fortidsmaaneder → surplus→goal-allokering.
+  # OBS ved deploy mod en DB med historik: foerste tick lukker ALLE aabne
+  # fortidsmaaneder (by design). Single replica — se scheduler-pattern-decision.
+  budget-month-close-scheduler:
+    build:
+      context: .
+      dockerfile: services/budget-service/Dockerfile
+    command: ["python", "-m", "app.workers.month_close_scheduler"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET: dev-secret-key-change-in-production
+      CATEGORY_SERVICE_URL: http://categorization-service:8005
+      TRANSACTION_SERVICE_URL: http://transaction-service:8002
+      ENVIRONMENT: development
+      MONTH_CLOSE_INTERVAL_SECONDS: "3600"
+      MONTH_CLOSE_DAY: "7"
+    depends_on:
+      budget-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   postgres-banking:
     image: postgres:16
     environment:

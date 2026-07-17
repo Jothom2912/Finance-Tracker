@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     CATEGORY_SERVICE_URL: str = "http://localhost:8005"
     TRANSACTION_SERVICE_URL: str = "http://localhost:8002"
     REDIS_URL: str = "redis://redis:6379"
+    # F1-07 scheduled month-close (worker-loop scheduler)
+    MONTH_CLOSE_INTERVAL_SECONDS: int = 3600
+    MONTH_CLOSE_DAY: int = 7
 
 
 settings = Settings()

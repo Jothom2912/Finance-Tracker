@@ -60,6 +60,14 @@ class IMonthlyBudgetRepository(ABC):
     async def delete(self, budget_id: int, account_id: int, user_id: int) -> bool: ...
 
     @abstractmethod
+    async def list_open_before_period(self, year: int, month: int) -> list[MonthlyBudget]:
+        """All budgets with closed_at IS NULL and (year, month) strictly before
+        the given period — the scheduled-close sweep candidates (F1-07).
+        Not user-scoped: the scheduler closes each row as its stored user_id.
+        """
+        ...
+
+    @abstractmethod
     async def mark_closed(self, budget_id: int) -> bool:
         """Atomic conditional UPDATE: SET closed_at WHERE closed_at IS NULL.
 
