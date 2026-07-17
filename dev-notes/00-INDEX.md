@@ -44,6 +44,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-14-ai20-hybrid-cutover.md](sessions/2026-07-14-ai20-hybrid-cutover.md) — AI-20 shipped + cut over: transactions_v2 (auto-migration), embedding-consumer, hybrid-endpoint (RRF), EsSearch bag SEARCH_BACKEND=es; ES recall@3 0.971 vs chroma 0.967; ChromaDB-sletning venter på bake.
 - [sessions/2026-07-15-phase2-wave-b-resume.md](sessions/2026-07-15-phase2-wave-b-resume.md) — rate-limit resume: in-flight wave-B (gateway+user) + P2-14 CI committed & verified; pre-existing user-conftest bug fixed; wave-B scoreboard + remaining plan.
 - [sessions/2026-07-16-p209-external-id-currency.md](sessions/2026-07-16-p209-external-id-currency.md) — P2-09 shipped in 4 commits: contracts + tx-service dedup/migration 012 + banking producer; Phase 2 code-complete, only P2-15 left; P3-15 found.
+- [sessions/2026-07-17-loose-ends-p315-chromadb-secondsync.md](sessions/2026-07-17-loose-ends-p315-chromadb-secondsync.md) — P3-15 chunking shipped; ChromaDB deleted (plan step 12); live second-sync dedup PASSED (214/214 skipped); exam done, EB sandbox PEM gotcha.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)

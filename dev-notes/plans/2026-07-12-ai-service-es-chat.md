@@ -189,11 +189,16 @@ Ordered = priority order. Steps 1–3 are independent of each other after step 1
     "el og vand regninger" gik 0.50 → 1.00 på recall@3. Alle floors grønne.
     Compose flippet til `es`. Eval kan køre mod begge backends via
     `SEARCH_BACKEND=es make test-eval-retrieval` (seed-flow: tests/eval/es_seed.py).)*
-12. [ ] Post-cutover deletion: `chromadb_search.py`, `vectorstore.py`,
+12. [x] Post-cutover deletion: `chromadb_search.py`, `vectorstore.py`,
     `ingest_service.py`, `ingest_api.py`, chromadb dependency, `CHROMADB_PATH`, the
     frontend's ingest trigger if any. Resolves AI-06/AI-11/AI-18/P3-04 in one move;
     unblocks F2-04 (search UI) since staleness is gone (event-synced index).
-    *(Venter til es-flaget har baket — rollback er flip til chroma indtil da.)*
+    *(2026-07-17: udført efter 3 dages bake (commit f03a55a4). Også slettet:
+    `transaction_client.py` (kun ingest brugte den) + `TRANSACTION_SERVICE_URL`,
+    `SEARCH_BACKEND`-flaget (ES er eneste backend), compose-volume + k8s-PVC,
+    frontend-ingest-knappen. `get_ollama_client` flyttet til `ollama_client.py`;
+    eval-TransactionDTO flyttet ind i tests/eval/fixtures.py. Rollback herfra =
+    git revert + `backfill_embeddings` (ES-indekset er rebuildbart).)*
 
 ### 4. AI-02 + AI-21 — activate slots + taxonomy resolution (S)
 
