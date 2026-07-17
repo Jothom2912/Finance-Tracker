@@ -41,7 +41,8 @@ Three sibling CRUD services with the heaviest copy-paste duplication in the repo
 ## Key flows
 
 - `user.created` → default account (fast-path skip + partial unique index + swallowed unique-violation = idempotent).
-- `POST /monthly-budgets/close` → surplus → `budget.month_closed` → goal allocation to default savings goal or `unallocated_budget_surplus`. *(F1-04)* Triggeres nu fra BudgetPage-knappen (manual-only; scheduled day-7 = F1-07); `closed_at` eksponeret på `MonthlyBudgetResponse` til "Måned lukket"-badge. E2e-verified live 2026-07-17: close → mål +150 på ~2s + historik-række; uden default-goal → unallocated-række; gen-luk → 409.
+- `POST /monthly-budgets/close` → surplus → `budget.month_closed` → goal allocation to default savings goal or `unallocated_budget_surplus`. *(F1-04)* Triggeres fra BudgetPage-knappen; `closed_at` eksponeret på `MonthlyBudgetResponse` til "Måned lukket"-badge. E2e-verified live 2026-07-17: close → mål +150 på ~2s + historik-række; uden default-goal → unallocated-række; gen-luk → 409.
+- *(F1-07, 2026-07-17)* **Scheduled day-7 close**: `budget-month-close-scheduler` worker-container (samme image, `app/workers/month_close_scheduler.py`) sweeper åbne fortidsmåneder hvert tick (`MONTH_CLOSE_INTERVAL_SECONDS`, default 3600) og lukker de due (dag ≥ `MONTH_CLOSE_DAY`=7 i efterfølgende måned — ren domain-regel i `app/domain/scheduled_close.py`, injiceret clock) via samme `close_month` use case som knappen. Per-budget fejlisolering; races mod knappen er ufarlige (`mark_closed` conditional UPDATE + goal-side source_key-dedup). Pattern: [scheduler-decision](../../decisions/2026-07-17-scheduler-pattern-worker-loop.md); F1-05 genbruger det. E2e-verified live: auto-close af åben fortidsmåned → mål +120; manuelt lukket måned aldrig kandidat; næste tick 0 kandidater.
 
 ## Open problems
 
