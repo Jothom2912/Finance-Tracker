@@ -23,6 +23,7 @@ from datetime import date, timedelta
 import pytest
 from domain.budget_period import (
     budget_period,
+    days_remaining_in_period,
     determine_budget_month,
 )
 
@@ -263,3 +264,36 @@ class TestRoundTrip:
         jan_start, _ = budget_period(2027, 1, 28)
 
         assert jan_start - dec_end == timedelta(days=1)
+
+
+# ──────────────────────────────────────────────────────────────
+# days_remaining_in_period (F2-03: "N dage tilbage")
+# ──────────────────────────────────────────────────────────────
+
+
+class TestDaysRemainingInPeriod:
+    def test_mid_calendar_month(self) -> None:
+        # April 2026 ends on the 30th; from the 18th → 12 days left.
+        assert days_remaining_in_period(2026, 4, date(2026, 4, 18)) == 12
+
+    def test_last_day_returns_zero(self) -> None:
+        assert days_remaining_in_period(2026, 4, date(2026, 4, 30)) == 0
+
+    def test_day_before_end_returns_one(self) -> None:
+        assert days_remaining_in_period(2026, 4, date(2026, 4, 29)) == 1
+
+    def test_today_past_end_floors_at_zero(self) -> None:
+        assert days_remaining_in_period(2026, 4, date(2026, 5, 3)) == 0
+
+    def test_leap_year_february(self) -> None:
+        # 2024 is a leap year → Feb ends on the 29th.
+        assert days_remaining_in_period(2024, 2, date(2024, 2, 20)) == 9
+
+    def test_non_leap_year_february(self) -> None:
+        assert days_remaining_in_period(2025, 2, date(2025, 2, 20)) == 8
+
+    def test_custom_start_day_uses_period_end(self) -> None:
+        # start_day=28 → "April 2026" runs Mar 28 – Apr 27.
+        _, end = budget_period(2026, 4, 28)
+        assert end == date(2026, 4, 27)
+        assert days_remaining_in_period(2026, 4, date(2026, 4, 20), start_day=28) == 7

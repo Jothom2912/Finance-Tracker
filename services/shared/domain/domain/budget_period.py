@@ -44,6 +44,21 @@ def budget_period(year: int, month: int, start_day: int) -> tuple[date, date]:
     return start_date, end_date
 
 
+def days_remaining_in_period(year: int, month: int, today: date, start_day: int = 1) -> int:
+    """
+    Days left in a budget period, counting from ``today`` up to the inclusive
+    period end.
+
+    Convention: ``today`` itself is not counted; the end date is. So on the day
+    before the period ends this returns 1, on the last day it returns 0, and any
+    date at or past the period end returns 0 (never negative).
+
+    ``today`` is injected — no wall-clock reads here (deterministic for tests).
+    """
+    _, end_date = budget_period(year, month, start_day)
+    return max(0, (end_date - today).days)
+
+
 def determine_budget_month(tx_date: date, start_day: int) -> tuple[int, int]:
     """
     Given a transaction date, determine which budget month it belongs to.
