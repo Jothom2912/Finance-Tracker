@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     # F1-07 scheduled month-close (worker-loop scheduler)
     MONTH_CLOSE_INTERVAL_SECONDS: int = 3600
     MONTH_CLOSE_DAY: int = 7
+    # F2-03 mid-month budget alerts (worker-loop scheduler)
+    BUDGET_ALERT_INTERVAL_SECONDS: int = 21600  # 6h — coarse; downstream dedup handles churn
+    BUDGET_ALERT_THRESHOLDS: str = "80,100"  # comma-separated percent thresholds
+
+    @property
+    def budget_alert_thresholds(self) -> list[int]:
+        return [int(part) for part in self.BUDGET_ALERT_THRESHOLDS.split(",") if part.strip()]
 
 
 settings = Settings()
