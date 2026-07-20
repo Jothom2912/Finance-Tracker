@@ -49,6 +49,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [plans/2026-07-17-f107-scheduled-month-close.md](plans/2026-07-17-f107-scheduled-month-close.md) — F1-07: day-7 auto-close worker (domain due-rule, repo sweep-query, scheduler container); new trigger only, close semantics untouched.
 - [plans/2026-07-17-p314-serialize-bank-sync-sagas.md](plans/2026-07-17-p314-serialize-bank-sync-sagas.md) — P3-14: in-flight sync-claim på bank_connections (atomic claim/steal/TTL, status-check ved konflikt); F1-05-prerequisite.
 - [plans/2026-07-17-f105-scheduled-bank-sync.md](plans/2026-07-17-f105-scheduled-bank-sync.md) — F1-05: nightly sync-scheduler (staleness-regel >24h, worker-loop pattern, samme start_sync_saga use case); fuldender ADR-0003-kæden sync→close→goal.
+- [plans/2026-07-20-f101-notification-service-mvp.md](plans/2026-07-20-f101-notification-service-mvp.md) — F1-01: notification-service fra stub → hexagonal consumer (3 triggers: bank.sync.completed, goal-reached, budget.month_closed) + in-app feed (bell/badge); email deferred til IEmailPort+log-adapter; idempotens via deterministisk source_key.
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue `analytics.embeddings`, partial-update of `description_vector`.
