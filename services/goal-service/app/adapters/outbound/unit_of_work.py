@@ -42,6 +42,9 @@ class SQLAlchemyBudgetMonthClosedUnitOfWork(IBudgetMonthClosedUnitOfWork):
         self.goals = PostgresGoalSavingsRepository(session)
         self.allocations = PostgresGoalAllocationRepository(session)
         self.unallocated = PostgresUnallocatedBudgetSurplusRepository(session)
+        # F1-08: emit goal.reached when an allocation completes a goal — same
+        # transaction as the allocation so the event is atomic with the money.
+        self.outbox = OutboxRepository(session, OutboxEventModel)
 
     async def __aenter__(self) -> Self:
         return self

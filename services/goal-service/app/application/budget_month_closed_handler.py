@@ -7,6 +7,7 @@ from typing import Literal
 from app.application.ports.outbound import IBudgetMonthClosedUnitOfWork
 from app.domain.entities import Goal
 from contracts.events.budget import BudgetMonthClosedEvent
+from contracts.events.goal import GoalReachedEvent
 
 BudgetMonthClosedHandlingStatus = Literal[
     "ignored_zero_surplus",
@@ -97,6 +98,27 @@ class BudgetMonthClosedHandler:
                 goal_id=self._require_goal_id(goal),
                 amount=amount,
             )
+
+            # F1-08: if this allocation brought the goal to/over its target,
+            # announce it so notification-service can tell the user. Emitted in
+            # the same transaction as the allocation (atomic). Carries
+            # account_id, not user_id, so the money path stays decoupled from
+            # account-service (the consumer resolves the owner).
+            target = Decimal(str(goal.target_amount))
+            new_current = Decimal(str(goal.current_amount)) + amount
+            if target > 0 and new_current >= target:
+                await self._uow.outbox.add(
+                    event=GoalReachedEvent(
+                        goal_id=self._require_goal_id(goal),
+                        account_id=event.account_id,
+                        name=goal.name,
+                        target_amount=str(target),
+                        current_amount=str(new_current),
+                    ),
+                    aggregate_type="goal",
+                    aggregate_id=str(self._require_goal_id(goal)),
+                )
+
             await self._uow.commit()
 
             return BudgetMonthClosedHandlingResult(

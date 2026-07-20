@@ -125,6 +125,7 @@ class IBudgetMonthClosedUnitOfWork(ABC):
     goals: IGoalSavingsRepository
     allocations: IGoalAllocationRepository
     unallocated: IUnallocatedBudgetSurplusRepository
+    outbox: IOutboxRepository
 
     @abstractmethod
     async def __aenter__(self) -> Self: ...

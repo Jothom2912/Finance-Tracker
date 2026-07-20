@@ -112,6 +112,14 @@ class FakeUnallocatedBudgetSurplusRepository:
         )
 
 
+class FakeOutboxRepository:
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
+    async def add(self, *, event: object, aggregate_type: str, aggregate_id: str) -> None:
+        self.events.append(event)
+
+
 class FakeBudgetMonthClosedUnitOfWork:
     def __init__(self, goals: list[Goal] | None = None) -> None:
         self.committed = _CommittedState(
@@ -124,6 +132,7 @@ class FakeBudgetMonthClosedUnitOfWork:
         self.goals = FakeGoalSavingsRepository(self)
         self.allocations = FakeGoalAllocationRepository(self)
         self.unallocated = FakeUnallocatedBudgetSurplusRepository(self)
+        self.outbox = FakeOutboxRepository()
 
     async def __aenter__(self) -> FakeBudgetMonthClosedUnitOfWork:
         self.staged = deepcopy(self.committed)
@@ -260,3 +269,33 @@ async def test_insert_and_update_are_rolled_back_together_when_update_fails() ->
 
     assert uow.committed.allocations == {}
     assert uow.committed.goals[10].current_amount == Decimal("1000.00")
+
+
+@pytest.mark.asyncio()
+async def test_allocation_completing_goal_emits_goal_reached() -> None:
+    # target 5000, current 4500, surplus 800 → new_current 5300 ≥ target ⇒ reached
+    from contracts.events.goal import GoalReachedEvent
+
+    uow = FakeBudgetMonthClosedUnitOfWork(
+        goals=[_goal(target_amount=Decimal("5000.00"), current_amount=Decimal("4500.00"))]
+    )
+    result = await BudgetMonthClosedHandler(uow).handle(_event(surplus_amount="800.00"))
+
+    assert result.status == "allocated"
+    assert len(uow.outbox.events) == 1
+    ev = uow.outbox.events[0]
+    assert isinstance(ev, GoalReachedEvent)
+    assert ev.goal_id == 10
+    assert ev.account_id == 42
+    assert ev.target_amount == "5000.00"
+    assert ev.current_amount == "5300.00"
+
+
+@pytest.mark.asyncio()
+async def test_partial_allocation_below_target_emits_nothing() -> None:
+    # target 5000, current 1000, surplus 800 → new_current 1800 < target ⇒ no event
+    uow = FakeBudgetMonthClosedUnitOfWork(goals=[_goal()])
+    result = await BudgetMonthClosedHandler(uow).handle(_event(surplus_amount="800.00"))
+
+    assert result.status == "allocated"
+    assert uow.outbox.events == []
