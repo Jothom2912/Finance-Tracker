@@ -34,9 +34,7 @@ def upgrade() -> None:
         # Inline (not a separate ALTER) so the migration runs on SQLite too.
         sa.UniqueConstraint("source_key", name="uq_notifications_source_key"),
     )
-    op.create_index(
-        "ix_notifications_user_created", "notifications", ["user_id", "created_at"]
-    )
+    op.create_index("ix_notifications_user_created", "notifications", ["user_id", "created_at"])
 
 
 def downgrade() -> None:

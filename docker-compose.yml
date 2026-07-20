@@ -988,6 +988,70 @@ services:
       saga-service:
         condition: service_healthy
 
+  # === Notification service (F1-01) ===
+
+  postgres-notifications:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: notification_service
+      POSTGRES_PASSWORD: notification_service_pass
+      POSTGRES_DB: notifications
+    ports:
+      - "5439:5432"
+    volumes:
+      - postgres_notifications_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notification_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8008:8008"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8008/health', timeout=3).status==200 else 1)"]
+      <<: *api-healthcheck-defaults
+    environment:
+      DATABASE_URL: postgresql+asyncpg://notification_service:notification_service_pass@postgres-notifications:5432/notifications
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ACCOUNT_SERVICE_URL: http://account-service:8003
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      JWT_SECRET: dev-secret-key-change-in-production
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+      ENVIRONMENT: development
+    depends_on:
+      postgres-notifications:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  notification-consumer:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    command: ["python", "-m", "app.workers.notification_consumer"]
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+asyncpg://notification_service:notification_service_pass@postgres-notifications:5432/notifications
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ACCOUNT_SERVICE_URL: http://account-service:8003
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      JWT_SECRET: dev-secret-key-change-in-production
+      ENVIRONMENT: development
+    depends_on:
+      notification-service:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   # mysql_data: preserved but unused — delete with: docker volume rm finance-tracker_mysql_data
   postgres_data:
@@ -1000,4 +1064,5 @@ volumes:
   ollama_models:
   postgres_banking_data:
   postgres_saga_data:
+  postgres_notifications_data:
   es_data:

@@ -13,6 +13,7 @@ AI_SERVICE_DIR = services/ai-service
 BANKING_SERVICE_DIR = services/banking-service
 SAGA_SERVICE_DIR = services/saga-service
 ANALYTICS_SERVICE_DIR = services/analytics-service
+NOTIFICATION_SERVICE_DIR = services/notification-service
 FRONTEND_DIR = services/frontend
 
 # All Python services with a Makefile — keep in sync with the CI matrix
@@ -28,7 +29,8 @@ PY_SERVICE_DIRS = \
 	$(AI_SERVICE_DIR) \
 	$(BANKING_SERVICE_DIR) \
 	$(SAGA_SERVICE_DIR) \
-	$(ANALYTICS_SERVICE_DIR)
+	$(ANALYTICS_SERVICE_DIR) \
+	$(NOTIFICATION_SERVICE_DIR)
 
 help: ## Show available targets
 	@printf '\nAvailable targets:\n\n'

@@ -27,6 +27,7 @@ jobs:
           - banking-service
           - saga-service
           - analytics-service
+          - notification-service
 
     defaults:
       run:
