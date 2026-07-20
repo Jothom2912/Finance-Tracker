@@ -154,14 +154,14 @@ Grounding facts verified in code (2026-07-20):
 12. [x] Bell component (`components/NotificationBell/`) wired into `Navigation.jsx`: icon + unread badge, dropdown list
     (relative time, read/unread style), "markér alle læst", click → mark-read. Empty state.
 
-### F. Infra & wiring
-13. [ ] `docker-compose.yml`: `postgres-notifications` (new volume + port e.g. 5439),
+### F. Infra & wiring  ✅ done 2026-07-20
+13. [x] `docker-compose.yml`: `postgres-notifications` (new volume + port e.g. 5439),
     `notification-service` (API, 8008, healthcheck, migrations on boot per repo convention),
     `notification-consumer` (`command` worker). Env: DATABASE_URL, RABBITMQ_URL, JWT_SECRET,
     ACCOUNT_SERVICE_URL, INTERNAL_API_KEY, CORS_ORIGINS. `depends_on` postgres+rabbitmq
     (+account-service for the consumer). Compare env.py/config/Dockerfile against
     account-service/goal-service (CLAUDE.md extraction gotcha) before first up.
-14. [ ] CI (P2-14 pattern): add `notification-service` to the test matrix; add its dir to
+14. [x] CI (P2-14 pattern): add `notification-service` to the test matrix; add its dir to
     root `Makefile` `PY_SERVICE_DIRS`.
 
 ### G. Verification
