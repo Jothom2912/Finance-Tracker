@@ -997,7 +997,7 @@ services:
       POSTGRES_PASSWORD: notification_service_pass
       POSTGRES_DB: notifications
     ports:
-      - "5439:5432"
+      - "5441:5432"
     volumes:
       - postgres_notifications_data:/var/lib/postgresql/data
     healthcheck:
