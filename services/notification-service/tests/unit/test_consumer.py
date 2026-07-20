@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import pytest
 from app.application.service import NotificationService
-from app.workers.notification_consumer import NotificationConsumer
+from app.workers.notification_consumer import ROUTING_KEYS, NotificationConsumer
 from contracts.events.bank import BankSyncCompletedEvent
+from contracts.events.budget import BudgetLineThresholdCrossedEvent
 from contracts.events.goal import GoalReachedEvent, GoalUpdatedEvent
 from messaging import PoisonMessageError
 
@@ -51,6 +52,29 @@ async def test_dispatch_routes_goal_reached() -> None:
     result = await _consumer()._dispatch(_service(), "goal.reached", payload, "cid")
     assert result.status == "created"
     assert result.source_key == "goal.reached:9"
+
+
+async def test_dispatch_routes_budget_threshold() -> None:
+    payload = BudgetLineThresholdCrossedEvent(
+        account_id=5,
+        year=2026,
+        month=6,
+        category_id=3,
+        category_name="Dagligvarer",
+        budgeted_amount="1000.00",
+        spent_amount="850.00",
+        percentage_used=85,
+        threshold=80,
+        days_remaining=12,
+    ).model_dump(mode="json")
+
+    result = await _consumer()._dispatch(_service(), "budget.line_threshold_crossed", payload, "cid")
+    assert result.status == "created"
+    assert result.source_key == "budget.line_threshold_crossed:5:2026:6:3:80"
+
+
+def test_budget_threshold_routing_key_is_bound() -> None:
+    assert "budget.line_threshold_crossed" in ROUTING_KEYS
 
 
 async def test_unexpected_event_type_is_poison() -> None:

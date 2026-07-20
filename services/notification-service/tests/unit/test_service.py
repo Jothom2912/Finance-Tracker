@@ -4,7 +4,10 @@ import pytest
 from app.application.service import NotificationService
 from app.domain.exceptions import AccountNotFound, AccountOwnerUnavailable
 from contracts.events.bank import BankSyncCompletedEvent
-from contracts.events.budget import BudgetMonthClosedEvent
+from contracts.events.budget import (
+    BudgetLineThresholdCrossedEvent,
+    BudgetMonthClosedEvent,
+)
 from contracts.events.goal import GoalReachedEvent, GoalUpdatedEvent
 
 from tests._fakes import FakeAccountOwner, FakeEmail, FakeUoW
@@ -165,6 +168,77 @@ async def test_month_closed_propagates_when_account_service_unavailable() -> Non
     owner = FakeAccountOwner(exc=AccountOwnerUnavailable())
     with pytest.raises(AccountOwnerUnavailable):
         await _service(uow, email, owner).handle_budget_month_closed(_month_event())
+    assert uow.notifications.rows == []
+
+
+def _threshold_event(threshold: int = 80, category_id: int = 3) -> BudgetLineThresholdCrossedEvent:
+    return BudgetLineThresholdCrossedEvent(
+        account_id=5,
+        year=2026,
+        month=6,
+        category_id=category_id,
+        category_name="Dagligvarer",
+        budgeted_amount="1000.00",
+        spent_amount="850.00",
+        percentage_used=85,
+        threshold=threshold,
+        days_remaining=12,
+    )
+
+
+async def test_budget_threshold_resolves_owner_and_creates() -> None:
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=99)
+    result = await _service(uow, email, owner).handle_budget_line_threshold_crossed(
+        _threshold_event()
+    )
+
+    assert result.status == "created"
+    assert result.source_key == "budget.line_threshold_crossed:5:2026:6:3:80"
+    assert uow.notifications.rows[0].user_id == 99
+    assert email.sent == [(99, "Budget-advarsel")]
+
+
+async def test_budget_threshold_80_and_100_are_distinct_notifications() -> None:
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=99)
+    service = _service(uow, email, owner)
+
+    first = await service.handle_budget_line_threshold_crossed(_threshold_event(threshold=80))
+    second = await service.handle_budget_line_threshold_crossed(_threshold_event(threshold=100))
+
+    assert first.status == "created"
+    assert second.status == "created"
+    assert len(uow.notifications.rows) == 2
+
+
+async def test_budget_threshold_redelivery_is_deduplicated() -> None:
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=99)
+    service = _service(uow, email, owner)
+
+    first = await service.handle_budget_line_threshold_crossed(_threshold_event(threshold=80))
+    second = await service.handle_budget_line_threshold_crossed(_threshold_event(threshold=80))
+
+    assert first.status == "created"
+    assert second.status == "duplicate"
+    assert len(uow.notifications.rows) == 1
+    assert len(email.sent) == 1
+
+
+async def test_budget_threshold_dropped_when_account_missing() -> None:
+    uow, email = FakeUoW(), FakeEmail()
+    owner = FakeAccountOwner(exc=AccountNotFound(5))
+    result = await _service(uow, email, owner).handle_budget_line_threshold_crossed(
+        _threshold_event()
+    )
+
+    assert result.status == "account_not_found"
+    assert uow.notifications.rows == []
+
+
+async def test_budget_threshold_propagates_when_account_service_unavailable() -> None:
+    uow, email = FakeUoW(), FakeEmail()
+    owner = FakeAccountOwner(exc=AccountOwnerUnavailable())
+    with pytest.raises(AccountOwnerUnavailable):
+        await _service(uow, email, owner).handle_budget_line_threshold_crossed(_threshold_event())
     assert uow.notifications.rows == []
 
 

@@ -17,6 +17,7 @@ class NotificationType(str, enum.Enum):
     BANK_SYNC_COMPLETED = "bank_sync_completed"
     GOAL_REACHED = "goal_reached"
     BUDGET_MONTH_CLOSED = "budget_month_closed"
+    BUDGET_THRESHOLD_CROSSED = "budget_threshold_crossed"
 
 
 @dataclass(frozen=True)

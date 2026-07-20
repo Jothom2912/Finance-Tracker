@@ -22,7 +22,10 @@ from typing import Any
 
 from aio_pika.abc import AbstractIncomingMessage
 from contracts.events.bank import BankSyncCompletedEvent
-from contracts.events.budget import BudgetMonthClosedEvent
+from contracts.events.budget import (
+    BudgetLineThresholdCrossedEvent,
+    BudgetMonthClosedEvent,
+)
 from contracts.events.goal import GoalReachedEvent, GoalUpdatedEvent
 from messaging import ConsumerBase, PoisonMessageError, setup_worker_logging
 from sqlalchemy.exc import IntegrityError
@@ -37,7 +40,13 @@ from app.database import async_session_factory
 logger = logging.getLogger(__name__)
 
 QUEUE_NAME = "notification_service.events"
-ROUTING_KEYS = ("bank.sync.completed", "goal.updated", "goal.reached", "budget.month_closed")
+ROUTING_KEYS = (
+    "bank.sync.completed",
+    "goal.updated",
+    "goal.reached",
+    "budget.month_closed",
+    "budget.line_threshold_crossed",
+)
 
 
 class NotificationConsumer(ConsumerBase):
@@ -98,8 +107,12 @@ class NotificationConsumer(ConsumerBase):
             return await service.handle_budget_month_closed(
                 self._parse(BudgetMonthClosedEvent, payload, correlation_id)
             )
-        # The queue is only bound to the three keys above, so anything else is
-        # a routing/config bug, not a transient failure — send it to the DLQ.
+        if event_type == "budget.line_threshold_crossed":
+            return await service.handle_budget_line_threshold_crossed(
+                self._parse(BudgetLineThresholdCrossedEvent, payload, correlation_id)
+            )
+        # The queue is only bound to the keys above, so anything else is a
+        # routing/config bug, not a transient failure — send it to the DLQ.
         raise PoisonMessageError(f"unexpected event_type {event_type!r}")
 
     @staticmethod

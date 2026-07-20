@@ -50,6 +50,14 @@ def _transaction_word(count: int) -> str:
     return "transaktion" if count == 1 else "transaktioner"
 
 
+def _days_left_phrase(days_remaining: int) -> str:
+    if days_remaining <= 0:
+        return "ingen dage tilbage"
+    if days_remaining == 1:
+        return "1 dag tilbage"
+    return f"{days_remaining} dage tilbage"
+
+
 def build_bank_sync_completed(*, new_imported: int, errors: int) -> NotificationContent:
     if new_imported == 0:
         body = "Din bank er synkroniseret – ingen nye transaktioner."
@@ -73,6 +81,26 @@ def build_goal_reached(*, goal_name: str | None, target_amount: Decimal) -> Noti
     return NotificationContent(
         type=NotificationType.GOAL_REACHED,
         title="Mål nået! 🎉",
+        body=body,
+    )
+
+
+def build_budget_line_threshold_crossed(
+    *,
+    category_name: str,
+    percentage_used: int,
+    threshold: int,
+    days_remaining: int,
+) -> NotificationContent:
+    # threshold >= 100 means the line is spent up/over; below that it's a heads-up.
+    title = "Budget overskredet" if threshold >= 100 else "Budget-advarsel"
+    body = (
+        f"{percentage_used}% af {category_name} brugt, "
+        f"{_days_left_phrase(days_remaining)}."
+    )
+    return NotificationContent(
+        type=NotificationType.BUDGET_THRESHOLD_CROSSED,
+        title=title,
         body=body,
     )
 

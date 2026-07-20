@@ -6,6 +6,7 @@ import pytest
 from app.domain.entities import NotificationType
 from app.domain.messages import (
     build_bank_sync_completed,
+    build_budget_line_threshold_crossed,
     build_budget_month_closed,
     build_goal_reached,
     format_amount,
@@ -68,3 +69,34 @@ def test_budget_month_closed_zero_surplus() -> None:
     c = build_budget_month_closed(year=2026, month=12, surplus_amount=Decimal("0"))
     assert "december 2026" in c.body
     assert "intet overskud" in c.body
+
+
+def test_budget_threshold_80_is_a_warning() -> None:
+    c = build_budget_line_threshold_crossed(
+        category_name="Dagligvarer", percentage_used=85, threshold=80, days_remaining=12
+    )
+    assert c.type is NotificationType.BUDGET_THRESHOLD_CROSSED
+    assert c.title == "Budget-advarsel"
+    assert c.body == "85% af Dagligvarer brugt, 12 dage tilbage."
+
+
+def test_budget_threshold_100_is_overspend() -> None:
+    c = build_budget_line_threshold_crossed(
+        category_name="Transport", percentage_used=120, threshold=100, days_remaining=3
+    )
+    assert c.title == "Budget overskredet"
+    assert c.body == "120% af Transport brugt, 3 dage tilbage."
+
+
+def test_budget_threshold_singular_day() -> None:
+    c = build_budget_line_threshold_crossed(
+        category_name="Mad", percentage_used=80, threshold=80, days_remaining=1
+    )
+    assert "1 dag tilbage" in c.body
+
+
+def test_budget_threshold_zero_days() -> None:
+    c = build_budget_line_threshold_crossed(
+        category_name="Mad", percentage_used=80, threshold=80, days_remaining=0
+    )
+    assert "ingen dage tilbage" in c.body

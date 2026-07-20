@@ -17,7 +17,10 @@ from decimal import Decimal
 from uuid import UUID
 
 from contracts.events.bank import BankSyncCompletedEvent
-from contracts.events.budget import BudgetMonthClosedEvent
+from contracts.events.budget import (
+    BudgetLineThresholdCrossedEvent,
+    BudgetMonthClosedEvent,
+)
 from contracts.events.goal import GoalReachedEvent, GoalUpdatedEvent
 
 from app.application.ports.outbound import IAccountOwnerPort, IEmailPort, IUnitOfWork
@@ -25,6 +28,7 @@ from app.domain.entities import Notification, NotificationContent
 from app.domain.exceptions import AccountNotFound
 from app.domain.messages import (
     build_bank_sync_completed,
+    build_budget_line_threshold_crossed,
     build_budget_month_closed,
     build_goal_reached,
 )
@@ -95,6 +99,28 @@ class NotificationService:
             # AccountOwnerUnavailable is NOT caught here: it propagates so the
             # consumer retries/DLQs instead of silently losing the notification.
             logger.warning("month_closed: account %s not found — dropping", event.account_id)
+            return HandleResult(status="account_not_found", source_key=event.source_key)
+        return await self._create(user_id=user_id, content=content, source_key=event.source_key)
+
+    async def handle_budget_line_threshold_crossed(
+        self, event: BudgetLineThresholdCrossedEvent
+    ) -> HandleResult:
+        # Account-scoped (like month_closed): resolve the owner here. The event's
+        # source_key includes the threshold, so 80%/100% are distinct rows and
+        # each fires once per line/period regardless of how often the stateless
+        # scheduler re-emits.
+        content = build_budget_line_threshold_crossed(
+            category_name=event.category_name,
+            percentage_used=event.percentage_used,
+            threshold=event.threshold,
+            days_remaining=event.days_remaining,
+        )
+        try:
+            user_id = await self._account_owner.get_owner_user_id(event.account_id)
+        except AccountNotFound:
+            logger.warning(
+                "budget threshold: account %s not found — dropping", event.account_id
+            )
             return HandleResult(status="account_not_found", source_key=event.source_key)
         return await self._create(user_id=user_id, content=content, source_key=event.source_key)
 
