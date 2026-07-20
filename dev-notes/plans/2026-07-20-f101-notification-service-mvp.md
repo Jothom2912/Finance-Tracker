@@ -143,15 +143,15 @@ Grounding facts verified in code (2026-07-20):
      (ownership: `WHERE user_id = <jwt>`), 404 if not owned. CORS + domain-exception→HTTP
      mapping (`execute_with_logging` wrapper per house style).
 
-### E. Frontend feed (additive)
-9. [ ] `src/config/serviceUrls.js` + `.env.example`: add
+### E. Frontend feed (additive)  ✅ done 2026-07-20
+9. [x] `src/config/serviceUrls.js` + `.env.example`: add
    `NOTIFICATION_SERVICE_URL` (`http://localhost:8008/api/v1`).
-10. [ ] `src/api/notifications.jsx`: client (`fetchNotifications`, `fetchUnreadCount`,
+10. [x] `src/api/notifications.jsx`: client (`fetchNotifications`, `fetchUnreadCount`,
     `markRead`, `markAllRead`, `dismiss`) on `apiClient`.
-11. [ ] `src/hooks/useNotificationFeed.jsx` (**distinct name** from the toast
+11. [x] `src/hooks/useNotificationFeed.jsx` (**distinct name** from the toast
     `useNotifications`): TanStack Query list + unread-count with `refetchInterval` ~45s;
     mutations invalidate both keys.
-12. [ ] Bell component in `components/Navigation.jsx`: icon + unread badge, dropdown list
+12. [x] Bell component (`components/NotificationBell/`) wired into `Navigation.jsx`: icon + unread badge, dropdown list
     (relative time, read/unread style), "markér alle læst", click → mark-read. Empty state.
 
 ### F. Infra & wiring
