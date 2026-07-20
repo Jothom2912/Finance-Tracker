@@ -10,11 +10,13 @@ from contracts import (
     BankConnectionCreatedEvent,
     BankConnectionDisconnectedEvent,
     BankSyncCompletedEvent,
+    BudgetLineThresholdCrossedEvent,
     BudgetMonthClosedEvent,
     TransactionCategoryCorrectedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
     UserCreatedEvent,
+    make_budget_line_threshold_crossed_source_key,
     make_budget_month_closed_source_key,
 )
 from pydantic import ValidationError
@@ -201,6 +203,77 @@ class TestBudgetMonthClosedEvent:
                 actual_spent="4200.00",
                 surplus_amount="800.00",
             )
+
+
+class TestBudgetLineThresholdCrossedEvent:
+    def _make(self, **overrides: object) -> BudgetLineThresholdCrossedEvent:
+        kwargs: dict[str, object] = {
+            "account_id": 7,
+            "year": 2026,
+            "month": 4,
+            "category_id": 3,
+            "category_name": "Dagligvarer",
+            "budgeted_amount": "1000.00",
+            "spent_amount": "850.00",
+            "percentage_used": 85,
+            "threshold": 80,
+            "days_remaining": 12,
+        }
+        kwargs.update(overrides)
+        return BudgetLineThresholdCrossedEvent(**kwargs)  # type: ignore[arg-type]
+
+    def test_serialization_roundtrip_preserves_fields(self) -> None:
+        event = self._make()
+
+        restored = BudgetLineThresholdCrossedEvent.from_json(event.to_json())
+
+        assert restored.account_id == 7
+        assert restored.category_id == 3
+        assert restored.category_name == "Dagligvarer"
+        assert restored.budgeted_amount == "1000.00"
+        assert restored.spent_amount == "850.00"
+        assert restored.percentage_used == 85
+        assert restored.threshold == 80
+        assert restored.days_remaining == 12
+        assert restored.correlation_id == event.correlation_id
+
+    def test_event_type_correctness(self) -> None:
+        assert self._make().event_type == "budget.line_threshold_crossed"
+
+    def test_source_key_includes_threshold(self) -> None:
+        event = self._make(threshold=80)
+
+        assert (
+            event.source_key
+            == "budget.line_threshold_crossed:7:2026:4:3:80"
+        )
+        assert (
+            make_budget_line_threshold_crossed_source_key(7, 2026, 4, 3, 80)
+            == event.source_key
+        )
+
+    def test_thresholds_produce_distinct_source_keys(self) -> None:
+        assert self._make(threshold=80).source_key != self._make(
+            threshold=100
+        ).source_key
+
+    def test_immutability(self) -> None:
+        event = self._make()
+        with pytest.raises(ValidationError):
+            event.threshold = 100  # type: ignore[misc]
+
+    def test_negative_amount_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            self._make(spent_amount="-1.00")
+
+    def test_non_decimal_amount_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            self._make(budgeted_amount="a lot")
+
+    @pytest.mark.parametrize("threshold", [0, 101])
+    def test_out_of_range_threshold_raises(self, threshold: int) -> None:
+        with pytest.raises(ValidationError):
+            self._make(threshold=threshold)
 
 
 class TestTransactionCreatedEvent:

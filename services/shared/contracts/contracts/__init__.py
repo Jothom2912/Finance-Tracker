@@ -11,7 +11,9 @@ from contracts.events.bank import (
     BankSyncCompletedEvent,
 )
 from contracts.events.budget import (
+    BudgetLineThresholdCrossedEvent,
     BudgetMonthClosedEvent,
+    make_budget_line_threshold_crossed_source_key,
     make_budget_month_closed_source_key,
 )
 from contracts.events.category import (
@@ -53,6 +55,7 @@ __all__ = [
     "BankConnectionDisconnectedEvent",
     "BankSyncCompletedEvent",
     "BaseEvent",
+    "BudgetLineThresholdCrossedEvent",
     "BudgetMonthClosedEvent",
     "CategoryCreatedEvent",
     "CategoryDeletedEvent",
@@ -77,5 +80,6 @@ __all__ = [
     "SagaCommand",
     "SagaReply",
     "UserCreatedEvent",
+    "make_budget_line_threshold_crossed_source_key",
     "make_budget_month_closed_source_key",
 ]

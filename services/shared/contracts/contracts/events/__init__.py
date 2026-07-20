@@ -10,7 +10,9 @@ from contracts.events.bank import (
     BankSyncCompletedEvent,
 )
 from contracts.events.budget import (
+    BudgetLineThresholdCrossedEvent,
     BudgetMonthClosedEvent,
+    make_budget_line_threshold_crossed_source_key,
     make_budget_month_closed_source_key,
 )
 from contracts.events.category import (
@@ -41,6 +43,7 @@ __all__ = [
     "BankConnectionCreatedEvent",
     "BankConnectionDisconnectedEvent",
     "BankSyncCompletedEvent",
+    "BudgetLineThresholdCrossedEvent",
     "BudgetMonthClosedEvent",
     "CategoryCreatedEvent",
     "CategoryDeletedEvent",
@@ -57,5 +60,6 @@ __all__ = [
     "TransactionDeletedEvent",
     "TransactionUpdatedEvent",
     "UserCreatedEvent",
+    "make_budget_line_threshold_crossed_source_key",
     "make_budget_month_closed_source_key",
 ]
