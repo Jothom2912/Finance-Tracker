@@ -106,14 +106,14 @@ Grounding facts verified in code (2026-07-20):
    with `env.py` reading `DATABASE_URL` (asyncpg→psycopg2 swap — the gotcha from CLAUDE.md)
    and `versions/001_create_notifications.py`. Unique index on `source_key` = idempotency backstop.
 
-### B. Ports & adapters
-4. [ ] `app/application/ports/outbound.py`: `INotificationRepository`
+### B. Ports & adapters  ✅ done 2026-07-20
+4. [x] `app/application/ports/outbound.py`: `INotificationRepository`
    (`add(notification) -> None` raising on dup source_key, `list_for_user(user_id, unread,
    limit, offset)`, `unread_count(user_id)`, `mark_read(id, user_id)`, `mark_all_read(user_id)`,
    `dismiss(id, user_id)`, `source_key_exists(key)`), `IEmailPort` (`send(user_id, title,
    body)`), `IAccountOwnerPort` (`get_owner_user_id(account_id) -> int`). Inbound port =
    application service protocol.
-5. [ ] Adapters: `adapters/outbound/postgres_notification_repository.py` +
+5. [x] Adapters: `adapters/outbound/postgres_notification_repository.py` +
    `unit_of_work.py`; `adapters/outbound/log_email_adapter.py` (no-op that logs at INFO);
    `adapters/outbound/account_adapter.py` (copy goal-service's `get_owner_user_id`);
    domain exceptions (`AccountOwnerUnavailable`) with HTTP mapping in the API layer.
