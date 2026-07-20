@@ -118,15 +118,15 @@ Grounding facts verified in code (2026-07-20):
    `adapters/outbound/account_adapter.py` (copy goal-service's `get_owner_user_id`);
    domain exceptions (`AccountOwnerUnavailable`) with HTTP mapping in the API layer.
 
-### C. Application service + consumer (the event path)
-6. [ ] `app/application/service.py`: `NotificationService` — one `create_from_event`-style
+### C. Application service + consumer (the event path)  ✅ done 2026-07-20
+6. [x] `app/application/service.py`: `NotificationService` — one `create_from_event`-style
    method per trigger, each computing the deterministic `source_key`, resolving user_id
    (direct for bank/goal; via `IAccountOwnerPort` for budget), building the Danish message,
    persisting (idempotent), then best-effort `IEmailPort.send`. `source_key` scheme:
    - bank sync: `bank.sync.completed:{connection_id}:{correlation_id}` (redelivery-stable).
    - goal reached: `goal.reached:{goal_id}` (once per goal, ever).
    - month closed: reuse `event.source_key` (`budget.month_closed:{account_id}:{year}:{month}`).
-7. [ ] `app/workers/notification_consumer.py`: one `ConsumerBase` subclass, queue
+7. [x] `app/workers/notification_consumer.py`: one `ConsumerBase` subclass, queue
    `notification_service.events`, bound to routing keys
    `["bank.sync.completed", "goal.updated", "budget.month_closed"]`; `handle()` parses by
    `event_type`, validates the matching contract model (invalid → `PoisonMessageError`),
