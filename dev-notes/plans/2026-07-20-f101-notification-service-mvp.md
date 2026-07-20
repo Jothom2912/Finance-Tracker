@@ -134,8 +134,8 @@ Grounding facts verified in code (2026-07-20):
    duplicate (unique `source_key` `IntegrityError`) → log INFO + ACK (goal-service pattern).
    `python -m app.workers.notification_consumer` entrypoint.
 
-### D. REST read/write API (inbound)
-8. [ ] `app/adapters/inbound/api.py` + wire into `main.py` under `/api/v1/notifications`,
+### D. REST read/write API (inbound)  ✅ done 2026-07-20
+8. [x] Routes in `main.py` under `/api/v1/notifications`,
    JWT via `finans-tracker-auth` (`user_id` from token, per fase2 decision):
    - `GET /` — list (newest first, `?unread=true`, pagination); excludes dismissed.
    - `GET /unread-count` — `{count}` for the badge.
