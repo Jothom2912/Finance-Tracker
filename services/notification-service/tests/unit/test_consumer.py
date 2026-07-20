@@ -34,13 +34,13 @@ async def test_dispatch_routes_bank_sync() -> None:
     assert result.status == "created"
 
 
-async def test_dispatch_routes_goal_updated_and_filters_status() -> None:
+async def test_dispatch_routes_goal_updated_and_filters_below_target() -> None:
     payload = GoalUpdatedEvent(
         goal_id=1, user_id=7, target_amount="1000", current_amount="10", status="active"
     ).model_dump(mode="json")
 
     result = await _consumer()._dispatch(_service(), "goal.updated", payload, "cid")
-    assert result.status == "ignored_not_completed"
+    assert result.status == "ignored_not_reached"
 
 
 async def test_unexpected_event_type_is_poison() -> None:

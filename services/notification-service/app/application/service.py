@@ -31,14 +31,10 @@ from app.domain.messages import (
 
 logger = logging.getLogger(__name__)
 
-# goal-service's GoalStatus.COMPLETED value — kept as a local literal rather
-# than importing across the service boundary.
-GOAL_STATUS_COMPLETED = "completed"
-
 
 @dataclass(frozen=True)
 class HandleResult:
-    status: str  # created | duplicate | ignored_not_completed | account_not_found
+    status: str  # created | duplicate | ignored_not_reached | account_not_found
     source_key: str | None = None
     notification_id: UUID | None = None
 
@@ -62,9 +58,14 @@ class NotificationService:
         return await self._create(user_id=event.user_id, content=content, source_key=source_key)
 
     async def handle_goal_updated(self, event: GoalUpdatedEvent) -> HandleResult:
-        if event.status != GOAL_STATUS_COMPLETED:
-            return HandleResult(status="ignored_not_completed")
-        content = build_goal_reached(goal_name=event.name, target_amount=Decimal(event.target_amount))
+        # goal.updated carries the *stored* status (active/paused), never
+        # "completed" — completion is a computed property of amounts. So detect
+        # "reached" from the amounts, matching goal-service's effective_status.
+        target = Decimal(event.target_amount)
+        current = Decimal(event.current_amount)
+        if target <= 0 or current < target:
+            return HandleResult(status="ignored_not_reached")
+        content = build_goal_reached(goal_name=event.name, target_amount=target)
         # once per goal, ever
         source_key = f"goal.reached:{event.goal_id}"
         return await self._create(user_id=event.user_id, content=content, source_key=source_key)

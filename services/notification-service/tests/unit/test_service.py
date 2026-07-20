@@ -52,31 +52,40 @@ async def test_redelivery_of_same_event_is_deduplicated() -> None:
     assert len(email.sent) == 1  # no second email
 
 
-async def test_goal_updated_ignored_when_not_completed() -> None:
+async def test_goal_updated_ignored_when_below_target() -> None:
     uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+    # stored status is active even for a goal near completion — must not matter
     event = GoalUpdatedEvent(goal_id=1, user_id=7, target_amount="1000", current_amount="500", status="active")
     result = await _service(uow, email, owner).handle_goal_updated(event)
 
-    assert result.status == "ignored_not_completed"
+    assert result.status == "ignored_not_reached"
     assert uow.notifications.rows == []
     assert email.sent == []
+
+
+async def test_goal_updated_ignored_when_target_is_zero() -> None:
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+    event = GoalUpdatedEvent(goal_id=1, user_id=7, target_amount="0", current_amount="0", status="active")
+    result = await _service(uow, email, owner).handle_goal_updated(event)
+    assert result.status == "ignored_not_reached"
 
 
 async def test_goal_reached_creates_once_per_goal() -> None:
     uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
     service = _service(uow, email, owner)
-    completed = GoalUpdatedEvent(
+    # current >= target ⇒ reached, regardless of the stored status string
+    reached = GoalUpdatedEvent(
         goal_id=42,
         user_id=7,
         target_amount="1000",
         current_amount="1000",
-        status="completed",
+        status="active",
         name="Ferie",
     )
 
-    first = await service.handle_goal_updated(completed)
-    # a later goal.updated (still completed) must not notify again
-    second = await service.handle_goal_updated(completed)
+    first = await service.handle_goal_updated(reached)
+    # a later goal.updated (still at/over target) must not notify again
+    second = await service.handle_goal_updated(reached)
 
     assert first.status == "created"
     assert first.source_key == "goal.reached:42"
