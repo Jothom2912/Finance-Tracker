@@ -27,6 +27,9 @@ const GOAL_SERVICE_URL =
 const BANKING_SERVICE_URL =
   import.meta.env.VITE_BANKING_SERVICE_URL || 'http://localhost:8009/api/v1';
 
+const NOTIFICATION_SERVICE_URL =
+  import.meta.env.VITE_NOTIFICATION_SERVICE_URL || 'http://localhost:8008/api/v1';
+
 export {
   GATEWAY_SERVICE_URL,
   USER_SERVICE_URL,
@@ -37,4 +40,5 @@ export {
   ACCOUNT_SERVICE_URL,
   GOAL_SERVICE_URL,
   BANKING_SERVICE_URL,
+  NOTIFICATION_SERVICE_URL,
 };

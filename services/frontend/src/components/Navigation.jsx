@@ -2,6 +2,7 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell/NotificationBell';
 import '../styles/Navigation.css';
 
 function Navigation() {
@@ -34,6 +35,7 @@ function Navigation() {
         </ul>
 
         <div className="navbar-user">
+          <NotificationBell />
           <span className="user-info">
             Logget ind som: <strong>{user?.username}</strong>
           </span>
