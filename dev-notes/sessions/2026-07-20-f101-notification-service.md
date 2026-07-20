@@ -48,8 +48,26 @@ Built stub → full hexagonal service in 7 waves (A–G), commit-per-phase (~12 
   constraint **inline** in `create_table`. And alembic.ini logger sections need `qualname`.
 - `uuid7` isn't monotonic within one ms (random bits) → feed orders by `created_at` first.
 
+## F1-08 (same day) — auto goal-reached now fires
+
+Closed the gap immediately. New `GoalReachedEvent` in shared contracts carrying
+**account_id, not user_id** (keeps goal-service's money path decoupled from
+account-service — the consumer resolves the owner). goal-service's month-closed UoW gained
+an outbox; the handler emits the event in the same transaction as the allocation, only when
+`current + surplus >= target (>0)`. notification-service binds `goal.reached`, resolves
+owner, uses the **same** `source_key goal.reached:{goal_id}` as the manual `goal.updated`
+path → the two never double-notify.
+
+Live e2e PASSED: set goal 20 default (target 100) → close month 5/2026 (surplus 500) →
+allocation 0→500 → `goal.reached` published → notification "Nødopsparing … 100,00 kr" for
+user 17 (owner resolved from account 18). Then a manual PUT of the same goal → `goal.updated`
+⇒ **duplicate** (1 row). goal-service 86 + notification 49 + contracts 44 tests green.
+
+Gotcha during e2e: `budget-outbox-worker` + `budget-month-close-scheduler` were in `created`
+(not running) state — the month-5 event sat `pending` until I `docker compose up -d
+budget-outbox-worker`. Local-stack artifact, not code.
+
 ## Open ends
 
-- **F1-08**: emit event on allocation-completes-goal so the auto path notifies.
 - Real email (SMTP) + reconsent banner still deferred; k8s manifests deferred with schedulers.
-- e2e mutated the dev stack (user 17/18, goal 19, budget, notifications) — harmless.
+- e2e mutated the dev stack (user 17/18, goals 19/20, budgets, notifications) — harmless.

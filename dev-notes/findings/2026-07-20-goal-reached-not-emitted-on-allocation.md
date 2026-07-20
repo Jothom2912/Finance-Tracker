@@ -3,7 +3,8 @@ id: F-2026-07-20-goal-reached-allocation
 title: "Surplus allocation completing a goal emits no event → no goal-reached notification on the auto path"
 date: 2026-07-20
 severity: MEDIUM
-status: open
+status: resolved
+resolved-by: F1-08 (2026-07-20) — goal-service emits GoalReachedEvent from the allocation path; notification-service consumes goal.reached. Live e2e verified.
 area: goal-service, notification-service
 discovered-by: F1-01 e2e prep
 ---

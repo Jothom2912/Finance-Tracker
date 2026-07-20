@@ -11,9 +11,11 @@ Port: **8008** · DB: PostgreSQL (`notifications`) · Hexagonal (domain / ports 
 | Event (routing key) | Notification | user_id source |
 |---------------------|--------------|----------------|
 | `bank.sync.completed` | "Banksynkronisering færdig" | on the event |
-| `goal.updated` → `status == "completed"` | "Mål nået! 🎉" (once per goal) | on the event |
+| `goal.updated` → `current >= target` | "Mål nået! 🎉" (manual goal edit that reaches target) | on the event |
+| `goal.reached` | "Mål nået! 🎉" (automatic surplus allocation completes a goal — F1-08) | resolved via account-service |
 | `budget.month_closed` | "Måned lukket" (+ surplus) | resolved via account-service `/internal/accounts/{id}/owner` |
 
+Both goal paths dedupe on `goal.reached:{goal_id}`, so a goal never notifies twice.
 `transaction.categorized` is deliberately **not** consumed (too noisy, no value).
 
 ## Idempotency

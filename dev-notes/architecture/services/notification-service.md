@@ -28,14 +28,18 @@ No outbox / no producer — it emits nothing.
 | Routing key | Fires when | user_id | source_key (idempotency) |
 |-------------|-----------|---------|--------------------------|
 | `bank.sync.completed` | always | on event | `bank.sync.completed:{connection_id}:{correlation_id}` |
-| `goal.updated` | `current_amount >= target_amount` (>0) | on event | `goal.reached:{goal_id}` (once per goal) |
+| `goal.updated` | `current_amount >= target_amount` (>0) — manual goal edit | on event | `goal.reached:{goal_id}` (once per goal) |
+| `goal.reached` | automatic surplus allocation completes a goal (F1-08) | **resolved** via account-service | `goal.reached:{goal_id}` (shared with `goal.updated`) |
 | `budget.month_closed` | always | **resolved** via account-service `/api/v1/internal/accounts/{id}/owner` | `event.source_key` = `budget.month_closed:{account_id}:{year}:{month}` |
 
-Goal detection is **by amount, not stored status** — `goal.updated` carries the stored
-status (active/paused), never "completed" (that's computed). See
-[finding 2026-07-20](../../findings/2026-07-20-goal-reached-not-emitted-on-allocation.md):
-the auto surplus-allocation path emits **no** `goal.updated`, so goal-reached currently
-only fires on manual goal edits (follow-up **F1-08**).
+Goal-reached has **two producers** that converge on one `source_key`:
+- **manual** edits → `goal.updated` (carries user_id); detected **by amount, not stored
+  status** (the stored status is active/paused, never computed "completed").
+- **automatic** surplus allocation → `goal.reached` (F1-08; carries account_id, owner
+  resolved here so goal-service's money path stays decoupled from account-service).
+
+Both write `goal.reached:{goal_id}`, so whichever lands first wins and the other dedupes —
+a goal never notifies twice. (Resolved [finding 2026-07-20](../../findings/2026-07-20-goal-reached-not-emitted-on-allocation.md).)
 
 ## Storage
 
