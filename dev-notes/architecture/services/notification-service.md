@@ -19,7 +19,8 @@ F1-01 (2026-07-20). Hexagonal: `domain` (entity, message builders, uuid7) / `app
   (`user_id` from token), foreign id ⇒ 404.
 - **notification-consumer** (`python -m app.workers.notification_consumer`) — one queue
   `notification_service.events` bound to `bank.sync.completed`, `goal.updated`,
-  `budget.month_closed` on the topic exchange; `ConsumerBase` (DLQ + retry).
+  `goal.reached`, `budget.month_closed`, `budget.line_threshold_crossed` on the topic
+  exchange; `ConsumerBase` (DLQ + retry).
 
 No outbox / no producer — it emits nothing.
 
@@ -31,6 +32,7 @@ No outbox / no producer — it emits nothing.
 | `goal.updated` | `current_amount >= target_amount` (>0) — manual goal edit | on event | `goal.reached:{goal_id}` (once per goal) |
 | `goal.reached` | automatic surplus allocation completes a goal (F1-08) | **resolved** via account-service | `goal.reached:{goal_id}` (shared with `goal.updated`) |
 | `budget.month_closed` | always | **resolved** via account-service `/api/v1/internal/accounts/{id}/owner` | `event.source_key` = `budget.month_closed:{account_id}:{year}:{month}` |
+| `budget.line_threshold_crossed` | a budget line is at/over a threshold (80%/100%) in the running period — emitted by budget-service's alert scheduler (F2-03) | **resolved** via account-service (same as month_closed) | `event.source_key` = `budget.line_threshold_crossed:{account_id}:{year}:{month}:{category_id}:{threshold}` (threshold in key ⇒ 80/100 fire once each) |
 
 Goal-reached has **two producers** that converge on one `source_key`:
 - **manual** edits → `goal.updated` (carries user_id); detected **by amount, not stored

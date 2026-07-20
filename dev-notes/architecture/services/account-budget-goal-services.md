@@ -1,7 +1,7 @@
 ---
 title: account-service + budget-service + goal-service
-updated: 2026-07-17
-source: architecture audit 2026-07-07; F1-04 update 2026-07-17
+updated: 2026-07-20
+source: architecture audit 2026-07-07; F1-04 update 2026-07-17; F2-03 update 2026-07-20
 ---
 
 # account-service (8004) / budget-service (8003) / goal-service (8006)
@@ -21,6 +21,7 @@ Three sibling CRUD services with the heaviest copy-paste duplication in the repo
 
 - Async stack, UoW, pydantic-settings. **Two parallel budget domains**: legacy `/api/v1/budgets` (`budgets` table) and `/api/v1/monthly-budgets` (`monthly_budgets` + `budget_lines`, unique `(account_id, month, year)`), unsynchronized.
 - `close` endpoint computes surplus (budgeted − spent via HTTP to transaction-service) and emits `budget.month_closed` with deterministic `source_key` — idempotent, well-plumbed.
+- *(F2-03, 2026-07-20)* **Mid-month budget alerts**: a second worker-loop container `budget-alert-scheduler` (`app/workers/budget_alert_scheduler.py`) sweeps open budgets of the **running** period each tick (`list_open_for_period`, `BUDGET_ALERT_INTERVAL_SECONDS` default 6h) and, per budget, calls `MonthlyBudgetService.evaluate_alerts` — per-line spent (**fail-closed** `get_expenses_by_category`, like `close_month`; a down upstream skips the tick, never fabricates 0%) vs a threshold list (`BUDGET_ALERT_THRESHOLDS` default `80,100`). Each crossing emits **`BudgetLineThresholdCrossedEvent`** (account-scoped; carries `category_name`, `percentage_used`, `threshold`, `days_remaining`; decimal-string money) via the month-closed UoW's outbox. **Stateless**: re-emits every tick; "notify once per line/threshold/period" is enforced by notification-service's unique `source_key` (threshold in the key → 80/100 distinct). Trade-off: redundant outbox/consumer churn accepted over a fired-alerts state table ([plan](../../plans/2026-07-20-f203-mid-month-budget-alerts.md)). Pure domain: `evaluate_line_crossings` (skips ≤0-budget lines) + shared `days_remaining_in_period`. Live e2e PASSED 4/4.
 - ⚠ `TransactionPort` returns `{}` on any error → `spent=0` → **whole budget fabricated as surplus** and irreversibly credited to goals (CRITICAL). `CategoryPort.exists()` also fails open.
 - Mints **user JWTs for arbitrary user_ids** as service-to-service auth (`make_service_auth_header`).
 - Redis URL hardcoded; summary `@cache(expire=60)` likely no-op (service instance in cache key).
