@@ -15,6 +15,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [architecture/services/categorization-and-ai-services.md](architecture/services/categorization-and-ai-services.md) — rule-tier pipeline, taxonomy ownership (ADR-003), SSE chat pipeline, ChromaDB.
 - [architecture/services/gateway-service.md](architecture/services/gateway-service.md) — read BFF (REST + GraphQL), fan-out reality, stubs, monolith footprint.
 - [architecture/services/frontend.md](architecture/services/frontend.md) — React SPA: TanStack Query (no Redux), 3 API clients, direct service coupling.
+- [architecture/services/notification-service.md](architecture/services/notification-service.md) — F1-01 in-app feed: terminal consumer of 3 triggers, source_key idempotency, REST feed + bell UI.
 
 ## Patterns (living documents)
 - [patterns/README.md](patterns/README.md) — pattern index: table of all patterns with canonical implementations. **Start here for "how do we do X".**
@@ -33,6 +34,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [findings/2026-07-07-architecture-audit.md](findings/2026-07-07-architecture-audit.md) — full codebase audit: 10 CRITICAL, 27 HIGH, ~45 MEDIUM, ~40 LOW, with file:line evidence.
 - [findings/2026-07-12-goal-migration-004-sqlite.md](findings/2026-07-12-goal-migration-004-sqlite.md) — goal migration 004 Postgres-only + fixture migrated wrong DB; resolved 2026-07-17 (F1-04 wave 0).
 - [findings/2026-07-17-goal-delete-fk-500.md](findings/2026-07-17-goal-delete-fk-500.md) — goal hard-delete with allocation history → FK 500 (LOW); resolved 2026-07-17 by P3-16 soft-delete.
+- [findings/2026-07-20-goal-reached-not-emitted-on-allocation.md](findings/2026-07-20-goal-reached-not-emitted-on-allocation.md) — surplus-allocation completing a goal emits no event → no goal-reached notification on the auto path (MEDIUM, → F1-08).
 
 ## Backlog & plans
 - [backlog/BACKLOG.md](backlog/BACKLOG.md) — technical backlog (P1 security/money → P2 systemic → P3 consistency), linked to finding IDs. P1 done 2026-07-07.
@@ -75,6 +77,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-17-f107-scheduled-month-close.md](sessions/2026-07-17-f107-scheduled-month-close.md) — F1-07 shipped: day-7 auto-close worker + scheduler-pattern decision; live e2e PASSED (auto-close +120, manual-close skip, idempotent tick); sqlite-create_all + PYTHONPATH gotchas.
 - [sessions/2026-07-17-p314-sync-claim.md](sessions/2026-07-17-p314-sync-claim.md) — P3-14 shipped: in-flight sync-claim (design-pivot fra deterministisk correlation-id); live e2e PASSED (concurrent → samme saga_id, claim roterer); banking local-test gotchas. F1-05 fuldt unblocked.
 - [sessions/2026-07-17-f105-scheduled-sync.md](sessions/2026-07-17-f105-scheduled-sync.md) — F1-05 shipped: nightly sync-scheduler; live e2e PASSED (auto-saga, scheduler deferred til manuel saga, 0 due på prod-config). **ADR-0003-kæden fuldautomatisk.**
+- [sessions/2026-07-20-f101-notification-service.md](sessions/2026-07-20-f101-notification-service.md) — F1-01 shipped: notification-service (stub→hexagonal, 3 triggers, REST feed + bell UI); live e2e PASSED all 3; goal-detection-by-amount pivot + F1-08 gap found.
 
 ## Templates
 - [templates/plan.md](templates/plan.md) · [templates/decision.md](templates/decision.md) · [templates/finding.md](templates/finding.md) · [templates/session.md](templates/session.md)

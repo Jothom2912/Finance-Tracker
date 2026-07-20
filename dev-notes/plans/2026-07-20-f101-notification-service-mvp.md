@@ -1,7 +1,7 @@
 ---
 title: "F1-01: Notification service MVP — in-app feed for auto-events"
 date: 2026-07-20
-status: open            # open | in-progress | done | superseded
+status: done            # open | in-progress | done | superseded
 backlog-items: [F1-01]
 related:
   - ../backlog/FEATURES.md
@@ -164,21 +164,18 @@ Grounding facts verified in code (2026-07-20):
 14. [x] CI (P2-14 pattern): add `notification-service` to the test matrix; add its dir to
     root `Makefile` `PY_SERVICE_DIRS`.
 
-### G. Verification
-15. [ ] **Unit** (`make -C services/notification-service test`): message-builders (Danish
-    strings, edge cases — 0 imported, errors>0, surplus formatting, singular/plural);
-    goal status-flip filter (updated-but-not-completed ⇒ no notification); dispatch by
-    event_type; poison payloads. No `datetime.now()` (freezegun/injected clock).
-16. [ ] **Integration** (testcontainers): repo idempotency (same `source_key` twice ⇒ one
-    row, IntegrityError swallowed); REST endpoints incl. JWT ownership (user B can't read/
-    mark user A's rows); consumer **wire-through** test with real UoW (handler-unit ≠
-    working path — exam-note lesson, `patterns/idempotent-consumers.md`).
-17. [ ] **Live e2e** (full stack `docker compose up`): (a) trigger auto bank-sync
-    (scheduler tunable `SYNC_EVERY_HOURS=0` per F1-05 session) → one `BANK_SYNC_COMPLETED`
-    notification for the owner; (b) manual "Luk måned" with surplus → one
-    `BUDGET_MONTH_CLOSED` (owner resolved via account-service); (c) push a goal to 100% →
-    one `GOAL_REACHED`, and a second `goal.updated` after completion produces **no** dup.
-    Verify feed list, unread-count badge, mark-read, dismiss, and JWT scoping in the UI.
+### G. Verification  ✅ done 2026-07-20
+15. [x] **Unit**: message-builders (Danish, edge cases), goal reached-detection (by amount,
+    incl. below-target + target=0 ⇒ ignored), dispatch by event_type, poison payloads.
+16. [x] **Integration** (sqlite, fast — no testcontainers needed): repo idempotency
+    (dup `source_key` ⇒ IntegrityError swallowed); REST endpoints incl. JWT ownership
+    (user B 404 on user A's rows); consumer dispatch/poison. 45 service tests + 3 frontend.
+17. [x] **Live e2e** (full stack already up): (a) `bank.sync.completed` published to the real
+    exchange → one notification for the owner; (b) manual "Luk måned" (surplus 500) → one
+    `BUDGET_MONTH_CLOSED`, owner resolved via account-service `/internal/.../owner` (200);
+    (c) goal pushed to target via PUT → one `GOAL_REACHED`, second update ⇒ **duplicate**
+    (1 row). Feed, unread-count (3→2→0), mark-read, dismiss, read-all, cross-user isolation
+    all verified via REST with real JWTs.
 
 ## Risks & rollback
 
@@ -196,5 +193,26 @@ Grounding facts verified in code (2026-07-20):
   remove the bell (frontend). No producer or shared-schema change to unwind. Its queue
   binding means unconsumed trigger events simply pile in its own queue/DLQ, harming nothing else.
 
-## Outcome (fill in when done)
-_TBD._
+## Outcome
+
+**Shipped 2026-07-20** in 7 waves (A–G), commit-per-phase. Service is live in the local
+stack; 45 backend + 3 frontend tests green; live e2e PASSED for all 3 triggers + full API.
+
+Deviations from the plan:
+- **Goal-reached detection changed** from `status == "completed"` to
+  `current_amount >= target_amount` (>0). e2e prep showed `goal.updated` carries the
+  *stored* status (active/paused), never "completed" (completion is computed), so the
+  original filter was effectively dead. Amount-based detection matches `effective_status`.
+- **Compose host port** 5439 → **5441** (5439 was already taken by `postgres-banking`).
+- **No testcontainers**: `sa.Uuid` (dialect-agnostic) let repo + API integration tests run
+  on in-memory sqlite — faster, no Docker in unit CI.
+- **bank.sync.completed e2e** was exercised by publishing a real event to the topic
+  exchange (user 17 had no PSD2 connection; browser OAuth can't be automated headlessly).
+  The banking-side *production* of that event is covered by F1-05's own e2e.
+
+Follow-ups spawned:
+- **F1-08** (+ [finding 2026-07-20](../findings/2026-07-20-goal-reached-not-emitted-on-allocation.md)):
+  the surplus→goal **allocation path emits no event**, so goal-reached does not fire on the
+  automatic ADR-0003 flow — only on manual goal edits. Needs a producer change in goal-service.
+- **Reconsent banner + real email (SMTP)** remain deferred (email = `IEmailPort` + log adapter).
+- **k8s manifests** for notification-service/consumer deferred with the schedulers' manifests.

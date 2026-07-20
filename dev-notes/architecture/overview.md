@@ -22,8 +22,9 @@ Personal finance tracker as **event-driven microservices**. 10 FastAPI services 
 | banking-service | 8009 | PSD2 via Enable Banking, saga participant | sync EB client in async contexts |
 | gateway-service | 8010 | Read BFF: REST dashboard + GraphQL + saga proxy | sync httpx, sequential "fan-out" |
 | saga-service | 8011 | Generic saga orchestrator (bank_sync) | 4 processes; unauthenticated status API |
+| notification-service | 8008 | In-app notification feed (F1-01): consumes bank-sync/goal-reached/month-closed | terminal consumer, own DB, no producer |
 
-Frontend: React/Vite SPA calling **8 services directly** (gateway only for GraphQL reads + saga status) — TanStack Query, no Redux.
+Frontend: React/Vite SPA calling **9 services directly** (gateway only for GraphQL reads + saga status) — TanStack Query, no Redux.
 
 ## Core patterns (they work — keep them)
 
