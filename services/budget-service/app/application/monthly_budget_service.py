@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
 from contracts.events.budget import (
+    BudgetLineThresholdCrossedEvent,
     BudgetMonthClosedEvent,
     make_budget_month_closed_source_key,
 )
 from domain import budget_period
+from domain.budget_period import days_remaining_in_period
 
 from app.application.dto import (
     BudgetLineResponse,
@@ -24,6 +27,7 @@ from app.application.ports.outbound import (
     ITransactionPort,
     IUnitOfWork,
 )
+from app.domain.budget_alerts import evaluate_line_crossings
 from app.domain.entities import BudgetLine, MonthlyBudget
 from app.domain.exceptions import (
     AccountRequiredForMonthlyBudget,
@@ -322,6 +326,73 @@ class MonthlyBudgetService:
             account_id,
             surplus,
         )
+
+    async def evaluate_alerts(
+        self,
+        budget: MonthlyBudget,
+        today: date,
+        thresholds: list[int],
+        budget_start_day: int = 1,
+    ) -> list[BudgetLineThresholdCrossedEvent]:
+        """Emit a BudgetLineThresholdCrossedEvent per line at/over a threshold (F2-03).
+
+        Called by the alert scheduler for each open budget of the running period.
+        Fail-closed: if transaction-service is unreachable, UpstreamServiceUnavailable
+        propagates so the caller skips this budget and retries next tick — we never
+        fall back to spent=0 (which would silently suppress real alerts).
+
+        Stateless: re-emits the same crossings every tick; notification-service's
+        unique source_key collapses redelivery so the user is notified once. Events
+        are added to the outbox and committed in one transaction (no budget mutation).
+        """
+        start_date, end_date = budget_period(budget.year, budget.month, budget_start_day)
+        expenses = await self._transaction_port.get_expenses_by_category(
+            budget.account_id,
+            start_date,
+            end_date,
+            user_id=budget.user_id,
+        )
+
+        crossings = evaluate_line_crossings(budget.lines, expenses, thresholds)
+        if not crossings:
+            return []
+
+        category_names = await self._category_port.get_all_names()
+        days_left = days_remaining_in_period(
+            budget.year,
+            budget.month,
+            today,
+            budget_start_day,
+        )
+
+        events: list[BudgetLineThresholdCrossedEvent] = []
+        for crossing in crossings:
+            event = BudgetLineThresholdCrossedEvent(
+                account_id=budget.account_id,
+                year=budget.year,
+                month=budget.month,
+                category_id=crossing.category_id,
+                category_name=category_names.get(crossing.category_id)
+                or str(crossing.category_id),
+                budgeted_amount=f"{crossing.budget_amount:.2f}",
+                spent_amount=f"{crossing.spent_amount:.2f}",
+                percentage_used=crossing.percentage_used,
+                threshold=crossing.threshold,
+                days_remaining=days_left,
+            )
+            await self._uow.outbox.add(event, "monthly_budget", str(budget.id))
+            events.append(event)
+
+        await self._uow.commit()
+        logger.info(
+            "Emitted %d budget-alert event(s) for budget %s (%02d/%d, account %s)",
+            len(events),
+            budget.id,
+            budget.month,
+            budget.year,
+            budget.account_id,
+        )
+        return events
 
     # -- Helpers ---------------------------------------------------------------
 

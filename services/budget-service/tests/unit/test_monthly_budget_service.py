@@ -6,7 +6,7 @@ Fokus på to sikkerhedsregressioner:
 2. Ejerskab: alle repository-opslag skal filtrere på user_id fra JWT.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -146,3 +146,98 @@ async def test_delete_passes_user_id_to_repository(service):
 
     assert result is False
     uow.monthly_budgets.delete.assert_awaited_once_with(1, 1, 2)
+
+
+# ---------------------------------------------------------------------------
+# evaluate_alerts — mid-month threshold crossings (F2-03)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_evaluate_alerts_fails_closed_when_transaction_service_unavailable(service):
+    svc, uow, transaction_port, _ = service
+    transaction_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable(
+        "transaction-service"
+    )
+
+    with pytest.raises(UpstreamServiceUnavailable):
+        await svc.evaluate_alerts(
+            make_monthly_budget(),
+            today=date(2026, 6, 18),
+            thresholds=[80, 100],
+        )
+
+    uow.outbox.add.assert_not_awaited()
+    uow.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_evaluate_alerts_emits_event_per_crossing_and_commits(service):
+    svc, uow, transaction_port, _ = service
+    # budget line: category 10, amount 1000; spent 850 → 85% crosses only 80.
+    transaction_port.get_expenses_by_category.return_value = {10: 850.0}
+
+    events = await svc.evaluate_alerts(
+        make_monthly_budget(),
+        today=date(2026, 6, 18),
+        thresholds=[80, 100],
+    )
+
+    assert len(events) == 1
+    event = events[0]
+    assert event.threshold == 80
+    assert event.percentage_used == 85
+    assert event.category_name == "Mad"
+    assert event.budgeted_amount == "1000.00"
+    assert event.spent_amount == "850.00"
+    assert event.days_remaining == 12
+    assert event.source_key == "budget.line_threshold_crossed:1:2026:6:10:80"
+    uow.outbox.add.assert_awaited_once()
+    uow.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_evaluate_alerts_over_budget_emits_both_thresholds(service):
+    svc, uow, transaction_port, _ = service
+    transaction_port.get_expenses_by_category.return_value = {10: 1200.0}
+
+    events = await svc.evaluate_alerts(
+        make_monthly_budget(),
+        today=date(2026, 6, 18),
+        thresholds=[80, 100],
+    )
+
+    assert [e.threshold for e in events] == [80, 100]
+    assert uow.outbox.add.await_count == 2
+    uow.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_evaluate_alerts_no_crossing_emits_nothing(service):
+    svc, uow, transaction_port, _ = service
+    transaction_port.get_expenses_by_category.return_value = {10: 100.0}  # 10%
+
+    events = await svc.evaluate_alerts(
+        make_monthly_budget(),
+        today=date(2026, 6, 18),
+        thresholds=[80, 100],
+    )
+
+    assert events == []
+    uow.outbox.add.assert_not_awaited()
+    uow.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_evaluate_alerts_falls_back_to_category_id_when_name_missing(service):
+    svc, uow, transaction_port, category_port = service
+    category_port.get_all_names.return_value = {}  # name lookup empty
+    transaction_port.get_expenses_by_category.return_value = {10: 900.0}
+
+    events = await svc.evaluate_alerts(
+        make_monthly_budget(),
+        today=date(2026, 6, 18),
+        thresholds=[80, 100],
+    )
+
+    assert events[0].category_name == "10"

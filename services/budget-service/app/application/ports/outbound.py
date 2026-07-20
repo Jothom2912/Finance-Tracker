@@ -68,6 +68,14 @@ class IMonthlyBudgetRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_open_for_period(self, year: int, month: int) -> list[MonthlyBudget]:
+        """All open budgets FOR the given (still-running) period — the mid-month
+        alert sweep candidates (F2-03). Not user-scoped: the scheduler evaluates
+        each row as its stored user_id.
+        """
+        ...
+
+    @abstractmethod
     async def mark_closed(self, budget_id: int) -> bool:
         """Atomic conditional UPDATE: SET closed_at WHERE closed_at IS NULL.
 

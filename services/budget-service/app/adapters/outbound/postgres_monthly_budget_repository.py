@@ -63,6 +63,18 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
         )
         return [self._to_entity(model) for model in result.scalars().all()]
 
+    async def list_open_for_period(self, year: int, month: int) -> list[MonthlyBudget]:
+        result = await self._session.execute(
+            select(MonthlyBudgetModel)
+            .where(
+                MonthlyBudgetModel.closed_at.is_(None),
+                MonthlyBudgetModel.year == year,
+                MonthlyBudgetModel.month == month,
+            )
+            .order_by(MonthlyBudgetModel.id),
+        )
+        return [self._to_entity(model) for model in result.scalars().all()]
+
     async def create(self, budget: MonthlyBudget) -> MonthlyBudget:
         model = MonthlyBudgetModel(
             month=budget.month,
