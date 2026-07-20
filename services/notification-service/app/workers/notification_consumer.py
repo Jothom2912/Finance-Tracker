@@ -23,7 +23,7 @@ from typing import Any
 from aio_pika.abc import AbstractIncomingMessage
 from contracts.events.bank import BankSyncCompletedEvent
 from contracts.events.budget import BudgetMonthClosedEvent
-from contracts.events.goal import GoalUpdatedEvent
+from contracts.events.goal import GoalReachedEvent, GoalUpdatedEvent
 from messaging import ConsumerBase, PoisonMessageError, setup_worker_logging
 from sqlalchemy.exc import IntegrityError
 
@@ -37,7 +37,7 @@ from app.database import async_session_factory
 logger = logging.getLogger(__name__)
 
 QUEUE_NAME = "notification_service.events"
-ROUTING_KEYS = ("bank.sync.completed", "goal.updated", "budget.month_closed")
+ROUTING_KEYS = ("bank.sync.completed", "goal.updated", "goal.reached", "budget.month_closed")
 
 
 class NotificationConsumer(ConsumerBase):
@@ -92,6 +92,8 @@ class NotificationConsumer(ConsumerBase):
             )
         if event_type == "goal.updated":
             return await service.handle_goal_updated(self._parse(GoalUpdatedEvent, payload, correlation_id))
+        if event_type == "goal.reached":
+            return await service.handle_goal_reached(self._parse(GoalReachedEvent, payload, correlation_id))
         if event_type == "budget.month_closed":
             return await service.handle_budget_month_closed(
                 self._parse(BudgetMonthClosedEvent, payload, correlation_id)

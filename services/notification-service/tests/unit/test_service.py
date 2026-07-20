@@ -5,7 +5,7 @@ from app.application.service import NotificationService
 from app.domain.exceptions import AccountNotFound, AccountOwnerUnavailable
 from contracts.events.bank import BankSyncCompletedEvent
 from contracts.events.budget import BudgetMonthClosedEvent
-from contracts.events.goal import GoalUpdatedEvent
+from contracts.events.goal import GoalReachedEvent, GoalUpdatedEvent
 
 from tests._fakes import FakeAccountOwner, FakeEmail, FakeUoW
 
@@ -89,6 +89,44 @@ async def test_goal_reached_creates_once_per_goal() -> None:
 
     assert first.status == "created"
     assert first.source_key == "goal.reached:42"
+    assert second.status == "duplicate"
+    assert len(uow.notifications.rows) == 1
+
+
+def _reached_event(goal_id: int = 42) -> GoalReachedEvent:
+    return GoalReachedEvent(goal_id=goal_id, account_id=5, name="Ferie", target_amount="1000", current_amount="1000")
+
+
+async def test_goal_reached_event_resolves_owner_and_creates() -> None:
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=99)
+    result = await _service(uow, email, owner).handle_goal_reached(_reached_event())
+
+    assert result.status == "created"
+    assert result.source_key == "goal.reached:42"
+    assert uow.notifications.rows[0].user_id == 99
+    assert email.sent == [(99, "Mål nået! 🎉")]
+
+
+async def test_goal_reached_event_dropped_when_account_missing() -> None:
+    uow, email = FakeUoW(), FakeEmail()
+    owner = FakeAccountOwner(exc=AccountNotFound(5))
+    result = await _service(uow, email, owner).handle_goal_reached(_reached_event())
+
+    assert result.status == "account_not_found"
+    assert uow.notifications.rows == []
+
+
+async def test_goal_reached_and_manual_update_never_double_notify() -> None:
+    # allocation (goal.reached) and a manual edit (goal.updated) for the SAME
+    # goal share source_key goal.reached:{id} — whichever lands first wins.
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+    service = _service(uow, email, owner)
+
+    first = await service.handle_goal_reached(_reached_event(goal_id=7))
+    updated = GoalUpdatedEvent(goal_id=7, user_id=7, target_amount="1000", current_amount="1000", status="active")
+    second = await service.handle_goal_updated(updated)
+
+    assert first.status == "created"
     assert second.status == "duplicate"
     assert len(uow.notifications.rows) == 1
 

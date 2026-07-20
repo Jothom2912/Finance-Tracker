@@ -4,7 +4,7 @@ import pytest
 from app.application.service import NotificationService
 from app.workers.notification_consumer import NotificationConsumer
 from contracts.events.bank import BankSyncCompletedEvent
-from contracts.events.goal import GoalUpdatedEvent
+from contracts.events.goal import GoalReachedEvent, GoalUpdatedEvent
 from messaging import PoisonMessageError
 
 from tests._fakes import FakeAccountOwner, FakeEmail, FakeUoW
@@ -41,6 +41,16 @@ async def test_dispatch_routes_goal_updated_and_filters_below_target() -> None:
 
     result = await _consumer()._dispatch(_service(), "goal.updated", payload, "cid")
     assert result.status == "ignored_not_reached"
+
+
+async def test_dispatch_routes_goal_reached() -> None:
+    payload = GoalReachedEvent(
+        goal_id=9, account_id=5, name="Ferie", target_amount="1000", current_amount="1000"
+    ).model_dump(mode="json")
+
+    result = await _consumer()._dispatch(_service(), "goal.reached", payload, "cid")
+    assert result.status == "created"
+    assert result.source_key == "goal.reached:9"
 
 
 async def test_unexpected_event_type_is_poison() -> None:

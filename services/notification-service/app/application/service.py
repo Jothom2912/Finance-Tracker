@@ -18,7 +18,7 @@ from uuid import UUID
 
 from contracts.events.bank import BankSyncCompletedEvent
 from contracts.events.budget import BudgetMonthClosedEvent
-from contracts.events.goal import GoalUpdatedEvent
+from contracts.events.goal import GoalReachedEvent, GoalUpdatedEvent
 
 from app.application.ports.outbound import IAccountOwnerPort, IEmailPort, IUnitOfWork
 from app.domain.entities import Notification, NotificationContent
@@ -69,6 +69,20 @@ class NotificationService:
         # once per goal, ever
         source_key = f"goal.reached:{event.goal_id}"
         return await self._create(user_id=event.user_id, content=content, source_key=source_key)
+
+    async def handle_goal_reached(self, event: GoalReachedEvent) -> HandleResult:
+        # The automatic surplus-allocation path (F1-08) emits goal.reached with
+        # account_id, not user_id — resolve the owner the same way as
+        # month_closed. Same source_key as the manual path so the two never
+        # double-notify for one goal.
+        content = build_goal_reached(goal_name=event.name, target_amount=Decimal(event.target_amount))
+        source_key = f"goal.reached:{event.goal_id}"
+        try:
+            user_id = await self._account_owner.get_owner_user_id(event.account_id)
+        except AccountNotFound:
+            logger.warning("goal.reached: account %s not found — dropping", event.account_id)
+            return HandleResult(status="account_not_found", source_key=source_key)
+        return await self._create(user_id=user_id, content=content, source_key=source_key)
 
     async def handle_budget_month_closed(self, event: BudgetMonthClosedEvent) -> HandleResult:
         content = build_budget_month_closed(
