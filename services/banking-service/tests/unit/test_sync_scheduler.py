@@ -15,6 +15,7 @@ import pytest
 from app.domain.entities import BankConnection
 from app.domain.exceptions import BankConsentExpired
 from app.workers.sync_scheduler import run_once
+from contracts.events.bank import SyncTrigger
 
 FROZEN_NOW = datetime(2026, 7, 17, 3, 0, 0, tzinfo=timezone.utc)
 
@@ -79,7 +80,11 @@ async def test_due_connection_synced_with_row_user_id_and_no_token() -> None:
     counts = await _run([conn], service)
 
     assert counts["started"] == 1
-    service.start_sync_saga.assert_awaited_once_with(conn.id, user_id=42, bearer_token=None)
+    # trigger=SCHEDULED er hele grunden til at notification-service kan tie om
+    # en nattlig sync der intet fandt — den må ikke falde ud af kaldet igen.
+    service.start_sync_saga.assert_awaited_once_with(
+        conn.id, user_id=42, bearer_token=None, trigger=SyncTrigger.SCHEDULED
+    )
 
 
 @pytest.mark.asyncio

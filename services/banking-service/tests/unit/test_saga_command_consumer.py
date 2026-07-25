@@ -16,6 +16,7 @@ from uuid import uuid4
 import pytest
 from app.adapters.outbound.enable_banking_client import BankTransaction
 from app.workers.saga_command_consumer import BankingSagaCommandConsumer
+from contracts.events.bank import SyncTrigger
 
 
 def _bank_txn(**overrides) -> BankTransaction:  # type: ignore[no-untyped-def]
@@ -125,7 +126,7 @@ class _FakeSession:
         self.committed = True
 
 
-def _connection_row(saga_id: str | None):
+def _connection_row(saga_id: str | None, sync_trigger: str | None = None):
     from types import SimpleNamespace
 
     return SimpleNamespace(
@@ -134,10 +135,12 @@ def _connection_row(saga_id: str | None):
         last_synced_at=None,
         sync_saga_id=saga_id,
         sync_started_at=object(),
+        sync_trigger=sync_trigger,
     )
 
 
-async def _run_mark_sync_complete(conn, body: dict) -> None:
+async def _run_mark_sync_complete(conn, body: dict):
+    """Kør handleren; returnér det emitterede BankSyncCompletedEvent."""
     consumer = BankingSagaCommandConsumer()
     session = _FakeSession(conn)
     with (
@@ -148,11 +151,12 @@ async def _run_mark_sync_complete(conn, body: dict) -> None:
         reply = await consumer._handle_mark_sync_complete(body)
     assert reply == {"success": True}
     assert session.committed
+    return outbox_cls.return_value.add.await_args.kwargs["event"]
 
 
 @pytest.mark.asyncio
 async def test_mark_sync_complete_clears_matching_claim() -> None:
-    conn = _connection_row(saga_id="saga-1")
+    conn = _connection_row(saga_id="saga-1", sync_trigger="scheduled")
 
     await _run_mark_sync_complete(
         conn,
@@ -161,13 +165,14 @@ async def test_mark_sync_complete_clears_matching_claim() -> None:
 
     assert conn.sync_saga_id is None
     assert conn.sync_started_at is None
+    assert conn.sync_trigger is None
     assert conn.last_synced_at is not None
 
 
 @pytest.mark.asyncio
 async def test_mark_sync_complete_leaves_newer_claim_untouched() -> None:
     # En gammel/duplikeret reply maa ikke rydde en NYERE sagas claim.
-    conn = _connection_row(saga_id="newer-saga")
+    conn = _connection_row(saga_id="newer-saga", sync_trigger="manual")
 
     await _run_mark_sync_complete(
         conn,
@@ -176,4 +181,47 @@ async def test_mark_sync_complete_leaves_newer_claim_untouched() -> None:
 
     assert conn.sync_saga_id == "newer-saga"
     assert conn.sync_started_at is not None
+    assert conn.sync_trigger == "manual"
     assert conn.last_synced_at is not None
+
+
+@pytest.mark.asyncio
+async def test_sync_trigger_is_read_from_the_claim_before_it_is_cleared() -> None:
+    # Claimet er triggerens eneste bærer, og den samme handler rydder det.
+    # Læses den efter rydningen, bliver hver scheduled sync til "manual" og
+    # hele undertrykkelsen i notification-service holder op med at virke.
+    conn = _connection_row(saga_id="saga-1", sync_trigger="scheduled")
+
+    event = await _run_mark_sync_complete(
+        conn,
+        {"connection_id": str(conn.id), "user_id": 2, "saga_id": "saga-1"},
+    )
+
+    assert event.trigger is SyncTrigger.SCHEDULED
+    assert conn.sync_trigger is None
+
+
+@pytest.mark.asyncio
+async def test_null_sync_trigger_falls_back_to_manual() -> None:
+    # Rækker claimet før migration 004. Fallback skal være MANUAL, så en
+    # ukendt provenance fejler i retning af at fortælle brugeren noget.
+    conn = _connection_row(saga_id="saga-1", sync_trigger=None)
+
+    event = await _run_mark_sync_complete(
+        conn,
+        {"connection_id": str(conn.id), "user_id": 2, "saga_id": "saga-1"},
+    )
+
+    assert event.trigger is SyncTrigger.MANUAL
+
+
+@pytest.mark.asyncio
+async def test_unknown_sync_trigger_falls_back_to_manual() -> None:
+    conn = _connection_row(saga_id="saga-1", sync_trigger="cron")
+
+    event = await _run_mark_sync_complete(
+        conn,
+        {"connection_id": str(conn.id), "user_id": 2, "saga_id": "saga-1"},
+    )
+
+    assert event.trigger is SyncTrigger.MANUAL

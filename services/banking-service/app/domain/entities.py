@@ -26,6 +26,7 @@ class BankConnection:
     last_synced_at: Optional[datetime] = None
     sync_saga_id: Optional[str] = None
     sync_started_at: Optional[datetime] = None
+    sync_trigger: Optional[str] = None
     created_at: Optional[datetime] = None
 
     def is_sync_due(self, now: datetime, every_hours: int) -> bool:

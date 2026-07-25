@@ -31,11 +31,19 @@ class IBankConnectionRepository(Protocol):
         """Active connections never synced or synced before cutoff (F1-05 sweep)."""
         ...
 
-    async def try_claim_sync(self, connection_id: UUID, saga_id: str, now: datetime, ttl_seconds: int) -> bool:
-        """Atomic in-flight sync-claim; True iff this caller won (P3-14)."""
+    async def try_claim_sync(
+        self, connection_id: UUID, saga_id: str, now: datetime, ttl_seconds: int, trigger: str
+    ) -> bool:
+        """Atomic in-flight sync-claim; True iff this caller won (P3-14).
+
+        ``trigger`` ("manual"/"scheduled") is stored on the claim so the
+        saga-reply handler can stamp the completion event.
+        """
         ...
 
-    async def steal_sync_claim(self, connection_id: UUID, old_saga_id: str, new_saga_id: str, now: datetime) -> bool:
+    async def steal_sync_claim(
+        self, connection_id: UUID, old_saga_id: str, new_saga_id: str, now: datetime, trigger: str
+    ) -> bool:
         """Take over a known-terminal claim; scoped to old_saga_id (one winner)."""
         ...
 

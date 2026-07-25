@@ -16,7 +16,7 @@ from uuid import UUID
 import aio_pika
 from aio_pika import ExchangeType
 from aio_pika.abc import AbstractIncomingMessage
-from contracts.events.bank import BankSyncCompletedEvent
+from contracts.events.bank import BankSyncCompletedEvent, SyncTrigger
 from messaging import OutboxRepository
 from sqlalchemy import select
 
@@ -33,6 +33,19 @@ EXCHANGE_NAME = "finans_tracker.events"
 QUEUE_NAME = "banking_service.saga_commands"
 ROUTING_KEYS = ["saga.cmd.bank_fetch_transactions", "saga.cmd.mark_sync_complete"]
 MAX_RETRIES = 3
+
+
+def _parse_sync_trigger(raw: str | None) -> SyncTrigger:
+    """Claim-kolonnen → enum, med MANUAL som fallback.
+
+    Rækker claimet før migration 004 har NULL, og en fremtidig værdi vi ikke
+    kender skal ikke vælte en sync-completion. Begge falder tilbage til MANUAL:
+    den værste fejl her er at brugeren aldrig hører om sin egen sync.
+    """
+    try:
+        return SyncTrigger(raw)
+    except ValueError:
+        return SyncTrigger.MANUAL
 
 
 class BankingSagaCommandConsumer:
@@ -218,11 +231,18 @@ class BankingSagaCommandConsumer:
                 # Naive UTC per column convention; not domain logic, so a
                 # direct timestamp (not injected clock) is acceptable here.
                 conn.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                # Læs trigger'en FØR claimet ryddes nedenfor — claimet er dens
+                # eneste bærer. NULL på rækker claimet før migration 004, og på
+                # en steal-path kan den tilhøre en nyere saga; begge tilfælde
+                # falder tilbage til MANUAL, som fejler i retning af at
+                # notificere brugeren frem for at tie.
+                trigger = _parse_sync_trigger(conn.sync_trigger)
                 # P3-14: frigiv sync-claimet — kun hvis det stadig er VORES
                 # (en nyere sagas claim må ikke ryddes af en gammel reply).
                 if saga_id and conn.sync_saga_id == saga_id:
                     conn.sync_saga_id = None
                     conn.sync_started_at = None
+                    conn.sync_trigger = None
 
                 outbox_repo = OutboxRepository(session, OutboxEventModel)
                 event = BankSyncCompletedEvent(
@@ -233,6 +253,7 @@ class BankingSagaCommandConsumer:
                     new_imported=body.get("new_imported", 0),
                     duplicates_skipped=body.get("duplicates_skipped", 0),
                     errors=body.get("errors", 0),
+                    trigger=trigger,
                 )
                 await outbox_repo.add(
                     event=event,
