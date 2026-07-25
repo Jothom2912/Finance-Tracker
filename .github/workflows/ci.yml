@@ -108,6 +108,64 @@ jobs:
             fi
           fi
 
+  # The shared packages were outside CI entirely, even though all 12 services
+  # import them — a break here is worse than a break in one service. All three
+  # were in fact failing `ruff format --check` on committed code, unnoticed
+  # (fixed in 3f003510).
+  #
+  # Separate job rather than matrix entries in python-services: that job's
+  # bandit step hard-fails when there is no `app/` directory, and these
+  # packages are libraries, not services.
+  shared-packages:
+    name: shared/${{ matrix.package }} - Python 3.11
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - contracts
+          - messaging
+          - auth
+
+    defaults:
+      run:
+        working-directory: services/shared/${{ matrix.package }}
+
+    env:
+      JWT_SECRET: test-secret
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv ruff bandit
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      # Same -ll -ii threshold as the services; scans the package directory
+      # since there is no app/.
+      - name: Bandit security scan
+        run: bandit -r ${{ matrix.package }} -ll -ii
+
+      - name: Run tests
+        run: uv run pytest tests -v
+
   frontend:
     name: Frontend CI
     runs-on: ubuntu-latest

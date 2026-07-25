@@ -12,8 +12,9 @@ dependencies = [
     "fastapi>=0.110.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
+    "ruff",
     "pytest",
     "httpx",
 ]
