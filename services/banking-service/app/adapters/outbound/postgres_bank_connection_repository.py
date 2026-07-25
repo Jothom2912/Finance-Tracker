@@ -109,14 +109,19 @@ class PostgresBankConnectionRepository:
         saga_id: str,
         now: datetime,
         ttl_seconds: int,
-        trigger: str,
+        trigger: SyncTrigger,
     ) -> bool:
         """Atomic in-flight claim (P3-14): wins iff no claim exists or the
         existing one is older than the TTL backstop. Exactly one concurrent
         caller gets rowcount 1.
 
         ``trigger`` rides along on the claim so the saga-reply handler can
-        stamp the completion event without the saga carrying the value."""
+        stamp the completion event without the saga carrying the value.
+        ``.value`` explicitly: ``SyncTrigger`` is a ``str`` subclass so binding
+        the member would happen to work, but the column is a plain ``String``
+        and the two sibling writers here already spell it out — one of three
+        doing it differently is how "manual" and "SyncTrigger.MANUAL" end up in
+        the same column."""
         naive_now = _to_naive_utc(now)
         cutoff = naive_now - timedelta(seconds=ttl_seconds)
         result = await self._session.execute(
@@ -128,7 +133,7 @@ class PostgresBankConnectionRepository:
                     BankConnectionModel.sync_started_at < cutoff,
                 ),
             )
-            .values(sync_saga_id=saga_id, sync_started_at=naive_now, sync_trigger=trigger)
+            .values(sync_saga_id=saga_id, sync_started_at=naive_now, sync_trigger=trigger.value)
         )
         return result.rowcount == 1
 
@@ -138,7 +143,7 @@ class PostgresBankConnectionRepository:
         old_saga_id: str,
         new_saga_id: str,
         now: datetime,
-        trigger: str,
+        trigger: SyncTrigger,
     ) -> bool:
         """Take over a claim whose saga is known-terminal. Scoped to the old
         saga_id so only one of several concurrent stealers wins."""
@@ -151,7 +156,7 @@ class PostgresBankConnectionRepository:
             .values(
                 sync_saga_id=new_saga_id,
                 sync_started_at=_to_naive_utc(now),
-                sync_trigger=trigger,
+                sync_trigger=trigger.value,
             )
         )
         return result.rowcount == 1

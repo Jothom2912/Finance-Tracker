@@ -6,6 +6,7 @@ from typing import Any, Optional, Protocol, Self
 from uuid import UUID
 
 from contracts.base import BaseEvent
+from contracts.events.bank import SyncTrigger
 
 from app.domain.entities import BankConnection, OutboxEntry
 
@@ -32,17 +33,21 @@ class IBankConnectionRepository(Protocol):
         ...
 
     async def try_claim_sync(
-        self, connection_id: UUID, saga_id: str, now: datetime, ttl_seconds: int, trigger: str
+        self, connection_id: UUID, saga_id: str, now: datetime, ttl_seconds: int, trigger: SyncTrigger
     ) -> bool:
         """Atomic in-flight sync-claim; True iff this caller won (P3-14).
 
-        ``trigger`` ("manual"/"scheduled") is stored on the claim so the
-        saga-reply handler can stamp the completion event.
+        ``trigger`` is stored on the claim so the saga-reply handler can stamp
+        the completion event.  Typed as the enum, not ``str``: both callers
+        already pass ``SyncTrigger`` members, and with a ``str`` annotation a
+        typo'd literal type-checks, reaches the DB and then degrades silently
+        to MANUAL on the way out — killing the quiet-sweep suppression with no
+        failing test.  The persisted column stays a string (see the adapter).
         """
         ...
 
     async def steal_sync_claim(
-        self, connection_id: UUID, old_saga_id: str, new_saga_id: str, now: datetime, trigger: str
+        self, connection_id: UUID, old_saga_id: str, new_saga_id: str, now: datetime, trigger: SyncTrigger
     ) -> bool:
         """Take over a known-terminal claim; scoped to old_saga_id (one winner)."""
         ...

@@ -26,6 +26,11 @@ class BankConnection:
     last_synced_at: Optional[datetime] = None
     sync_saga_id: Optional[str] = None
     sync_started_at: Optional[datetime] = None
+    # Bevidst ``str`` og ikke ``SyncTrigger``, selvom porten og adapteren nu er
+    # typet med enum'en: ``SyncTrigger`` bor i ``contracts``, og domænet må ikke
+    # afhænge af event-kontrakterne (samme grænse som 86b97980 gjorde eksplicit
+    # i notification-service). Skal domænet håndhæve værdisættet, hører det til
+    # som en domæne-enum her — ikke som et import af transportlagets.
     sync_trigger: Optional[str] = None
     created_at: Optional[datetime] = None
 
