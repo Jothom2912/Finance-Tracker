@@ -68,6 +68,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [decisions/2026-07-16-p209-dedup-semantics.md](decisions/2026-07-16-p209-dedup-semantics.md) — P2-09: three-way dedup rule (external_id + in-batch set + NULL-scoped fuzzy fallback), IntegrityError-as-honest-saga-failure, event_version stays 1, accepted transition artifacts.
 - [decisions/2026-07-17-learned-corrections-as-rules.md](decisions/2026-07-17-learned-corrections-as-rules.md) — F1-03: corrections stored as auto-managed user rules (priority ladder 10/50/100), not merchant rows; `is_user_confirmed` superseded; consumer cache TTL-only.
 - [decisions/2026-07-17-manual-month-close-button.md](decisions/2026-07-17-manual-month-close-button.md) — F1-04: manual "Luk måned"-knap supersedes ADR-0003 out-of-scope; scheduled day-7 close → F1-07.
+- [decisions/2026-07-25-budget-spend-from-analytics.md](decisions/2026-07-25-budget-spend-from-analytics.md) — P1-13: budget-service læser forbrug fra analytics' `/overview` (ADR-0004's kanoniske regler); ukategoriseret tæller nu med i overskuddet, og forbrug bliver eventually consistent — begge bevidst, ikke bivirkninger.
 - [decisions/2026-07-17-scheduler-pattern-worker-loop.md](decisions/2026-07-17-scheduler-pattern-worker-loop.md) — periodic jobs = in-service worker-loop containers (outbox-worker shape), not KEDA cron; idempotency mandatory, single replica, injected clock. F1-07 first user, F1-05 reuses.
 
 ## Sessions
