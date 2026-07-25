@@ -15,3 +15,9 @@ PyJWT[crypto]>=2.8.0
 ../shared/auth
 ../shared/messaging
 cryptography>=41.0.0
+# Test-only: conftest points DATABASE_URL at sqlite+aiosqlite so the suite runs
+# without a live Postgres (023970ba). The driver itself was never added, so CI —
+# which installs from this file into a clean env — errored during collection on
+# three modules and exit-coded 2. Every other service carries aiosqlite as a dev
+# dependency; banking has no pyproject, so it belongs here.
+aiosqlite
