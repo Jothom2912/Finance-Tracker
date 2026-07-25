@@ -75,10 +75,23 @@ async def _poll_until(check_fn, timeout: float = POLL_TIMEOUT, interval: float =
 def _psql_notifications(sql: str) -> str:
     result = subprocess.run(
         [
-            "docker", "compose", "exec", "-T", "postgres-notifications",
-            "psql", "-U", "notification_service", "-d", "notifications", "-t", "-c", sql,
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postgres-notifications",
+            "psql",
+            "-U",
+            "notification_service",
+            "-d",
+            "notifications",
+            "-t",
+            "-c",
+            sql,
         ],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 
@@ -86,10 +99,23 @@ def _psql_notifications(sql: str) -> str:
 def _psql_transactions(sql: str) -> str:
     result = subprocess.run(
         [
-            "docker", "compose", "exec", "-T", "postgres-transactions",
-            "psql", "-U", "transaction_service", "-d", "transactions", "-t", "-c", sql,
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postgres-transactions",
+            "psql",
+            "-U",
+            "transaction_service",
+            "-d",
+            "transactions",
+            "-t",
+            "-c",
+            sql,
         ],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 
@@ -114,6 +140,7 @@ async def _await_stable_category(account_id: int, expected_sum: float, desc: str
     """Wait until the account's dominant expense category is STABLE — async
     categorization can move a transaction (e.g. seed-id → rule-matched id) after
     creation, so we require two identical reads before budgeting against it."""
+
     async def _stable():
         first = _effective_expense_category(account_id)
         if not first or abs(first[1] - expected_sum) >= 0.01:
@@ -138,7 +165,9 @@ def _run_alert_tick() -> str:
     )
     result = subprocess.run(
         ["docker", "compose", "exec", "-T", "budget-service", "python", "-c", script],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return result.stdout.strip()
 
@@ -197,9 +226,7 @@ async def test_context():
 
         # 850 of 1000 budget ⇒ 85% (crosses 80, not 100)
         for i, amount in enumerate([500.0, 350.0]):
-            await _create_expense(
-                client, headers, account_id, seed_cat["id"], seed_cat["name"], amount, f"E2E {i}"
-            )
+            await _create_expense(client, headers, account_id, seed_cat["id"], seed_cat["name"], amount, f"E2E {i}")
 
         # Async categorization may move the transactions to a different category
         # than the one supplied at create time. The per-line alert matches on the
@@ -245,9 +272,7 @@ class TestBudgetThresholdAlertE2E:
         key80 = _source_key(ctx["account_id"], ctx["category_id"], 80)
 
         async def _check_row():
-            rows = _psql_notifications(
-                f"SELECT type, body FROM notifications WHERE source_key = '{key80}';"
-            )
+            rows = _psql_notifications(f"SELECT type, body FROM notifications WHERE source_key = '{key80}';")
             return rows if rows else None
 
         row = await _poll_until(_check_row, desc="80% notification row")
@@ -274,9 +299,7 @@ class TestBudgetThresholdAlertE2E:
         settled_cat = await _await_stable_category(
             ctx["account_id"], expected_sum=1250.0, desc="over-budget spend to settle at 1250"
         )
-        assert settled_cat == ctx["category_id"], (
-            f"category drifted from {ctx['category_id']} to {settled_cat}"
-        )
+        assert settled_cat == ctx["category_id"], f"category drifted from {ctx['category_id']} to {settled_cat}"
 
         _run_alert_tick()  # both 80 and 100 now at/over threshold for this account
 

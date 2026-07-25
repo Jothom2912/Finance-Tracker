@@ -145,9 +145,11 @@ async def run(database_url: str, rabbitmq_url: str, execute: bool, limit: int | 
 
     print("\nSample events (first 5):")
     for row in results[:5]:
-        print(f"  tx={row['transaction_id']}  cat={row['category_id']}  "
-              f"sub={row['subcategory_id']}  name={row['subcategory_name']!r}  "
-              f"tier={row['tier']}")
+        print(
+            f"  tx={row['transaction_id']}  cat={row['category_id']}  "
+            f"sub={row['subcategory_id']}  name={row['subcategory_name']!r}  "
+            f"tier={row['tier']}"
+        )
     print()
 
     if not execute:
