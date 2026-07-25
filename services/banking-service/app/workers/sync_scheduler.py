@@ -27,6 +27,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
+from contracts.events.bank import SyncTrigger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.adapters.outbound.postgres_bank_connection_repository import (
@@ -88,6 +89,7 @@ async def run_once(
                     conn.id,  # type: ignore[arg-type]  # rows fra DB har altid id
                     user_id=conn.user_id,
                     bearer_token=None,
+                    trigger=SyncTrigger.SCHEDULED,
                 )
                 if already_running:
                     counts["already_running"] += 1

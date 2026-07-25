@@ -41,17 +41,22 @@ export function useNotificationFeed() {
   // refreshes the badge and the dropdown together.
   const invalidate = () => queryClient.invalidateQueries({ queryKey: FEED_KEY });
 
+  // onSettled, not onSuccess: a write that FAILS is the case where our view is
+  // most likely stale. The server 404s a notification that was dismissed on
+  // another device, and the list is only polled every 45s — so on success we
+  // refetch because something changed, and on failure we refetch because
+  // reality disagrees with what we are showing. Either way, ask the server.
   const markReadMutation = useMutation({
     mutationFn: notificationsApi.markRead,
-    onSuccess: invalidate,
+    onSettled: invalidate,
   });
   const markAllReadMutation = useMutation({
     mutationFn: notificationsApi.markAllRead,
-    onSuccess: invalidate,
+    onSettled: invalidate,
   });
   const dismissMutation = useMutation({
     mutationFn: notificationsApi.dismissNotification,
-    onSuccess: invalidate,
+    onSettled: invalidate,
   });
 
   return {

@@ -61,6 +61,10 @@ class BankSyncSagaDefinition(SagaDefinition):
                 "new_imported": context.get("new_imported", 0),
                 "duplicates_skipped": context.get("duplicates_skipped", 0),
                 "errors": context.get("errors", 0),
+                # Skal med hele vejen til completion-eventet: notification-service
+                # undertrykker en stille scheduled sync, og en sync hvor alt blev
+                # parse-skippet er ikke stille — den er kaput.
+                "parse_skipped": context.get("parse_skipped", 0),
             }
         return {}
 
@@ -83,6 +87,10 @@ class BankSyncSagaDefinition(SagaDefinition):
             context["fetched_items"] = result_data.get("items", [])
             context["total_fetched"] = result_data.get("total_fetched", 0)
             context["parse_skipped"] = result_data.get("parse_skipped", 0)
+            # Fetch-trinnet har sine egne mapping-fejl. Uden denne linje blev de
+            # tabt, fordi kun step 1 akkumulerede errors — og et event med
+            # errors=0 kan blive undertrykt af notification-service.
+            context["errors"] = context.get("errors", 0) + result_data.get("errors", 0)
         elif step_index == 1:
             context["imported_ids"] = result_data.get("imported_ids", [])
             context["new_imported"] = result_data.get("imported", 0)

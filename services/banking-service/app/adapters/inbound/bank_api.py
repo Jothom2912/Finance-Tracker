@@ -6,6 +6,7 @@ from typing import Optional
 from urllib.parse import urlencode
 from uuid import UUID
 
+from contracts.events.bank import SyncTrigger
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -231,6 +232,7 @@ async def sync_transactions(
             user_id=user_id,
             date_from=date_from,
             bearer_token=authorization,
+            trigger=SyncTrigger.MANUAL,
         )
     except BankConnectionNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))

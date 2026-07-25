@@ -12,6 +12,7 @@ from contracts import (
     BankSyncCompletedEvent,
     BudgetLineThresholdCrossedEvent,
     BudgetMonthClosedEvent,
+    SyncTrigger,
     TransactionCategoryCorrectedEvent,
     TransactionCreatedEvent,
     TransactionDeletedEvent,
@@ -558,6 +559,58 @@ class TestBankSyncCompletedEvent:
         assert restored.duplicates_skipped == 7
         assert restored.parse_skipped == 1
         assert restored.event_type == "bank.sync.completed"
+
+    def test_trigger_roundtrips_as_string(self) -> None:
+        event = BankSyncCompletedEvent(
+            connection_id="abc-123",
+            account_id=1,
+            user_id=2,
+            total_fetched=0,
+            new_imported=0,
+            duplicates_skipped=0,
+            errors=0,
+            trigger=SyncTrigger.SCHEDULED,
+        )
+
+        assert json.loads(event.to_json())["trigger"] == "scheduled"
+        assert BankSyncCompletedEvent.from_json(event.to_json()).trigger is SyncTrigger.SCHEDULED
+
+    def test_payload_without_trigger_defaults_to_manual(self) -> None:
+        # A payload already sitting in an outbox row or a queue when the field
+        # ships must still validate -- that is what keeps event_version at 1.
+        # The default errs toward MANUAL because this field gates whether a user
+        # is told anything, and silence is the worse failure.
+        legacy = json.dumps(
+            {
+                "event_type": "bank.sync.completed",
+                "event_version": 1,
+                "connection_id": "abc-123",
+                "account_id": 1,
+                "user_id": 2,
+                "total_fetched": 4,
+                "new_imported": 4,
+                "duplicates_skipped": 0,
+                "errors": 0,
+            }
+        )
+
+        restored = BankSyncCompletedEvent.from_json(legacy)
+
+        assert restored.trigger is SyncTrigger.MANUAL
+        assert restored.event_version == 1
+
+    def test_unknown_trigger_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            BankSyncCompletedEvent(
+                connection_id="abc-123",
+                account_id=1,
+                user_id=2,
+                total_fetched=0,
+                new_imported=0,
+                duplicates_skipped=0,
+                errors=0,
+                trigger="cron",
+            )
 
 
 class TestBaseEvent:

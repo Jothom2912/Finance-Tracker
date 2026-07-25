@@ -131,3 +131,16 @@ async def test_dismiss_removes_from_feed_and_foreign_is_404(
     ids = {r["id"] for r in remaining.json()}
     assert str(a.id) not in ids
     assert str(b.id) in ids
+
+
+async def test_writes_to_a_dismissed_notification_are_404(
+    ctx: tuple[AsyncClient, AsyncSession],
+) -> None:
+    # Once dismissed the row is gone as far as the feed is concerned; the write
+    # endpoints must not keep answering 204 for it.
+    client, session = ctx
+    a, _ = await _seed(session)
+    assert (await client.delete(f"/api/v1/notifications/{a.id}", headers=_auth(1))).status_code == 204
+
+    assert (await client.post(f"/api/v1/notifications/{a.id}/read", headers=_auth(1))).status_code == 404
+    assert (await client.delete(f"/api/v1/notifications/{a.id}", headers=_auth(1))).status_code == 404

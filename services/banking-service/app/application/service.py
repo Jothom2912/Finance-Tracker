@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from contracts.events.bank import (
     BankConnectionCreatedEvent,
     BankConnectionDisconnectedEvent,
+    SyncTrigger,
 )
 from contracts.events.saga import BankSyncSagaStartEvent
 
@@ -230,6 +231,7 @@ class BankingService:
         user_id: int,
         date_from: Optional[str] = None,
         bearer_token: Optional[str] = None,
+        trigger: SyncTrigger = SyncTrigger.MANUAL,
     ) -> tuple[str, bool]:
         """Start an async bank-sync saga — at most one in-flight per connection (P3-14).
 
@@ -239,6 +241,12 @@ class BankingService:
         opslag ved konflikt: terminal saga → claim steales; ukendt status →
         fail ACTIVE, så saga-service-nedetid aldrig giver duplikat-sagas
         (TTL'en i ``try_claim_sync`` er backstop mod claims der aldrig løses).
+
+        ``trigger`` skrives på claimet og læses igen af saga-reply-handleren
+        når ``BankSyncCompletedEvent`` bygges — claimet har præcis sagaens
+        levetid, så værdien behøver ikke rejse gennem saga-envelopen.
+        Defaulter til MANUAL, så et kald der glemmer at sætte den fejler i
+        retning af at notificere brugeren.
         """
         async with self._uow:
             conn = await self._uow.connections.get_by_id(connection_id)
@@ -263,7 +271,7 @@ class BankingService:
         # eventet; taber det, persisteres intet.
         async with self._uow:
             if await self._uow.connections.try_claim_sync(
-                connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS
+                connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS, trigger.value
             ):
                 await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
                 await self._uow.commit()
@@ -283,13 +291,14 @@ class BankingService:
             # prøv claim én gang til; taber vi igen, afleverer vi vinderens id.
             async with self._uow:
                 if await self._uow.connections.try_claim_sync(
-                    connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS
+                    connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS, trigger.value
                 ):
                     await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
                     await self._uow.commit()
                     return saga_id, False
                 await self._uow.rollback()
-            return (await self._current_claim(connection_id)) or saga_id, True
+            winner = (await self._current_claim(connection_id)) or saga_id
+            return await self._defer_to_running_saga(connection_id, winner, trigger)
 
         status = None
         if self._saga_status is not None:
@@ -297,7 +306,9 @@ class BankingService:
 
         if status in _TERMINAL_SAGA_STATUSES:
             async with self._uow:
-                if await self._uow.connections.steal_sync_claim(connection_id, existing_id, saga_id, now):
+                if await self._uow.connections.steal_sync_claim(
+                    connection_id, existing_id, saga_id, now, trigger.value
+                ):
                     await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
                     await self._uow.commit()
                     logger.info(
@@ -310,7 +321,8 @@ class BankingService:
                     return saga_id, False
                 await self._uow.rollback()
             # Tabt steal-kapløb — aflever vinderens claim.
-            return (await self._current_claim(connection_id)) or existing_id, True
+            winner = (await self._current_claim(connection_id)) or existing_id
+            return await self._defer_to_running_saga(connection_id, winner, trigger)
 
         logger.info(
             "Bank sync already running: saga_id=%s (status=%s) connection=%s",
@@ -318,7 +330,30 @@ class BankingService:
             status or "unknown",
             connection_id,
         )
-        return existing_id, True
+        return await self._defer_to_running_saga(connection_id, existing_id, trigger)
+
+    async def _defer_to_running_saga(
+        self, connection_id: UUID, winner_saga_id: str, trigger: SyncTrigger
+    ) -> tuple[str, bool]:
+        """Aflever en kørende sagas id — og opgrader dens trigger hvis vi er manuelle.
+
+        Den kørende saga afslutter på vores vegne, så det er DENS claim der
+        stempler completion-eventet. Er vores eget kald manuelt, skal claimet
+        derfor opgraderes: ellers bliver brugerens knaptryk undertrykt som en
+        stille scheduled sync, og han får ingen kvittering for noget han selv
+        bad om. Omvendt nedgraderer et scheduled kald aldrig et manuelt claim.
+        """
+        if trigger is SyncTrigger.MANUAL:
+            async with self._uow:
+                escalated = await self._uow.connections.escalate_trigger_to_manual(connection_id, winner_saga_id)
+                await self._uow.commit()
+            if escalated:
+                logger.info(
+                    "Manual sync joined running saga %s — claim trigger escalated to manual (connection=%s)",
+                    winner_saga_id,
+                    connection_id,
+                )
+        return winner_saga_id, True
 
     async def _current_claim(self, connection_id: UUID) -> Optional[str]:
         async with self._uow:

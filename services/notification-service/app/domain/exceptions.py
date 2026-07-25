@@ -5,6 +5,9 @@
   drops the notification (nothing to deliver to), no retry.
 - ``AccountOwnerUnavailable`` → account-service is down/unreachable; the
   consumer must let the message retry/DLQ, never silently drop it.
+- ``AccountOwnerAuthError`` → account-service answered, but rejected *us*
+  (401/403). Same retry/DLQ handling as unavailable, but kept distinct so a
+  bad ``INTERNAL_API_KEY`` does not read as an upstream outage in the logs.
 """
 
 from __future__ import annotations
@@ -23,3 +26,8 @@ class AccountNotFound(Exception):
 class AccountOwnerUnavailable(Exception):
     def __init__(self) -> None:
         super().__init__("account-service is unavailable")
+
+
+class AccountOwnerAuthError(Exception):
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"account-service rejected the internal API key (HTTP {status_code})")

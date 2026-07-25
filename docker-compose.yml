@@ -895,14 +895,6 @@ services:
       ollama-pull:
         condition: service_completed_successfully
 
-  # notification-service:
-  #   build: ./services/notification-service
-  #   ports:
-  #     - "8008:8008"
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-
   # ── Saga Service ─────────────────────────────────────────────────
 
   postgres-saga:

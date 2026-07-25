@@ -83,11 +83,14 @@ class PostgresNotificationRepository(INotificationRepository):
     async def mark_read(self, notification_id: UUID, user_id: int) -> bool:
         # coalesce keeps the first read time and makes a re-mark idempotent
         # while rowcount still reflects ownership (for 404 semantics).
+        # Dismissed rows are excluded: they are gone from the feed, so the
+        # write path must agree and 404 rather than silently succeed.
         result = await self._session.execute(
             update(NotificationModel)
             .where(
                 NotificationModel.id == notification_id,
                 NotificationModel.user_id == user_id,
+                NotificationModel.dismissed_at.is_(None),
             )
             .values(read_at=func.coalesce(NotificationModel.read_at, utcnow()))
         )
@@ -106,12 +109,17 @@ class PostgresNotificationRepository(INotificationRepository):
         return int(result.rowcount)
 
     async def dismiss(self, notification_id: UUID, user_id: int) -> bool:
+        # The guard replaces the previous coalesce: an already-dismissed row no
+        # longer matches at all, so re-dismissing 404s. That costs idempotency
+        # on a double-click but keeps one definition of "gone" across the feed,
+        # the unread count and both write paths.
         result = await self._session.execute(
             update(NotificationModel)
             .where(
                 NotificationModel.id == notification_id,
                 NotificationModel.user_id == user_id,
+                NotificationModel.dismissed_at.is_(None),
             )
-            .values(dismissed_at=func.coalesce(NotificationModel.dismissed_at, utcnow()))
+            .values(dismissed_at=utcnow())
         )
         return result.rowcount > 0

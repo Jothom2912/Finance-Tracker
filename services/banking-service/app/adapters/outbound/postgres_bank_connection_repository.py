@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
+from contracts.events.bank import SyncTrigger
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -108,10 +109,14 @@ class PostgresBankConnectionRepository:
         saga_id: str,
         now: datetime,
         ttl_seconds: int,
+        trigger: str,
     ) -> bool:
         """Atomic in-flight claim (P3-14): wins iff no claim exists or the
         existing one is older than the TTL backstop. Exactly one concurrent
-        caller gets rowcount 1."""
+        caller gets rowcount 1.
+
+        ``trigger`` rides along on the claim so the saga-reply handler can
+        stamp the completion event without the saga carrying the value."""
         naive_now = _to_naive_utc(now)
         cutoff = naive_now - timedelta(seconds=ttl_seconds)
         result = await self._session.execute(
@@ -123,7 +128,7 @@ class PostgresBankConnectionRepository:
                     BankConnectionModel.sync_started_at < cutoff,
                 ),
             )
-            .values(sync_saga_id=saga_id, sync_started_at=naive_now)
+            .values(sync_saga_id=saga_id, sync_started_at=naive_now, sync_trigger=trigger)
         )
         return result.rowcount == 1
 
@@ -133,6 +138,7 @@ class PostgresBankConnectionRepository:
         old_saga_id: str,
         new_saga_id: str,
         now: datetime,
+        trigger: str,
     ) -> bool:
         """Take over a claim whose saga is known-terminal. Scoped to the old
         saga_id so only one of several concurrent stealers wins."""
@@ -142,7 +148,32 @@ class PostgresBankConnectionRepository:
                 BankConnectionModel.id == str(connection_id),
                 BankConnectionModel.sync_saga_id == old_saga_id,
             )
-            .values(sync_saga_id=new_saga_id, sync_started_at=_to_naive_utc(now))
+            .values(
+                sync_saga_id=new_saga_id,
+                sync_started_at=_to_naive_utc(now),
+                sync_trigger=trigger,
+            )
+        )
+        return result.rowcount == 1
+
+    async def escalate_trigger_to_manual(self, connection_id: UUID, saga_id: str) -> bool:
+        """Opgrader et fremmed claims trigger til ``manual``.
+
+        Bruges når et manuelt kald joiner en kørende saga: sagaen afslutter på
+        brugerens vegne, så dens completion-event skal notificere selvom det var
+        sweepen der startede den. Manual vinder altså over scheduled — den
+        omvendte retning (nedgradering til scheduled) findes med vilje ikke.
+
+        Scoped til ``saga_id``, så vi ikke rammer et claim der er udskiftet
+        imens; er triggeren allerede manual, er UPDATE'en et no-op.
+        """
+        result = await self._session.execute(
+            update(BankConnectionModel)
+            .where(
+                BankConnectionModel.id == str(connection_id),
+                BankConnectionModel.sync_saga_id == saga_id,
+            )
+            .values(sync_trigger=SyncTrigger.MANUAL.value)
         )
         return result.rowcount == 1
 
@@ -154,7 +185,7 @@ class PostgresBankConnectionRepository:
                 BankConnectionModel.id == str(connection_id),
                 BankConnectionModel.sync_saga_id == saga_id,
             )
-            .values(sync_saga_id=None, sync_started_at=None)
+            .values(sync_saga_id=None, sync_started_at=None, sync_trigger=None)
         )
 
     async def update_consent(
@@ -185,5 +216,6 @@ class PostgresBankConnectionRepository:
             last_synced_at=row.last_synced_at,
             sync_saga_id=row.sync_saga_id,
             sync_started_at=row.sync_started_at,
+            sync_trigger=row.sync_trigger,
             created_at=row.created_at,
         )

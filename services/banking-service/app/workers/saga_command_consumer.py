@@ -16,7 +16,7 @@ from uuid import UUID
 import aio_pika
 from aio_pika import ExchangeType
 from aio_pika.abc import AbstractIncomingMessage
-from contracts.events.bank import BankSyncCompletedEvent
+from contracts.events.bank import BankSyncCompletedEvent, SyncTrigger
 from messaging import OutboxRepository
 from sqlalchemy import select
 
@@ -33,6 +33,34 @@ EXCHANGE_NAME = "finans_tracker.events"
 QUEUE_NAME = "banking_service.saga_commands"
 ROUTING_KEYS = ["saga.cmd.bank_fetch_transactions", "saga.cmd.mark_sync_complete"]
 MAX_RETRIES = 3
+
+
+def _parse_sync_trigger(raw: str | None) -> SyncTrigger:
+    """Claim-kolonnen → enum, med MANUAL som fallback.
+
+    To forskellige tilfælde, med vilje skilt ad:
+
+    - ``NULL`` er forventet på rækker claimet før migration 004 og kræver ingen
+      støj.
+    - En værdi vi ikke kan parse er derimod et *bug-signal* — en writer og
+      denne enum er ude af sync. Fallback'en gør at hver scheduled sync
+      relabelles ``manual``, så undertrykkelsen holder op med at virke, og
+      uden en log-linje er det eneste spor "klokken blev støjende igen".
+
+    Begge falder tilbage til MANUAL: den værste fejl her er at brugeren aldrig
+    hører om sin egen sync.
+    """
+    if raw is None:
+        return SyncTrigger.MANUAL
+    try:
+        return SyncTrigger(raw)
+    except ValueError:
+        logger.warning(
+            "Ukendt sync_trigger %r på claim — falder tilbage til manual. "
+            "En writer er ude af sync med SyncTrigger-enum'en.",
+            raw,
+        )
+        return SyncTrigger.MANUAL
 
 
 class BankingSagaCommandConsumer:
@@ -218,11 +246,32 @@ class BankingSagaCommandConsumer:
                 # Naive UTC per column convention; not domain logic, so a
                 # direct timestamp (not injected clock) is acceptable here.
                 conn.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                # Læs trigger'en FØR claimet ryddes nedenfor — claimet er dens
+                # eneste bærer — og KUN hvis claimet stadig er vores.
+                #
+                # Claim-rækken er ikke versioneret per saga: try_claim_sync
+                # vinder alene på TTL-cutoff, så en nyere saga kan have
+                # overskrevet sync_trigger mens vi kørte. Læste vi den blindt,
+                # ville en langsom MANUEL sync kunne stemples "scheduled" og
+                # derefter undertrykkes i notification-service — brugeren
+                # trykkede på knappen og fik stilhed. Fremmed claim ⇒ MANUAL,
+                # så vi fejler i retning af at notificere.
+                own_claim = bool(saga_id) and conn.sync_saga_id == saga_id
+                trigger = _parse_sync_trigger(conn.sync_trigger) if own_claim else SyncTrigger.MANUAL
+                if not own_claim:
+                    logger.info(
+                        "mark_sync_complete: claimet tilhører ikke saga %s (nu: %s) — "
+                        "stempler completion som manual (connection=%s)",
+                        saga_id,
+                        conn.sync_saga_id,
+                        connection_id,
+                    )
                 # P3-14: frigiv sync-claimet — kun hvis det stadig er VORES
                 # (en nyere sagas claim må ikke ryddes af en gammel reply).
-                if saga_id and conn.sync_saga_id == saga_id:
+                if own_claim:
                     conn.sync_saga_id = None
                     conn.sync_started_at = None
+                    conn.sync_trigger = None
 
                 outbox_repo = OutboxRepository(session, OutboxEventModel)
                 event = BankSyncCompletedEvent(
@@ -233,6 +282,8 @@ class BankingSagaCommandConsumer:
                     new_imported=body.get("new_imported", 0),
                     duplicates_skipped=body.get("duplicates_skipped", 0),
                     errors=body.get("errors", 0),
+                    parse_skipped=body.get("parse_skipped", 0),
+                    trigger=trigger,
                 )
                 await outbox_repo.add(
                     event=event,

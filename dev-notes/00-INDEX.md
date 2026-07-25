@@ -35,6 +35,8 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [findings/2026-07-12-goal-migration-004-sqlite.md](findings/2026-07-12-goal-migration-004-sqlite.md) — goal migration 004 Postgres-only + fixture migrated wrong DB; resolved 2026-07-17 (F1-04 wave 0).
 - [findings/2026-07-17-goal-delete-fk-500.md](findings/2026-07-17-goal-delete-fk-500.md) — goal hard-delete with allocation history → FK 500 (LOW); resolved 2026-07-17 by P3-16 soft-delete.
 - [findings/2026-07-20-goal-reached-not-emitted-on-allocation.md](findings/2026-07-20-goal-reached-not-emitted-on-allocation.md) — surplus-allocation completing a goal emits no event → no goal-reached notification on the auto path (MEDIUM, → F1-08).
+- [findings/2026-07-25-k8s-manifest-drift.md](findings/2026-07-25-k8s-manifest-drift.md) — 6 workloads + 1 DB in compose have no k8s manifest (F1-01/F1-05/F1-07/F2-03/AI-20); `apply -k` silently drops the notification feed and the automatic ADR-0003 chain (MEDIUM, → P2-21).
+- [findings/2026-07-25-worker-migration-ordering.md](findings/2026-07-25-worker-migration-ordering.md) — migrations are a side effect of the API container's `CMD`; workers override `command:` and skip them, so k8s workers crash-loop until the API catches up (LOW, systemic, → P3-17).
 
 ## Backlog & plans
 - [backlog/BACKLOG.md](backlog/BACKLOG.md) — technical backlog (P1 security/money → P2 systemic → P3 consistency), linked to finding IDs. P1 done 2026-07-07.
@@ -52,6 +54,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [plans/2026-07-17-p314-serialize-bank-sync-sagas.md](plans/2026-07-17-p314-serialize-bank-sync-sagas.md) — P3-14: in-flight sync-claim på bank_connections (atomic claim/steal/TTL, status-check ved konflikt); F1-05-prerequisite.
 - [plans/2026-07-17-f105-scheduled-bank-sync.md](plans/2026-07-17-f105-scheduled-bank-sync.md) — F1-05: nightly sync-scheduler (staleness-regel >24h, worker-loop pattern, samme start_sync_saga use case); fuldender ADR-0003-kæden sync→close→goal.
 - [plans/2026-07-20-f101-notification-service-mvp.md](plans/2026-07-20-f101-notification-service-mvp.md) — F1-01: notification-service fra stub → hexagonal consumer (3 triggers: bank.sync.completed, goal-reached, budget.month_closed) + in-app feed (bell/badge); email deferred til IEmailPort+log-adapter; idempotens via deterministisk source_key.
+- [plans/2026-07-25-notification-service-hardening.md](plans/2026-07-25-notification-service-hardening.md) — post-F1-01/F2-03 review fixes: red CI (`ruff format`), `trigger` on `BankSyncCompletedEvent` so nightly quiet syncs stop notifying (rides the P3-14 claim, no saga change), + adapter/test/docstring polish. k8s drift and migration-ordering deliberately excluded (P2-21, P3-17).
 - [plans/2026-07-20-f203-mid-month-budget-alerts.md](plans/2026-07-20-f203-mid-month-budget-alerts.md) — F2-03: budget-alert-scheduler (worker-loop) evaluerer åbne budgetter for løbende måned → `budget.line_threshold_crossed` (80%/100%) → notification-service (4. trigger); stateless re-emit + downstream source_key-dedup; fail-closed spent; account-scoped event + owner-resolution.
 
 ## Decisions

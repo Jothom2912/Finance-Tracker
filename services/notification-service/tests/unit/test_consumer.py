@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import logging
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
+from unittest.mock import MagicMock
+
 import pytest
 from app.application.service import NotificationService
+from app.workers import notification_consumer as consumer_module
 from app.workers.notification_consumer import ROUTING_KEYS, NotificationConsumer
 from contracts.events.bank import BankSyncCompletedEvent
 from contracts.events.budget import BudgetLineThresholdCrossedEvent
@@ -18,6 +24,18 @@ def _service() -> NotificationService:
 def _consumer() -> NotificationConsumer:
     # Construction only stores config + builds stateless adapters (no I/O).
     return NotificationConsumer()
+
+
+@asynccontextmanager
+async def _null_session_factory() -> AsyncIterator[None]:
+    """Stand-in for async_session_factory: the fake UoW ignores the session."""
+    yield None
+
+
+def _message() -> Any:
+    # handle() only forwards the message to ConsumerBase for ack/nack, which
+    # this test does not exercise.
+    return MagicMock()
 
 
 async def test_dispatch_routes_bank_sync() -> None:
@@ -86,3 +104,32 @@ async def test_malformed_payload_is_poison() -> None:
     with pytest.raises(PoisonMessageError):
         # missing all required fields for the declared type
         await _consumer()._dispatch(_service(), "bank.sync.completed", {"event_type": "x"}, "cid")
+
+
+async def test_integrity_error_is_acked_as_a_benign_duplicate(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The unique constraint on source_key is the idempotency backstop, so the
+    # lost-insert-race must return normally from handle() — returning is what
+    # makes ConsumerBase ACK. If it propagated instead, the message would go
+    # round the retry ladder and end in the DLQ on every redelivery.
+    uow = FakeUoW(lose_insert_race=True)
+    monkeypatch.setattr(consumer_module, "async_session_factory", _null_session_factory)
+    monkeypatch.setattr(consumer_module, "SQLAlchemyUnitOfWork", lambda _session: uow)
+
+    payload = BankSyncCompletedEvent(
+        connection_id="c1",
+        account_id=1,
+        user_id=7,
+        total_fetched=2,
+        new_imported=2,
+        duplicates_skipped=0,
+        errors=0,
+    ).model_dump(mode="json")
+
+    with caplog.at_level(logging.INFO):
+        await _consumer().handle(payload, _message())
+
+    assert uow.rolled_back is True
+    assert "benign race, acking" in caplog.text

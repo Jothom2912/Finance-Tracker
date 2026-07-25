@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
-from contracts.events.bank import BankSyncCompletedEvent
+from contracts.events.bank import BankSyncCompletedEvent, SyncTrigger
 from contracts.events.budget import (
     BudgetLineThresholdCrossedEvent,
     BudgetMonthClosedEvent,
@@ -32,13 +32,15 @@ from app.domain.messages import (
     build_budget_month_closed,
     build_goal_reached,
 )
+from app.domain.rules import should_notify_bank_sync
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class HandleResult:
-    status: str  # created | duplicate | ignored_not_reached | account_not_found
+    # created | duplicate | ignored_not_reached | ignored_quiet_sync | account_not_found
+    status: str
     source_key: str | None = None
     notification_id: UUID | None = None
 
@@ -55,6 +57,22 @@ class NotificationService:
         self._account_owner = account_owner
 
     async def handle_bank_sync_completed(self, event: BankSyncCompletedEvent) -> HandleResult:
+        # Drop the nightly no-op before touching the repo: source_key carries
+        # correlation_id, so a suppressed sweep would otherwise write a fresh
+        # row every night rather than deduping against the previous one.
+        # Wire-enum → primitive here, so the domain predicate stays free of the
+        # event contracts. `==` not `is`: SyncTrigger subclasses str, so a plain
+        # "scheduled" (use_enum_values, model_construct, a dict-driven path)
+        # must suppress exactly like the enum member — identity comparison
+        # fails open and silently re-enables the nightly noise.
+        scheduled = event.trigger == SyncTrigger.SCHEDULED
+        if not should_notify_bank_sync(
+            scheduled=scheduled,
+            new_imported=event.new_imported,
+            errors=event.errors,
+            parse_skipped=event.parse_skipped,
+        ):
+            return HandleResult(status="ignored_quiet_sync")
         content = build_bank_sync_completed(new_imported=event.new_imported, errors=event.errors)
         # correlation_id makes the key redelivery-stable while still letting a
         # genuinely new sync of the same connection notify again.
@@ -102,9 +120,7 @@ class NotificationService:
             return HandleResult(status="account_not_found", source_key=event.source_key)
         return await self._create(user_id=user_id, content=content, source_key=event.source_key)
 
-    async def handle_budget_line_threshold_crossed(
-        self, event: BudgetLineThresholdCrossedEvent
-    ) -> HandleResult:
+    async def handle_budget_line_threshold_crossed(self, event: BudgetLineThresholdCrossedEvent) -> HandleResult:
         # Account-scoped (like month_closed): resolve the owner here. The event's
         # source_key includes the threshold, so 80%/100% are distinct rows and
         # each fires once per line/period regardless of how often the stateless
@@ -118,9 +134,7 @@ class NotificationService:
         try:
             user_id = await self._account_owner.get_owner_user_id(event.account_id)
         except AccountNotFound:
-            logger.warning(
-                "budget threshold: account %s not found — dropping", event.account_id
-            )
+            logger.warning("budget threshold: account %s not found — dropping", event.account_id)
             return HandleResult(status="account_not_found", source_key=event.source_key)
         return await self._create(user_id=user_id, content=content, source_key=event.source_key)
 

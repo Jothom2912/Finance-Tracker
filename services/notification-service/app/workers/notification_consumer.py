@@ -1,6 +1,6 @@
-"""Consumer for the three F1 trigger events → in-app notifications.
+"""Consumer for the five trigger events → in-app notifications.
 
-One queue bound to all three routing keys (none has a slow/flaky dependency,
+One queue bound to all five routing keys (none has a slow/flaky dependency,
 so no per-concern queue isolation is needed — cf. the embed-worker decision).
 Connection/topology/retry/DLQ boilerplate lives in ``messaging.ConsumerBase``.
 
@@ -63,6 +63,14 @@ class NotificationConsumer(ConsumerBase):
             api_key=settings.INTERNAL_API_KEY,
             timeout=settings.ACCOUNT_SERVICE_TIMEOUT,
         )
+
+    async def run(self) -> None:
+        # ConsumerBase.run() owns the AMQP connection's lifetime but knows
+        # nothing about our HTTP pool, so close it on the way out.
+        try:
+            await super().run()
+        finally:
+            await self._account_owner.aclose()
 
     async def handle(self, payload: dict[str, Any], message: AbstractIncomingMessage) -> None:
         event_type = payload.get("event_type")

@@ -9,14 +9,17 @@ from sqlalchemy.exc import IntegrityError
 
 
 class FakeNotificationRepository:
-    def __init__(self) -> None:
+    def __init__(self, *, lose_insert_race: bool = False) -> None:
         self.rows: list[Notification] = []
+        # Models the race the unique constraint exists for: the fast-path
+        # exists-check sees nothing, then a concurrent writer wins the INSERT.
+        self._lose_insert_race = lose_insert_race
 
     async def source_key_exists(self, source_key: str) -> bool:
         return any(n.source_key == source_key for n in self.rows)
 
     async def add(self, notification: Notification) -> Notification:
-        if await self.source_key_exists(notification.source_key):
+        if self._lose_insert_race or await self.source_key_exists(notification.source_key):
             raise IntegrityError("dup", {}, Exception())
         notification.id = uuid4()
         self.rows.append(notification)
@@ -24,8 +27,8 @@ class FakeNotificationRepository:
 
 
 class FakeUoW:
-    def __init__(self) -> None:
-        self.notifications = FakeNotificationRepository()
+    def __init__(self, *, lose_insert_race: bool = False) -> None:
+        self.notifications = FakeNotificationRepository(lose_insert_race=lose_insert_race)
         self.committed = False
         self.rolled_back = False
 

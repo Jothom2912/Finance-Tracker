@@ -9,6 +9,7 @@ from contracts.events.bank import (
     BankConnectionCreatedEvent,
     BankConnectionDisconnectedEvent,
     BankSyncCompletedEvent,
+    SyncTrigger,
 )
 from contracts.events.budget import (
     BudgetLineThresholdCrossedEvent,
@@ -66,6 +67,7 @@ __all__ = [
     "SubCategoryCreatedEvent",
     "SubCategoryDeletedEvent",
     "SubCategoryUpdatedEvent",
+    "SyncTrigger",
     "TransactionCategorizedEvent",
     "TransactionCategoryCorrectedEvent",
     "TransactionCreatedEvent",

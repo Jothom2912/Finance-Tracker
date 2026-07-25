@@ -10,6 +10,7 @@ from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.database import Base
 from app.domain.entities import Notification, NotificationType
 from app.models import NotificationModel
+from sqlalchemy import select
 from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -107,6 +108,39 @@ async def test_mark_read_is_scoped_to_owner(session: AsyncSession) -> None:
     # user 2 cannot mark user 1's notification
     assert await uow.notifications.mark_read(mine.id, 2) is False
     assert await uow.notifications.dismiss(mine.id, 2) is False
+
+
+async def test_dismissed_rows_are_not_writable(session: AsyncSession) -> None:
+    # A dismissed row is gone from the feed, so the write path must agree:
+    # both mark_read and a second dismiss report no match (→ 404), rather
+    # than 204-ing against something the user can no longer see.
+    uow = SQLAlchemyUnitOfWork(session)
+    n = await uow.notifications.add(_n("gone"))
+    await uow.commit()
+
+    assert await uow.notifications.dismiss(n.id, 1) is True
+    await uow.commit()
+
+    assert await uow.notifications.mark_read(n.id, 1) is False
+    assert await uow.notifications.dismiss(n.id, 1) is False
+
+
+async def test_dismiss_does_not_move_the_first_dismissed_at(session: AsyncSession) -> None:
+    # The guard replaced a coalesce; prove the timestamp is still write-once.
+    uow = SQLAlchemyUnitOfWork(session)
+    n = await uow.notifications.add(_n("stamp"))
+    await uow.commit()
+    await uow.notifications.dismiss(n.id, 1)
+    await uow.commit()
+
+    row = (await session.execute(select(NotificationModel).where(NotificationModel.id == n.id))).scalar_one()
+    stamped_at = row.dismissed_at
+    assert stamped_at is not None
+
+    await uow.notifications.dismiss(n.id, 1)
+    await uow.commit()
+    await session.refresh(row)
+    assert row.dismissed_at == stamped_at
 
 
 async def test_mark_all_read(session: AsyncSession) -> None:

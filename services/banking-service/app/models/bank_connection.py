@@ -29,6 +29,10 @@ class BankConnectionModel(Base):
     # ryddet ved mark_sync_complete; serialiserer sagas per connection.
     sync_saga_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     sync_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Hvad der startede den igangværende sync ("manual"/"scheduled") — læses af
+    # saga-reply-handleren når BankSyncCompletedEvent bygges. NULL på rækker
+    # claimet før migration 004; handleren falder tilbage til "manual".
+    sync_trigger: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     __table_args__ = (
