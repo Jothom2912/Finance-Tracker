@@ -98,7 +98,14 @@ Alle fire CI-steps for de tre shared-pakker er kørt lokalt med præcis de komma
 kalder, inkl. `bandit -ll -ii` (0 findings ved den tærskel; de 3 Low-severity findings i
 `messaging` er under den, som for services).
 
-**Live-verifikation mangler stadig** — planens step 9. Se nedenfor.
+**Live-verifikation gennemført** (planens step 9, fuld tabel i planens Outcome). Kernen:
+redelivery af samme `mark_sync_complete` gav 0 nye notifikationer, 0 nye outbox-rækker og
+1 uændret inbox-række, mens `saga_reply.dlq` indeholdt præcis 2 replies — én per levering,
+altså svarede dublet-stien også. Step 7's `.value`-skrivning verificeret mod rigtig Postgres
+i en rullet-tilbage transaktion (`'scheduled'`/`'manual'`, ikke `'SyncTrigger.X'`).
+
+Det live-testen *ikke* beviste: saga-siden var syntetisk, så orchestratorens accept af
+dublet-replyet blev ikke observeret, og ingen ægte EB-sync blev kørt (ingen JWT tilgængelig).
 
 ## Gotchas værd at huske
 
@@ -113,9 +120,10 @@ kalder, inkl. `bandit -ll -ii` (0 findings ved den tærskel; de 3 Low-severity f
 
 ## Åbne ender efter i dag
 
-- **Live-verifikation af P2-22** (plan step 9): kræver kørende stack. Husk at bekræfte at det
-  *byggede* worker-image indeholder guarden før man tror på testen —
-  `compose build banking-service` bygger ikke dens workers.
+- **Testartefakter i dev-DB'en**: 1 falsk sync-notifikation til user 1 (+ outbox- og
+  inbox-række), alle identificerbare på `p222-smoke`-præfikset. Ikke ryddet op.
+- **Ægte end-to-end sync** mangler stadig som observation (ingen JWT/login-helper); den
+  ville også vise orchestratorens accept af et dublet-reply.
 - **P2-23** stored reply for `bulk_import` (+ ville også låse op for at guarde
   `bank_fetch_transactions`).
 - **P2-24** delt intern-API-klient — owner-lookup findes i tre hånd-rullede kopier.

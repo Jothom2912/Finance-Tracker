@@ -179,7 +179,7 @@ kosmetik på en tabel to consumers er afhængige af er ikke værd at betale.
      plans close-out, så begge dages arbejde er dækket.
    - `00-INDEX.md`: denne plan + session-loggen.
 
-9. [~] **Verification.** *(offline grøn; live mangler)*
+9. [x] **Verification.**
 
    ```bash
    make -C services/notification-service check && make -C services/notification-service test
@@ -229,8 +229,55 @@ par uden at røre step 3–8.
 
 ## Outcome
 
-**Steps 1–8 shipped 2026-07-25** på `fix/p222-saga-inbox-guard`, 9 commits. Step 9's
-offline-halvdel er grøn; **live-verifikationen mangler** (kræver kørende stack).
+**Steps 1–9 shipped 2026-07-25** på `fix/p222-saga-inbox-guard`. Offline-suiter grønne og
+**live-verifikationen gennemført** — resultat nedenfor.
+
+### Live-verifikation (step 9)
+
+Workerne blev bygget individuelt (`compose build banking-saga-command-consumer
+notification-consumer`) — `compose build banking-service` bygger dem ikke — og guarden blev
+bekræftet *inde i* den kørende container før noget blev målt (`_step_key`/`_is_duplicate`
+til stede, `clear_sync_claim` væk).
+
+| Måling | Før | 1. levering | Redelivery |
+|---|---|---|---|
+| `notifications` (user 1, bank_sync) | 7 | **8** | **8** |
+| `outbox_events` (`bank.sync.completed`) | 23 | **24** | **24** |
+| `processed_events` (nøglen) | 0 | **1** | **1** |
+
+Consumer-loggen på redeliveryen: `Dublet saga-kommando
+(p222-smoke-…:mark_sync_complete) — springer effekten over, svarer success`. Nøglen i
+DB er `p222-smoke-…:mark_sync_complete` / `banking_service.saga_commands` — altså
+step-scoped som designet.
+
+**At dubletten svarede** blev målt indirekte men entydigt: `saga_service.saga_reply.dlq`
+indeholdt bagefter præcis **2** beskeder, én per levering, begge med testens `saga_id`.
+Replyet blev altså publiceret også på dublet-stien. (Purget efter testen.)
+
+**Step 7's skrivevej** blev verificeret mod den rigtige Postgres i en transaktion der blev
+rullet tilbage: `try_claim_sync(SyncTrigger.SCHEDULED)` → `'scheduled'`,
+`steal_sync_claim(SyncTrigger.MANUAL)` → `'manual'` — ikke `'SyncTrigger.SCHEDULED'` — og
+`_parse_sync_trigger` round-trippede begge tilbage til enum'en. Kolonnen var uændret efter
+rollback.
+
+**Hvad live-testen IKKE beviste, ærligt:**
+
+- **Saga-siden var syntetisk.** Testens `saga_id` var ikke en rigtig sagas, så
+  orchestratorens håndtering af dublet-replyet (`SagaAlreadyCompleted` → ack som dublet)
+  blev *ikke* observeret. Det er dækket af orchestrator-koden og saga-service's 50 tests, men
+  ikke af denne kørsel. En fuld observation kræver en ægte saga, altså en EB-sync.
+- **Ingen ægte bank-sync blev kørt** — der var ingen tilgængelig JWT for user 1 og ingen
+  login-helper i `scripts/`. Fetch-stien er uændret af denne wave bortset fra en docstring.
+- **Sidefund fra testens støj:** et `saga_id` der ikke er en UUID får reply-consumeren til at
+  kaste `asyncpg.DataError` → 3 retries → DLQ, i stedet for at afvise beskeden som poison.
+  Præ-eksisterende, lav værdi (ægte saga-id'er *er* UUID'er), men noteret.
+
+**Testartefakter efterladt i dev-miljøet** (bevidst, ikke oprydt uden at spørge): 1
+notifikation til user 1 der påstår 2 importerede transaktioner der ikke findes, 1 publiceret
+outbox-række, 1 `processed_events`-række med nøgle `p222-smoke-…`. Alle tre er entydigt
+identificerbare på `p222-smoke`-præfikset / korrelations-id'et. Desuden en `claim_probe.py` i
+banking-worker-containerens writable layer (ikke i imaget; forsvinder ved næste recreate —
+kunne ikke slettes, da containeren kører non-root).
 
 Suiter: banking **66** (60 før), notification **90**, transaction **215**, shared
 contracts/messaging/auth **56/45/28** — alle med lint, format og bandit grønne.
