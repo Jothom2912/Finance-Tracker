@@ -56,10 +56,6 @@ class IBankConnectionRepository(Protocol):
         """
         ...
 
-    async def clear_sync_claim(self, connection_id: UUID, saga_id: str) -> None:
-        """Release the claim iff it still belongs to saga_id."""
-        ...
-
     async def update_consent(
         self,
         connection_id: UUID,

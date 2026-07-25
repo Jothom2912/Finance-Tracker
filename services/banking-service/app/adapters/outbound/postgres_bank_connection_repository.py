@@ -177,17 +177,6 @@ class PostgresBankConnectionRepository:
         )
         return result.rowcount == 1
 
-    async def clear_sync_claim(self, connection_id: UUID, saga_id: str) -> None:
-        """Release only our own claim — a newer saga's claim must survive."""
-        await self._session.execute(
-            update(BankConnectionModel)
-            .where(
-                BankConnectionModel.id == str(connection_id),
-                BankConnectionModel.sync_saga_id == saga_id,
-            )
-            .values(sync_saga_id=None, sync_started_at=None, sync_trigger=None)
-        )
-
     async def update_consent(
         self,
         connection_id: UUID,
