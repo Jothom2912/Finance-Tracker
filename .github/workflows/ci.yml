@@ -8,6 +8,41 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The per-service jobs below lint only their own directory, and the Makefile's
+  # lint target iterates the same list — so scripts/ and the root tests/ were in
+  # no perimeter at all. Both had unnoticed formatting drift when this job was
+  # added (2026-07-26), and scripts/ holds tools that write directly to service
+  # databases.
+  #
+  # This also backstops .githooks/pre-commit: hooks are per-clone, opt-in via
+  # `make install-hooks`, and bypassable with --no-verify, so they cannot
+  # guarantee anything about master. One ruff invocation is valid repo-wide
+  # because no service defines its own [tool.ruff] — all inherit ruff.toml.
+  #
+  # Runs first and independently: it needs no dependencies, so it reports in
+  # well under a minute instead of waiting on twelve `uv sync`s.
+  repo-lint:
+    name: Repo-wide lint (incl. scripts/, tests/)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Ruff lint
+        run: ruff check services scripts tests
+
+      - name: Ruff format check
+        run: ruff format --check services scripts tests
+
   python-services:
     name: ${{ matrix.service }} - Python 3.11
     runs-on: ubuntu-latest

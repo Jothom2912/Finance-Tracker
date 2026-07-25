@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#
+# Blocks commits that would fail CI's ruff steps.
+#
+# Why this exists: on 2026-07-25 three CI jobs (banking-service, budget-service
+# and the three shared packages) were found red *by accident*, all on
+# `ruff format --check` against already-committed code. budget-service's tests
+# had therefore not run in CI for five days, because the format step precedes
+# them. Nobody was watching Actions, and `make check` was not run before
+# committing. Three instances in one day is a missing feedback loop, not three
+# mistakes.
+#
+# Scope is deliberately narrow: lint and format only, on the files being
+# committed. Tests are far too slow for a commit hook (12 services), and CI
+# already runs them. This catches the exact class that went red, in under a
+# second.
+#
+# Every service inherits the root ruff.toml — no service defines its own
+# [tool.ruff] — so a single invocation from the repo root is correct for all
+# of them, including scripts/ and tests/, which no per-service Makefile covers.
+#
+# Install:  make install-hooks     (sets core.hooksPath — hooks are not cloned)
+# Bypass:   git commit --no-verify
+#
+# Portability: macOS ships bash 3.2, so no mapfile and no `set -u` (referencing
+# an empty array under -u is an error there).
+set -eo pipefail
+
+# --diff-filter=ACM: added/copied/modified. Deleted and renamed-away paths are
+# skipped — ruff cannot read a file that is no longer there.
+# -z plus read -d '': survives paths with spaces.
+staged=()
+while IFS= read -r -d '' file; do
+    staged+=("$file")
+done < <(git diff --cached --name-only -z --diff-filter=ACM -- '*.py')
+
+if [ ${#staged[@]} -eq 0 ]; then
+    exit 0
+fi
+
+# Prefer a ruff on PATH; fall back to uvx, which every dev here already has
+# (uv is the project's dependency manager).
+if command -v ruff > /dev/null 2>&1; then
+    ruff_cmd=(ruff)
+elif command -v uvx > /dev/null 2>&1; then
+    ruff_cmd=(uvx ruff)
+else
+    # Fail loudly rather than skipping. A gate that silently disables itself
+    # when tooling is missing is the failure mode this hook exists to fix.
+    echo "pre-commit: neither 'ruff' nor 'uvx' found on PATH." >&2
+    echo "            Install uv, or bypass once with: git commit --no-verify" >&2
+    exit 1
+fi
+
+# Known limitation: this checks the files as they exist in the working tree,
+# not the staged blobs. With a partially-staged file the hook may judge content
+# that is not being committed. Accepted — the failure mode it guards against is
+# whole-file formatting drift, and checking staged blobs would mean piping each
+# file through --stdin-filename one at a time.
+#
+# `|| status=1` rather than letting -e abort: both checks should report, so a
+# single commit attempt shows every problem instead of one per retry.
+status=0
+"${ruff_cmd[@]}" check "${staged[@]}" || status=1
+"${ruff_cmd[@]}" format --check "${staged[@]}" || status=1
+
+if [ $status -ne 0 ]; then
+    echo >&2
+    echo "pre-commit: ruff would fail CI on these files." >&2
+    echo "            Fix with: ${ruff_cmd[*]} format <files>" >&2
+    echo "            Bypass with: git commit --no-verify" >&2
+fi
+
+exit $status

@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint format format-check check clean clean-test-containers
+.PHONY: help install-deps install-hooks dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint lint-repo format format-check check clean clean-test-containers
 
 INFRA_SERVICES = postgres postgres-transactions postgres-categorization postgres-account postgres-budget postgres-goals postgres-banking rabbitmq redis
 USER_SERVICE_DIR = services/user-service
@@ -35,7 +35,8 @@ PY_SERVICE_DIRS = \
 help: ## Show available targets
 	@printf '\nAvailable targets:\n\n'
 	@printf '  [Setup]\n'
-	@printf '    install-deps              Install deps for all services\n\n'
+	@printf '    install-deps              Install deps for all services\n'
+	@printf '    install-hooks             Enable tracked git hooks (once per clone)\n\n'
 	@printf '  [Development]\n'
 	@printf '    dev                       Start infra and print instructions\n'
 	@printf '    dev-docker                Start everything in Docker containers\n'
@@ -53,6 +54,7 @@ help: ## Show available targets
 	@printf '    test                      Run all tests\n'
 	@printf '    test-e2e                  Run E2E tests (requires Docker)\n'
 	@printf '    lint                      Run ruff linter on all Python services\n'
+	@printf '    lint-repo                 Lint+format-check whole repo (incl. scripts/, tests/)\n'
 	@printf '    format                    Auto-format all Python services\n'
 	@printf '    format-check              Check formatting without changes\n'
 	@printf '    check                     Run all quality checks\n'
@@ -64,6 +66,12 @@ help: ## Show available targets
 install-deps: ## Install dependencies for all services
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir install-deps; done
 	$(MAKE) -C $(FRONTEND_DIR) install-deps
+
+# Hooks live in .githooks/ so they are version-controlled; .git/hooks is not
+# cloned, so this must be run once per clone.
+install-hooks: ## Enable the tracked git hooks (run once per clone)
+	git config core.hooksPath .githooks
+	@echo "core.hooksPath -> .githooks (pre-commit: ruff check + format on staged .py)"
 
 # === Development ===
 
@@ -128,6 +136,14 @@ format: ## Auto-format all Python services
 
 format-check: ## Check code formatting without changes
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir format-check; done
+
+# The per-service targets above iterate PY_SERVICE_DIRS, which leaves scripts/
+# and the root tests/ unlinted — both had drifted unnoticed. No service defines
+# its own [tool.ruff], so one invocation from the root is correct everywhere.
+# Mirrored by the repo-lint job in .github/workflows/ci.yml.
+lint-repo: ## Lint + format-check the WHOLE repo, incl. scripts/ and tests/
+	uvx ruff check services scripts tests
+	uvx ruff format --check services scripts tests
 
 check: ## Run all quality checks (lint + format + tests)
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir check; done
