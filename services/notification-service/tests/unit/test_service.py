@@ -22,6 +22,7 @@ def _bank_event(
     trigger: SyncTrigger = SyncTrigger.MANUAL,
     new_imported: int = 3,
     errors: int = 0,
+    parse_skipped: int = 0,
 ) -> BankSyncCompletedEvent:
     return BankSyncCompletedEvent(
         connection_id="c1",
@@ -31,6 +32,7 @@ def _bank_event(
         new_imported=new_imported,
         duplicates_skipped=0,
         errors=errors,
+        parse_skipped=parse_skipped,
         trigger=trigger,
     )
 
@@ -106,6 +108,36 @@ async def test_scheduled_sync_with_only_errors_notifies() -> None:
 
     assert result.status == "created"
     assert len(uow.notifications.rows) == 1
+
+
+async def test_scheduled_sync_with_only_parse_skips_notifies() -> None:
+    # Fetched rows that the parser could not read: new_imported and errors are
+    # both 0, so without parse_skipped this looks exactly like a quiet night and
+    # a dead bank connection would be silenced indefinitely.
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+
+    result = await _service(uow, email, owner).handle_bank_sync_completed(
+        _bank_event(trigger=SyncTrigger.SCHEDULED, new_imported=0, errors=0, parse_skipped=40)
+    )
+
+    assert result.status == "created"
+    assert len(uow.notifications.rows) == 1
+
+
+async def test_raw_string_trigger_is_still_suppressed() -> None:
+    # SyncTrigger subclasses str. The service compares with `==`, not `is`, so a
+    # plain "scheduled" — from use_enum_values, model_construct, or any
+    # dict-driven path — suppresses like the enum member. Identity comparison
+    # would fail open here and quietly re-enable the nightly noise.
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+    event = _bank_event(new_imported=0)
+    raw = event.model_copy(update={"trigger": "scheduled"})
+    assert raw.trigger is not SyncTrigger.SCHEDULED  # precondition: really a str
+
+    result = await _service(uow, email, owner).handle_bank_sync_completed(raw)
+
+    assert result.status == "ignored_quiet_sync"
+    assert uow.notifications.rows == []
 
 
 async def test_event_without_trigger_defaults_to_notifying() -> None:

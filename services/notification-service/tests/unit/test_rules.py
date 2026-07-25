@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from app.domain.rules import should_notify_bank_sync
-from contracts.events.bank import SyncTrigger
 
 
 @pytest.mark.parametrize(
@@ -14,33 +13,25 @@ from contracts.events.bank import SyncTrigger
 def test_manual_sync_always_notifies(new_imported: int, errors: int) -> None:
     # The user pressed a button; "nothing changed" is still an answer they are
     # owed. Silence on a manual sync reads as a failure.
-    assert should_notify_bank_sync(trigger=SyncTrigger.MANUAL, new_imported=new_imported, errors=errors)
+    assert should_notify_bank_sync(scheduled=False, new_imported=new_imported, errors=errors)
 
 
 def test_scheduled_sync_with_nothing_to_report_is_silent() -> None:
-    assert not should_notify_bank_sync(trigger=SyncTrigger.SCHEDULED, new_imported=0, errors=0)
+    assert not should_notify_bank_sync(scheduled=True, new_imported=0, errors=0)
 
 
 def test_scheduled_sync_with_imports_notifies() -> None:
-    assert should_notify_bank_sync(trigger=SyncTrigger.SCHEDULED, new_imported=1, errors=0)
+    assert should_notify_bank_sync(scheduled=True, new_imported=1, errors=0)
 
 
 def test_scheduled_sync_with_only_errors_notifies() -> None:
     # Nothing imported but something went wrong — that is exactly the case the
     # user cannot discover on their own, so it must not be swallowed.
-    assert should_notify_bank_sync(trigger=SyncTrigger.SCHEDULED, new_imported=0, errors=2)
+    assert should_notify_bank_sync(scheduled=True, new_imported=0, errors=2)
 
 
 def test_scheduled_sync_with_only_parse_skips_notifies() -> None:
     # The dangerous shape: the bank returned 40 rows and the parser read none
     # of them, so new_imported and errors are both 0. That is a broken
     # connection, not a quiet night — suppressing it hides a dead integration.
-    assert should_notify_bank_sync(trigger=SyncTrigger.SCHEDULED, new_imported=0, errors=0, parse_skipped=40)
-
-
-def test_trigger_is_compared_by_value_not_identity() -> None:
-    # SyncTrigger subclasses str, so a plain "scheduled" arriving from a
-    # dict-driven path (or use_enum_values=True on the event model) must
-    # suppress exactly like the enum member. Identity comparison fails open
-    # here and would quietly re-enable the nightly noise.
-    assert not should_notify_bank_sync(trigger="scheduled", new_imported=0, errors=0)  # type: ignore[arg-type]
+    assert should_notify_bank_sync(scheduled=True, new_imported=0, errors=0, parse_skipped=40)

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
-from contracts.events.bank import BankSyncCompletedEvent
+from contracts.events.bank import BankSyncCompletedEvent, SyncTrigger
 from contracts.events.budget import (
     BudgetLineThresholdCrossedEvent,
     BudgetMonthClosedEvent,
@@ -60,8 +60,14 @@ class NotificationService:
         # Drop the nightly no-op before touching the repo: source_key carries
         # correlation_id, so a suppressed sweep would otherwise write a fresh
         # row every night rather than deduping against the previous one.
+        # Wire-enum → primitive here, so the domain predicate stays free of the
+        # event contracts. `==` not `is`: SyncTrigger subclasses str, so a plain
+        # "scheduled" (use_enum_values, model_construct, a dict-driven path)
+        # must suppress exactly like the enum member — identity comparison
+        # fails open and silently re-enables the nightly noise.
+        scheduled = event.trigger == SyncTrigger.SCHEDULED
         if not should_notify_bank_sync(
-            trigger=event.trigger,
+            scheduled=scheduled,
             new_imported=event.new_imported,
             errors=event.errors,
             parse_skipped=event.parse_skipped,
