@@ -30,11 +30,11 @@ from datetime import date, datetime, timezone
 from messaging import setup_worker_logging
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.adapters.outbound.analytics_port import AnalyticsSpendPort
 from app.adapters.outbound.category_port import CategoryPort
 from app.adapters.outbound.postgres_monthly_budget_repository import (
     PostgresMonthlyBudgetRepository,
 )
-from app.adapters.outbound.analytics_port import AnalyticsSpendPort
 from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.application.monthly_budget_service import MonthlyBudgetService
 from app.application.ports.outbound import ICategoryPort, ISpendPort
