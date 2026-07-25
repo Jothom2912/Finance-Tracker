@@ -16,8 +16,10 @@ from uuid import uuid4
 
 import pytest
 from app.adapters.outbound.enable_banking_client import BankTransaction
+from app.models.processed_events import ProcessedEventModel
 from app.workers.saga_command_consumer import BankingSagaCommandConsumer
 from contracts.events.bank import SyncTrigger
+from sqlalchemy.exc import IntegrityError
 
 
 def _bank_txn(**overrides) -> BankTransaction:  # type: ignore[no-untyped-def]
@@ -100,12 +102,32 @@ async def test_existing_mapping_contract_unchanged() -> None:
 # ── P3-14: mark_sync_complete frigiver sync-claimet ──────────────────
 
 
-class _FakeSession:
-    """Minimal async-session-stand-in for _handle_mark_sync_complete."""
+class _Result:
+    def __init__(self, row) -> None:
+        self._row = row
 
-    def __init__(self, conn) -> None:
+    def scalar_one_or_none(self):
+        return self._row
+
+
+class _FakeSession:
+    """Minimal async-session-stand-in for _handle_mark_sync_complete.
+
+    Skelner de to SELECTs handleren laver (bank_connections vs.
+    processed_events) på statementets entity, og *persisterer* inbox-rækker
+    ved commit — så et andet kald mod samme session-tilstand ser den række
+    det første kald skrev. Uden den persistering ville en redelivery-test
+    bestå vakuøst.
+    """
+
+    def __init__(self, conn, inbox: set[str] | None = None, fail_commit: bool = False) -> None:
         self._conn = conn
+        self.inbox: set[str] = inbox if inbox is not None else set()
+        self.added: list = []
         self.committed = False
+        self.commit_count = 0
+        self.rollback_count = 0
+        self._fail_commit = fail_commit
 
     async def __aenter__(self):
         return self
@@ -113,18 +135,29 @@ class _FakeSession:
     async def __aexit__(self, *args):
         return None
 
-    async def execute(self, *_args, **_kwargs):
-        conn = self._conn
+    async def execute(self, stmt, *_args, **_kwargs):
+        if stmt.column_descriptions[0]["entity"] is ProcessedEventModel:
+            asked = set(stmt.compile().params.values())
+            return _Result(object() if asked & self.inbox else None)
+        return _Result(self._conn)
 
-        class _Result:
-            @staticmethod
-            def scalar_one_or_none():
-                return conn
-
-        return _Result()
+    def add(self, obj) -> None:
+        self.added.append(obj)
 
     async def commit(self) -> None:
+        self.commit_count += 1
+        if self._fail_commit:
+            # Efterlign unique-constraint'en: kapløbstaberen ser den her.
+            raise IntegrityError("uq_processed_event", None, Exception("duplicate key"))
         self.committed = True
+        for obj in self.added:
+            if isinstance(obj, ProcessedEventModel):
+                self.inbox.add(obj.correlation_id)
+        self.added = []
+
+    async def rollback(self) -> None:
+        self.rollback_count += 1
+        self.added = []
 
 
 def _connection_row(saga_id: str | None, sync_trigger: str | None = None):
@@ -140,19 +173,29 @@ def _connection_row(saga_id: str | None, sync_trigger: str | None = None):
     )
 
 
-async def _run_mark_sync_complete(conn, body: dict):
-    """Kør handleren; returnér det emitterede BankSyncCompletedEvent."""
+async def _call_mark_sync_complete(conn, body: dict, session: _FakeSession | None = None):
+    """Kør handleren én gang; returnér (reply, outbox_add_mock, session).
+
+    Rå variant: siger intet om at der *blev* emitteret et event — det er
+    netop det dublet-testene skal kunne se.
+    """
     consumer = BankingSagaCommandConsumer()
-    session = _FakeSession(conn)
+    session = session if session is not None else _FakeSession(conn)
     with (
         patch("app.workers.saga_command_consumer.async_session_factory", lambda: session),
         patch("app.workers.saga_command_consumer.OutboxRepository") as outbox_cls,
     ):
         outbox_cls.return_value.add = AsyncMock()
         reply = await consumer._handle_mark_sync_complete(body)
+    return reply, outbox_cls.return_value.add, session
+
+
+async def _run_mark_sync_complete(conn, body: dict):
+    """Kør handleren; returnér det emitterede BankSyncCompletedEvent."""
+    reply, add_mock, session = await _call_mark_sync_complete(conn, body)
     assert reply == {"success": True}
     assert session.committed
-    return outbox_cls.return_value.add.await_args.kwargs["event"]
+    return add_mock.await_args.kwargs["event"]
 
 
 @pytest.mark.asyncio
@@ -278,3 +321,112 @@ async def test_missing_saga_id_in_body_is_not_treated_as_our_claim() -> None:
     event = await _run_mark_sync_complete(conn, {"connection_id": str(conn.id), "user_id": 2})
 
     assert event.trigger is SyncTrigger.MANUAL
+
+
+# ── P2-22: inbox-guard på mark_sync_complete ─────────────────────────
+
+
+def _command(conn, saga_id: str = "saga-1", step_name: str = "mark_sync_complete") -> dict:
+    return {
+        "connection_id": str(conn.id),
+        "user_id": 2,
+        "saga_id": saga_id,
+        "step_name": step_name,
+    }
+
+
+@pytest.mark.asyncio
+async def test_redelivered_command_emits_no_second_event() -> None:
+    # Hele P2-22 i én test. Første levering rydder claimet; anden levering
+    # ville derfor læse sync_trigger=NULL → MANUAL → et ANDET
+    # BankSyncCompletedEvent med frisk correlation_id, hvis source_key-dedup
+    # i notification-service ikke kan absorbere → spøgelsesnotifikation.
+    conn = _connection_row(saga_id="saga-1", sync_trigger="scheduled")
+    session = _FakeSession(conn)
+
+    first_reply, first_add, _ = await _call_mark_sync_complete(conn, _command(conn), session)
+    second_reply, second_add, _ = await _call_mark_sync_complete(conn, _command(conn), session)
+
+    assert first_add.await_count == 1
+    assert second_add.await_count == 0, "redelivery emitterede et andet completion-event"
+    # Og begge svarer — se næste test for hvorfor det er afgørende.
+    assert first_reply == {"success": True}
+    assert second_reply == {"success": True}
+
+
+@pytest.mark.asyncio
+async def test_duplicate_still_replies_so_the_saga_does_not_hang() -> None:
+    # Grunden til redeliveryen er typisk at reply'et blev tabt. Ack'er vi
+    # dubletten uden at svare, hænger sagaen til timeout og går i
+    # kompensation — vi ville bytte en spøgelsesnotifikation for en fejlet
+    # saga. Dublet-stien skal derfor svare success, ikke tie.
+    conn = _connection_row(saga_id="saga-1", sync_trigger="manual")
+    session = _FakeSession(conn, inbox={"saga-1:mark_sync_complete"})
+
+    reply, add_mock, _ = await _call_mark_sync_complete(conn, _command(conn), session)
+
+    assert reply == {"success": True}
+    assert add_mock.await_count == 0
+    assert session.commit_count == 0, "dublet-stien må ikke skrive noget"
+
+
+@pytest.mark.asyncio
+async def test_two_steps_in_the_same_saga_both_run() -> None:
+    # Nøglen er (saga_id, step_name) — ikke saga_id alene. Var den saga_id
+    # alene, ville trin 2 blive afvist som dublet af trin 1 og hele sagaen
+    # standse. Nem fejl at lave, og den ville se ud som en "hængende saga".
+    conn = _connection_row(saga_id="saga-1", sync_trigger="scheduled")
+    session = _FakeSession(conn)
+
+    _, first_add, _ = await _call_mark_sync_complete(conn, _command(conn, step_name="fetch_transactions"), session)
+    _, second_add, _ = await _call_mark_sync_complete(conn, _command(conn, step_name="mark_sync_complete"), session)
+
+    assert first_add.await_count == 1
+    assert second_add.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_inbox_row_commits_with_the_effects() -> None:
+    # Inbox-rækken skal ligge i handlerens egen transaktion. Ét commit,
+    # der bærer både claim-ryddet, outbox-rækken og inbox-rækken.
+    conn = _connection_row(saga_id="saga-1", sync_trigger="scheduled")
+    session = _FakeSession(conn)
+
+    await _call_mark_sync_complete(conn, _command(conn), session)
+
+    assert session.commit_count == 1
+    assert session.inbox == {"saga-1:mark_sync_complete"}
+
+
+@pytest.mark.asyncio
+async def test_integrity_error_on_commit_is_a_benign_race() -> None:
+    # To deliveries samtidigt: exists-checket var rent i begge, og
+    # unique-constraint'en afgjorde kapløbet. Taberen ruller tilbage og
+    # svarer som dublet i stedet for at fejle sagaen.
+    conn = _connection_row(saga_id="saga-1", sync_trigger="scheduled")
+    session = _FakeSession(conn, fail_commit=True)
+
+    reply, _, _ = await _call_mark_sync_complete(conn, _command(conn), session)
+
+    assert reply == {"success": True}
+    assert session.rollback_count == 1
+
+
+@pytest.mark.asyncio
+async def test_command_without_step_name_runs_without_guard(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # En delvis nøgle er farligere end ingen: ":" ville matche hver anden
+    # nøgleløs kommando og gøre alle på nær den første til dubletter. Vi
+    # falder tilbage til adfærden fra før guarden — og siger det højt.
+    conn = _connection_row(saga_id="saga-1", sync_trigger="scheduled")
+    session = _FakeSession(conn)
+
+    with caplog.at_level(logging.WARNING):
+        _, add_mock, _ = await _call_mark_sync_complete(
+            conn, {"connection_id": str(conn.id), "user_id": 2, "saga_id": "saga-1"}, session
+        )
+
+    assert add_mock.await_count == 1
+    assert session.inbox == set()
+    assert "uden inbox-guard" in caplog.text
