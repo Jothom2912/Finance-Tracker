@@ -117,6 +117,23 @@ class TransactionSagaCommandConsumer:
                 await message.ack()
 
     async def _handle_bulk_import(self, body: dict) -> dict:
+        """Importér de hentede transaktioner.
+
+        **Ingen inbox-guard, og almindelig dedup ville ikke være nok** (P2-22).
+
+        Data er sikre ved redelivery i forvejen: P2-09's dedup-nøgler gør at
+        allerede-committede rækker springes over som duplicates. Det åbne hul
+        er *reply'et*, ikke databasen — ved en redelivery er ``imported_ids``
+        tom (alt tælles som duplicate), så fejler sagaen bagefter, har
+        kompensationen intet at rulle tilbage, og de importerede rækker bliver
+        liggende.
+
+        En simpel "set før? svar success" guard ville gøre det **værre**: den
+        ville svare med tomme ``imported_ids`` med vilje. Fixet er *stored
+        reply* — gem svaret fra første kørsel og gensend det uændret — hvilket
+        er en anden mekanisme end guarden i banking's
+        ``_handle_mark_sync_complete``. Sporet som P2-23.
+        """
         user_id = body["user_id"]
         account_id = body["account_id"]
         account_name = body["account_name"]
@@ -181,6 +198,19 @@ class TransactionSagaCommandConsumer:
         }
 
     async def _handle_rollback_import(self, body: dict) -> dict:
+        """Kompensation: slet de importerede transaktioner igen.
+
+        **Behøver ingen inbox-guard** (P2-22) — og det er værd at bemærke
+        hvorfor netop den her ikke gør, for det er den *eneste* kommando
+        orchestratoren faktisk genudsender af sig selv
+        (``_handle_stale_compensation`` re-emitterer den én gang ved stale
+        kompensation). Den er idempotent ved konstruktion: målet er "rækkerne
+        er væk", så en allerede-slettet række (``TransactionNotFoundException``)
+        er en opfyldt betingelse, ikke en fejl.
+
+        En guard her ville tværtimod skade: den ville få gen-emitteringen til
+        at svare success uden at rydde op, hvis første forsøg fejlede halvvejs.
+        """
         user_id = body["user_id"]
         transaction_ids = body.get("transaction_ids", [])
 
