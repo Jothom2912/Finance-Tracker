@@ -1,7 +1,7 @@
 ---
 title: P2-22 — inbox guard på saga-command consumers + loose ends fra notification-hardening
 date: 2026-07-25
-status: open
+status: done
 backlog-items: [P2-22, P3-09]
 related:
   - plans/2026-07-25-notification-service-hardening.md
@@ -90,7 +90,7 @@ kosmetik på en tabel to consumers er afhængige af er ikke værd at betale.
 
 ## Steps
 
-1. [ ] **Inbox guard på `_handle_mark_sync_complete`** —
+1. [x] **Inbox guard på `_handle_mark_sync_complete`** —
    `banking-service/app/workers/saga_command_consumer.py`.
    - Ny modul-konstant + helper: `_step_key(saga_id, step_name) -> str` →
      `f"{saga_id}:{step_name}"`, og `_is_duplicate(session, key)` /
@@ -108,7 +108,7 @@ kosmetik på en tabel to consumers er afhængige af er ikke værd at betale.
      `{"success": True}` (to samtidige deliveries).
    - Diff-form: ~35 linjer i én fil, ingen migration, ingen kontraktændring.
 
-2. [ ] **Tests for guarden** — `banking-service/tests/unit/test_saga_command_consumer.py`.
+2. [x] **Tests for guarden** — `banking-service/tests/unit/test_saga_command_consumer.py`.
    - Redelivery af samme `(saga_id, step_name)` → **én** outbox-række, og andet kald
      returnerer stadig `success: True`.
    - P2-22-historien end-to-end på handler-niveau: kør handleren, ryd claimet (som første
@@ -120,7 +120,7 @@ kosmetik på en tabel to consumers er afhængige af er ikke værd at betale.
    - Mutation-check som i hardeningens step 7: gør nøglen per-delivery-unik og bekræft at
      dedup-testen fejler, så den ikke består vakuøst.
 
-3. [ ] **Skriv dommen over de tre øvrige handlers** — kommentarer + nyt backlog-item, ingen
+3. [x] **Skriv dommen over de tre øvrige handlers** — kommentarer + nyt backlog-item, ingen
    adfærdsændring.
    - `bank_fetch_transactions` (banking): kommentar om at dedup her er *forkert* og hvorfor
      (reply bærer hele fetchen). Rene læsninger + EB-kald; redelivery er spild, ikke skade.
@@ -134,18 +134,18 @@ kosmetik på en tabel to consumers er afhængige af er ikke værd at betale.
      Kræver *stored reply*, ikke almindelig dedup → **nyt item P2-23**, med vinduet skrevet
      ned. Kommentar i koden der peger på det.
 
-4. [ ] **Slet død `clear_sync_claim`** — `banking-service/app/application/ports/outbound.py`
+4. [x] **Slet død `clear_sync_claim`** — `banking-service/app/application/ports/outbound.py`
    + `app/adapters/outbound/postgres_bank_connection_repository.py`. Nul callers
    (verificeret), ingen tests. Claimet frigives ved ORM-mutation i consumeren. To
    implementeringer af samme regel hvoraf den ene er falsk er værre end ingen.
 
-5. [ ] **`aclose()` på en port der ikke erklærer den** — notification-service.
+5. [x] **`aclose()` på en port der ikke erklærer den** — notification-service.
    `notification_consumer.py:73` kalder `aclose()` i en `finally` på owner-porten;
    erklæres den ikke på porten, giver en substitueret implementation `AttributeError` under
    shutdown og maskerer den *rigtige* fejl. Fix: erklær `aclose()` på porten (arkitektonisk
    ærligt — lifetime er en del af kontrakten), ikke `getattr`-workaround.
 
-6. [ ] **Shared-pakkerne ind i CI** — `.github/workflows/ci.yml`.
+6. [x] **Shared-pakkerne ind i CI** — `.github/workflows/ci.yml`.
    `services/shared/contracts` fejler `ruff format --check` **lige nu** (2 filer, F2-03-kode)
    uden at CI fanger det, fordi matrixen kun indeholder de 12 services. En shared-pakke der
    brækker rammer alle 12 — det er den værste ting at have udenfor CI.
@@ -156,13 +156,13 @@ kosmetik på en tabel to consumers er afhængige af er ikke værd at betale.
    - Separat commit: `ruff format` på de to filer, så formateringsstøj ikke blandes med
      CI-ændringen.
 
-7. [ ] **(Droppable) Type `sync_trigger` som `SyncTrigger`** i banking-porten og
+7. [x] **(Droppable) Type `sync_trigger` som `SyncTrigger`** i banking-porten og
    -entiteten i stedet for `str`. I dag round-trippes enum → str → DB → str → enum, så en
    forkert værdi type-checker og degraderer stille til MANUAL (kun opdaget af
    `_parse_sync_trigger`s warning, tilføjet i hardeningen). Rigtigt kald, men det er
    P3-14-kode og udvider diffen. **Tages kun hvis step 1–6 er grønne** — ellers eget item.
 
-8. [ ] **Docs** — separat commit, ingen kode.
+8. [x] **Docs** — separat commit, ingen kode.
    - `patterns/idempotent-consumers.md`: ny sektion "saga-kommandoer er undtagelsen" —
      hvorfor `correlation_id` ikke duer som nøgle, at `(saga_id, step_name)` er den
      korrekte, hvorfor inbox-rækken skal ligge i handler-transaktionen (retry-evne), og at
@@ -179,7 +179,7 @@ kosmetik på en tabel to consumers er afhængige af er ikke værd at betale.
      plans close-out, så begge dages arbejde er dækket.
    - `00-INDEX.md`: denne plan + session-loggen.
 
-9. [ ] **Verification.**
+9. [~] **Verification.** *(offline grøn; live mangler)*
 
    ```bash
    make -C services/notification-service check && make -C services/notification-service test
@@ -227,6 +227,64 @@ kosmetik på en tabel to consumers er afhængige af er ikke værd at betale.
 Hvert step er egen commit. Step 1+2 hører sammen (fix + bevis) men er stadig revertable som
 par uden at røre step 3–8.
 
-## Outcome (fill in when done)
+## Outcome
 
-<!-- udfyldes ved close-out: deviations, follow-ups, faktiske suite-tal -->
+**Steps 1–8 shipped 2026-07-25** på `fix/p222-saga-inbox-guard`, 9 commits. Step 9's
+offline-halvdel er grøn; **live-verifikationen mangler** (kræver kørende stack).
+
+Suiter: banking **66** (60 før), notification **90**, transaction **215**, shared
+contracts/messaging/auth **56/45/28** — alle med lint, format og bandit grønne.
+
+Commits: `03857e37` (plan) · `023970ba` (banking-conftest) · `6c77b2ef` (guard + 6 tests) ·
+`de72d5df` (transaction-domme) · `4d0f2e0b` (død `clear_sync_claim`) · `af5fcf8c`
+(port-`aclose()`) · `3f003510` (`ruff format` shared) · `7f13173f` (CI-job + dependency-groups)
+· `b16d402f` (`SyncTrigger`-typing).
+
+Deviations fra planen:
+
+- **Ekstra step, ikke planlagt: banking-service's CI-job kunne aldrig collecte sine tests.**
+  `Settings` kræver `DATABASE_URL`, workflowet sætter den ikke, og banking var den ene service
+  uden `tests/conftest.py`. Maskeret fordi `ruff format --check` fejlede tidligere i samme job
+  — hardeningens d5630a6e afdækkede den. P2-14 registrerede banking som CI-dækket siden
+  2026-07-07, mens jobbet ikke kunne udføre en test.
+  [Finding](../findings/2026-07-25-banking-ci-could-not-collect.md). Fixet gør samtidig
+  hardeningens dokumenterede `uv run --with-requirements`-incantation overflødig.
+- **Step 6 var større end forventet.** Planen sagde `contracts` fejlede `ruff format`; **alle
+  tre** pakker gjorde. Og de brugte stadig `[project.optional-dependencies] dev` uden `ruff`,
+  så `uv sync --dev` (PEP 735, som CI og alle 12 services bruger) installerede intet værktøj —
+  symptomet er `error: Failed to spawn: ruff`, som læses som en PATH-fejl. Migreret til
+  `[dependency-groups]`.
+- **Step 7 blev taget** (den var markeret droppable), men **afgrænset**: port og adapter er nu
+  typet `SyncTrigger`, mens domæne-entiteten bevidst bliver `str`. `SyncTrigger` bor i
+  `contracts`, og domænet må ikke afhænge af event-kontrakterne — samme grænse som 86b97980
+  gjorde eksplicit i notification-service. Begrundelsen står ved feltet, så den ikke bliver
+  "ryddet op" senere. Bemærk at begge callers allerede sendte enum-members, så porten *løj*;
+  og at to af tre writers allerede skrev `.value` — nu gør alle tre.
+- **Step 5 blev en concrete no-op default** i porten, ikke `@abstractmethod`. En stub eller
+  in-memory-implementation skal ikke tvinges til et tomt override, fordi HTTP-adapteren
+  tilfældigvis ejer en connection pool.
+- **Step 8 rettede en forældet påstand** i `banking-and-saga-services.md`: den hævdede stadig
+  at `entry_reference`/`currency` droppes før import, hvilket P2-09 fiksede 2026-07-16.
+- **Session-loggen dækker begge dages arbejde** (hardening + denne wave), siden hardeningen
+  blev merget uden en:
+  [sessions/2026-07-25-notification-hardening-and-p222.md](../sessions/2026-07-25-notification-hardening-and-p222.md).
+
+Ting jeg fik forkert undervejs, værd at huske:
+
+- Jeg påstod først at banking-service **ikke** havde `processed_events` nogen steder. Den har
+  tabellen fra migration 001 og bruger den i `account_projection_consumer`; min grep var
+  afkortet med `head -20`. Planen blev mindre end backloggen antog — men påstanden var forkert
+  i en hel besked først.
+- Jeg læste `bandit`s output som 3 HIGH-severity findings i `messaging`. "High: 3" stod i
+  *confidence*-blokken; severity var Low, og `-ll -ii` gav "No issues identified", exit 0.
+
+Follow-ups spawned:
+
+- **P2-23** — stored reply for `bulk_import` (låser også op for at kunne guarde
+  `bank_fetch_transactions`).
+- **P2-24** — delt intern-API-klient i `services/shared`; owner-lookup findes i tre
+  hånd-rullede kopier med tre fejl-taksonomier.
+- **Til P3-13**: en CI-check på at test-steppet faktisk *kørte* noget
+  (`pytest --collect-only` count > 0) ville have fanget banking-hullet på dag ét.
+- **Uberørt, som planlagt**: P2-21 (k8s-manifest-drift), P3-17 (migrations-rækkefølge),
+  P3-18 (notification-retention + præferencemodel).

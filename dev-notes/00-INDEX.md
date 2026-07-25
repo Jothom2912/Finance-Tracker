@@ -36,6 +36,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [findings/2026-07-17-goal-delete-fk-500.md](findings/2026-07-17-goal-delete-fk-500.md) — goal hard-delete with allocation history → FK 500 (LOW); resolved 2026-07-17 by P3-16 soft-delete.
 - [findings/2026-07-20-goal-reached-not-emitted-on-allocation.md](findings/2026-07-20-goal-reached-not-emitted-on-allocation.md) — surplus-allocation completing a goal emits no event → no goal-reached notification on the auto path (MEDIUM, → F1-08).
 - [findings/2026-07-25-k8s-manifest-drift.md](findings/2026-07-25-k8s-manifest-drift.md) — 6 workloads + 1 DB in compose have no k8s manifest (F1-01/F1-05/F1-07/F2-03/AI-20); `apply -k` silently drops the notification feed and the automatic ADR-0003 chain (MEDIUM, → P2-21).
+- [findings/2026-07-25-banking-ci-could-not-collect.md](findings/2026-07-25-banking-ci-could-not-collect.md) — banking-service's CI-job kunne aldrig collecte sine tests (`DATABASE_URL` mangler + ingen conftest), maskeret af et tidligere `ruff format`-fejl i samme job; shared-pakkerne var slet ikke i CI (MEDIUM, resolved 2026-07-25).
 - [findings/2026-07-25-worker-migration-ordering.md](findings/2026-07-25-worker-migration-ordering.md) — migrations are a side effect of the API container's `CMD`; workers override `command:` and skip them, so k8s workers crash-loop until the API catches up (LOW, systemic, → P3-17).
 
 ## Backlog & plans
@@ -83,6 +84,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-17-p314-sync-claim.md](sessions/2026-07-17-p314-sync-claim.md) — P3-14 shipped: in-flight sync-claim (design-pivot fra deterministisk correlation-id); live e2e PASSED (concurrent → samme saga_id, claim roterer); banking local-test gotchas. F1-05 fuldt unblocked.
 - [sessions/2026-07-17-f105-scheduled-sync.md](sessions/2026-07-17-f105-scheduled-sync.md) — F1-05 shipped: nightly sync-scheduler; live e2e PASSED (auto-saga, scheduler deferred til manuel saga, 0 due på prod-config). **ADR-0003-kæden fuldautomatisk.**
 - [sessions/2026-07-20-f101-notification-service.md](sessions/2026-07-20-f101-notification-service.md) — F1-01 shipped: notification-service (stub→hexagonal, 3 triggers, REST feed + bell UI); live e2e PASSED all 3; goal-detection-by-amount pivot + F1-08 gap found.
+- [sessions/2026-07-25-notification-hardening-and-p222.md](sessions/2026-07-25-notification-hardening-and-p222.md) — hardening-close-out + P2-22: saga-kommandoer kan ikke dedupes på `correlation_id` (samme for alle trin) → `(saga_id, step_name)`; dubletten skal stadig svare; banking's CI-job kunne aldrig collecte.
 - [sessions/2026-07-20-f203-mid-month-budget-alerts.md](sessions/2026-07-20-f203-mid-month-budget-alerts.md) — F2-03 shipped: budget-alert-scheduler → `budget.line_threshold_crossed` (80/100) → notification-service 4th trigger; live e2e PASSED 4/4; async re-categorization races per-category reads (gotcha); notif type is String col (no migration).
 
 ## Templates
