@@ -118,11 +118,38 @@ already validated against `saga_id` at completion time. Files:
   claim-clearing block below it, pass into `BankSyncCompletedEvent(trigger=...)`, fall back
   to `MANUAL` when `NULL` (rows predating the migration).
 
-**Known imprecision, accepted:** if a manual sync *steals* an in-flight scheduled claim
-(P3-14 steal path), the old saga's reply reads the new claim's trigger and its event is
-labelled `manual`. Worst case is one extra notification — the safe direction. Fixing it
-properly means versioning the claim per saga, which is not worth it for a cosmetic label.
-Document in the banking architecture doc; do not chase.
+**~~Known imprecision, accepted~~ — WRONG, corrected 2026-07-25 (step 8b).**
+
+The original text read: *"the old saga's reply reads the new claim's trigger and its event is
+labelled `manual`. Worst case is one extra notification — the safe direction."*
+
+Both halves were false, and the code comment repeated the error. `_parse_sync_trigger` only
+falls back to `MANUAL` on `NULL` or an unparseable value — `'scheduled'` is a valid enum
+value and passes straight through. So the real worst case is the **opposite** direction: a
+*manual* sync labelled `scheduled` and then **suppressed**. The user presses the button and
+gets silence, which is exactly what `should_notify_bank_sync`'s docstring says must never
+happen.
+
+Two reachable paths, neither requiring a fault:
+
+1. **Conflict join** (no TTL expiry needed): the sweep owns the saga, the user presses Sync,
+   `start_sync_saga` returns the existing saga id without writing `MANUAL` onto the claim.
+   The sweep's quiet completion is then suppressed on the user's behalf.
+2. **TTL steal**: `try_claim_sync`'s predicate is `sync_started_at IS NULL OR < cutoff` — it
+   does **not** require `sync_saga_id IS NULL` — so a manual saga stalled past
+   `SYNC_CLAIM_TTL_SECONDS` (600s) has its claim overwritten by the next scheduler tick
+   (3600s). The P3-14 ownership check guarded only the *clearing*, never the *read*.
+
+Fixed without versioning the claim and without touching the saga: the read is now gated on
+`conn.sync_saga_id == saga_id` (foreign claim ⇒ `MANUAL`, logged), and a manual call joining
+a running saga escalates that claim to manual. **Manual wins over scheduled; there is
+deliberately no downgrade in the other direction** — the asymmetry is the whole point, since
+only one direction can silence a user.
+
+**Lesson worth keeping:** the plan asserted a failure direction without deriving it from the
+fallback's actual conditions, and then the code comment inherited the assertion. "Fails in
+the safe direction" is a claim that needs a test, not a sentence. The three tests added in
+step 8b are all mutation-verified for that reason.
 
 ### 4. [x] `feat(notification): suppress quiet scheduled syncs`
 
@@ -182,6 +209,36 @@ about what is gone. `mark_all_read` (`:96`) already filters correctly.
 - Update `architecture/services/notification-service.md`: the bank-sync trigger row gains
   its fire-condition, and note the new `ignored_quiet_sync` status.
 
+### 8b. [x] Post-review fixes (added 2026-07-25 after a high-effort code review)
+
+The review of steps 1–8 found a defect that **inverts this plan's own documented
+invariant**, plus four smaller ones. All fixed before merge:
+
+- **`fix(banking): only stamp a completion event from our own claim`** — see the correction
+  in "Known imprecision" under step 3 below. The blocker.
+- **`fix(banking): log an unparseable sync_trigger`** — NULL (expected) split from
+  unparseable (bug signal, now WARNING). Was a `Try/except der sluger fejl uden logging`.
+- **`fix: carry parse_skipped and fetch-stage errors into the completion event`** —
+  `parse_skipped` reached the saga context but `build_command(step 2)` dropped it, and step
+  0's mapping errors were never accumulated. So a sync that fetched 40 rows and parsed none
+  reported `new_imported=0, errors=0` → **suppressed**. A dead bank connection was
+  indistinguishable from a quiet night. Touches saga-service (one line each in
+  `build_command` and `on_reply`).
+- **`refactor(notification): keep contracts out of the domain, enforce it`** —
+  `app/domain/rules.py` imported `contracts.events.bank`, the only such import under any
+  service's `app/domain/`. The predicate now takes `scheduled: bool`. Root cause: the service
+  had **no pytest-archon test at all**, so the boundary CLAUDE.md calls enforced was not.
+  Added `tests/test_architecture.py`.
+- **`fix(frontend): refetch the feed when a notification write fails`** — step 6's guard made
+  the API 404 writes to dismissed rows, but both callers use `.catch(() => {})` and
+  invalidation was on `onSuccess` only, so a stale row stayed on screen with a dead button.
+  `onSettled` on all three mutations.
+
+Three of these were pinned by **mutation testing** — reverting the fix must fail the new
+test. Worth doing here specifically because every one of these bugs is silent: the failure
+mode is a notification that does not appear, so a test that passes for the wrong reason
+looks identical to a test that works.
+
 ### 9. [ ] Verification
 
 ```bash
@@ -219,14 +276,23 @@ touching the others. Step 3 is the only one with a migration.
 
 ## Outcome (fill in when done)
 
-**Steps 1–8 shipped 2026-07-25** on branch `fix/notification-service-hardening`. Suites
-green: notification **83**, contracts 56, banking 55. Only step 9's *live* verification
-remains — the offline half of it (four suites) is green; `make test-e2e` and the
-scheduler-tick observation still need a running stack.
+**Steps 1–8 + 8b shipped 2026-07-25** on branch `fix/notification-service-hardening`, 16
+commits. Suites green: notification **90**, banking **60**, saga-service 50, contracts 56,
+frontend 254. Only step 9's *live* verification remains — the offline half is green;
+`make test-e2e` and the scheduler-tick observation still need a running stack.
 
 Commits: `4d936582` (style/notification) · `875b5680` (contracts) · `d5630a6e`
 (style/banking) · `355764fd` (banking) · `883f54af` (notification) · `419af321` (step 5) ·
-`12e4e3e4` (step 6) · `0de568b4` (step 7) · `de29ed68` (step 8).
+`12e4e3e4` (step 6) · `0de568b4` (step 7) · `de29ed68` (step 8) · then step 8b:
+`5e533623` (claim ownership — the blocker) · `6c0455c6` (trigger logging) · `866a6f1a`
+(parse_skipped + fetch errors) · `86b97980` (domain boundary + archon) · `66c48b16`
+(frontend onSettled).
+
+**Scope grew from one service to four.** The plan was written as notification-service
+hardening; it ended up touching banking-service, saga-service, shared/contracts and the
+frontend. That is not scope creep so much as the shape of the actual problem: "should this
+event become a notification?" is answered with data produced three services upstream, so
+every gap in that chain is a gap in the feature.
 
 Deviations from the plan:
 
@@ -264,6 +330,31 @@ Deviations from the plan:
 - **Step 6/7 added 8 tests, not 2** (83 vs 75 at step 6's start): the two planned gaps, plus
   repository- and API-level coverage of the dismissed-guard, which was a behaviour change and
   had none.
+
+Findings from the review that were **not** fixed (deliberate, ranked):
+
+- **Redelivery re-emits the completion event.** The handler clears the claim and writes the
+  outbox row in one transaction, but there is no inbox/`processed_events` guard, so a
+  redelivered `saga.cmd.mark_sync_complete` (reply-publish fails after commit) re-reads a
+  NULL trigger → MANUAL → a *second* event with a fresh `correlation_id`, hence a fresh
+  `source_key` that dedup cannot absorb. One spurious notification per redelivery. Pre-existing
+  (it double-notified before this work too); the suppression just makes it visible. Real fix
+  is the inbox pattern CLAUDE.md prescribes for this consumer → new backlog item.
+- **`clear_sync_claim` has zero callers** — the claim is released by mutating the ORM object
+  in the consumer. Two implementations, one of them dead. Cheap to delete, but it is P3-14
+  code, not this plan's.
+- **enum → str → DB → str → enum round-trip** with `str`-typed ports and entity, so a bad
+  value type-checks and degrades silently to MANUAL. Typing the port `SyncTrigger` is the
+  right call and is one edit away, but it widens the diff across P3-14 code.
+- **The account adapter is the third hand-rolled copy** of the internal owner lookup
+  (goal-service and banking-service have their own, with three different error taxonomies).
+  The pooling and auth-classification wins from step 5 do not reach the other two. A shared
+  internal-API client in `services/shared` is the real answer — same consolidation
+  `messaging.ConsumerBase` did for consumers.
+- **`aclose()` is called on a port that does not declare it**, in a `finally`, so a
+  substituted implementation makes shutdown raise `AttributeError` and mask the real error.
+  banking-service's `saga_command_consumer` already has the right shape (`aclose()` on the
+  consumer, called from `main()`'s `try/finally`).
 
 Follow-ups spawned:
 
