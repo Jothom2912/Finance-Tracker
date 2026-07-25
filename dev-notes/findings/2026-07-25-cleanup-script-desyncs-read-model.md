@@ -3,8 +3,8 @@ title: cleanup_pg_duplicates.py deletes behind the outbox and leaves phantom row
 date: 2026-07-25
 severity: MEDIUM
 area: transaction, analytics, tooling
-status: open
-resolved-by: null
+status: resolved
+resolved-by: plans/2026-07-26-p320-cleanup-script-outbox.md
 ---
 
 # cleanup_pg_duplicates.py deletes behind the outbox and leaves phantom rows in the ES read model
@@ -71,3 +71,43 @@ grows — worth considering alongside P2-25's soft-delete decision, since soft-d
 make this class of leak detectable by comparing counts rather than diffing id sets.
 
 Tracked as P3-20.
+
+---
+
+## Resolved 2026-07-26
+
+Fixed by option 1 as recommended — the outbox row is now written in the script's existing
+transaction ([plan](../plans/2026-07-26-p320-cleanup-script-outbox.md), commit `b0a9c2b7`).
+The durable rule landed in
+[patterns/transactional-outbox.md](../patterns/transactional-outbox.md).
+
+**Two corrections to what is written above.**
+
+**"Reconciling the existing drift is separate and cheap here (one row)" was true only
+because the finding diffed one month.** A full id-set diff found **67** phantoms, not one.
+66 of them turned out to have a different cause entirely — `ai-service/tests/eval/es_seed.py`
+seeding fixtures directly into the production index — now filed as
+[P3-21](2026-07-26-eval-seed-writes-to-prod-index.md). The P3-20 attribution was correct:
+exactly one real-user phantom, exactly the predicted row.
+
+**The drift was measurable in both directions and only leaked one way.** 0 rows present in
+Postgres but missing from ES, confirming the original claim that ordinary projection is
+healthy.
+
+Measured before → after (account 1, user 1, expenses):
+
+| Period | Postgres | ES before | ES after |
+|---|---|---|---|
+| July | 53 / 17 528,17 | 54 / **17 666,17** | 53 / **17 528,17** |
+| June | 84 / 16 709,83 | 85 / 16 739,83 | 84 / 16 709,83 |
+| April | 36 / 9 345,02 | 37 / 9 465,02 | 36 / 9 345,02 |
+
+June and April moved because the fixed script deleted two *real* duplicates still sitting
+in the database (id 864 at 30,00 and 1024 at 120,00) — a live demonstration of the bug's
+ongoing cost, since running the old script that day would have created two more permanent
+phantoms. Real-user phantoms after the work: **0**.
+
+Tx 1119 could not be fixed by the script itself — the row is gone from Postgres, so nothing
+finds it. Its delete event was reconstructed from the ES document's own fields and inserted
+into the outbox, deliberately *not* patched into ES directly: writing to the read model
+behind the event contract is the exact violation being closed.

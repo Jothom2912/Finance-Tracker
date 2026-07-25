@@ -39,6 +39,39 @@ banking, categorization, saga. Saga-service outboxes its **commands** too — th
 orchestrator advances state and enqueues the next command in one transaction
 ([saga-orchestration](saga-orchestration.md)).
 
+## Scripts are participants in the contract, not observers of it
+
+**A script that writes to a service's database owes that service's events.** The outbox
+guarantee is a property of the *table*, not of the application code that usually touches
+it — a `DELETE` issued by a maintenance script diverges the read model exactly as surely
+as one issued by a buggy use case.
+
+This is not hypothetical: `scripts/cleanup_pg_duplicates.py` deleted duplicate transactions
+straight from `transactions` for months. Every deleted row stayed alive in `transactions_v2`
+([findings/2026-07-25-cleanup-script-desyncs-read-model.md](../findings/2026-07-25-cleanup-script-desyncs-read-model.md)),
+and the damage is **permanent** — the row that would trigger the delete event is already
+gone, so no retry, replay or self-healing consumer can ever notice. Read models self-heal
+against *missed* events; they have no defence against events that were never emitted.
+Only a full reindex recovers.
+
+Rules for anything under `scripts/` that writes to a service DB:
+
+1. **Write the outbox row in the same transaction as the domain write.** Same connection,
+   same commit. Mirror the service's own use case.
+2. **Build the event from the real contract class**, never as hand-assembled JSON — then a
+   new required field breaks the script loudly instead of emitting a payload consumers
+   silently cannot parse.
+3. **Run it in the owning service's venv** (`uv run --project services/<svc>`) — that is
+   what makes `contracts` importable, and it is the right dependency direction anyway.
+4. **Assert the row counts match before committing.** Outboxing more deletes than you
+   deleted tombstones live rows — the inverse failure, and equally unrecoverable since
+   `is_deleted` is terminal in ES.
+
+Reading from a service DB and publishing to MQ is *not* a violation:
+`scripts/backfill_category_names.py` re-emits `TransactionCategorizedEvent` from
+categorization-service's own data and writes nothing. The rule is about writes behind the
+outbox, not about scripts touching RabbitMQ.
+
 ## Gotchas / open ends
 
 - **Copy-paste ×8, already drifting** — systemic problem #1 in
