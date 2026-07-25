@@ -232,14 +232,28 @@ class BankingSagaCommandConsumer:
                 # direct timestamp (not injected clock) is acceptable here.
                 conn.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 # Læs trigger'en FØR claimet ryddes nedenfor — claimet er dens
-                # eneste bærer. NULL på rækker claimet før migration 004, og på
-                # en steal-path kan den tilhøre en nyere saga; begge tilfælde
-                # falder tilbage til MANUAL, som fejler i retning af at
-                # notificere brugeren frem for at tie.
-                trigger = _parse_sync_trigger(conn.sync_trigger)
+                # eneste bærer — og KUN hvis claimet stadig er vores.
+                #
+                # Claim-rækken er ikke versioneret per saga: try_claim_sync
+                # vinder alene på TTL-cutoff, så en nyere saga kan have
+                # overskrevet sync_trigger mens vi kørte. Læste vi den blindt,
+                # ville en langsom MANUEL sync kunne stemples "scheduled" og
+                # derefter undertrykkes i notification-service — brugeren
+                # trykkede på knappen og fik stilhed. Fremmed claim ⇒ MANUAL,
+                # så vi fejler i retning af at notificere.
+                own_claim = bool(saga_id) and conn.sync_saga_id == saga_id
+                trigger = _parse_sync_trigger(conn.sync_trigger) if own_claim else SyncTrigger.MANUAL
+                if not own_claim:
+                    logger.info(
+                        "mark_sync_complete: claimet tilhører ikke saga %s (nu: %s) — "
+                        "stempler completion som manual (connection=%s)",
+                        saga_id,
+                        conn.sync_saga_id,
+                        connection_id,
+                    )
                 # P3-14: frigiv sync-claimet — kun hvis det stadig er VORES
                 # (en nyere sagas claim må ikke ryddes af en gammel reply).
-                if saga_id and conn.sync_saga_id == saga_id:
+                if own_claim:
                     conn.sync_saga_id = None
                     conn.sync_started_at = None
                     conn.sync_trigger = None

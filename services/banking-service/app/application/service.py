@@ -297,7 +297,8 @@ class BankingService:
                     await self._uow.commit()
                     return saga_id, False
                 await self._uow.rollback()
-            return (await self._current_claim(connection_id)) or saga_id, True
+            winner = (await self._current_claim(connection_id)) or saga_id
+            return await self._defer_to_running_saga(connection_id, winner, trigger)
 
         status = None
         if self._saga_status is not None:
@@ -320,7 +321,8 @@ class BankingService:
                     return saga_id, False
                 await self._uow.rollback()
             # Tabt steal-kapløb — aflever vinderens claim.
-            return (await self._current_claim(connection_id)) or existing_id, True
+            winner = (await self._current_claim(connection_id)) or existing_id
+            return await self._defer_to_running_saga(connection_id, winner, trigger)
 
         logger.info(
             "Bank sync already running: saga_id=%s (status=%s) connection=%s",
@@ -328,7 +330,30 @@ class BankingService:
             status or "unknown",
             connection_id,
         )
-        return existing_id, True
+        return await self._defer_to_running_saga(connection_id, existing_id, trigger)
+
+    async def _defer_to_running_saga(
+        self, connection_id: UUID, winner_saga_id: str, trigger: SyncTrigger
+    ) -> tuple[str, bool]:
+        """Aflever en kørende sagas id — og opgrader dens trigger hvis vi er manuelle.
+
+        Den kørende saga afslutter på vores vegne, så det er DENS claim der
+        stempler completion-eventet. Er vores eget kald manuelt, skal claimet
+        derfor opgraderes: ellers bliver brugerens knaptryk undertrykt som en
+        stille scheduled sync, og han får ingen kvittering for noget han selv
+        bad om. Omvendt nedgraderer et scheduled kald aldrig et manuelt claim.
+        """
+        if trigger is SyncTrigger.MANUAL:
+            async with self._uow:
+                escalated = await self._uow.connections.escalate_trigger_to_manual(connection_id, winner_saga_id)
+                await self._uow.commit()
+            if escalated:
+                logger.info(
+                    "Manual sync joined running saga %s — claim trigger escalated to manual (connection=%s)",
+                    winner_saga_id,
+                    connection_id,
+                )
+        return winner_saga_id, True
 
     async def _current_claim(self, connection_id: UUID) -> Optional[str]:
         async with self._uow:

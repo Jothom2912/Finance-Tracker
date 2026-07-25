@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
+from contracts.events.bank import SyncTrigger
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -152,6 +153,27 @@ class PostgresBankConnectionRepository:
                 sync_started_at=_to_naive_utc(now),
                 sync_trigger=trigger,
             )
+        )
+        return result.rowcount == 1
+
+    async def escalate_trigger_to_manual(self, connection_id: UUID, saga_id: str) -> bool:
+        """Opgrader et fremmed claims trigger til ``manual``.
+
+        Bruges når et manuelt kald joiner en kørende saga: sagaen afslutter på
+        brugerens vegne, så dens completion-event skal notificere selvom det var
+        sweepen der startede den. Manual vinder altså over scheduled — den
+        omvendte retning (nedgradering til scheduled) findes med vilje ikke.
+
+        Scoped til ``saga_id``, så vi ikke rammer et claim der er udskiftet
+        imens; er triggeren allerede manual, er UPDATE'en et no-op.
+        """
+        result = await self._session.execute(
+            update(BankConnectionModel)
+            .where(
+                BankConnectionModel.id == str(connection_id),
+                BankConnectionModel.sync_saga_id == saga_id,
+            )
+            .values(sync_trigger=SyncTrigger.MANUAL.value)
         )
         return result.rowcount == 1
 

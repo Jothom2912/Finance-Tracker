@@ -47,6 +47,15 @@ class IBankConnectionRepository(Protocol):
         """Take over a known-terminal claim; scoped to old_saga_id (one winner)."""
         ...
 
+    async def escalate_trigger_to_manual(self, connection_id: UUID, saga_id: str) -> bool:
+        """Upgrade an existing claim's trigger to "manual"; scoped to saga_id.
+
+        For when a manual call joins a running saga: that saga finishes on the
+        user's behalf, so its completion event must notify. Manual wins over
+        scheduled; there is deliberately no downgrade in the other direction.
+        """
+        ...
+
     async def clear_sync_claim(self, connection_id: UUID, saga_id: str) -> None:
         """Release the claim iff it still belongs to saga_id."""
         ...

@@ -9,7 +9,7 @@ from app.application.service import BankingService
 from app.config import settings
 from app.domain.entities import BankConnection
 from app.domain.exceptions import BankAccountNotOwned, BankConsentExpired
-from contracts.events.bank import BankConnectionCreatedEvent
+from contracts.events.bank import BankConnectionCreatedEvent, SyncTrigger
 from contracts.events.saga import BankSyncSagaStartEvent
 
 # Deterministic clock injected into the service (no datetime.now() in tests).
@@ -411,6 +411,46 @@ async def test_sync_conflict_with_active_saga_returns_existing_id_without_event(
     uow.outbox.add.assert_not_awaited()
     uow.connections.steal_sync_claim.assert_not_awaited()
     saga_status.get_status.assert_awaited_once_with("running-saga", "Bearer x")
+
+
+@pytest.mark.asyncio
+async def test_manual_sync_joining_running_saga_escalates_the_claim_trigger(
+    service: BankingService,
+    uow: MagicMock,
+    saga_status: AsyncMock,
+) -> None:
+    # Sweepen ejer sagaen, brugeren trykker Sync. Sagaen afslutter på hans
+    # vegne, så DENS claim stempler eventet — uden opgradering ville et stille
+    # resultat blive undertrykt og brugeren få ingen kvittering.
+    connection_id = uuid4()
+    uow.connections.get_by_id.return_value = _claimed_connection(connection_id, "sweep-saga")
+    uow.connections.try_claim_sync.return_value = False
+    saga_status.get_status.return_value = "started"
+
+    _, already_running = await service.start_sync_saga(
+        connection_id, user_id=2, bearer_token="Bearer x", trigger=SyncTrigger.MANUAL
+    )
+
+    assert already_running is True
+    uow.connections.escalate_trigger_to_manual.assert_awaited_once_with(connection_id, "sweep-saga")
+
+
+@pytest.mark.asyncio
+async def test_scheduled_sync_joining_running_saga_does_not_touch_the_trigger(
+    service: BankingService,
+    uow: MagicMock,
+    saga_status: AsyncMock,
+) -> None:
+    # Modsat retning: en scheduled sweep må ALDRIG nedgradere et manuelt claim,
+    # ellers kan den tie brugerens egen sync ned.
+    connection_id = uuid4()
+    uow.connections.get_by_id.return_value = _claimed_connection(connection_id, "manual-saga")
+    uow.connections.try_claim_sync.return_value = False
+    saga_status.get_status.return_value = "started"
+
+    await service.start_sync_saga(connection_id, user_id=2, bearer_token="Bearer x", trigger=SyncTrigger.SCHEDULED)
+
+    uow.connections.escalate_trigger_to_manual.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -225,3 +225,34 @@ async def test_unknown_sync_trigger_falls_back_to_manual() -> None:
     )
 
     assert event.trigger is SyncTrigger.MANUAL
+
+
+@pytest.mark.asyncio
+async def test_foreign_claim_is_never_read_as_scheduled() -> None:
+    # Kernen i fejlen: claim-rækken er ikke versioneret per saga, så en nyere
+    # saga kan have overskrevet sync_trigger mens vi kørte. En LANGSOM MANUEL
+    # sync ville da blive stemplet "scheduled" og undertrykt af
+    # notification-service — brugeren trykkede på knappen og fik stilhed.
+    # Fremmed claim ⇒ MANUAL, altid.
+    conn = _connection_row(saga_id="sweep-saga", sync_trigger="scheduled")
+
+    event = await _run_mark_sync_complete(
+        conn,
+        {"connection_id": str(conn.id), "user_id": 2, "saga_id": "stalled-manual-saga"},
+    )
+
+    assert event.trigger is SyncTrigger.MANUAL
+    # Og det fremmede claim står stadig urørt.
+    assert conn.sync_trigger == "scheduled"
+    assert conn.sync_saga_id == "sweep-saga"
+
+
+@pytest.mark.asyncio
+async def test_missing_saga_id_in_body_is_not_treated_as_our_claim() -> None:
+    # Uden saga_id kan vi ikke bevise ejerskab, så vi må ikke låne claimets
+    # trigger — heller ikke selvom værdien tilfældigvis ser rigtig ud.
+    conn = _connection_row(saga_id="sweep-saga", sync_trigger="scheduled")
+
+    event = await _run_mark_sync_complete(conn, {"connection_id": str(conn.id), "user_id": 2})
+
+    assert event.trigger is SyncTrigger.MANUAL
