@@ -1,6 +1,6 @@
 ---
 date: 2026-07-26
-topic: P3-20 — cleanup script writes its delete events; ES read model reconciled to Postgres
+topic: P3-20 — cleanup script writes its delete events; ES reconciled to Postgres; CI feedback loop
 ---
 
 # Session 2026-07-26 — P3-20 cleanup script joins the event contract
@@ -29,6 +29,13 @@ Real-user phantoms 1 → **0**; rows missing in ES: 0 both before and after.
 **One finding written** ([P3-21](../findings/2026-07-26-eval-seed-writes-to-prod-index.md)),
 one resolved, and the durable rule added to
 [patterns/transactional-outbox.md](../patterns/transactional-outbox.md).
+
+**The CI feedback loop, carried over from 2026-07-25, was decided and shipped** in 2 commits
+(`f02d8c74` drift fix · `5d3aa4a5` mechanism) —
+[decision](../decisions/2026-07-26-ci-feedback-loop.md). Two layers: a tracked
+`.githooks/pre-commit` running ruff on staged files (`make install-hooks`), plus a
+`repo-lint` CI job covering `services scripts tests`. Detection remains unsolved and is
+filed as **P3-22**.
 
 ## Learned / surprised
 
@@ -67,6 +74,32 @@ doc, `scripted_upsert` would have created a tombstone, the assertion would have 
 I would have proven nothing about flipping a live row. The control assertion mattered as much
 as the positive one: the three *surviving* rows had to stay `is_deleted: false`.
 
+**"Nobody watches CI" was the wrong diagnosis — the perimeter had holes.** I expected to find
+a workflow problem and found the opposite: 12 services, 3 shared packages, frontend and e2e,
+each with lint, format, bandit and tests. Thorough. What was missing is that the per-service
+jobs lint only their own directory and the Makefile iterates the same list, so `scripts/` and
+the root `tests/` were in **no** perimeter at all — and both had drift sitting on master.
+`scripts/` is where the tools that write directly to production databases live. Had I gone
+straight to "add a hook", I would have shipped a fix that still left those two directories
+uncovered.
+
+**The pipe trap bit me again while measuring the pipe trap.** My repo-wide
+`ruff format --check ... | tail -15` printed two failing files and `EXIT=0`, because the
+pipeline's status is `tail`'s — the exact mistake recorded in yesterday's log, made while
+gathering evidence about that class of mistake. It is a good argument for why the gate has to
+be a hook rather than a discipline: the hook does not depend on me reading output correctly.
+
+**A commit hook must be written for bash 3.2.** My first draft used `mapfile` and `set -u`.
+macOS ships bash 3.2 (2007), where `mapfile` does not exist and referencing an empty array
+under `-u` is an error — so the hook would have failed on the only machine it runs on. Caught
+by checking `bash --version` instead of assuming `#!/usr/bin/env bash` means a modern bash.
+
+**Verifying a hook means proving it blocks, not that it is installed.** `git config` returning
+`.githooks` proves nothing. I staged a deliberately broken file, confirmed the commit was
+**not** created (HEAD unchanged), then confirmed `--no-verify` does get through, then that
+clean code passes. The middle check matters: a hook with no escape hatch gets uninstalled the
+first time it is wrong.
+
 **Third documentation-vs-reality gap in the same script.** Its documented invocation
 (`uv run python scripts/...`) cannot work — there is no root pyproject. It had never been
 `ruff format`ed and carried an unused import, because `scripts/` is in neither
@@ -77,12 +110,13 @@ databases is outside every quality gate the services have.
 
 - **P3-21** — eval fixtures in the production index. Blocks turning the Postgres↔ES id-set
   diff into an automated check, which is the durable fix for this whole class.
-- **`scripts/` is outside lint, format and CI.** Related to, but not the same as, the
-  unwatched-CI problem below.
-- **CI is still unwatched** — carried over from 2026-07-25 and *not* addressed this session
-  despite being the second half of the agreed plan. Still needs a mechanism decision
-  (pre-commit hook vs. actually watching Actions); `gh` is not even authenticated locally,
-  so the three red jobs found last week could only have been found by accident. Next.
+- **P3-22 — CI detection.** Prevention shipped; detection did not. A broken *test* on master
+  is still invisible until someone opens a browser. Blocked on `gh auth login`, which is
+  interactive and therefore the user's to run; after that a `make ci-status` target is
+  trivial. The prevention layer covers lint/format only — that limit should not be read as
+  coverage.
+- **`make install-hooks` is silent if forgotten.** Per-clone and opt-in by design; the
+  `repo-lint` job exists precisely because the hook cannot be relied on.
 - **P2-25 unchanged** — this makes hard-delete event-correct, it does not decide soft-delete.
   The argument for soft-delete is marginally stronger now: it would make this leak class
   detectable by count rather than by id-set diff.
@@ -97,5 +131,7 @@ databases is outside every quality gate the services have.
 - `findings/2026-07-25-cleanup-script-desyncs-read-model.md` → `status: resolved` + a
   "Resolved" section correcting the one-row claim
 - `patterns/transactional-outbox.md` — new section: scripts are participants in the contract
-- `backlog/BACKLOG.md` — P3-20 done, P3-21 added
+- Created `decisions/2026-07-26-ci-feedback-loop.md`, `.githooks/pre-commit`
+- `Makefile` — `install-hooks` + `lint-repo` targets; `.github/workflows/ci.yml` — `repo-lint` job
+- `backlog/BACKLOG.md` — P3-20 done, P3-21 + P3-22 added
 - `00-INDEX.md`
