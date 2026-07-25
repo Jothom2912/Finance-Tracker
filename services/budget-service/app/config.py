@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     CATEGORY_SERVICE_URL: str = "http://localhost:8005"
     TRANSACTION_SERVICE_URL: str = "http://localhost:8002"
+    # P1-13: forbrug læses fra analytics (ADR-0004's kanoniske regler), ikke
+    # fra transaction-servicens paginerede listeendpoint.
+    ANALYTICS_SERVICE_URL: str = "http://localhost:8006"
     REDIS_URL: str = "redis://redis:6379"
     # F1-07 scheduled month-close (worker-loop scheduler)
     MONTH_CLOSE_INTERVAL_SECONDS: int = 3600
