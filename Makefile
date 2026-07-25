@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps install-hooks dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint lint-repo format format-check check clean clean-test-containers
+.PHONY: help install-deps install-hooks ci-status dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint lint-repo format format-check check clean clean-test-containers
 
 INFRA_SERVICES = postgres postgres-transactions postgres-categorization postgres-account postgres-budget postgres-goals postgres-banking rabbitmq redis
 USER_SERVICE_DIR = services/user-service
@@ -55,6 +55,7 @@ help: ## Show available targets
 	@printf '    test-e2e                  Run E2E tests (requires Docker)\n'
 	@printf '    lint                      Run ruff linter on all Python services\n'
 	@printf '    lint-repo                 Lint+format-check whole repo (incl. scripts/, tests/)\n'
+	@printf '    ci-status                 Latest CI run for this branch (exit 1 if red)\n'
 	@printf '    format                    Auto-format all Python services\n'
 	@printf '    format-check              Check formatting without changes\n'
 	@printf '    check                     Run all quality checks\n'
@@ -144,6 +145,12 @@ format-check: ## Check code formatting without changes
 lint-repo: ## Lint + format-check the WHOLE repo, incl. scripts/ and tests/
 	uvx ruff check services scripts tests
 	uvx ruff format --check services scripts tests
+
+# Detection half of the CI feedback loop (the hook is the prevention half).
+# Stdlib-only and unauthenticated — this repo is public, so run/job/step
+# conclusions are readable without `gh`. GH_TOKEN lifts the 60/hour cap.
+ci-status: ## Show the latest CI run for the current branch (exit 1 if red)
+	@python3 scripts/ci_status.py
 
 check: ## Run all quality checks (lint + format + tests)
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir check; done
