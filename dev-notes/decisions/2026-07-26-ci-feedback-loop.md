@@ -18,6 +18,10 @@ can actually guarantee anything about master.
 
 Tests stay out of the hook.
 
+**Detection** is `make ci-status` (`scripts/ci_status.py`) — stdlib-only, reading GitHub's
+public REST API with no `gh` and no token. Added after the rest of this decision was
+written; see Consequences, where the original reasoning is corrected rather than edited away.
+
 ## Context
 
 On 2026-07-25 three CI jobs — banking-service, budget-service, and the three shared
@@ -41,7 +45,7 @@ Measurement taken before choosing ([session](../sessions/2026-07-26-p320-cleanup
   directly to a service database — had never been formatted or linted.
 - **There was no preventive gate at all.** `.git/hooks/` was empty.
 - **There is no detection either.** `gh` is not authenticated locally, so there is no path
-  to CI status short of opening a browser.
+  to CI status short of opening a browser. *(Corrected below — `gh` is not the only path.)*
 - **One fact makes the fix cheap**: no service defines its own `[tool.ruff]`. Everything
   inherits the root `ruff.toml`, so a single invocation from the repo root is correct
   repo-wide — no per-service venv, no matrix.
@@ -74,10 +78,31 @@ fastest signal in the workflow is now also the one that was failing most often.
 **Harder.** One extra setup step per clone (`make install-hooks`), and it is silent if
 forgotten — the CI job is the mitigation for exactly that. Commits now take ~1s longer.
 
-**Explicitly not solved: detection.** Knowing that CI went red still requires looking. That
-needs `gh auth login`, which is interactive and therefore a user action. Once authenticated,
-a `make ci-status` target or a session-start check becomes possible. Until then this
-decision is prevention-only, and that limit should not be mistaken for coverage.
+**Detection — solved the same day, and my reasoning above was wrong.** I claimed detection
+required `gh auth login` and therefore had to wait on a user action. That conflated *the
+`gh` CLI* with *the GitHub API*. This repo is **public**, so the unauthenticated REST API
+serves run status, per-job conclusions and per-step conclusions with no credentials at all.
+Only the log text is gated (403).
+
+Shipped as `make ci-status` → `scripts/ci_status.py`: stdlib-only, no venv, no token.
+`GH_TOKEN` is honoured if present, which lifts the 60-requests/hour anonymous cap and keeps
+it working should the repo ever go private. Exit code 1 on a red run, so it composes into
+scripts.
+
+The step name plus the failure annotation turned out to be **more** useful than the log
+would have been. Within minutes of writing it, it reported that banking-service had been
+red since 2026-07-17 with `exit code 2` — pytest's collection-error code, not its
+test-failure code — which pointed straight at a missing test dependency, reproduced locally
+and fixed in `ce7a23f3`. Nine days red, found in one command.
+
+It also surfaces jobs **skipped** because of a `needs:` on a failed job. That is not
+cosmetic: e2e had silently not run for those nine days. One red job switching off downstream
+coverage is the same shape as the finding that started this — a format step failing before
+the test step, hiding 117 tests.
+
+**Still not solved: nothing *pushes* the signal.** `make ci-status` must be run. A
+post-push hook or a session-start check would close that, but both were judged premature
+until the command itself had proven useful.
 
 **Not solved either: the pipe trap.** `uv run ruff check . | tail -2 && git commit` commits
 even when ruff fails, because the pipeline's exit status is `tail`'s — it cost a fixup

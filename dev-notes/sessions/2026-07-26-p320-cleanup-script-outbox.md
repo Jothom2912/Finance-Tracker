@@ -30,12 +30,19 @@ Real-user phantoms 1 → **0**; rows missing in ES: 0 both before and after.
 one resolved, and the durable rule added to
 [patterns/transactional-outbox.md](../patterns/transactional-outbox.md).
 
-**The CI feedback loop, carried over from 2026-07-25, was decided and shipped** in 2 commits
-(`f02d8c74` drift fix · `5d3aa4a5` mechanism) —
-[decision](../decisions/2026-07-26-ci-feedback-loop.md). Two layers: a tracked
-`.githooks/pre-commit` running ruff on staged files (`make install-hooks`), plus a
-`repo-lint` CI job covering `services scripts tests`. Detection remains unsolved and is
-filed as **P3-22**.
+**The CI feedback loop, carried over from 2026-07-25, was decided and shipped** in 4 commits
+(`f02d8c74` drift fix · `5d3aa4a5` prevention · `2f75644d` detection · `ce7a23f3` the first
+thing it caught) — [decision](../decisions/2026-07-26-ci-feedback-loop.md).
+
+- **Prevention**: tracked `.githooks/pre-commit` running ruff on staged files
+  (`make install-hooks`), plus a `repo-lint` CI job covering `services scripts tests`.
+  The new job went green first try.
+- **Detection**: `make ci-status` → `scripts/ci_status.py`, stdlib-only, no `gh`, no token.
+- **First catch**: banking-service had been red since **2026-07-17** — nine days. Missing
+  `aiosqlite`; e2e had been skipped in every run since.
+
+P3-22 closed the same day it was filed; **P3-23** opened (banking-service is the only
+service without a `pyproject.toml`).
 
 ## Learned / surprised
 
@@ -100,6 +107,38 @@ by checking `bash --version` instead of assuming `#!/usr/bin/env bash` means a m
 clean code passes. The middle check matters: a hook with no escape hatch gets uninstalled the
 first time it is wrong.
 
+**I wrote a decision document around a constraint that did not exist.** It stated that
+detection required `gh auth login`, which is interactive, therefore the user's to run,
+therefore blocked — and I filed P3-22 on that basis. The constraint was imaginary: I had
+conflated the `gh` CLI with the GitHub API. The repo is public, so an anonymous
+`api.github.com` read returns run status and every job's and step's conclusion. One `curl`
+would have falsified it before I wrote the paragraph. The lesson is not "check the API
+docs"; it is that **"blocked on the user" is a claim like any other and deserves the same
+one-command check as a technical claim** — it is just an unusually comfortable one to
+believe, because it converts my open problem into someone else's.
+
+**Nine days red, found in one command.** The first thing `ci-status` printed was that
+banking-service had failed on every run since 2026-07-17. The annotation said `exit code 2`
+— pytest's *collection error* code, not its test-failure code — which is a much sharper
+signal than a log dump: it says "the suite never ran" rather than "a test is wrong".
+Reproduced locally with CI's exact env, found `ModuleNotFoundError: aiosqlite`, one line to
+fix.
+
+**Yesterday's banking fix was verified locally and never in CI, so it read as resolved for
+24 hours.** `023970ba` pointed conftest at `sqlite+aiosqlite` so the suite would run without
+a live Postgres, but never added the driver. It worked on the machine it was written on
+because the package happened to be installed there; CI installs into a clean environment.
+The finding was marked resolved, the backlog said resolved, and master stayed red. Local
+green is not evidence about CI — which is the same lesson as
+[[project_exam_note_event_delivery]], one layer out.
+
+**One red job silently switched off e2e for nine days.** `e2e-tests` has
+`needs: python-services`, so a single failing matrix entry skipped the whole
+system-cooperation suite. This is the third instance today of the same shape: an early
+failure disabling later coverage while the summary still looks like "one job failed"
+(format-before-tests hiding 117 tests; collection-error hiding 66; this). `ci_status.py`
+now prints skipped-because-of-needs explicitly, because "1 failed" understates it.
+
 **Third documentation-vs-reality gap in the same script.** Its documented invocation
 (`uv run python scripts/...`) cannot work — there is no root pyproject. It had never been
 `ruff format`ed and carried an unused import, because `scripts/` is in neither
@@ -110,11 +149,20 @@ databases is outside every quality gate the services have.
 
 - **P3-21** — eval fixtures in the production index. Blocks turning the Postgres↔ES id-set
   diff into an automated check, which is the durable fix for this whole class.
-- **P3-22 — CI detection.** Prevention shipped; detection did not. A broken *test* on master
-  is still invisible until someone opens a browser. Blocked on `gh auth login`, which is
-  interactive and therefore the user's to run; after that a `make ci-status` target is
-  trivial. The prevention layer covers lint/format only — that limit should not be read as
-  coverage.
+- **⚠️ The repo is public, and P1-08's PII deferral was conditioned on it not being.** The
+  carry-over note says the history rewrite is "only needed if the repo is ever shared";
+  `origin` is `github.com/Jothom2912/Finance-Tracker` and an anonymous API read returns 200.
+  The purged personal data is reachable in history by anyone, and has been. **Not acted on**
+  — a rewrite on a published repo invalidates every clone, cannot be undone, and does not
+  evict what GitHub has already cached, so the values should be treated as disclosed either
+  way. Needs an explicit rewrite-vs-accept decision. Backlog note updated to say the
+  condition is met.
+- **P3-23 — banking-service has no `pyproject.toml`.** Only service on bare
+  `requirements.txt`, hence no dev/runtime split, which is why a test-only dependency had to
+  land in the runtime file.
+- **Nothing pushes the CI signal.** `make ci-status` must be run. A post-push hook or
+  session-start check would close it; judged premature until the command proved useful —
+  it has now, so this is a live candidate.
 - **`make install-hooks` is silent if forgotten.** Per-clone and opt-in by design; the
   `repo-lint` job exists precisely because the hook cannot be relied on.
 - **P2-25 unchanged** — this makes hard-delete event-correct, it does not decide soft-delete.
@@ -131,7 +179,12 @@ databases is outside every quality gate the services have.
 - `findings/2026-07-25-cleanup-script-desyncs-read-model.md` → `status: resolved` + a
   "Resolved" section correcting the one-row claim
 - `patterns/transactional-outbox.md` — new section: scripts are participants in the contract
-- Created `decisions/2026-07-26-ci-feedback-loop.md`, `.githooks/pre-commit`
-- `Makefile` — `install-hooks` + `lint-repo` targets; `.github/workflows/ci.yml` — `repo-lint` job
-- `backlog/BACKLOG.md` — P3-20 done, P3-21 + P3-22 added
+- Created `decisions/2026-07-26-ci-feedback-loop.md`, `.githooks/pre-commit`,
+  `scripts/ci_status.py`
+- `Makefile` — `install-hooks`, `lint-repo`, `ci-status`; `.github/workflows/ci.yml` —
+  `repo-lint` job
+- `decisions/2026-07-26-ci-feedback-loop.md` — detection section rewritten; the wrong
+  `gh auth` premise corrected in place rather than deleted
+- `backlog/BACKLOG.md` — P3-20 done, P3-21 added, P3-22 added **and** done, P3-23 added,
+  P1-08 carry-over updated (repo is public → deferral condition met)
 - `00-INDEX.md`
