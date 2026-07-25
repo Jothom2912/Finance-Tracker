@@ -40,6 +40,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [findings/2026-07-25-worker-migration-ordering.md](findings/2026-07-25-worker-migration-ordering.md) — migrations are a side effect of the API container's `CMD`; workers override `command:` and skip them, so k8s workers crash-loop until the API catches up (LOW, systemic, → P3-17).
 - [findings/2026-07-25-budget-spend-truncated-at-50.md](findings/2026-07-25-budget-spend-truncated-at-50.md) — budget-service sends no `limit`, so spend is summed from the 50 newest transactions: 69% understated on a real dev account-month, feeding `close_month`'s surplus and F2-03's alerts (HIGH, → P1-13).
 - [findings/2026-07-25-transaction-hard-delete-categorized-dlq.md](findings/2026-07-25-transaction-hard-delete-categorized-dlq.md) — transactions are hard-deleted, so the categorization write-back cannot tell "not yet" from "gone" and retries a deleted row to the DLQ (MEDIUM, → P2-25).
+- [findings/2026-07-25-cleanup-script-desyncs-read-model.md](findings/2026-07-25-cleanup-script-desyncs-read-model.md) — `cleanup_pg_duplicates.py` sletter uden om outboxen, så ES beholder fantom-rækker for evigt; analytics overrapporterer juli med 138,00 (MEDIUM, → P3-20).
 - [findings/2026-07-25-saga-reply-non-uuid-poison.md](findings/2026-07-25-saga-reply-non-uuid-poison.md) — a malformed `saga_id` raises `asyncpg.DataError` past both `except` clauses, so it retries instead of being rejected as poison (LOW, → P3-19).
 
 ## Backlog & plans

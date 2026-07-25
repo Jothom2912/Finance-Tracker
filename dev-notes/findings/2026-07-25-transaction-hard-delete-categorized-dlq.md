@@ -56,9 +56,21 @@ retries with backoff on a shared consumer and leaves a message in a DLQ that rea
 unexplained failure. A DLQ that accumulates benign entries stops being a signal — which is
 precisely why this one sat unexamined until someone went looking.
 
-The hard delete is the larger issue and is not limited to this consumer: any downstream
-projection keyed on a transaction id has the same blind spot, and there is no audit trail
-for a deleted financial record.
+**Correction (2026-07-25, same day):** an earlier revision of this finding claimed that
+"any downstream projection keyed on a transaction id has the same blind spot". That is
+**wrong** and is retracted. `TransactionService.delete_transaction`
+(`app/application/service.py:277-299`) emits a `TransactionDeletedEvent` to the outbox in
+the same transaction as the delete, and the ES read model consumes it — `transactions_v2`
+carries an `is_deleted` boolean, and live inspection found five correctly-flagged July rows
+plus tx 1133 itself marked `is_deleted: true`. The event path is intact.
+
+The blind spot is narrower than stated: it is *this consumer*, which reads the row rather
+than the event and therefore cannot see a deletion that has already happened. The missing
+audit trail inside transaction-service's own database stands.
+
+A separate, genuinely unguarded delete path does exist — see
+[the cleanup-script finding](2026-07-25-cleanup-script-desyncs-read-model.md) — but it is a
+maintenance script, not the service.
 
 **Suggested fix**: Two steps, in order.
 

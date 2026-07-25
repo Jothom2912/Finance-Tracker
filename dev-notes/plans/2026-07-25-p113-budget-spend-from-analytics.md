@@ -155,12 +155,26 @@ will now agree *because* they share a staleness rather than disagreeing on subst
 7. [ ] **Verification**
    - `make -C services/budget-service test` (unit + integration), `make -C services/budget-service check`.
    - `make -C services/analytics-service test` — untouched, but it owns the contract now.
-   - **The before/after measurement**, which is the actual proof. Baseline is already
-     recorded in the finding (account 1: June 94 tx → 5 180,32 of 16 739,83; July 61 tx →
-     10 286,17 of 17 528,17). After the change, `GET /api/v1/monthly-budgets/summary` for
-     account 1 must report the true figures. Cross-check the same period against
-     `GET /api/v1/analytics/overview` — the two must now agree exactly, which is the
-     Forbrug-vs-budget discrepancy closing.
+   - **The before/after measurement**, which is the actual proof. Baseline is recorded in
+     the finding (account 1: June 94 tx → 5 180,32 of 16 739,83; July 61 tx → 10 286,17 of
+     17 528,17). Expected after:
+
+     | Period | Before | After | Postgres truth |
+     |---|---|---|---|
+     | June 2026 | 5 180,32 | **16 739,83** | 16 739,83 |
+     | July 2026 | 10 286,17 | **17 666,17** | 17 528,17 |
+
+     Both figures were confirmed against the running analytics-service *before* writing the
+     adapter, so the target numbers are measured rather than predicted.
+
+     **July will not match Postgres, and that is expected.** The 138,00 gap is phantom
+     transaction 1119, left in `transactions_v2` by `cleanup_pg_duplicates.py` deleting
+     behind the outbox → [P3-20](../findings/2026-07-25-cleanup-script-desyncs-read-model.md).
+     Do not "fix" it inside this plan; a verification that demands 17 528,17 is asserting
+     against a defect in a different component. June, which has no phantom, matches exactly
+     — that is the clean proof.
+   - Cross-check the same period against `GET /api/v1/analytics/overview` — budget and
+     overview must now agree exactly, which is the Forbrug-vs-budget discrepancy closing.
    - **Mutation-check the fix**: temporarily re-point the adapter at transaction-service and
      confirm the summary drops back to 5 180,32. A test that cannot tell the two apart is
      not testing this.

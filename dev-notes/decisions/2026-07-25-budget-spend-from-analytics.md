@@ -79,6 +79,16 @@ fail-closed by design and that policy is preserved against the new upstream. Acc
 blocked close is recoverable, a wrong surplus is not. The alert scheduler already skips and
 retries on the next tick, and `get_summary` keeps its fail-open `spent=0` degradation.
 
+**budget-service inherits whatever drift the read model carries.** Verified while building
+the adapter, not assumed: for account 1 / June 2026 analytics returns 16 739,83, matching
+Postgres to the øre. July is 138,00 high because of one phantom row left by
+`cleanup_pg_duplicates.py` deleting behind the outbox
+([P3-20](../findings/2026-07-25-cleanup-script-desyncs-read-model.md)) — a defect in a
+maintenance script, not in the projection, and 0,8% against the 41% error this change
+removes. The trade is accepted with eyes open: budget-service stops owning an aggregation
+bug and starts depending on the read model's integrity, which makes read-model drift a
+money problem and therefore worth fixing properly.
+
 **Budget and dashboard now share a staleness instead of disagreeing on substance.** The
 manual close button is the only path meaningfully exposed to projection lag — the day-7
 scheduler closes the *previous* month, by which time the projection has had days to settle.
