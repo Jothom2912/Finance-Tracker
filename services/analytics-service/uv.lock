@@ -589,11 +589,13 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'" },
+requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "finans-tracker-domain"
