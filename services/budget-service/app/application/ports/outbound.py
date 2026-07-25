@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import date
+from decimal import Decimal
 from typing import Optional, Self
 
 from contracts.base import BaseEvent
@@ -86,7 +87,16 @@ class IMonthlyBudgetRepository(ABC):
         ...
 
 
-class ITransactionPort(ABC):
+class ISpendPort(ABC):
+    """Forbrug for en konto i en periode, efter de kanoniske regler (ADR-0004).
+
+    De to metoder svarer på to forskellige spørgsmål og må ikke udledes af
+    hinanden: budgetlinjer er nøglet på et rigtigt ``category_id``, mens
+    månedens overskud skal måles mod ALT forbrug — inklusive det
+    ukategoriserede, som ingen linje kan bære. Se
+    ``dev-notes/decisions/2026-07-25-budget-spend-from-analytics.md``.
+    """
+
     @abstractmethod
     async def get_expenses_by_category(
         self,
@@ -95,7 +105,24 @@ class ITransactionPort(ABC):
         end_date: date,
         user_id: int = 0,
     ) -> dict[int, float]:
-        """Raises UpstreamServiceUnavailable hvis transaction-service ikke kan nås."""
+        """Forbrug per ``category_id``; ukategoriseret udelades (ingen linje).
+
+        Raises UpstreamServiceUnavailable hvis kilden ikke kan nås.
+        """
+        ...
+
+    @abstractmethod
+    async def get_total_expenses(
+        self,
+        account_id: int,
+        start_date: date,
+        end_date: date,
+        user_id: int = 0,
+    ) -> Decimal:
+        """Samlet forbrug i perioden, ukategoriseret medregnet.
+
+        Raises UpstreamServiceUnavailable hvis kilden ikke kan nås.
+        """
         ...
 
 

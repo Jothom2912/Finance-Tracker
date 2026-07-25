@@ -86,9 +86,9 @@ def clean_db(postgres, _migrated_db):
 
 @pytest.fixture()
 def mock_transaction_port():
-    from app.application.ports.outbound import ITransactionPort
+    from app.application.ports.outbound import ISpendPort
 
-    port = AsyncMock(spec=ITransactionPort)
+    port = AsyncMock(spec=ISpendPort)
     port.get_expenses_by_category.return_value = {}
     return port
 

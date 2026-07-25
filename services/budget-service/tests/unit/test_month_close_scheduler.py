@@ -44,9 +44,9 @@ async def session_factory():
 
 @pytest.fixture()
 def ports():
-    from app.application.ports.outbound import ICategoryPort, ITransactionPort
+    from app.application.ports.outbound import ICategoryPort, ISpendPort
 
-    transaction_port = AsyncMock(spec=ITransactionPort)
+    transaction_port = AsyncMock(spec=ISpendPort)
     transaction_port.get_expenses_by_category.return_value = {1: 30.0}
     category_port = AsyncMock(spec=ICategoryPort)
     category_port.get_all_names.return_value = {1: "Mad"}

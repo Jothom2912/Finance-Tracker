@@ -33,7 +33,7 @@ from app.adapters.outbound.postgres_monthly_budget_repository import (
 from app.adapters.outbound.transaction_port import TransactionPort
 from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.application.monthly_budget_service import MonthlyBudgetService
-from app.application.ports.outbound import ICategoryPort, ITransactionPort
+from app.application.ports.outbound import ICategoryPort, ISpendPort
 from app.config import settings
 from app.domain.exceptions import (
     MonthlyBudgetAlreadyClosed,
@@ -49,7 +49,7 @@ async def run_once(
     session_factory: async_sessionmaker[AsyncSession],
     today: date,
     close_day: int = 7,
-    transaction_port: ITransactionPort | None = None,
+    transaction_port: ISpendPort | None = None,
     category_port: ICategoryPort | None = None,
 ) -> dict[str, int]:
     """One sweep. Returns counters for the tick-summary log (and tests).

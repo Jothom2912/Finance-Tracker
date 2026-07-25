@@ -24,7 +24,7 @@ from app.application.dto import (
 )
 from app.application.ports.outbound import (
     ICategoryPort,
-    ITransactionPort,
+    ISpendPort,
     IUnitOfWork,
 )
 from app.domain.budget_alerts import evaluate_line_crossings
@@ -46,7 +46,7 @@ class MonthlyBudgetService:
     def __init__(
         self,
         uow: IUnitOfWork,
-        transaction_port: ITransactionPort,
+        transaction_port: ISpendPort,
         category_port: ICategoryPort,
     ) -> None:
         self._uow = uow
