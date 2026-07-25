@@ -139,7 +139,7 @@ Document in the banking architecture doc; do not chase.
 Keeping the rule as a pure function (not an `if` inside the handler) is the house pattern —
 it is the part with real edge cases, so it belongs where it can be tested without a UoW.
 
-### 5. [ ] `refactor(notification): reuse httpx client, classify auth failures`
+### 5. [x] `refactor(notification): reuse httpx client, classify auth failures`
 
 `app/adapters/outbound/account_adapter.py`:
 
@@ -150,14 +150,14 @@ it is the part with real edge cases, so it belongs where it can be tested withou
   logged at ERROR, re-raised so it still DLQs) rather than `AccountOwnerUnavailable`. A
   wrong `INTERNAL_API_KEY` must not read as an account-service outage.
 
-### 6. [ ] `fix(notification): dismissed rows are not writable`
+### 6. [x] `fix(notification): dismissed rows are not writable`
 
 `app/adapters/outbound/postgres_notification_repository.py:83,108` — add
 `dismissed_at.is_(None)` to the `mark_read` and `dismiss` predicates, so a dismissed
 notification 404s instead of returning 204. Today the feed and the write path disagree
 about what is gone. `mark_all_read` (`:96`) already filters correctly.
 
-### 7. [ ] `test(notification): close the two coverage gaps`
+### 7. [x] `test(notification): close the two coverage gaps`
 
 - `tests/unit/test_consumer.py` — the `IntegrityError` → ACK race path
   (`notification_consumer.py:75`) is currently unexercised; the fake raises it but no test
@@ -168,7 +168,7 @@ about what is gone. `mark_all_read` (`:96`) already filters correctly.
   `AccountOwnerUnavailable`. This adapter is the only place a live dependency is
   interpreted and it has zero tests today.
 
-### 8. [ ] `chore: docstrings, dead compose stub, hollow package`
+### 8. [x] `chore: docstrings, dead compose stub, hollow package`
 
 - `app/workers/notification_consumer.py:1` — "three F1 trigger events" → five routing keys.
 - `app/adapters/outbound/account_adapter.py:3-5` — owner-resolution now serves three
@@ -219,11 +219,14 @@ touching the others. Step 3 is the only one with a migration.
 
 ## Outcome (fill in when done)
 
-**Steps 1–4 shipped 2026-07-25** on branch `fix/notification-service-hardening`. Suites
-green: notification 72, contracts 56, banking 55. Steps 5–8 + live verification remain.
+**Steps 1–8 shipped 2026-07-25** on branch `fix/notification-service-hardening`. Suites
+green: notification **83**, contracts 56, banking 55. Only step 9's *live* verification
+remains — the offline half of it (four suites) is green; `make test-e2e` and the
+scheduler-tick observation still need a running stack.
 
 Commits: `4d936582` (style/notification) · `875b5680` (contracts) · `d5630a6e`
-(style/banking) · `355764fd` (banking) · `883f54af` (notification).
+(style/banking) · `355764fd` (banking) · `883f54af` (notification) · `419af321` (step 5) ·
+`12e4e3e4` (step 6) · `0de568b4` (step 7) · `de29ed68` (step 8).
 
 Deviations from the plan:
 
@@ -239,6 +242,28 @@ Deviations from the plan:
   handler that stamps the event is the same one that clears the carrier, so reading in the
   wrong order silently turns every scheduled sync into `manual` and the whole suppression
   stops working with no test failing.
+- **Step 5 added a `transport=` seam** to `AccountServiceAdapter` rather than letting the
+  test inject a whole `AsyncClient`. With the client built inside the adapter, `base_url`,
+  the `x-internal-api-key` header and the timeout stay under test in step 7 instead of being
+  bypassed by the fake.
+- **Step 5's `aclose()` is called from an overridden `run()`** in `NotificationConsumer`
+  (`try: await super().run() finally: await self._account_owner.aclose()`). `ConsumerBase`
+  owns the AMQP connection's lifetime but has no subclass shutdown hook, and adding one to
+  the shared `messaging` package for a single caller was not worth the blast radius.
+- **Step 6 dropped the `coalesce` in `dismiss`.** With `dismissed_at IS NULL` in the
+  predicate the coalesce is unreachable, so it became a plain `utcnow()`. Accepted
+  consequence, called out in the arch doc: **dismiss is no longer idempotent** — a repeat
+  `DELETE` 404s instead of 204-ing. Reachable via double-click or a stale feed. If that
+  shows up as a frontend complaint, the fix belongs in the client (optimistic removal), not
+  by reintroducing a write path that disagrees with the read path.
+- **Step 7's race test was mutation-checked.** Swapping `except IntegrityError` for a
+  different exception class makes it fail — confirming it drives the real ACK path rather
+  than passing vacuously. Needed a `lose_insert_race` flag on `FakeNotificationRepository`,
+  since the interesting case is exists-check clean *then* INSERT rejected; the pre-existing
+  fake could only produce the fast-path `duplicate`.
+- **Step 6/7 added 8 tests, not 2** (83 vs 75 at step 6's start): the two planned gaps, plus
+  repository- and API-level coverage of the dismissed-guard, which was a behaviour change and
+  had none.
 
 Follow-ups spawned:
 
