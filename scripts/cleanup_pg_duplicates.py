@@ -231,9 +231,7 @@ def _delete_rows(conn, rows: list[dict]) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Remove duplicate transactions from PostgreSQL (transaction-service)."
-    )
+    parser = argparse.ArgumentParser(description="Remove duplicate transactions from PostgreSQL (transaction-service).")
     parser.add_argument(
         "--execute",
         action="store_true",
@@ -272,10 +270,12 @@ def main() -> None:
 
     print(f"\nSample rows to delete (first 10 of {len(to_delete)}):")
     for row in to_delete[:10]:
-        print(f"  id={row['id']}  date={row['date']!s}  amount={row['amount']!s}  "
-              f"desc={row['description']!r}  sub_id={row['subcategory_id']}  "
-              f"tier={row['categorization_tier']}  "
-              f"group_size={row['group_size']}  keeping_id={row['keep_id']}")
+        print(
+            f"  id={row['id']}  date={row['date']!s}  amount={row['amount']!s}  "
+            f"desc={row['description']!r}  sub_id={row['subcategory_id']}  "
+            f"tier={row['categorization_tier']}  "
+            f"group_size={row['group_size']}  keeping_id={row['keep_id']}"
+        )
     print()
 
     if not args.execute:
