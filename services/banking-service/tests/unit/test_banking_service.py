@@ -465,8 +465,8 @@ async def test_sync_conflict_lost_steal_race_returns_winner(
 ) -> None:
     connection_id = uuid4()
     uow.connections.get_by_id.side_effect = [
-        _claimed_connection(connection_id, "dead-saga"),   # validering
-        _claimed_connection(connection_id, "dead-saga"),   # konflikt-læsning
+        _claimed_connection(connection_id, "dead-saga"),  # validering
+        _claimed_connection(connection_id, "dead-saga"),  # konflikt-læsning
         _claimed_connection(connection_id, "winner-saga"),  # efter tabt steal
     ]
     uow.connections.try_claim_sync.return_value = False
