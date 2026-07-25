@@ -71,4 +71,26 @@ describe('useNotificationFeed', () => {
     expect(notificationsApi.markRead.mock.calls[0][0]).toBe('018f-abc');
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications'] });
   });
+
+  it('still invalidates the feed when a write 404s', async () => {
+    // The server now 404s writes against a dismissed notification, so this is
+    // the stale-snapshot case: the row was dismissed on another device and the
+    // list is only polled every 45s. Refetching on failure is what removes it;
+    // on onSuccess alone the dead row stayed on screen and the button looked
+    // broken, because the callers swallow the rejection.
+    notificationsApi.fetchNotifications.mockResolvedValue([REST_NOTIFICATION]);
+    notificationsApi.fetchUnreadCount.mockResolvedValue({ count: 1 });
+    notificationsApi.dismissNotification.mockRejectedValue(new Error('404 Not Found'));
+
+    const { wrapper, client } = createQueryClientWrapper();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+    const { result } = renderHook(() => useNotificationFeed(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    invalidateSpy.mockClear();
+
+    await expect(result.current.dismiss('018f-abc')).rejects.toThrow('404');
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications'] });
+  });
 });
