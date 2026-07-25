@@ -188,9 +188,7 @@ def _threshold_event(threshold: int = 80, category_id: int = 3) -> BudgetLineThr
 
 async def test_budget_threshold_resolves_owner_and_creates() -> None:
     uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=99)
-    result = await _service(uow, email, owner).handle_budget_line_threshold_crossed(
-        _threshold_event()
-    )
+    result = await _service(uow, email, owner).handle_budget_line_threshold_crossed(_threshold_event())
 
     assert result.status == "created"
     assert result.source_key == "budget.line_threshold_crossed:5:2026:6:3:80"
@@ -226,9 +224,7 @@ async def test_budget_threshold_redelivery_is_deduplicated() -> None:
 async def test_budget_threshold_dropped_when_account_missing() -> None:
     uow, email = FakeUoW(), FakeEmail()
     owner = FakeAccountOwner(exc=AccountNotFound(5))
-    result = await _service(uow, email, owner).handle_budget_line_threshold_crossed(
-        _threshold_event()
-    )
+    result = await _service(uow, email, owner).handle_budget_line_threshold_crossed(_threshold_event())
 
     assert result.status == "account_not_found"
     assert uow.notifications.rows == []

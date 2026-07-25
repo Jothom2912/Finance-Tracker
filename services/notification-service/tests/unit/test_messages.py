@@ -89,14 +89,10 @@ def test_budget_threshold_100_is_overspend() -> None:
 
 
 def test_budget_threshold_singular_day() -> None:
-    c = build_budget_line_threshold_crossed(
-        category_name="Mad", percentage_used=80, threshold=80, days_remaining=1
-    )
+    c = build_budget_line_threshold_crossed(category_name="Mad", percentage_used=80, threshold=80, days_remaining=1)
     assert "1 dag tilbage" in c.body
 
 
 def test_budget_threshold_zero_days() -> None:
-    c = build_budget_line_threshold_crossed(
-        category_name="Mad", percentage_used=80, threshold=80, days_remaining=0
-    )
+    c = build_budget_line_threshold_crossed(category_name="Mad", percentage_used=80, threshold=80, days_remaining=0)
     assert "ingen dage tilbage" in c.body

@@ -94,10 +94,7 @@ def build_budget_line_threshold_crossed(
 ) -> NotificationContent:
     # threshold >= 100 means the line is spent up/over; below that it's a heads-up.
     title = "Budget overskredet" if threshold >= 100 else "Budget-advarsel"
-    body = (
-        f"{percentage_used}% af {category_name} brugt, "
-        f"{_days_left_phrase(days_remaining)}."
-    )
+    body = f"{percentage_used}% af {category_name} brugt, {_days_left_phrase(days_remaining)}."
     return NotificationContent(
         type=NotificationType.BUDGET_THRESHOLD_CROSSED,
         title=title,

@@ -102,9 +102,7 @@ class NotificationService:
             return HandleResult(status="account_not_found", source_key=event.source_key)
         return await self._create(user_id=user_id, content=content, source_key=event.source_key)
 
-    async def handle_budget_line_threshold_crossed(
-        self, event: BudgetLineThresholdCrossedEvent
-    ) -> HandleResult:
+    async def handle_budget_line_threshold_crossed(self, event: BudgetLineThresholdCrossedEvent) -> HandleResult:
         # Account-scoped (like month_closed): resolve the owner here. The event's
         # source_key includes the threshold, so 80%/100% are distinct rows and
         # each fires once per line/period regardless of how often the stateless
@@ -118,9 +116,7 @@ class NotificationService:
         try:
             user_id = await self._account_owner.get_owner_user_id(event.account_id)
         except AccountNotFound:
-            logger.warning(
-                "budget threshold: account %s not found — dropping", event.account_id
-            )
+            logger.warning("budget threshold: account %s not found — dropping", event.account_id)
             return HandleResult(status="account_not_found", source_key=event.source_key)
         return await self._create(user_id=user_id, content=content, source_key=event.source_key)
 
