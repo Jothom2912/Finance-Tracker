@@ -61,6 +61,20 @@ class IAccountOwnerPort(ABC):
         """
         ...
 
+    async def aclose(self) -> None:
+        """Release whatever the implementation holds open (default: nothing).
+
+        The consumer closes this port in a ``finally`` on shutdown. Was that
+        call not part of the contract, a substituted implementation without the
+        method would raise ``AttributeError`` *inside* the finally and mask the
+        real shutdown error.
+
+        Concrete, not abstract: a stub or in-memory implementation should not
+        be forced to write an empty override just because the HTTP adapter
+        owns a connection pool.
+        """
+        return None
+
 
 class IUnitOfWork(ABC):
     notifications: INotificationRepository

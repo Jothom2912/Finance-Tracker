@@ -76,9 +76,9 @@ from app.config import settings
 
 get_current_user_id = make_current_user_dependency(lambda: settings.JWT_SECRET)
 
+
 @router.get("/me")
-def me(user_id: int = Depends(get_current_user_id)):
-    ...
+def me(user_id: int = Depends(get_current_user_id)): ...
 ```
 
 The secret is supplied via a zero-argument callable (`SecretProvider`)

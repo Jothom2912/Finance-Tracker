@@ -18,10 +18,7 @@ def make_budget_line_threshold_crossed_source_key(
     category_id: int,
     threshold: int,
 ) -> str:
-    return (
-        "budget.line_threshold_crossed:"
-        f"{account_id}:{year}:{month}:{category_id}:{threshold}"
-    )
+    return f"budget.line_threshold_crossed:{account_id}:{year}:{month}:{category_id}:{threshold}"
 
 
 class BudgetMonthClosedEvent(BaseEvent):

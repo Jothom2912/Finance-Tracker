@@ -11,8 +11,9 @@ dependencies = [
     "pydantic>=2.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
+    "ruff",
     "pytest",
 ]
 

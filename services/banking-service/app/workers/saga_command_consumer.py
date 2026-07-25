@@ -19,12 +19,15 @@ from aio_pika.abc import AbstractIncomingMessage
 from contracts.events.bank import BankSyncCompletedEvent, SyncTrigger
 from messaging import OutboxRepository
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.enable_banking_client import EnableBankingClient, EnableBankingConfig
 from app.config import settings
 from app.database import async_session_factory
 from app.models import BankConnectionModel
 from app.models.outbox import OutboxEventModel
+from app.models.processed_events import ProcessedEventModel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -61,6 +64,49 @@ def _parse_sync_trigger(raw: str | None) -> SyncTrigger:
             raw,
         )
         return SyncTrigger.MANUAL
+
+
+def _step_key(saga_id: str, step_name: str) -> str:
+    """Inbox-nøgle for én saga-kommando: sagaens trin-identitet.
+
+    Platformens inbox-nøgle er event'ets ``correlation_id`` (se
+    ``messaging.InboxDeduplicator``), men den duer ikke for saga-kommandoer:
+    orchestratoren bygger kommando-payloaden som et rent dict uden
+    ``correlation_id``, og den værdi den sætter på outbox-rækken er
+    ``saga.correlation_id`` — **den samme for alle trin i samme saga**. Dedup
+    på den ville behandle trin 2 som en dublet af trin 1 og standse sagaen.
+
+    ``(saga_id, step_name)`` er derimod sagaens naturlige trin-identitet, og
+    den er sikker her fordi orchestratoren aldrig genudsender et
+    *eksekverings*-trin: ``handle_reply`` kræver ``status == STARTED`` og
+    navne-match og rykker derefter frem, og timeout går til kompensation —
+    ikke til retry af trinnet. Kun ``rollback_import`` genudsendes
+    (``_handle_stale_compensation``), og den er idempotent i forvejen.
+
+    Tom nøgle ⇒ ingen dedup (se ``_inbox_key_or_none``): en delvis nøgle er
+    farligere end ingen.
+    """
+    return f"{saga_id}:{step_name}"
+
+
+def _inbox_key_or_none(body: dict) -> str | None:
+    """Nøgle for denne kommando, eller ``None`` hvis den ikke kan dannes.
+
+    Mangler ét af felterne, falder vi tilbage til adfærden fra før guarden
+    (ingen dedup) i stedet for at gætte. Nøglen ``":"`` ville ellers matche
+    hver anden nøgleløs kommando og gøre alle på nær den første til dubletter.
+    """
+    saga_id = body.get("saga_id") or ""
+    step_name = body.get("step_name") or ""
+    if not saga_id or not step_name:
+        logger.warning(
+            "Saga-kommando uden saga_id/step_name (saga_id=%r step_name=%r) — "
+            "kører uden inbox-guard; en redelivery kan give dobbelt effekt.",
+            saga_id,
+            step_name,
+        )
+        return None
+    return _step_key(saga_id, step_name)
 
 
 class BankingSagaCommandConsumer:
@@ -160,6 +206,19 @@ class BankingSagaCommandConsumer:
                 await message.ack()
 
     async def _handle_fetch_transactions(self, body: dict) -> dict:
+        """Hent transaktioner fra EB. **Bevidst uden inbox-guard** (P2-22).
+
+        Dette trins reply *bærer* resultatet (``result_data.items`` = hele
+        fetchen). En dedup-sti kan derfor ikke bare svare "success" uden at
+        genskabe items: sagaen ville importere 0 og syncen tabe transaktioner
+        i stilhed. Det er en værre fejl end det gentagne EB-kald en redelivery
+        koster — og handleren skriver ingenting, så en redelivery er netop
+        kun spild, ikke skade.
+
+        Vil man dedupe her, kræver det *stored reply* (gem svaret, gensend
+        det) — samme mekanisme som transaction-service's bulk-import mangler
+        (P2-23), ikke den guard ``_handle_mark_sync_complete`` bruger.
+        """
         connection_id = body["connection_id"]
         bank_account_uid = body.get("bank_account_uid", "")
         date_from = body.get("date_from")
@@ -236,8 +295,27 @@ class BankingSagaCommandConsumer:
         connection_id = body["connection_id"]
         user_id = body["user_id"]
         saga_id = body.get("saga_id", "")
+        inbox_key = _inbox_key_or_none(body)
 
         async with async_session_factory() as session:
+            # P2-22: kommandoen må kun have effekt én gang. Uden denne guard
+            # læser en redelivery (reply-publish fejlede efter commit, eller
+            # ACK'en blev tabt) et nu-NULL sync_trigger → MANUAL → et ANDET
+            # BankSyncCompletedEvent med frisk correlation_id → en ny
+            # source_key i notification-service, som unique-constraint'en
+            # derfor ikke kan absorbere. Én spøgelses-"ingen nye
+            # transaktioner" per redelivery.
+            if inbox_key is not None and await self._is_duplicate(session, inbox_key):
+                # Svar ALLIGEVEL. Årsagen til redeliveryen er typisk netop et
+                # tabt reply; ack'er vi uden at svare, hænger sagaen til
+                # timeout og går i kompensation — vi ville bytte en
+                # spøgelsesnotifikation for en fejlet saga.
+                logger.info(
+                    "Dublet saga-kommando (%s) — springer effekten over, svarer success",
+                    inbox_key,
+                )
+                return {"success": True}
+
             result = await session.execute(
                 select(BankConnectionModel).where(BankConnectionModel.id == UUID(connection_id))
             )
@@ -290,9 +368,45 @@ class BankingSagaCommandConsumer:
                     aggregate_type="bank_connection",
                     aggregate_id=connection_id,
                 )
-                await session.commit()
+
+                # Inbox-rækken hører i SAMME transaktion som effekterne.
+                # Committede vi den for sig, ville idempotensen koste
+                # retry-evnen: en handler der rejser efter inbox-commit men
+                # før effekt-commit ville aldrig køre igen. Sammen betyder
+                # "effekterne skete" og "kommandoen er set" ét faktum.
+                #
+                # Ligger uden for conn is None-grenen med vilje: findes
+                # forbindelsen ikke, er der ingen effekt at deduplikere, og
+                # adfærden er uændret fra før guarden (ingen commit, success).
+                if inbox_key is not None:
+                    session.add(
+                        ProcessedEventModel(
+                            correlation_id=inbox_key,
+                            consumer_name=QUEUE_NAME,
+                        )
+                    )
+
+                try:
+                    await session.commit()
+                except IntegrityError:
+                    # To deliveries kørte samtidigt: exists-checket var rent i
+                    # begge, unique-constraint'en afgjorde kapløbet. Taberen
+                    # har rullet sine effekter tilbage og svarer som dublet.
+                    await session.rollback()
+                    logger.info("Dublet på commit (%s) — benign kapløb", inbox_key)
+                    return {"success": True}
 
         return {"success": True}
+
+    @staticmethod
+    async def _is_duplicate(session: AsyncSession, inbox_key: str) -> bool:
+        result = await session.execute(
+            select(ProcessedEventModel).where(
+                ProcessedEventModel.correlation_id == inbox_key,
+                ProcessedEventModel.consumer_name == QUEUE_NAME,
+            )
+        )
+        return result.scalar_one_or_none() is not None
 
     async def _publish_reply(self, saga_id: str, step_name: str, reply_data: dict) -> None:
         if self._channel is None:

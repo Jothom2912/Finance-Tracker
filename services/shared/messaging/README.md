@@ -41,8 +41,10 @@ finans-tracker-messaging = { path = "../shared/messaging" }
 from messaging import OutboxEventMixin, OutboxRepository
 from app.database import Base
 
+
 class OutboxEventModel(OutboxEventMixin, Base):
     pass
+
 
 repo = OutboxRepository(session, OutboxEventModel)
 await repo.add(event, aggregate_type="goal", aggregate_id=str(goal.id))
@@ -89,13 +91,14 @@ from messaging import RabbitMQPublisher
 
 publisher = RabbitMQPublisher(settings.RABBITMQ_URL)
 await publisher.connect()
-await publisher.publish(event)   # SerializableEvent
+await publisher.publish(event)  # SerializableEvent
 ```
 
 ### Consumer with DLQ + retry
 
 ```python
 from messaging import ConsumerBase, PoisonMessageError
+
 
 class BudgetMonthClosedConsumer(ConsumerBase):
     async def handle(self, payload, message):
@@ -104,6 +107,7 @@ class BudgetMonthClosedConsumer(ConsumerBase):
         except ValidationError as exc:
             raise PoisonMessageError(str(exc)) from exc
         ...
+
 
 consumer = BudgetMonthClosedConsumer(
     rabbitmq_url=settings.RABBITMQ_URL,
