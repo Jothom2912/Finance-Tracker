@@ -71,8 +71,6 @@ def decode_token(
     try:
         claims["user_id"] = int(raw_user_id)
     except (TypeError, ValueError) as exc:
-        raise InvalidTokenError(
-            f"Token identity claim is not a valid integer: {raw_user_id!r}"
-        ) from exc
+        raise InvalidTokenError(f"Token identity claim is not a valid integer: {raw_user_id!r}") from exc
 
     return claims

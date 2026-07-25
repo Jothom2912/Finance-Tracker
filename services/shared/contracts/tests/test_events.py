@@ -244,19 +244,11 @@ class TestBudgetLineThresholdCrossedEvent:
     def test_source_key_includes_threshold(self) -> None:
         event = self._make(threshold=80)
 
-        assert (
-            event.source_key
-            == "budget.line_threshold_crossed:7:2026:4:3:80"
-        )
-        assert (
-            make_budget_line_threshold_crossed_source_key(7, 2026, 4, 3, 80)
-            == event.source_key
-        )
+        assert event.source_key == "budget.line_threshold_crossed:7:2026:4:3:80"
+        assert make_budget_line_threshold_crossed_source_key(7, 2026, 4, 3, 80) == event.source_key
 
     def test_thresholds_produce_distinct_source_keys(self) -> None:
-        assert self._make(threshold=80).source_key != self._make(
-            threshold=100
-        ).source_key
+        assert self._make(threshold=80).source_key != self._make(threshold=100).source_key
 
     def test_immutability(self) -> None:
         event = self._make()
