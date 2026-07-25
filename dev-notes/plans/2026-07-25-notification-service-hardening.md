@@ -1,7 +1,7 @@
 ---
 title: notification-service hardening — CI, sync-trigger, polish
 date: 2026-07-25
-status: in-progress     # open | in-progress | done | superseded
+status: done            # open | in-progress | done | superseded
 backlog-items: [P2-21, P3-17, P3-18]
 related:
   - plans/2026-07-20-f101-notification-service-mvp.md
@@ -9,6 +9,7 @@ related:
   - plans/2026-07-17-f105-scheduled-bank-sync.md
   - findings/2026-07-25-k8s-manifest-drift.md
   - findings/2026-07-25-worker-migration-ordering.md
+  - findings/2026-07-25-per-worker-image-staleness.md
   - architecture/services/notification-service.md
 ---
 
@@ -239,7 +240,43 @@ test. Worth doing here specifically because every one of these bugs is silent: t
 mode is a notification that does not appear, so a test that passes for the wrong reason
 looks identical to a test that works.
 
-### 9. [ ] Verification
+### 9. [x] Verification — **done 2026-07-25, all green**
+
+Offline: notification 90 · banking 60 · saga-service 50 · contracts 56 · frontend 254 ·
+**e2e 24/24** against the running stack. Ruff format+lint clean in all four Python services.
+
+Live flow, observed (connection `ba120c29`, user 1):
+
+| # | Scenario | Expected | Observed |
+|---|---|---|---|
+| 1 | consumer bindings | 5 routing keys | ✅ all five, `messaging.consumer` log |
+| — | migration 004 | column exists | ✅ `sync_trigger varchar NULL` present (checked the column, not alembic's exit code) |
+| 2 | manual sync, nothing new | 1 notification | ✅ claim carried `trigger=manual` mid-flight → "ingen nye transaktioner" |
+| 3 | scheduled tick, nothing new | **0** rows | ✅ `status=ignored_quiet_sync`, count unchanged, claim released |
+| 4 | scheduled tick, 1 new tx | 1 notification | ✅ "1 transaktion blev importeret" — suppression is not over-aggressive |
+| 5 | owner resolution | undisturbed | ✅ 4 sequential lookups on the *same* pooled client, 3 ms apart, all 200, `status=duplicate` (idempotency intact) |
+| 8b-A | manual joins running scheduled saga | notification, not silence | ✅ claim escalated `scheduled`→`manual` on join → "ingen nye transaktioner". **Under the pre-fix code this was silence.** |
+| 8b-B | foreign claim (TTL-steal state) | stamped manual, claim survives | ✅ guard logged both saga ids, notification created, foreign claim untouched (P3-14 invariant preserved) |
+
+Scenario 4 was produced by deleting one imported transaction so the next sweep re-imported it
+(dedup is `account_id`+`external_id`), which restores itself. Scenario 8b-B was produced by
+overwriting `sync_saga_id` mid-flight — the exact state a TTL steal leaves.
+
+**Deploy gotcha found while doing this — worth more than the verification itself.** Every
+worker in `docker-compose.yml` has its *own* `build:` block pointing at the same Dockerfile,
+so each is a separate image. `docker compose build banking-service` does **not** rebuild
+`banking-saga-command-consumer`, and `up -d` will not recreate a container whose own image
+did not change. The first run of scenario 2 therefore executed against a **mixed-version
+system**: new API (writing `sync_trigger`) + a consumer image from 2026-07-20 that had never
+heard of the column. It produced a green-looking result that meant nothing — the notification
+appeared only because the *old* consumer left `trigger` at its Pydantic default.
+
+Caught it by grepping the running container for the new symbol
+(`docker compose exec banking-saga-command-consumer grep -c own_claim ...` → `0`) rather than
+trusting "Started". That check is now the first step of any live verification here: **assert
+the new code is in the container before believing a single observation.** It generalises the
+existing "verify migrations created tables, not that alembic exit-coded 0" rule — same
+failure shape, one layer up. → [finding](../findings/2026-07-25-per-worker-image-staleness.md)
 
 ```bash
 make -C services/notification-service check    # format-check + lint  → must exit 0 (step 1)
