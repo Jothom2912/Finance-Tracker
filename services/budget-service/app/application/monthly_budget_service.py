@@ -372,8 +372,7 @@ class MonthlyBudgetService:
                 year=budget.year,
                 month=budget.month,
                 category_id=crossing.category_id,
-                category_name=category_names.get(crossing.category_id)
-                or str(crossing.category_id),
+                category_name=category_names.get(crossing.category_id) or str(crossing.category_id),
                 budgeted_amount=f"{crossing.budget_amount:.2f}",
                 spent_amount=f"{crossing.spent_amount:.2f}",
                 percentage_used=crossing.percentage_used,

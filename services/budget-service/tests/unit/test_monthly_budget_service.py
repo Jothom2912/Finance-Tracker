@@ -156,9 +156,7 @@ async def test_delete_passes_user_id_to_repository(service):
 @pytest.mark.asyncio
 async def test_evaluate_alerts_fails_closed_when_transaction_service_unavailable(service):
     svc, uow, transaction_port, _ = service
-    transaction_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable(
-        "transaction-service"
-    )
+    transaction_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable("transaction-service")
 
     with pytest.raises(UpstreamServiceUnavailable):
         await svc.evaluate_alerts(

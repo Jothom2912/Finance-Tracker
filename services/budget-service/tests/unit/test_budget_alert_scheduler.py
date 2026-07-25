@@ -118,9 +118,7 @@ async def test_run_once_only_sweeps_the_running_period(session_factory, ports) -
 async def test_run_once_skips_closed_budget(session_factory, ports) -> None:
     from app.workers.budget_alert_scheduler import run_once
 
-    await _insert_budget(
-        session_factory, month=7, year=2026, amount=1000.0, closed_at=datetime(2026, 7, 10, 12, 0)
-    )
+    await _insert_budget(session_factory, month=7, year=2026, amount=1000.0, closed_at=datetime(2026, 7, 10, 12, 0))
     ports[0].get_expenses_by_category.return_value = {1: 900.0}
 
     counts = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])

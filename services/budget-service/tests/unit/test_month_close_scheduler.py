@@ -84,9 +84,7 @@ async def _fetch_budget_state(session_factory, budget_id: int):
     from sqlalchemy import select
 
     async with session_factory() as session:
-        result = await session.execute(
-            select(MonthlyBudgetModel.closed_at).where(MonthlyBudgetModel.id == budget_id)
-        )
+        result = await session.execute(select(MonthlyBudgetModel.closed_at).where(MonthlyBudgetModel.id == budget_id))
         return result.scalar_one()
 
 
@@ -119,9 +117,7 @@ async def test_run_once_skips_current_month_and_not_yet_due(session_factory, por
     # Forrige måned, men "i dag" er d. 6. — før close_day
     previous = await _insert_budget(session_factory, month=6, year=2026, account_id=2)
 
-    counts = await run_once(
-        session_factory, date(2026, 7, 6), transaction_port=ports[0], category_port=ports[1]
-    )
+    counts = await run_once(session_factory, date(2026, 7, 6), transaction_port=ports[0], category_port=ports[1])
 
     assert counts == {
         "due": 0,

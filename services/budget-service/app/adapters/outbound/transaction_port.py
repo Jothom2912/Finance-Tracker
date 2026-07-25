@@ -70,7 +70,5 @@ class TransactionPort(ISpendPort):
         step 6) og implementerer kun metoden for at forblive instantierbar,
         så udskiftningen kan rulles tilbage ved at skifte composition root.
         """
-        expenses = await self.get_expenses_by_category(
-            account_id, start_date, end_date, user_id=user_id
-        )
+        expenses = await self.get_expenses_by_category(account_id, start_date, end_date, user_id=user_id)
         return sum((Decimal(str(v)) for v in expenses.values()), Decimal(0))
