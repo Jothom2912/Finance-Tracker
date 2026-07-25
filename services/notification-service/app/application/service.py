@@ -60,7 +60,12 @@ class NotificationService:
         # Drop the nightly no-op before touching the repo: source_key carries
         # correlation_id, so a suppressed sweep would otherwise write a fresh
         # row every night rather than deduping against the previous one.
-        if not should_notify_bank_sync(trigger=event.trigger, new_imported=event.new_imported, errors=event.errors):
+        if not should_notify_bank_sync(
+            trigger=event.trigger,
+            new_imported=event.new_imported,
+            errors=event.errors,
+            parse_skipped=event.parse_skipped,
+        ):
             return HandleResult(status="ignored_quiet_sync")
         content = build_bank_sync_completed(new_imported=event.new_imported, errors=event.errors)
         # correlation_id makes the key redelivery-stable while still letting a

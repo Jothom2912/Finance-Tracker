@@ -282,6 +282,7 @@ class BankingSagaCommandConsumer:
                     new_imported=body.get("new_imported", 0),
                     duplicates_skipped=body.get("duplicates_skipped", 0),
                     errors=body.get("errors", 0),
+                    parse_skipped=body.get("parse_skipped", 0),
                     trigger=trigger,
                 )
                 await outbox_repo.add(
