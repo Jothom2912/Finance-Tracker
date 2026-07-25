@@ -64,6 +64,14 @@ class NotificationConsumer(ConsumerBase):
             timeout=settings.ACCOUNT_SERVICE_TIMEOUT,
         )
 
+    async def run(self) -> None:
+        # ConsumerBase.run() owns the AMQP connection's lifetime but knows
+        # nothing about our HTTP pool, so close it on the way out.
+        try:
+            await super().run()
+        finally:
+            await self._account_owner.aclose()
+
     async def handle(self, payload: dict[str, Any], message: AbstractIncomingMessage) -> None:
         event_type = payload.get("event_type")
         correlation_id = payload.get("correlation_id", "unknown")
