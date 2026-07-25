@@ -38,6 +38,9 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [findings/2026-07-25-k8s-manifest-drift.md](findings/2026-07-25-k8s-manifest-drift.md) — 6 workloads + 1 DB in compose have no k8s manifest (F1-01/F1-05/F1-07/F2-03/AI-20); `apply -k` silently drops the notification feed and the automatic ADR-0003 chain (MEDIUM, → P2-21).
 - [findings/2026-07-25-banking-ci-could-not-collect.md](findings/2026-07-25-banking-ci-could-not-collect.md) — banking-service's CI-job kunne aldrig collecte sine tests (`DATABASE_URL` mangler + ingen conftest), maskeret af et tidligere `ruff format`-fejl i samme job; shared-pakkerne var slet ikke i CI (MEDIUM, resolved 2026-07-25).
 - [findings/2026-07-25-worker-migration-ordering.md](findings/2026-07-25-worker-migration-ordering.md) — migrations are a side effect of the API container's `CMD`; workers override `command:` and skip them, so k8s workers crash-loop until the API catches up (LOW, systemic, → P3-17).
+- [findings/2026-07-25-budget-spend-truncated-at-50.md](findings/2026-07-25-budget-spend-truncated-at-50.md) — budget-service sends no `limit`, so spend is summed from the 50 newest transactions: 69% understated on a real dev account-month, feeding `close_month`'s surplus and F2-03's alerts (HIGH, → P1-13).
+- [findings/2026-07-25-transaction-hard-delete-categorized-dlq.md](findings/2026-07-25-transaction-hard-delete-categorized-dlq.md) — transactions are hard-deleted, so the categorization write-back cannot tell "not yet" from "gone" and retries a deleted row to the DLQ (MEDIUM, → P2-25).
+- [findings/2026-07-25-saga-reply-non-uuid-poison.md](findings/2026-07-25-saga-reply-non-uuid-poison.md) — a malformed `saga_id` raises `asyncpg.DataError` past both `except` clauses, so it retries instead of being rejected as poison (LOW, → P3-19).
 
 ## Backlog & plans
 - [backlog/BACKLOG.md](backlog/BACKLOG.md) — technical backlog (P1 security/money → P2 systemic → P3 consistency), linked to finding IDs. P1 done 2026-07-07.
@@ -85,6 +88,7 @@ One line per document. Add yours when you add a file (see `dev-notes` skill).
 - [sessions/2026-07-17-f105-scheduled-sync.md](sessions/2026-07-17-f105-scheduled-sync.md) — F1-05 shipped: nightly sync-scheduler; live e2e PASSED (auto-saga, scheduler deferred til manuel saga, 0 due på prod-config). **ADR-0003-kæden fuldautomatisk.**
 - [sessions/2026-07-20-f101-notification-service.md](sessions/2026-07-20-f101-notification-service.md) — F1-01 shipped: notification-service (stub→hexagonal, 3 triggers, REST feed + bell UI); live e2e PASSED all 3; goal-detection-by-amount pivot + F1-08 gap found.
 - [sessions/2026-07-25-notification-hardening-and-p222.md](sessions/2026-07-25-notification-hardening-and-p222.md) — hardening-close-out + P2-22: saga-kommandoer kan ikke dedupes på `correlation_id` (samme for alle trin) → `(saga_id, step_name)`; dubletten skal stadig svare; banking's CI-job kunne aldrig collecte.
+- [sessions/2026-07-25-loose-ends-cleanup.md](sessions/2026-07-25-loose-ends-cleanup.md) — dev-artefakter + 2 DLQ'er ryddet; 3 utrackede fund skrevet op (P1-13 budget-trunkering, P2-25 hard-delete, P3-19 poison) — dokumentation, ingen kodeændringer.
 - [sessions/2026-07-20-f203-mid-month-budget-alerts.md](sessions/2026-07-20-f203-mid-month-budget-alerts.md) — F2-03 shipped: budget-alert-scheduler → `budget.line_threshold_crossed` (80/100) → notification-service 4th trigger; live e2e PASSED 4/4; async re-categorization races per-category reads (gotcha); notif type is String col (no migration).
 
 ## Templates
