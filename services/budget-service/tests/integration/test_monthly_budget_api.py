@@ -12,6 +12,7 @@ Kræver Docker kørende.
 from __future__ import annotations
 
 import os
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -85,16 +86,17 @@ def clean_db(postgres, _migrated_db):
 
 
 @pytest.fixture()
-def mock_transaction_port():
+def mock_spend_port():
     from app.application.ports.outbound import ISpendPort
 
     port = AsyncMock(spec=ISpendPort)
     port.get_expenses_by_category.return_value = {}
+    port.get_total_expenses.return_value = Decimal("0")
     return port
 
 
 @pytest.fixture()
-def client(async_db_url, mock_transaction_port):
+def client(async_db_url, mock_spend_port):
     from app.application.monthly_budget_service import MonthlyBudgetService
     from app.application.ports.outbound import ICategoryPort
     from app.dependencies import get_monthly_budget_service
@@ -115,7 +117,7 @@ def client(async_db_url, mock_transaction_port):
             uow = SQLAlchemyUnitOfWork(session)
             yield MonthlyBudgetService(
                 uow=uow,
-                transaction_port=mock_transaction_port,
+                spend_port=mock_spend_port,
                 category_port=mock_category_port,
             )
         await engine.dispose()
@@ -232,14 +234,14 @@ class TestOwnershipEnforcement:
 
 
 class TestCloseMonthFailClosed:
-    def test_close_returns_503_when_transaction_service_unavailable(
-        self, client, user1_headers, mock_transaction_port, postgres
+    def test_close_returns_503_when_spend_source_unavailable(
+        self, client, user1_headers, mock_spend_port, postgres
     ) -> None:
         from app.domain.exceptions import UpstreamServiceUnavailable
 
         _create_budget(client, user1_headers)
-        mock_transaction_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable(
-            "transaction-service",
+        mock_spend_port.get_total_expenses.side_effect = UpstreamServiceUnavailable(
+            "analytics-service",
         )
 
         response = client.post(
@@ -255,10 +257,10 @@ class TestCloseMonthFailClosed:
         assert _pg_execute(postgres, "SELECT id FROM outbox_events") == []
 
     def test_close_succeeds_when_transaction_service_available(
-        self, client, user1_headers, mock_transaction_port, postgres
+        self, client, user1_headers, mock_spend_port, postgres
     ) -> None:
         _create_budget(client, user1_headers)
-        mock_transaction_port.get_expenses_by_category.return_value = {1: 400.0}
+        mock_spend_port.get_expenses_by_category.return_value = {1: 400.0}
 
         response = client.post(
             "/api/v1/monthly-budgets/close",

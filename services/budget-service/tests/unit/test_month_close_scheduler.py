@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -46,11 +47,14 @@ async def session_factory():
 def ports():
     from app.application.ports.outbound import ICategoryPort, ISpendPort
 
-    transaction_port = AsyncMock(spec=ISpendPort)
-    transaction_port.get_expenses_by_category.return_value = {1: 30.0}
+    spend_port = AsyncMock(spec=ISpendPort)
+    spend_port.get_expenses_by_category.return_value = {1: 30.0}
+    # close_month måler overskuddet mod ALT forbrug (P1-13), ikke mod
+    # summen af de kategoriserede buckets.
+    spend_port.get_total_expenses.return_value = Decimal("30.00")
     category_port = AsyncMock(spec=ICategoryPort)
     category_port.get_all_names.return_value = {1: "Mad"}
-    return transaction_port, category_port
+    return spend_port, category_port
 
 
 async def _insert_budget(
@@ -102,7 +106,7 @@ async def test_run_once_closes_due_month_and_writes_outbox(session_factory, port
 
     budget_id = await _insert_budget(session_factory, month=6, year=2026)
 
-    counts = await run_once(session_factory, TODAY, transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, TODAY, spend_port=ports[0], category_port=ports[1])
 
     assert counts["due"] == 1
     assert counts["closed"] == 1
@@ -117,7 +121,7 @@ async def test_run_once_skips_current_month_and_not_yet_due(session_factory, por
     # Forrige måned, men "i dag" er d. 6. — før close_day
     previous = await _insert_budget(session_factory, month=6, year=2026, account_id=2)
 
-    counts = await run_once(session_factory, date(2026, 7, 6), transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, date(2026, 7, 6), spend_port=ports[0], category_port=ports[1])
 
     assert counts == {
         "due": 0,
@@ -135,7 +139,7 @@ async def test_run_once_skips_manually_closed_month(session_factory, ports) -> N
 
     await _insert_budget(session_factory, month=6, year=2026, closed_at=datetime(2026, 7, 1, 12, 0))
 
-    counts = await run_once(session_factory, TODAY, transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, TODAY, spend_port=ports[0], category_port=ports[1])
 
     # Allerede lukkede rækker rammer ikke engang sweepen (closed_at IS NULL-filter)
     assert counts["due"] == 0
@@ -149,16 +153,16 @@ async def test_run_once_upstream_failure_leaves_month_open_and_continues(session
     failing = await _insert_budget(session_factory, month=5, year=2026, account_id=1)
     healthy = await _insert_budget(session_factory, month=6, year=2026, account_id=2)
 
-    transaction_port, category_port = ports
+    spend_port, category_port = ports
 
-    async def flaky_expenses(account_id, start_date, end_date, user_id=0):
+    async def flaky_total(account_id, start_date, end_date, user_id=0):
         if account_id == 1:
-            raise UpstreamServiceUnavailable("transaction-service")
-        return {1: 30.0}
+            raise UpstreamServiceUnavailable("analytics-service")
+        return Decimal("30.00")
 
-    transaction_port.get_expenses_by_category.side_effect = flaky_expenses
+    spend_port.get_total_expenses.side_effect = flaky_total
 
-    counts = await run_once(session_factory, TODAY, transaction_port=transaction_port, category_port=category_port)
+    counts = await run_once(session_factory, TODAY, spend_port=spend_port, category_port=category_port)
 
     # Fail-closed: den fejlende måned forbliver åben (retry næste tick),
     # og fejlen isoleres — den anden måned lukkes alligevel.
@@ -174,8 +178,8 @@ async def test_run_once_is_idempotent_across_ticks(session_factory, ports) -> No
 
     await _insert_budget(session_factory, month=6, year=2026)
 
-    first = await run_once(session_factory, TODAY, transaction_port=ports[0], category_port=ports[1])
-    second = await run_once(session_factory, TODAY, transaction_port=ports[0], category_port=ports[1])
+    first = await run_once(session_factory, TODAY, spend_port=ports[0], category_port=ports[1])
+    second = await run_once(session_factory, TODAY, spend_port=ports[0], category_port=ports[1])
 
     assert first["closed"] == 1
     assert second == {

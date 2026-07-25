@@ -34,7 +34,7 @@ from app.adapters.outbound.category_port import CategoryPort
 from app.adapters.outbound.postgres_monthly_budget_repository import (
     PostgresMonthlyBudgetRepository,
 )
-from app.adapters.outbound.transaction_port import TransactionPort
+from app.adapters.outbound.analytics_port import AnalyticsSpendPort
 from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.application.monthly_budget_service import MonthlyBudgetService
 from app.application.ports.outbound import ICategoryPort, ISpendPort
@@ -48,7 +48,7 @@ async def run_once(
     session_factory: async_sessionmaker[AsyncSession],
     today: date,
     thresholds: list[int],
-    transaction_port: ISpendPort | None = None,
+    spend_port: ISpendPort | None = None,
     category_port: ICategoryPort | None = None,
 ) -> dict[str, int]:
     """One sweep of the running period. Returns counters for the tick log (and tests).
@@ -56,7 +56,7 @@ async def run_once(
     Ports are injectable for tests; the real HTTP adapters are stateless, so one
     instance per sweep is fine.
     """
-    transaction_port = transaction_port or TransactionPort()
+    spend_port = spend_port or AnalyticsSpendPort()
     category_port = category_port or CategoryPort()
     counts = {"budgets": 0, "events": 0, "failed_upstream": 0, "failed_unexpected": 0}
 
@@ -73,7 +73,7 @@ async def run_once(
         async with session_factory() as session:
             service = MonthlyBudgetService(
                 uow=SQLAlchemyUnitOfWork(session),
-                transaction_port=transaction_port,
+                spend_port=spend_port,
                 category_port=category_port,
             )
             try:

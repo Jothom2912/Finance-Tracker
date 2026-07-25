@@ -7,6 +7,7 @@ Fokus på to sikkerhedsregressioner:
 """
 
 from datetime import date, datetime
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -22,15 +23,15 @@ from app.domain.exceptions import (
 @pytest.fixture
 def service():
     uow = AsyncMock()
-    transaction_port = AsyncMock()
+    spend_port = AsyncMock()
     category_port = AsyncMock()
     category_port.get_all_names.return_value = {10: "Mad"}
     svc = MonthlyBudgetService(
         uow=uow,
-        transaction_port=transaction_port,
+        spend_port=spend_port,
         category_port=category_port,
     )
-    return svc, uow, transaction_port, category_port
+    return svc, uow, spend_port, category_port
 
 
 def make_monthly_budget(budget_id=1, month=6, year=2026, account_id=1, user_id=1):
@@ -51,10 +52,10 @@ def make_monthly_budget(budget_id=1, month=6, year=2026, account_id=1, user_id=1
 
 
 @pytest.mark.asyncio
-async def test_close_month_fails_closed_when_transaction_service_unavailable(service):
-    svc, uow, transaction_port, _ = service
+async def test_close_month_fails_closed_when_spend_source_unavailable(service):
+    svc, uow, spend_port, _ = service
     uow.monthly_budgets.get_by_account_and_period.return_value = make_monthly_budget()
-    transaction_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable("transaction-service")
+    spend_port.get_total_expenses.side_effect = UpstreamServiceUnavailable("analytics-service")
 
     with pytest.raises(UpstreamServiceUnavailable):
         await svc.close_month(account_id=1, year=2026, month=6, user_id=1)
@@ -66,9 +67,9 @@ async def test_close_month_fails_closed_when_transaction_service_unavailable(ser
 
 @pytest.mark.asyncio
 async def test_close_month_success_marks_closed_and_emits_event(service):
-    svc, uow, transaction_port, _ = service
+    svc, uow, spend_port, _ = service
     uow.monthly_budgets.get_by_account_and_period.return_value = make_monthly_budget()
-    transaction_port.get_expenses_by_category.return_value = {10: 400.0}
+    spend_port.get_total_expenses.return_value = Decimal("400.00")
     uow.monthly_budgets.mark_closed.return_value = True
 
     await svc.close_month(account_id=1, year=2026, month=6, user_id=1)
@@ -76,6 +77,34 @@ async def test_close_month_success_marks_closed_and_emits_event(service):
     uow.monthly_budgets.mark_closed.assert_awaited_once_with(1)
     uow.outbox.add.assert_awaited_once()
     uow.commit.assert_awaited_once()
+
+    event = uow.outbox.add.await_args.kwargs.get("event") or uow.outbox.add.await_args.args[0]
+    assert event.actual_spent == "400.00"
+    assert event.surplus_amount == "600.00"
+
+
+@pytest.mark.asyncio
+async def test_close_month_surplus_counts_uncategorised_spend(service):
+    """P1-13: overskuddet måles mod ALT forbrug, ikke kun de kategoriserede buckets.
+
+    Før dette hentede close_month per-kategori-dictet og summerede det, så
+    ukategoriseret forbrug forsvandt ud af regnestykket og oppustede
+    overskuddet — og dermed mål-allokeringen. Her er 250 af de 400
+    ukategoriserede: bruges det gamle per-kategori-opslag, bliver
+    overskuddet 850 i stedet for 600.
+    """
+    svc, uow, spend_port, _ = service
+    uow.monthly_budgets.get_by_account_and_period.return_value = make_monthly_budget()
+    spend_port.get_expenses_by_category.return_value = {10: 150.0}
+    spend_port.get_total_expenses.return_value = Decimal("400.00")
+    uow.monthly_budgets.mark_closed.return_value = True
+
+    await svc.close_month(account_id=1, year=2026, month=6, user_id=1)
+
+    event = uow.outbox.add.await_args.kwargs.get("event") or uow.outbox.add.await_args.args[0]
+    assert event.actual_spent == "400.00"
+    assert event.surplus_amount == "600.00"
+    spend_port.get_expenses_by_category.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -99,9 +128,9 @@ async def test_close_month_raises_not_found_when_budget_belongs_to_other_user(se
 
 @pytest.mark.asyncio
 async def test_get_summary_degrades_gracefully_when_transaction_service_unavailable(service):
-    svc, uow, transaction_port, _ = service
+    svc, uow, spend_port, _ = service
     uow.monthly_budgets.get_by_account_and_period.return_value = make_monthly_budget()
-    transaction_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable("transaction-service")
+    spend_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable("transaction-service")
 
     summary = await svc.get_summary(account_id=1, month=6, year=2026, user_id=1)
 
@@ -155,8 +184,8 @@ async def test_delete_passes_user_id_to_repository(service):
 
 @pytest.mark.asyncio
 async def test_evaluate_alerts_fails_closed_when_transaction_service_unavailable(service):
-    svc, uow, transaction_port, _ = service
-    transaction_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable("transaction-service")
+    svc, uow, spend_port, _ = service
+    spend_port.get_expenses_by_category.side_effect = UpstreamServiceUnavailable("transaction-service")
 
     with pytest.raises(UpstreamServiceUnavailable):
         await svc.evaluate_alerts(
@@ -171,9 +200,9 @@ async def test_evaluate_alerts_fails_closed_when_transaction_service_unavailable
 
 @pytest.mark.asyncio
 async def test_evaluate_alerts_emits_event_per_crossing_and_commits(service):
-    svc, uow, transaction_port, _ = service
+    svc, uow, spend_port, _ = service
     # budget line: category 10, amount 1000; spent 850 → 85% crosses only 80.
-    transaction_port.get_expenses_by_category.return_value = {10: 850.0}
+    spend_port.get_expenses_by_category.return_value = {10: 850.0}
 
     events = await svc.evaluate_alerts(
         make_monthly_budget(),
@@ -196,8 +225,8 @@ async def test_evaluate_alerts_emits_event_per_crossing_and_commits(service):
 
 @pytest.mark.asyncio
 async def test_evaluate_alerts_over_budget_emits_both_thresholds(service):
-    svc, uow, transaction_port, _ = service
-    transaction_port.get_expenses_by_category.return_value = {10: 1200.0}
+    svc, uow, spend_port, _ = service
+    spend_port.get_expenses_by_category.return_value = {10: 1200.0}
 
     events = await svc.evaluate_alerts(
         make_monthly_budget(),
@@ -212,8 +241,8 @@ async def test_evaluate_alerts_over_budget_emits_both_thresholds(service):
 
 @pytest.mark.asyncio
 async def test_evaluate_alerts_no_crossing_emits_nothing(service):
-    svc, uow, transaction_port, _ = service
-    transaction_port.get_expenses_by_category.return_value = {10: 100.0}  # 10%
+    svc, uow, spend_port, _ = service
+    spend_port.get_expenses_by_category.return_value = {10: 100.0}  # 10%
 
     events = await svc.evaluate_alerts(
         make_monthly_budget(),
@@ -228,9 +257,9 @@ async def test_evaluate_alerts_no_crossing_emits_nothing(service):
 
 @pytest.mark.asyncio
 async def test_evaluate_alerts_falls_back_to_category_id_when_name_missing(service):
-    svc, uow, transaction_port, category_port = service
+    svc, uow, spend_port, category_port = service
     category_port.get_all_names.return_value = {}  # name lookup empty
-    transaction_port.get_expenses_by_category.return_value = {10: 900.0}
+    spend_port.get_expenses_by_category.return_value = {10: 900.0}
 
     events = await svc.evaluate_alerts(
         make_monthly_budget(),

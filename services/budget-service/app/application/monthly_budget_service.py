@@ -46,11 +46,11 @@ class MonthlyBudgetService:
     def __init__(
         self,
         uow: IUnitOfWork,
-        transaction_port: ISpendPort,
+        spend_port: ISpendPort,
         category_port: ICategoryPort,
     ) -> None:
         self._uow = uow
-        self._transaction_port = transaction_port
+        self._spend_port = spend_port
         self._category_port = category_port
 
     # -- Queries ---------------------------------------------------------------
@@ -91,7 +91,7 @@ class MonthlyBudgetService:
         )
         start_date, end_date = budget_period(year, month, budget_start_day)
         try:
-            expenses = await self._transaction_port.get_expenses_by_category(
+            expenses = await self._spend_port.get_expenses_by_category(
                 account_id,
                 start_date,
                 end_date,
@@ -289,7 +289,13 @@ class MonthlyBudgetService:
         # Fail-closed: kan udgifterne ikke hentes, propagerer
         # UpstreamServiceUnavailable — måneden lukkes IKKE og der udsendes
         # ingen event (spent=0 ville kreditere et fiktivt overskud til mål).
-        expenses = await self._transaction_port.get_expenses_by_category(
+        #
+        # Overskuddet måles mod ALT forbrug, ikke mod summen af de
+        # kategoriserede buckets: ukategoriseret forbrug er stadig penge ude
+        # af kontoen, og at udelade det oppustede overskuddet — og dermed
+        # mål-allokeringen — også før P1-13's trunkeringsfejl. Se
+        # dev-notes/decisions/2026-07-25-budget-spend-from-analytics.md.
+        spent = await self._spend_port.get_total_expenses(
             account_id,
             start_date,
             end_date,
@@ -297,7 +303,6 @@ class MonthlyBudgetService:
         )
 
         budgeted = Decimal(str(budget.total_budget))
-        spent = sum(Decimal(str(v)) for v in expenses.values())
         surplus = max(Decimal(0), budgeted - spent)
 
         source_key = make_budget_month_closed_source_key(account_id, year, month)
@@ -346,7 +351,7 @@ class MonthlyBudgetService:
         are added to the outbox and committed in one transaction (no budget mutation).
         """
         start_date, end_date = budget_period(budget.year, budget.month, budget_start_day)
-        expenses = await self._transaction_port.get_expenses_by_category(
+        expenses = await self._spend_port.get_expenses_by_category(
             budget.account_id,
             start_date,
             end_date,

@@ -47,10 +47,10 @@ async def session_factory():
 def ports():
     from app.application.ports.outbound import ICategoryPort, ISpendPort
 
-    transaction_port = AsyncMock(spec=ISpendPort)
+    spend_port = AsyncMock(spec=ISpendPort)
     category_port = AsyncMock(spec=ICategoryPort)
     category_port.get_all_names.return_value = {1: "Dagligvarer"}
-    return transaction_port, category_port
+    return spend_port, category_port
 
 
 async def _insert_budget(
@@ -94,7 +94,7 @@ async def test_run_once_emits_event_for_line_over_threshold(session_factory, por
     await _insert_budget(session_factory, month=7, year=2026, amount=1000.0)
     ports[0].get_expenses_by_category.return_value = {1: 850.0}  # 85% → crosses 80
 
-    counts = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, TODAY, THRESHOLDS, spend_port=ports[0], category_port=ports[1])
 
     assert counts["budgets"] == 1
     assert counts["events"] == 1
@@ -108,7 +108,7 @@ async def test_run_once_only_sweeps_the_running_period(session_factory, ports) -
     await _insert_budget(session_factory, month=6, year=2026, account_id=2, amount=1000.0)
     ports[0].get_expenses_by_category.return_value = {1: 999.0}
 
-    counts = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, TODAY, THRESHOLDS, spend_port=ports[0], category_port=ports[1])
 
     assert counts["budgets"] == 0
     assert counts["events"] == 0
@@ -121,7 +121,7 @@ async def test_run_once_skips_closed_budget(session_factory, ports) -> None:
     await _insert_budget(session_factory, month=7, year=2026, amount=1000.0, closed_at=datetime(2026, 7, 10, 12, 0))
     ports[0].get_expenses_by_category.return_value = {1: 900.0}
 
-    counts = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, TODAY, THRESHOLDS, spend_port=ports[0], category_port=ports[1])
 
     assert counts["budgets"] == 0
     assert await _count_outbox_events(session_factory) == 0
@@ -133,7 +133,7 @@ async def test_run_once_over_budget_emits_both_thresholds(session_factory, ports
     await _insert_budget(session_factory, month=7, year=2026, amount=1000.0)
     ports[0].get_expenses_by_category.return_value = {1: 1200.0}  # 120% → 80 and 100
 
-    counts = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, TODAY, THRESHOLDS, spend_port=ports[0], category_port=ports[1])
 
     assert counts["events"] == 2
     assert await _count_outbox_events(session_factory) == 2
@@ -145,7 +145,7 @@ async def test_run_once_no_crossing_emits_nothing(session_factory, ports) -> Non
     await _insert_budget(session_factory, month=7, year=2026, amount=1000.0)
     ports[0].get_expenses_by_category.return_value = {1: 100.0}  # 10%
 
-    counts = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, TODAY, THRESHOLDS, spend_port=ports[0], category_port=ports[1])
 
     assert counts["events"] == 0
     assert await _count_outbox_events(session_factory) == 0
@@ -165,7 +165,7 @@ async def test_run_once_upstream_failure_isolated_and_continues(session_factory,
 
     ports[0].get_expenses_by_category.side_effect = flaky_expenses
 
-    counts = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])
+    counts = await run_once(session_factory, TODAY, THRESHOLDS, spend_port=ports[0], category_port=ports[1])
 
     assert counts["budgets"] == 2
     assert counts["failed_upstream"] == 1
@@ -182,8 +182,8 @@ async def test_run_once_is_idempotent_at_the_outbox_but_emits_each_tick(session_
     await _insert_budget(session_factory, month=7, year=2026, amount=1000.0)
     ports[0].get_expenses_by_category.return_value = {1: 850.0}
 
-    first = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])
-    second = await run_once(session_factory, TODAY, THRESHOLDS, transaction_port=ports[0], category_port=ports[1])
+    first = await run_once(session_factory, TODAY, THRESHOLDS, spend_port=ports[0], category_port=ports[1])
+    second = await run_once(session_factory, TODAY, THRESHOLDS, spend_port=ports[0], category_port=ports[1])
 
     assert first["events"] == 1
     assert second["events"] == 1

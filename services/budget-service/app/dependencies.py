@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.outbound.analytics_port import AnalyticsSpendPort
 from app.adapters.outbound.category_port import CategoryPort
 from app.adapters.outbound.postgres_budget_repository import PostgresBudgetRepository
-from app.adapters.outbound.transaction_port import TransactionPort
 from app.adapters.outbound.unit_of_work import SQLAlchemyUnitOfWork
 from app.application.monthly_budget_service import MonthlyBudgetService
 from app.application.ports.inbound import IBudgetService
@@ -24,9 +24,9 @@ async def get_monthly_budget_service(
 ) -> MonthlyBudgetService:
     uow = SQLAlchemyUnitOfWork(db)
     category_port = CategoryPort()
-    transaction_port = TransactionPort()
+    spend_port = AnalyticsSpendPort()
     return MonthlyBudgetService(
         uow=uow,
-        transaction_port=transaction_port,
+        spend_port=spend_port,
         category_port=category_port,
     )
