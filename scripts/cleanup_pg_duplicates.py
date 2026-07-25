@@ -15,13 +15,33 @@ Safety rails
 * Every deleted row is logged as full JSON for audit.
 * Idempotent — running twice is safe (second run finds 0 duplicates).
 
+Event contract (P3-20)
+----------------------
+Deleting straight from ``transactions`` is only half the service's own
+delete path: ``TransactionService.delete_transaction`` writes a
+``TransactionDeletedEvent`` outbox row *in the same transaction* so the
+Elasticsearch read model learns about it.  A script that skips that step
+leaves a phantom row nothing can ever remove — the row that would trigger
+the event is already gone, so no retry, replay or self-healing consumer
+can notice (see ``dev-notes/findings/2026-07-25-cleanup-script-desyncs-read-model.md``).
+
+So this script writes the same outbox rows in the same transaction as its
+DELETE, and the existing transaction-outbox-publisher does the rest.
+The event object is imported from ``contracts`` rather than hand-built as
+JSON, so the payload cannot drift from the contract.
+
 Usage::
 
     # Dry run (default) — see what would be deleted
-    uv run python scripts/cleanup_pg_duplicates.py
+    uv run --project services/transaction-service python scripts/cleanup_pg_duplicates.py
 
     # Actually delete
-    uv run python scripts/cleanup_pg_duplicates.py --execute
+    uv run --project services/transaction-service python scripts/cleanup_pg_duplicates.py --execute
+
+``--project services/transaction-service`` is required, not cosmetic: there
+is no root pyproject, and that venv is the one that owns both the psycopg2
+driver and ``contracts`` as a path dependency.  It is also the right venv on
+principle — this script writes to transaction-service's database.
 
 Environment variables::
 
@@ -34,10 +54,10 @@ import argparse
 import json
 import logging
 import os
-import sys
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _ENV_FILE = _REPO_ROOT / ".env"
@@ -141,14 +161,71 @@ def _get_summary(conn) -> dict:
     return {"total_rows": total, "duplicate_groups": groups}
 
 
-def _delete_rows(conn, ids: list[int]) -> int:
-    """Delete rows in the same transaction as the SELECT that found them."""
+def _build_outbox_row(row: dict) -> tuple:
+    """Build the ``outbox_events`` tuple for one row about to be deleted.
+
+    Mirrors ``OutboxRepository._build``: a fresh uuid4 id, the event's own
+    ``event_type``/``correlation_id``, and ``status='pending'`` so the
+    publisher picks it up.  The routing key is derived from ``event_type``
+    by the worker, so nothing else is needed here.
+
+    The event is constructed from the real contract class — if
+    ``TransactionDeletedEvent`` ever gains a required field, this raises
+    instead of silently emitting a payload consumers cannot parse.
+    """
+    from contracts.events.transaction import TransactionDeletedEvent
+
+    event = TransactionDeletedEvent(
+        transaction_id=row["id"],
+        account_id=row["account_id"],
+        user_id=row["user_id"],
+        amount=str(row["amount"]),
+    )
+    return (
+        str(uuid4()),
+        "transaction",
+        str(row["id"]),
+        event.event_type,
+        event.to_json(),
+        event.correlation_id,
+        "pending",
+        0,
+    )
+
+
+def _delete_rows(conn, rows: list[dict]) -> int:
+    """Delete rows and outbox their delete events in one transaction.
+
+    Both statements share the cursor and a single commit, so the read model
+    can never learn about a delete that did not happen — nor miss one that
+    did.  Insert first: a failed DELETE then rolls the events back with it.
+    """
+    ids = [row["id"] for row in rows]
     with conn.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO outbox_events (
+                id, aggregate_type, aggregate_id, event_type,
+                payload_json, correlation_id, status, attempts
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            [_build_outbox_row(row) for row in rows],
+        )
+        outboxed = cur.rowcount
+
         cur.execute(
             "DELETE FROM transactions WHERE id = ANY(%s)",
             (ids,),
         )
         deleted = cur.rowcount
+
+    if deleted != outboxed:
+        conn.rollback()
+        raise RuntimeError(
+            f"Refusing to commit: {outboxed} delete events for {deleted} deleted rows. "
+            "Write model and read model would diverge."
+        )
+
     conn.commit()
     return deleted
 
@@ -214,9 +291,8 @@ def main() -> None:
             f.write(json.dumps(row, cls=_Encoder, ensure_ascii=False) + "\n")
     logger.info("Audit log written to %s (%d rows)", audit_path, len(to_delete))
 
-    ids = [row["id"] for row in to_delete]
-    deleted = _delete_rows(conn, ids)
-    logger.info("Deleted %d duplicate rows", deleted)
+    deleted = _delete_rows(conn, to_delete)
+    logger.info("Deleted %d duplicate rows (+ %d delete events outboxed)", deleted, deleted)
 
     new_summary = _get_summary(conn)
     logger.info("Rows after cleanup:       %d (was %d)", new_summary["total_rows"], summary["total_rows"])
