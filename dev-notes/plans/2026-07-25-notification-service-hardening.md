@@ -1,7 +1,7 @@
 ---
 title: notification-service hardening — CI, sync-trigger, polish
 date: 2026-07-25
-status: open            # open | in-progress | done | superseded
+status: in-progress     # open | in-progress | done | superseded
 backlog-items: [P2-21, P3-17, P3-18]
 related:
   - plans/2026-07-20-f101-notification-service-mvp.md
@@ -72,7 +72,7 @@ change carries no fan-out risk.
 
 One commit per numbered step (per convention: commit per logical phase, clean rollback).
 
-### 1. [ ] `style(notification): ruff format` — unblock CI
+### 1. [x] `style(notification): ruff format` — unblock CI
 
 - `make -C services/notification-service format`
 - Touches 4 committed files: `app/application/service.py`, `app/domain/messages.py`,
@@ -81,7 +81,7 @@ One commit per numbered step (per convention: commit per logical phase, clean ro
 - **Do this first and alone** — it is the only step that unblocks the pipeline, and mixing
   it with logic changes makes the rest of the diff unreadable.
 
-### 2. [ ] `feat(contracts): trigger on BankSyncCompletedEvent`
+### 2. [x] `feat(contracts): trigger on BankSyncCompletedEvent`
 
 `services/shared/contracts/contracts/events/bank.py`:
 
@@ -100,7 +100,7 @@ in an outbox or queue at deploy time still validate. Default is `MANUAL` on purp
 errs toward notifying, which is the safe direction for a field that decides whether a user
 hears about something.
 
-### 3. [ ] `feat(banking): carry sync trigger on the P3-14 claim`
+### 3. [x] `feat(banking): carry sync trigger on the P3-14 claim`
 
 The claim row is the carrier — it already lives for exactly the saga's lifetime and is
 already validated against `saga_id` at completion time. Files:
@@ -124,7 +124,7 @@ labelled `manual`. Worst case is one extra notification — the safe direction. 
 properly means versioning the claim per saga, which is not worth it for a cosmetic label.
 Document in the banking architecture doc; do not chase.
 
-### 4. [ ] `feat(notification): suppress quiet scheduled syncs`
+### 4. [x] `feat(notification): suppress quiet scheduled syncs`
 
 - New pure predicate in `app/domain/` (extend `messages.py` or add `rules.py`):
   `should_notify_bank_sync(*, trigger, new_imported, errors) -> bool` — false iff
@@ -219,4 +219,36 @@ touching the others. Step 3 is the only one with a migration.
 
 ## Outcome (fill in when done)
 
-_Not started._
+**Steps 1–4 shipped 2026-07-25** on branch `fix/notification-service-hardening`. Suites
+green: notification 72, contracts 56, banking 55. Steps 5–8 + live verification remain.
+
+Commits: `4d936582` (style/notification) · `875b5680` (contracts) · `d5630a6e`
+(style/banking) · `355764fd` (banking) · `883f54af` (notification).
+
+Deviations from the plan:
+
+- **Extra commit `style(banking): ruff format`.** banking-service is also in the CI matrix
+  and was *also* failing `ruff format --check .` on committed code — two comment-alignment
+  spaces in the P3-14 steal tests, unrelated to this work. Found because step 3 touches
+  banking. So the red-CI finding was two services, not one; `services/shared/contracts` has
+  the same latent break but is **not** in the CI matrix, so it was left alone (noted below).
+- **Step 4 created `app/domain/rules.py`** rather than extending `messages.py`. The plan
+  allowed either; a separate module keeps "does this fire?" apart from "what does it say?".
+- **Three extra banking tests** beyond the planned set, covering the read-before-clear
+  ordering, NULL fallback and unknown-value fallback. The ordering one matters most: the
+  handler that stamps the event is the same one that clears the carrier, so reading in the
+  wrong order silently turns every scheduled sync into `manual` and the whole suppression
+  stops working with no test failing.
+
+Follow-ups spawned:
+
+- `services/shared/contracts` fails `ruff format --check` on pre-existing F2-03 code
+  (`contracts/events/budget.py`, `tests/test_events.py`). Harmless today because the shared
+  packages are not in the CI matrix — which is itself worth questioning, since a shared
+  package breaking is worse than one service breaking.
+- **Local-test gotcha for banking-service:** it has no `pyproject.toml` (requirements.txt
+  only), so `uv sync`/`uv run pytest` do not work there. Use:
+  `PYTHONPATH=../shared/contracts:../shared:. uv run --python 3.11 --with-requirements
+  requirements.txt --with pytest --with pytest-asyncio --with aiosqlite pytest tests`.
+  The `--python 3.11` is required — `psycopg2-binary==2.9.10` has no wheel for newer
+  interpreters and falls back to a source build that needs `pg_config`.
