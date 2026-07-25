@@ -32,13 +32,15 @@ from app.domain.messages import (
     build_budget_month_closed,
     build_goal_reached,
 )
+from app.domain.rules import should_notify_bank_sync
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class HandleResult:
-    status: str  # created | duplicate | ignored_not_reached | account_not_found
+    # created | duplicate | ignored_not_reached | ignored_quiet_sync | account_not_found
+    status: str
     source_key: str | None = None
     notification_id: UUID | None = None
 
@@ -55,6 +57,11 @@ class NotificationService:
         self._account_owner = account_owner
 
     async def handle_bank_sync_completed(self, event: BankSyncCompletedEvent) -> HandleResult:
+        # Drop the nightly no-op before touching the repo: source_key carries
+        # correlation_id, so a suppressed sweep would otherwise write a fresh
+        # row every night rather than deduping against the previous one.
+        if not should_notify_bank_sync(trigger=event.trigger, new_imported=event.new_imported, errors=event.errors):
+            return HandleResult(status="ignored_quiet_sync")
         content = build_bank_sync_completed(new_imported=event.new_imported, errors=event.errors)
         # correlation_id makes the key redelivery-stable while still letting a
         # genuinely new sync of the same connection notify again.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from app.application.service import NotificationService
 from app.domain.exceptions import AccountNotFound, AccountOwnerUnavailable
-from contracts.events.bank import BankSyncCompletedEvent
+from contracts.events.bank import BankSyncCompletedEvent, SyncTrigger
 from contracts.events.budget import (
     BudgetLineThresholdCrossedEvent,
     BudgetMonthClosedEvent,
@@ -17,15 +17,21 @@ def _service(uow: FakeUoW, email: FakeEmail, owner: FakeAccountOwner) -> Notific
     return NotificationService(uow, email, owner)  # type: ignore[arg-type]
 
 
-def _bank_event() -> BankSyncCompletedEvent:
+def _bank_event(
+    *,
+    trigger: SyncTrigger = SyncTrigger.MANUAL,
+    new_imported: int = 3,
+    errors: int = 0,
+) -> BankSyncCompletedEvent:
     return BankSyncCompletedEvent(
         connection_id="c1",
         account_id=1,
         user_id=7,
         total_fetched=3,
-        new_imported=3,
+        new_imported=new_imported,
         duplicates_skipped=0,
-        errors=0,
+        errors=errors,
+        trigger=trigger,
     )
 
 
@@ -53,6 +59,75 @@ async def test_redelivery_of_same_event_is_deduplicated() -> None:
     assert second.status == "duplicate"
     assert len(uow.notifications.rows) == 1
     assert len(email.sent) == 1  # no second email
+
+
+async def test_quiet_scheduled_sync_writes_nothing() -> None:
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+
+    result = await _service(uow, email, owner).handle_bank_sync_completed(
+        _bank_event(trigger=SyncTrigger.SCHEDULED, new_imported=0)
+    )
+
+    assert result.status == "ignored_quiet_sync"
+    assert uow.notifications.rows == []
+    assert uow.committed is False
+    assert email.sent == []
+
+
+async def test_quiet_manual_sync_still_notifies() -> None:
+    # The button-press receipt survives the suppression rule.
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+
+    result = await _service(uow, email, owner).handle_bank_sync_completed(
+        _bank_event(trigger=SyncTrigger.MANUAL, new_imported=0)
+    )
+
+    assert result.status == "created"
+    assert uow.notifications.rows[0].body == "Din bank er synkroniseret – ingen nye transaktioner."
+
+
+async def test_scheduled_sync_with_imports_notifies() -> None:
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+
+    result = await _service(uow, email, owner).handle_bank_sync_completed(
+        _bank_event(trigger=SyncTrigger.SCHEDULED, new_imported=4)
+    )
+
+    assert result.status == "created"
+    assert len(uow.notifications.rows) == 1
+
+
+async def test_scheduled_sync_with_only_errors_notifies() -> None:
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+
+    result = await _service(uow, email, owner).handle_bank_sync_completed(
+        _bank_event(trigger=SyncTrigger.SCHEDULED, new_imported=0, errors=2)
+    )
+
+    assert result.status == "created"
+    assert len(uow.notifications.rows) == 1
+
+
+async def test_event_without_trigger_defaults_to_notifying() -> None:
+    # An event published before the trigger field shipped must not be silently
+    # swallowed by the new rule.
+    uow, email, owner = FakeUoW(), FakeEmail(), FakeAccountOwner(user_id=7)
+    legacy = BankSyncCompletedEvent.model_validate(
+        {
+            "event_type": "bank.sync.completed",
+            "connection_id": "c1",
+            "account_id": 1,
+            "user_id": 7,
+            "total_fetched": 0,
+            "new_imported": 0,
+            "duplicates_skipped": 0,
+            "errors": 0,
+        }
+    )
+
+    result = await _service(uow, email, owner).handle_bank_sync_completed(legacy)
+
+    assert result.status == "created"
 
 
 async def test_goal_updated_ignored_when_below_target() -> None:
