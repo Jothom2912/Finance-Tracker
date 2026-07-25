@@ -1,7 +1,9 @@
 """HTTP adapter to account-service for owner resolution.
 
-``budget.month_closed`` carries only ``account_id`` (no ``user_id``), so we
-resolve the owner the same way goal-service does:
+Three of the five triggers are account-scoped — ``budget.month_closed``,
+``budget.line_threshold_crossed`` and the auto-allocation ``goal.reached`` —
+and carry only ``account_id``, no ``user_id``. For those we resolve the owner
+the same way goal-service does:
 ``GET /api/v1/internal/accounts/{id}/owner`` with the internal API key.
 """
 

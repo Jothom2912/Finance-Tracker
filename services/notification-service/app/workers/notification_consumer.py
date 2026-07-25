@@ -1,6 +1,6 @@
-"""Consumer for the three F1 trigger events → in-app notifications.
+"""Consumer for the five trigger events → in-app notifications.
 
-One queue bound to all three routing keys (none has a slow/flaky dependency,
+One queue bound to all five routing keys (none has a slow/flaky dependency,
 so no per-concern queue isolation is needed — cf. the embed-worker decision).
 Connection/topology/retry/DLQ boilerplate lives in ``messaging.ConsumerBase``.
 
