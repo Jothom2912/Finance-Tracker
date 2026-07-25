@@ -3,8 +3,8 @@ title: budget-service computes spend from at most 50 transactions
 date: 2026-07-25
 severity: HIGH
 area: budget, transaction
-status: open
-resolved-by: null
+status: resolved
+resolved-by: ../plans/2026-07-25-p113-budget-spend-from-analytics.md
 ---
 
 # budget-service computes spend from at most 50 transactions
@@ -84,4 +84,8 @@ the dashboard's reality, and the alternative is maintaining aggregation rules in
 — which is what produced the divergence in the first place. `close_month` must keep its
 fail-closed behaviour against the new upstream.
 
-Tracked as P1-13.
+Tracked as P1-13 — **resolved 2026-07-25** by
+[the plan](../plans/2026-07-25-p113-budget-spend-from-analytics.md). budget-service now reads
+spend from analytics; June went 5 180,32 → 16 739,83 (matching Postgres exactly) and July
+10 286,17 → 17 666,17. The residual 138,00 on July is a phantom row from a different defect
+([P3-20](2026-07-25-cleanup-script-desyncs-read-model.md)), not this one.

@@ -1,7 +1,7 @@
 ---
 title: P1-13 — budget-service reads spend from analytics instead of 50 truncated rows
 date: 2026-07-25
-status: open
+status: done
 backlog-items: [P1-13]
 related:
   - ../findings/2026-07-25-budget-spend-truncated-at-50.md
@@ -213,3 +213,84 @@ include this one.
 **Rollback**: steps 2-4 are behind one injected port. Reverting = re-point the composition
 root at `TransactionPort`, which is why step 6 deletes it only after verification. Steps 1
 and 5 are inert on their own.
+
+## Outcome
+
+**Steps 1–7 shipped 2026-07-25** on `master`, 8 commits. All seven planned steps done as
+written; the deviations below are additions, not changes of direction.
+
+### The measurement
+
+Old and new adapter run against the same data, in the running container, before deleting
+the old one:
+
+| Period | Old (`TransactionPort`) | New (`AnalyticsSpendPort`) | Postgres truth |
+|---|---|---|---|
+| June 2026 | 5 180,32 | **16 739,83** | 16 739,83 |
+| July 2026 | 10 286,17 | **17 666,17** | 17 528,17 |
+
+Both hit the numbers predicted before a line was written. June matches Postgres exactly.
+July's 138,00 excess is phantom tx 1119 → P3-20, discovered *during* this work (below).
+Bonus signal: the old port's total carried float error (`5180.3200000000003`) where the new
+one returns clean `Decimal` — the `Decimal(str(x))` choice paid off immediately.
+
+**Fail-closed verified live** with analytics-service stopped, against a throwaway budget row
+rather than the real open July budget (if the guarantee had been broken, testing on the real
+one would have closed a month and credited a fictional surplus to a goal):
+summary → HTTP 200 `spent=0` (fail-open, intact), close → HTTP 503, `closed_at` still NULL,
+zero outbox rows. Scratch row deleted afterwards.
+
+**F2-03 end to end**: the alert scheduler now calls analytics and emitted **7 events for
+budget 9** (account 1) — exactly the crossings the corrected line figures imply. Downstream,
+5 collapsed against existing `source_key` rows and **2 became new notifications**: Mad &
+drikke 100% (104,57%) and Diverse 100% (127,38%). Both are crossings truncated spend could
+never reach. Idempotency intact, and the fix's value is visible in the feed.
+
+### Deviations
+
+- **Extra commit `style(budget): ruff format` (3bbda8ca).** budget-service is in the CI
+  matrix and `ruff format --check .` is a hard step *before* the test step. Four files
+  failed it on committed code — `test_monthly_budget_service.py` since `5c03c807` (F2-03,
+  2026-07-20). The job had been red for five days, so budget-service's 117 tests had not run
+  in CI either. Third instance of this exact pattern in one day after banking-service and
+  the three shared packages; the recurrence is the finding, not any single file.
+- **Extra commit `style(budget): sortér imports` (39e8611f).** Self-inflicted: a pipe
+  (`ruff check . | tail`) masked ruff's exit code, so a `&&` chain proceeded and two I001
+  errors were committed. Noted because the mistake is invisible by construction.
+- **P3-20 found mid-flight.** Comparing analytics against Postgres to set the verification
+  targets surfaced a 138,00 discrepancy, traced to `cleanup_pg_duplicates.py:148` deleting
+  straight from the write DB with no outbox event, leaving a permanently live phantom row in
+  `transactions_v2`. Separate [finding](../findings/2026-07-25-cleanup-script-desyncs-read-model.md).
+- **A committed finding had to be retracted.** P2-25 claimed all downstream projections
+  shared the categorization consumer's blind spot. Chasing the phantom disproved it —
+  `delete_transaction` does emit `TransactionDeletedEvent`, and ES honours it via
+  `is_deleted`. Corrected in place with the retraction visible rather than edited away.
+- **No k8s change needed**, contrary to the plan's expectation of noting a new var for
+  P2-21: budget-service takes env via `envFrom` on the shared `finance-tracker-config`
+  ConfigMap, which already contains `ANALYTICS_SERVICE_URL`. The k8s side is better factored
+  than compose here. The two schedulers still have no manifests at all (P2-21, unchanged).
+- **7 tests needed updating in step 4**, exactly the ones asserting on a *number* rather than
+  on the port being called — the plan predicted this and required they be changed
+  explicitly. One new test (`test_close_month_surplus_counts_uncategorised_spend`) locks the
+  uncategorised semantics: 250 of 400 uncategorised → surplus 600, not 850.
+
+### Mutation checks
+
+Every semantic claim was checked by breaking it:
+
+| Mutation | Expected to break | Result |
+|---|---|---|
+| `get_total_expenses` sums buckets instead of reading `total_expenses` | 3 adapter tests | broke |
+| null-category bucket included in per-category | 2 adapter tests | broke |
+| `Decimal(float)` instead of `Decimal(str(float))` | 2 adapter tests | broke |
+| `close_month` reverted to `sum(per-category)` | 4 service tests incl. the new one | broke |
+
+### Follow-ups spawned
+
+- **P3-20** — `cleanup_pg_duplicates.py` deletes behind the outbox.
+- **Budget-service CI has been red since 2026-07-20**; fixed here, but nobody noticed for
+  five days across three services. Worth a mechanism, not another fix.
+- **Historical closed months keep their too-high surplus** and goal `amount_saved` credited
+  from them is not retro-corrected — recorded in the decision, no reconciliation attempted.
+- The two new July notifications are legitimate crossings, not test artefacts, and were
+  left in place.
