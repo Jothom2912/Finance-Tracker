@@ -38,13 +38,28 @@ MAX_RETRIES = 3
 def _parse_sync_trigger(raw: str | None) -> SyncTrigger:
     """Claim-kolonnen → enum, med MANUAL som fallback.
 
-    Rækker claimet før migration 004 har NULL, og en fremtidig værdi vi ikke
-    kender skal ikke vælte en sync-completion. Begge falder tilbage til MANUAL:
-    den værste fejl her er at brugeren aldrig hører om sin egen sync.
+    To forskellige tilfælde, med vilje skilt ad:
+
+    - ``NULL`` er forventet på rækker claimet før migration 004 og kræver ingen
+      støj.
+    - En værdi vi ikke kan parse er derimod et *bug-signal* — en writer og
+      denne enum er ude af sync. Fallback'en gør at hver scheduled sync
+      relabelles ``manual``, så undertrykkelsen holder op med at virke, og
+      uden en log-linje er det eneste spor "klokken blev støjende igen".
+
+    Begge falder tilbage til MANUAL: den værste fejl her er at brugeren aldrig
+    hører om sin egen sync.
     """
+    if raw is None:
+        return SyncTrigger.MANUAL
     try:
         return SyncTrigger(raw)
     except ValueError:
+        logger.warning(
+            "Ukendt sync_trigger %r på claim — falder tilbage til manual. "
+            "En writer er ude af sync med SyncTrigger-enum'en.",
+            raw,
+        )
         return SyncTrigger.MANUAL
 
 

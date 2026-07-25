@@ -8,6 +8,7 @@ in that gap.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
@@ -216,15 +217,36 @@ async def test_null_sync_trigger_falls_back_to_manual() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_sync_trigger_falls_back_to_manual() -> None:
+async def test_unknown_sync_trigger_falls_back_to_manual_and_warns(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Fallback'en er rigtig, men den skjuler et bug-signal: en writer er ude af
+    # sync med enum'en, og symptomet (klokken bliver støjende) peger ikke på
+    # årsagen. Derfor SKAL den logge — modsat NULL-tilfældet nedenfor.
     conn = _connection_row(saga_id="saga-1", sync_trigger="cron")
 
-    event = await _run_mark_sync_complete(
-        conn,
-        {"connection_id": str(conn.id), "user_id": 2, "saga_id": "saga-1"},
-    )
+    with caplog.at_level(logging.WARNING):
+        event = await _run_mark_sync_complete(
+            conn,
+            {"connection_id": str(conn.id), "user_id": 2, "saga_id": "saga-1"},
+        )
 
     assert event.trigger is SyncTrigger.MANUAL
+    assert "cron" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_null_sync_trigger_is_silent(caplog: pytest.LogCaptureFixture) -> None:
+    # NULL er forventet (rækker claimet før migration 004) — ingen støj.
+    conn = _connection_row(saga_id="saga-1", sync_trigger=None)
+
+    with caplog.at_level(logging.WARNING):
+        await _run_mark_sync_complete(
+            conn,
+            {"connection_id": str(conn.id), "user_id": 2, "saga_id": "saga-1"},
+        )
+
+    assert "sync_trigger" not in caplog.text
 
 
 @pytest.mark.asyncio
