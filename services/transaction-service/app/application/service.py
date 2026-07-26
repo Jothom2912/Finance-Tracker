@@ -19,6 +19,7 @@ from app.application.dto import (
     CSVImportResultDTO,
     PlannedTransactionResponse,
     TransactionFiltersDTO,
+    TransactionListResultDTO,
     TransactionResponse,
     UpdatePlannedTransactionDTO,
     UpdateTransactionDTO,
@@ -160,7 +161,20 @@ class TransactionService(ITransactionService):
             raise TransactionNotFoundException(transaction_id)
         return self._to_response(transaction)
 
-    async def list_transactions(self, user_id: int, filters: TransactionFiltersDTO) -> list[TransactionResponse]:
+    async def list_transactions(self, user_id: int, filters: TransactionFiltersDTO) -> TransactionListResultDTO:
+        """Rows for the requested window plus the size of the whole filtered set.
+
+        Both statements run inside the *same* ``async with self._uow`` — one DB
+        transaction — so the total describes the set the rows were cut from.
+        Under READ COMMITTED that is still two snapshots, so a concurrent
+        insert can leave ``total_count`` one ahead of the page; see
+        :class:`TransactionListResultDTO` for why that is accepted rather than
+        fixed.
+
+        ``count_filtered`` is called **without** ``skip``/``limit`` by design:
+        forwarding them would make the total equal the page size, and the
+        envelope would answer "is that all there was?" with "yes", always.
+        """
         async with self._uow:
             results = await self._uow.transactions.find_filtered(
                 user_id,
@@ -172,7 +186,18 @@ class TransactionService(ITransactionService):
                 skip=filters.skip,
                 limit=filters.limit,
             )
-        return [self._to_response(t) for t in results]
+            total_count = await self._uow.transactions.count_filtered(
+                user_id,
+                account_id=filters.account_id,
+                category_id=filters.category_id,
+                start_date=filters.start_date,
+                end_date=filters.end_date,
+                transaction_type=filters.transaction_type,
+            )
+        return TransactionListResultDTO(
+            total_count=total_count,
+            items=[self._to_response(t) for t in results],
+        )
 
     async def update_transaction(
         self,

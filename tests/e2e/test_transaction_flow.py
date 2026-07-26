@@ -174,7 +174,11 @@ class TestTransactionCRUD:
             )
 
         assert resp.status_code == 200
-        assert all(tx["date"].startswith("2025-01") for tx in resp.json())
+        # Envelope siden P1-14: iterering over resp.json() ville løbe over
+        # nøglerne ("total_count", "items"), så assertionen skal ned i items.
+        body = resp.json()
+        assert all(tx["date"].startswith("2025-01") for tx in body["items"])
+        assert body["total_count"] >= len(body["items"])
 
     @pytest.mark.asyncio()
     async def test_delete(self, token: str) -> None:
@@ -256,7 +260,9 @@ class TestCSVImport:
             assert result["errors"] == []
 
             list_resp = await client.get(f"{TX_SERVICE}/transactions/", headers=headers)
-            assert len(list_resp.json()) >= 3
+            # len() på envelopen er 2 (to nøgler), altså en FEJLENDE assertion —
+            # derfor skal denne rettelse ligge i samme commit som shape-skiftet.
+            assert list_resp.json()["total_count"] >= 3
 
 
 # ── planned transactions ────────────────────────────────────────────

@@ -10,6 +10,7 @@ from app.application.dto import (
     CSVImportResultDTO,
     PlannedTransactionResponse,
     TransactionFiltersDTO,
+    TransactionListResultDTO,
     TransactionResponse,
     UpdatePlannedTransactionDTO,
     UpdateTransactionDTO,
@@ -24,7 +25,11 @@ class ITransactionService(ABC):
     async def get_transaction(self, transaction_id: int, user_id: int) -> TransactionResponse: ...
 
     @abstractmethod
-    async def list_transactions(self, user_id: int, filters: TransactionFiltersDTO) -> list[TransactionResponse]: ...
+    async def list_transactions(
+        self,
+        user_id: int,
+        filters: TransactionFiltersDTO,
+    ) -> TransactionListResultDTO: ...
 
     @abstractmethod
     async def update_transaction(

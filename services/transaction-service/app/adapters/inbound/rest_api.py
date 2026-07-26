@@ -12,6 +12,7 @@ from app.application.dto import (
     CSVImportResultDTO,
     PlannedTransactionResponse,
     TransactionFiltersDTO,
+    TransactionListResultDTO,
     TransactionResponse,
     UpdatePlannedTransactionDTO,
     UpdateTransactionDTO,
@@ -48,7 +49,14 @@ async def create_transaction(
     return await service.create_transaction(user_id, body)
 
 
-@transaction_router.get("/", response_model=list[TransactionResponse])
+# BREAKING (P1-14): the body is an envelope ``{"total_count", "items"}``, not a
+# bare array.  A page of rows with no statement of how many rows the filter
+# actually matched cannot be told apart from "that is all there was" — the
+# defect this endpoint's 50-row default caused twice, on the transactions page
+# and in analytics' backfill.  The frontend's tolerant reader landed first
+# (``src/api/transactions.jsx``), so there is no deploy window in which an old
+# client meets this shape.
+@transaction_router.get("/", response_model=TransactionListResultDTO)
 async def list_transactions(
     user_id: int = Depends(get_current_user_id),
     service: ITransactionService = Depends(get_transaction_service),
@@ -69,7 +77,7 @@ async def list_transactions(
     # ``analytics-service/app/adapters/inbound/rest_api.py:111-112``.
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
-) -> list[TransactionResponse]:
+) -> TransactionListResultDTO:
     filters = TransactionFiltersDTO(
         account_id=account_id,
         category_id=category_id,

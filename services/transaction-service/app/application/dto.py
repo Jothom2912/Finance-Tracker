@@ -84,6 +84,31 @@ class TransactionFiltersDTO(BaseModel):
     limit: int = Field(default=50, ge=1, le=200)
 
 
+class TransactionListResultDTO(BaseModel):
+    """Envelope for ``GET /api/v1/transactions/`` — rows plus the size of the
+    filtered set they were cut from.
+
+    A DTO rather than a ``tuple[int, list[...]]`` because this crosses a
+    **driving** port (``ITransactionService``) whose return value *is* the
+    response body: FastAPI needs a ``BaseModel`` for ``response_model`` and
+    OpenAPI, a tuple would push the response shape into the adapter, and
+    positional members make a reversed unpack read fine and type-check.
+    Mirrors ``analytics-service``'s ``TransactionSearchResultDTO``.
+    (``gateway-service``'s ``tuple[int, list[...]]`` is the opposite
+    situation — a *driven* port whose tuple is internal transport.)
+
+    ``total_count`` and ``items`` are read in the same transaction but as two
+    statements, so under READ COMMITTED a concurrent insert can leave the
+    total one ahead of the page.  Bounded to a momentarily stale number; no
+    row is lost or duplicated, and OFFSET paging over a date-ordered set
+    already has that property.  ``REPEATABLE READ`` on a list endpoint would
+    be disproportionate.
+    """
+
+    total_count: int
+    items: list[TransactionResponse]
+
+
 class CSVImportResultDTO(BaseModel):
     imported: int
     skipped: int

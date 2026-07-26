@@ -82,6 +82,10 @@ def _build_service():  # type: ignore[no-untyped-def]
     uow.subcategories = AsyncMock()
     uow.subcategories.find_by_id.return_value = None
     uow.subcategories.find_by_ids.return_value = {}
+    # count_filtered must return a real int, not an AsyncMock: it feeds
+    # TransactionListResultDTO.total_count, which Pydantic validates.  Tests
+    # that care about the number stub it themselves.
+    uow.transactions.count_filtered.return_value = 0
     uow.commit = AsyncMock()
     uow.rollback = AsyncMock()
     uow.__aenter__ = AsyncMock(return_value=uow)
@@ -302,7 +306,7 @@ class TestListTransactions:
             end_date=date(2026, 12, 31),
         )
 
-        results = await service.list_transactions(user_id=10, filters=filters)
+        result = await service.list_transactions(user_id=10, filters=filters)
 
         uow.transactions.find_filtered.assert_awaited_once_with(
             10,
@@ -314,7 +318,7 @@ class TestListTransactions:
             skip=0,
             limit=50,
         )
-        assert len(results) == 1
+        assert len(result.items) == 1
 
     @pytest.mark.asyncio()
     async def test_combined_filters_forwarded_in_one_query(self) -> None:
@@ -331,7 +335,7 @@ class TestListTransactions:
             limit=25,
         )
 
-        results = await service.list_transactions(user_id=10, filters=filters)
+        result = await service.list_transactions(user_id=10, filters=filters)
 
         uow.transactions.find_filtered.assert_awaited_once_with(
             10,
@@ -343,7 +347,7 @@ class TestListTransactions:
             skip=10,
             limit=25,
         )
-        assert len(results) == 1
+        assert len(result.items) == 1
 
     @pytest.mark.asyncio()
     async def test_default_pagination(self) -> None:
@@ -363,6 +367,74 @@ class TestListTransactions:
             skip=0,
             limit=50,
         )
+
+    @pytest.mark.asyncio()
+    async def test_total_count_describes_the_filtered_set_not_the_page(self) -> None:
+        """The whole point of the envelope: 50 rows out of 93 says so.
+
+        ``total_count = len(items)`` is the tempting shortcut, and it would make
+        the number a restatement of the page — the response would answer "is
+        that all there was?" with "yes", always.
+        """
+        service, uow = _build_service()
+        uow.transactions.find_filtered.return_value = [_make_transaction(), _make_transaction()]
+        uow.transactions.count_filtered.return_value = 93
+
+        result = await service.list_transactions(user_id=10, filters=TransactionFiltersDTO(limit=2))
+
+        assert result.total_count == 93
+        assert len(result.items) == 2
+
+    @pytest.mark.asyncio()
+    async def test_the_count_gets_every_filter_but_never_the_window(self) -> None:
+        """``skip``/``limit`` must NOT reach ``count_filtered``.
+
+        Forwarding them is the mutation that turns the total into the page size
+        — and it type-checks, since the row path takes exactly those arguments.
+        The filters, by contrast, must all be there: a predicate applied to one
+        path and not the other yields a total the visible rows cannot add to.
+        """
+        service, uow = _build_service()
+        uow.transactions.find_filtered.return_value = []
+        uow.transactions.count_filtered.return_value = 0
+        filters = TransactionFiltersDTO(
+            account_id=100,
+            category_id=7,
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            transaction_type=TransactionType.EXPENSE,
+            skip=50,
+            limit=50,
+        )
+
+        await service.list_transactions(user_id=10, filters=filters)
+
+        uow.transactions.count_filtered.assert_awaited_once_with(
+            10,
+            account_id=100,
+            category_id=7,
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 30),
+            transaction_type=TransactionType.EXPENSE,
+        )
+
+    @pytest.mark.asyncio()
+    async def test_rows_and_count_share_one_transaction(self) -> None:
+        """One ``async with self._uow``, not two.
+
+        Two separate blocks would read the rows and the total from two
+        different DB transactions, widening the disagreement window from
+        "concurrent insert between two statements" to "anything that happened
+        in between".  Entering the UoW once is what pins that.
+        """
+        service, uow = _build_service()
+        uow.transactions.find_filtered.return_value = []
+        uow.transactions.count_filtered.return_value = 0
+
+        await service.list_transactions(user_id=10, filters=TransactionFiltersDTO())
+
+        assert uow.__aenter__.await_count == 1
+        uow.transactions.count_filtered.assert_awaited_once()
 
 
 class TestUpdateTransaction:

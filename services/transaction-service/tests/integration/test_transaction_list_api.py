@@ -5,10 +5,11 @@ semantics were tested at the repository level
 (``test_transaction_repository_filters.py``) and the service level
 (``tests/unit/test_transaction_service.py``), but nothing exercised the
 adapter — the query-parameter binding, the auth dependency, the response
-shape.  P1-14 is about to change that response shape, so this file lands
-**first** and pins the *current* contract.  Step 11 then flips a handful of
-named assertions instead of writing the endpoint's first test and its
-breaking change in one commit.
+shape.  It landed **first**, pinning the bare-array contract, so that step 11's
+breaking change showed up as a handful of named assertion flips rather than as
+the endpoint's first test and its shape change in one commit.  Since
+``92ab86f0``+ the body is the envelope ``{"total_count", "items"}`` and
+``_rows`` below is the single place that knows it.
 
 Two deliberate deviations from ``notification-service``'s ASGI-test template:
 
@@ -170,31 +171,63 @@ async def _get(client: httpx.AsyncClient, params: dict) -> httpx.Response:
     return await client.get("/api/v1/transactions/", params=params, headers=_auth())
 
 
+def _rows(response: httpx.Response) -> list[dict]:
+    """The page's rows out of the envelope.
+
+    One place in this file knows where rows live, so a future shape change is
+    one edit here plus the named shape tests below — not a sweep over every
+    filter assertion.
+    """
+    return response.json()["items"]
+
+
+def _total(response: httpx.Response) -> int:
+    return response.json()["total_count"]
+
+
 # --------------------------------------------------------------------------
-# Response shape — this is what P1-14 step 11 deliberately breaks.
+# Response shape — the envelope P1-14 step 11 introduced (breaking).
 # --------------------------------------------------------------------------
 
 
-async def test_list_returns_a_bare_json_array(client: httpx.AsyncClient) -> None:
-    """The current contract: the body IS the array, with nowhere to put a total.
+async def test_list_returns_an_envelope_with_a_total_and_items(client: httpx.AsyncClient) -> None:
+    """The contract after step 11: ``{"total_count": int, "items": [...]}``.
 
-    This assertion is the one step 11 flips to ``{"total_count", "items"}``.
-    It is written as its own test so the breaking change shows up as a named
-    contract change in the diff rather than as fallout in an unrelated test.
+    Written as its own test so the breaking change reads as a named contract
+    change in the diff rather than as fallout in an unrelated filter test.  It
+    replaces ``test_list_returns_a_bare_json_array``, which asserted
+    ``isinstance(body, list)`` — that is the assertion this endpoint's whole
+    problem lived behind: an array has nowhere to put a total.
     """
     response = await _get(client, _FEB_EXPENSES)
 
     assert response.status_code == 200
     body = response.json()
-    assert isinstance(body, list)
-    assert all(isinstance(row, dict) and "id" in row for row in body)
+    assert isinstance(body, dict)
+    assert set(body) == {"total_count", "items"}
+    assert isinstance(body["total_count"], int)
+    assert all(isinstance(row, dict) and "id" in row for row in body["items"])
 
 
 async def test_rows_carry_the_denormalised_category_name(client: httpx.AsyncClient) -> None:
     response = await _get(client, {"account_id": 1, "category_id": 1})
 
     assert response.status_code == 200
-    assert [(r["description"], r["category_name"]) for r in response.json()] == [("in range #1", "Mad & drikke")]
+    assert [(r["description"], r["category_name"]) for r in _rows(response)] == [("in range #1", "Mad & drikke")]
+
+
+async def test_the_total_sees_the_category_filter_too(client: httpx.AsyncClient) -> None:
+    """A separate test, asserting *only* the total.
+
+    ``category_id`` is the one filter no other assertion counts under, so
+    without this test dropping its branch from ``_filter_clauses`` fails the row
+    assertions only — and mutation check 1 would be blind to half of the shared
+    clause it is supposed to prove.  Kept apart from the row assertion above so
+    it cannot be masked by that one failing first.
+    """
+    response = await _get(client, {"account_id": 1, "category_id": 1})
+
+    assert _total(response) == 1
 
 
 # --------------------------------------------------------------------------
@@ -210,9 +243,11 @@ async def test_only_the_callers_own_rows_are_returned(client: httpx.AsyncClient)
     """
     response = await _get(client, {"account_id": 1, "start_date": "2026-02-01", "end_date": "2026-02-28"})
 
-    descriptions = [r["description"] for r in response.json()]
+    descriptions = [r["description"] for r in _rows(response)]
     assert "other user" not in descriptions
-    assert all(r["user_id"] == _USER for r in response.json())
+    assert all(r["user_id"] == _USER for r in _rows(response))
+    # The total is scoped too — a count that forgot the user would report 5.
+    assert _total(response) == 4
 
 
 async def test_all_filters_combine_in_one_request(client: httpx.AsyncClient) -> None:
@@ -220,7 +255,11 @@ async def test_all_filters_combine_in_one_request(client: httpx.AsyncClient) -> 
 
     # Excludes: dates outside the range, the income row on 2026-02-10, the
     # other account and the other user.  Newest first.
-    assert [r["description"] for r in response.json()] == ["in range #3", "in range #2", "in range #1"]
+    assert [r["description"] for r in _rows(response)] == ["in range #3", "in range #2", "in range #1"]
+    # The count must apply the *same* predicates: this is the assertion that
+    # fails if a filter is dropped from ``_filter_clauses`` and only the row
+    # path keeps it (or vice versa).
+    assert _total(response) == 3
 
 
 async def test_newest_first_with_id_as_tiebreak(client: httpx.AsyncClient) -> None:
@@ -228,7 +267,7 @@ async def test_newest_first_with_id_as_tiebreak(client: httpx.AsyncClient) -> No
 
     # Same date — the later-created (higher id) row comes first, which is what
     # makes OFFSET paging stable across requests.
-    assert [r["description"] for r in response.json()] == ["income same date", "in range #2"]
+    assert [r["description"] for r in _rows(response)] == ["income same date", "in range #2"]
 
 
 async def test_unknown_transaction_type_is_rejected(client: httpx.AsyncClient) -> None:
@@ -242,56 +281,71 @@ async def test_unknown_transaction_type_is_rejected(client: httpx.AsyncClient) -
 # --------------------------------------------------------------------------
 
 
-async def test_default_limit_silently_caps_the_page_at_50(client: httpx.AsyncClient) -> None:
+async def test_the_default_page_is_still_50_but_no_longer_silent(client: httpx.AsyncClient) -> None:
     """The defect P1-14 fixes, pinned at the HTTP boundary.
 
-    55 rows match; 50 come back; and — the actual problem — the response says
-    nothing at all about the five that did not.  A caller cannot distinguish
-    this from "that is all there was", which is exactly how the same ceiling
-    bit twice, here and in analytics' backfill.
+    The ceiling itself is unchanged: 55 rows match, 50 come back.  What changed
+    is that the response now *says so* — ``total_count`` is 55 beside 50 items,
+    so a caller can tell this from "that is all there was".  That
+    indistinguishability is how the same ceiling bit twice, here and in
+    analytics' backfill.
     """
     response = await _get(client, _FILLER_ONLY)
 
     assert response.status_code == 200
-    assert len(response.json()) == 50
+    assert len(_rows(response)) == 50
+    assert _total(response) == _FILLER_ROWS
 
 
 async def test_skip_reaches_the_rest_of_the_set(client: httpx.AsyncClient) -> None:
-    """Paging already works — only the total is missing.
+    """The two pages partition the filtered set, and both report the same total.
 
     Asserted as a set property rather than by description order, because what
-    matters is that the two pages partition the filtered set exactly: no row
-    lost between pages, none served twice.
+    matters is that no row is lost between pages and none is served twice.  The
+    total is the same on both pages — it describes the set, not the window, so
+    ``skip`` must not reach the ``COUNT``.
     """
     first = await _get(client, {**_FILLER_ONLY, "limit": 50})
     second = await _get(client, {**_FILLER_ONLY, "skip": 50, "limit": 50})
 
-    page_one = {r["id"] for r in first.json()}
-    page_two = {r["id"] for r in second.json()}
+    page_one = {r["id"] for r in _rows(first)}
+    page_two = {r["id"] for r in _rows(second)}
 
     assert len(page_one) == 50
     assert len(page_two) == _FILLER_ROWS - 50
     assert page_one.isdisjoint(page_two)
     assert len(page_one | page_two) == _FILLER_ROWS
+    assert _total(first) == _total(second) == _FILLER_ROWS
 
 
 async def test_limit_truncates_a_filtered_set(client: httpx.AsyncClient) -> None:
     """A page smaller than its filter set — three rows match, two are returned.
 
-    Step 11's ``total_count`` must read 3 here.  This is the case that makes
+    ``total_count`` reads 3, not 2.  This is the case that makes
     ``total_count = len(items)`` a *failing* implementation rather than a
-    passing one.
+    passing one, and the reason this file seeds more than one page.
     """
     response = await _get(client, {**_FEB_EXPENSES, "limit": 2})
 
-    assert [r["description"] for r in response.json()] == ["in range #3", "in range #2"]
+    assert [r["description"] for r in _rows(response)] == ["in range #3", "in range #2"]
+    assert _total(response) == 3
 
 
-async def test_skip_past_the_end_returns_an_empty_page(client: httpx.AsyncClient) -> None:
+async def test_skip_past_the_end_returns_an_empty_page_with_a_nonzero_total(
+    client: httpx.AsyncClient,
+) -> None:
+    """An empty page is not an empty period, and the envelope can say so.
+
+    This is what the frontend's clamp reads: ``items == []`` with
+    ``total_count == 3`` means "you are past the end", where ``total_count == 0``
+    would mean "there is nothing here".  Collapsing the two is how an empty
+    state gets to lie.
+    """
     response = await _get(client, {**_FEB_EXPENSES, "skip": 99})
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert _rows(response) == []
+    assert _total(response) == 3
 
 
 @pytest.mark.parametrize(
