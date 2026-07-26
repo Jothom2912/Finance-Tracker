@@ -63,8 +63,13 @@ external consumer and no published API contract, so versioning would be ceremony
 files.
 
 That asymmetry is the actual crux, and it cuts against the envelope: a header is
-non-breaking, an envelope is not. The decision below is that two in-tree edits are a smaller
-long-term cost than a second way of saying "list plus total" in the same frontend.
+non-breaking, an envelope is not. What resolves it is that the asymmetry is mostly dissolved by
+the plan's *ordering* rather than by the response shape. The frontend's tolerant reader lands in
+step 6 and the envelope in step 11, so there is no deploy window in which either side is
+broken — the non-breaking property is already bought, by sequencing. The header would therefore
+pay a permanent structural cost (a second mechanism, a CORS-shaped failure mode) to buy a
+property this plan has for free. That is what makes two in-tree edits the smaller long-term
+cost, not merely the fact that there are only two of them.
 
 ## Alternatives considered
 
@@ -72,7 +77,13 @@ long-term cost than a second way of saying "list plus total" in the same fronten
   non-breaking option and that was weighed seriously. Three costs: it needs
   `expose_headers=["X-Total-Count"]` added to CORS for a direct browser client, which would be
   the repo's first use and a new way for a deploy to be subtly wrong (the total silently
-  reads as absent, not as an error); `crudFactory.fetchAll` returns `response.json()` and
+  reads as absent, not as an error). That failure mode is **structurally invisible to the test
+  level this plan builds**: step 3's integration tests drive the app through
+  `httpx.ASGITransport`, which does not enforce CORS at all, so the header is present in the
+  response, the assertion passes, and only a real cross-origin browser request fails. The
+  envelope's equivalent mistake — a wrong total — is catchable by exactly those tests, which is
+  the asymmetry that matters when choosing what to make load-bearing. Further,
+  `crudFactory.fetchAll` returns `response.json()` and
   discards the `Response` (`crudFactory.jsx:28`), so a header total requires changing the
   shared factory or bypassing it — i.e. it does *not* avoid a frontend change, it just moves
   it somewhere with a wider blast radius than the one file that owns this endpoint; and it
@@ -113,14 +124,21 @@ long-term cost than a second way of saying "list plus total" in the same fronten
 must be shared.** The failure mode this decision introduces is not a missing total but a
 *wrong* one: a count computed with a different filter set than the rows would put an
 authoritative-looking number above rows that cannot add up to it — the exact shape of the
-defect P1-14 is fixing, reintroduced one layer down. So the seven filter branches move into
+defect P1-14 is fixing, reintroduced one layer down. So the filter set — the `user_id` scope plus
+five optional `if … is not None` branches (`postgres_transaction_repository.py:80-90`: `account_id`,
+`category_id`, `start_date`, `end_date`, `transaction_type`), six predicates in total — moves into
 one `_filter_clauses` helper that both queries call, and it returns *predicates*, not a
 `Select`, so the count path cannot inherit the row path's `order_by`/`offset`/`limit`. The
 outbound port's `count_filtered` deliberately has **no** `skip`/`limit` parameters: the
 signature is where "the total ignores the page" is impossible to misread. The residual risk is
 that someone later adds a filter to one path only, or adds pagination to the helper — the
 structural defences are the port signature and two mutation checks in the plan, and this
-paragraph exists so a future filter addition does not quietly reintroduce the class.
+paragraph exists so a future filter addition does not quietly reintroduce the class. One thing
+that is *not* a risk here: transactions are hard-deleted
+(`postgres_transaction_repository.py:116-127`, contra the repo's soft-delete convention — a
+separate matter), so there is no visibility predicate to forget in the count path. Those six are
+the whole set. If soft-delete is ever introduced, `_filter_clauses` is where it belongs, and this
+is the note that says so.
 
 **`total_count` and `items` can disagree by one row, and that is accepted.** They are read in
 the same `async with self._uow` block, so the same transaction — but under READ COMMITTED each

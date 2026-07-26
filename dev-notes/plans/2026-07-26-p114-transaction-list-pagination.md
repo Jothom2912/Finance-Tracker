@@ -71,6 +71,18 @@ The response-shape question this forces is recorded separately in
   accepts.
 - **No aggregation moves.** Unlike P1-13 this plan does not change where any number is
   computed; the page keeps reading the write side for rows and analytics keeps owning spend.
+- **The list stays user-scoped, and the two read paths keep different scopes.**
+  `fetchTransactions` sends no `account_id` at all (`api/transactions.jsx:24-31`) and
+  `useTransactions:11` only puts `accountId` in the *query key*, so the REST list covers every
+  account the user owns; the search path goes through the gateway, which requires
+  `X-Account-ID` (`graphql_api.py:235-239`) and is therefore account-scoped. One pager will sit
+  above two differently-scoped populations. Not a defect today — user 1 has exactly one account,
+  and June is 93 rows both user-scoped and for account 1, so this plan's measurement is reachable
+  as written — but for a multi-account user "af 93" and "93 resultater" would count different
+  sets. Aligning them is its own decision (which scope is right for the list?) and is filed as
+  P3-35, not smuggled into a pagination fix. Worth noting that the coherence argument the
+  decision note makes for unifying `PAGE_SIZE` applies with more force to scope than to page
+  size; it is deferred deliberately, not overlooked.
 
 ## Design decisions to record
 
@@ -134,8 +146,13 @@ flip, old path last.
        `analytics-service/app/adapters/inbound/rest_api.py:103-134`. Today `?limit=201`
        reaches `TransactionFiltersDTO(...)` inside the handler body and raises
        `pydantic.ValidationError` where FastAPI can no longer translate it, so a pure input
-       error surfaces as 500; bare annotations are not validated by FastAPI, only
-       `Query(...)` is. Its own step: separate defect, separate rollback, and bundling a
+       error surfaces as 500. Precisely: a bare annotation *is* type-validated by FastAPI
+       (`?limit=abc` already 422s), but it carries no bounds — `ge`/`le` require `Query(...)`,
+       and without them the only bounds check is the DTO's, one layer too deep to be
+       translated. Measured against the running service 2026-07-26: `?limit=201`, `?limit=0`
+       and `?skip=-1` all return **500**, `?limit=200` returns 200 OK with 200 rows (so
+       backfill's `PAGE_SIZE = 200` sits exactly on the new `le` bound, with no margin).
+       Its own step: separate defect, separate rollback, and bundling a
        status-code change into a shape change would make neither bisectable. +3 cases in
        step 3's file (`?limit=201`, `?limit=0`, `?skip=-1` → 422). ~4 lines.
 5. [ ] `feat(transaction): count_filtered + delt filterklausul i transaktions-repoet` —
@@ -358,11 +375,16 @@ truth, more than today. A dual shape on the server was rejected instead: it woul
 removed later by a *second* breaking change, and it hides "the envelope is not deployed yet"
 behind working-looking behaviour.
 
-**The gateway must not be older than the code.** `$offset` needs the resolver argument to
-exist. It does on master (`graphql_api.py:505`), but GraphQL validates the *document* — if the
-running gateway predates it, search fails **hard** for every query on every page, with no
-partial degradation and no client-side workaround (omitting `offset` from the variables does
-not help; the declaration is what is validated). Verify the running gateway before step 10.
+**The gateway must not be older than the code — verified 2026-07-26, cleared.** `$offset` needs
+the resolver argument to exist. It does on master (`graphql_api.py:505`), but GraphQL validates
+the *document* — if the running gateway predated it, search would fail **hard** for every query
+on every page, with no partial degradation and no client-side workaround (omitting `offset` from
+the variables does not help; the declaration is what is validated). Checked against the
+**running** container (not master, per the image-staleness lesson) by schema introspection:
+`searchTransactions(query: String!, startDate: Date, endDate: Date, categoryId: Int,
+txType: String, limit: Int!, offset: Int!)`. Note the type: `offset` is **`Int!`**, so step 10's
+document must declare `$offset: Int!` and must always send a value — `offset: null` fails
+validation rather than falling back to the resolver default.
 
 **`total_count` and `items` can disagree by a row.** Two statements in one transaction take
 two snapshots under READ COMMITTED, so a concurrent insert can produce `total_count = 94`
