@@ -1,18 +1,33 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import * as transactionsApi from '../api/transactions';
 import { invalidateFinancialData } from '../lib/invalidateFinancialData';
+import { PAGE_SIZE } from '../lib/pagination';
 
-export function transactionsQueryKey(accountId, filters) {
-  return ['transactions', { accountId, filters }];
+// page er et selvstændigt argument, ikke et medlem af filters: filters sendes
+// også til useTransactionSearch, så et REST-sidetal derinde ville forurene
+// søgningens nøgle (og omvendt). filters er rent semantisk — *hvilket udsnit* —
+// mens page er *hvilket vindue*.
+// Prefix-invalidering (invalidateFinancialData) rammer stadig alle sider, fordi
+// den matcher på ['transactions'] alene.
+export function transactionsQueryKey(accountId, filters, page) {
+  return ['transactions', { accountId, filters, page }];
 }
 
-export function useTransactions(filters) {
+export function useTransactions(filters, page = 1) {
   const queryClient = useQueryClient();
   const accountId = localStorage.getItem('account_id');
 
   const query = useQuery({
-    queryKey: transactionsQueryKey(accountId, filters),
-    queryFn: () => transactionsApi.fetchTransactions(filters),
+    queryKey: transactionsQueryKey(accountId, filters, page),
+    queryFn: () =>
+      transactionsApi.fetchTransactions({
+        ...filters,
+        skip: (page - 1) * PAGE_SIZE,
+        limit: PAGE_SIZE,
+      }),
+    // Behold forrige sides rækker mens den nye henter — tabellen kollapser ikke
+    // i højden ved sideskift. Samme mønster som useTransactionSearch.
+    placeholderData: keepPreviousData,
   });
 
   const invalidateTransactionViews = () => {
@@ -41,8 +56,16 @@ export function useTransactions(filters) {
   });
 
   return {
-    transactions: query.data ?? [],
+    transactions: query.data?.items ?? [],
+    // null, ikke 0: 0 betyder "tom periode". Med null kan siden se forskel på
+    // "serveren har svaret, der er ingen rækker" og "vi ved det ikke endnu",
+    // og step 9's clamp mod pageCount kan holdes tilbage indtil vi ved det.
+    totalCount: query.data?.totalCount ?? null,
     loading: query.isLoading,
+    // isPlaceholderData, ikke isFetching: den er sand præcis mens en ældre
+    // sides rækker står på skærmen under en ny nøgle. isFetching er også sand
+    // under en baggrunds-refetch efter en mutation, hvor et dæmp ville være støj.
+    isPaging: query.isPlaceholderData,
     error: query.error
       ? query.error.message || 'Kunne ikke hente transaktioner.'
       : null,
