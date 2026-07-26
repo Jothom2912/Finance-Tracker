@@ -250,7 +250,7 @@ flip, old path last.
        `pageCount > 1 && …` compiles, renders and looks right). Mutation checks: that move →
        3 fail; rendering at `totalCount === 0` → 1; unclamped `lastRow` → 3; an `aria-label`
        that drops the visible word → 6; `aria-disabled` for `disabled` → 1.
-9. [ ] `feat(frontend): server-side paging på transaktionslisten` —
+9. [x] `feat(frontend): server-side paging på transaktionslisten` —
        `src/pages/TransactionsPage.jsx`, `TransactionsPage.css`, new
        `src/pages/TransactionsPage.test.jsx`. Page reset via **set-state-during-render**, not
        a `useEffect`: with an effect the render *preceding* it already has the new filters and
@@ -274,6 +274,26 @@ flip, old path last.
        `emptyMessage`/`showEmptyAction` (defaulting to today's string, so no caller breaks) so
        a zero-hit search stops saying "for de valgte **filtre**" with a "Tilføj din første
        transaktion" CTA. ~+45/−15 plus ~120 test lines.
+       **Done in `7f86c86f`** (15 page tests, the page's first coverage). Three things the
+       plan did not anticipate. **(a) The search deliberately gets no pager in this step** —
+       `useTransactionSearch` cannot page until step 10, and a pager whose buttons do nothing
+       is worse than none, so `activeTotalCount` is `isSearchActive ? null : totalCount` and
+       step 10 makes it symmetric. **(b) The first clamp test was a false positive**: it shrank
+       the total by changing a date filter, which resets the page via `resultsKey`, so it was
+       green with the clamp deleted. It now shrinks the total across a bare `rerender` with
+       filters untouched, leaving the clamp as the only mechanism that can move the page. A
+       second case pins one-step convergence (page 5 → 2, never 4, 3). **(c) `userEvent` was
+       new to this repo** and is not act-wrapped by RTL 14, so every stateful interaction
+       printed "not wrapped in act". Switched to `fireEvent` (the existing convention) in both
+       new test files — `ced0ddce`. Mutation checks: remove the clamp → the 2 clamp tests fail;
+       drop its `!= null` guard → 2 fail; remove the reset → the 3 reset tests fail; and
+       **replace the render-phase reset with a `useEffect` → only the "sender ALDRIG et request
+       med nye filtre og gammelt sidetal" test fails**, catching the exact offending call
+       (`startDate=2026-05-01` with `page=5`) while both "resets to page 1" tests stay green.
+       That last pair is the plan's central claim, now demonstrated rather than argued.
+       `npm run build` is clean. **Still not driven in a browser** — the repo has no Playwright
+       or Puppeteer and its e2e suite is API-level, so a real UI drive needs a human at
+       `npm run dev`; noted under Verification.
 10. [ ] `fix(frontend): søgning respekterer aktive filtre og kan pages` —
        `src/hooks/useTransactionSearch.jsx`, its test, `TransactionsPage.jsx`. `$offset: Int!`
        added to the document — the only thing missing, since the resolver already takes it
@@ -375,6 +395,13 @@ April → total_count: 50 with 50 items    # "one row from silent loss" now read
 
 reconciled against `select count(*) from transactions where user_id=1 and account_id=1 and
 date between …` in Postgres.
+
+**The UI drive cannot be automated in this repo** — there is no Playwright or Puppeteer in
+`services/frontend/package.json` and `tests/e2e/` talks to the API, not a browser. So the
+checks below are a human at `npm run dev`, and any claim that they passed must come from
+someone who actually looked. Note also that until step 11 the total is `items.length`, so
+the pager reads "Viser 1–50 af 50" for June: pageability is verifiable now, the *number* is
+not.
 
 **From the UI**, which is what the finding actually demands: select June 2026 on account 1,
 page through, count 93 rows, and reconcile the sum of the listed amounts against the
