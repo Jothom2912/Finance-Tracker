@@ -222,7 +222,7 @@ flip, old path last.
        response. The live drive belongs in step 9, where there is a pager to observe; the
        server side of it (`skip`/`limit` honoured, `limit=200` → 200 rows) was already measured
        against the running service in step 4.
-8. [ ] `feat(frontend): Pagination-komponent med "Viser 1–50 af 93"` — new
+8. [x] `feat(frontend): Pagination-komponent med "Viser 1–50 af 93"` — new
        `src/components/Pagination/{Pagination.jsx,Pagination.css,Pagination.test.jsx}`.
        Unused this step; the test proves it standalone, so the step is trivially green.
        Folder-per-component with its own CSS is the convention (there is no shared component
@@ -239,6 +239,17 @@ flip, old path last.
        repo has no `aria-disabled` precedent); buttons are **not** disabled while fetching,
        because rapid next-next is legitimate and `keepPreviousData` handles the overlap.
        ~120 new lines + ~60 test lines.
+       **Done in `8e641822`** (19 tests). Two decisions firmed up while writing it. The
+       component takes **no `isPaging`/`isFetching` prop at all** — "buttons are not disabled
+       while fetching" is stronger as an absent parameter than as an unused one, and the dim
+       belongs on the table in step 9. And `pageCount` is **computed** from `totalCount` via
+       `pageCountOf` rather than passed in, so the pager and step 9's clamp cannot disagree
+       about how many pages exist. Beyond the plan: two tests assert the live region is the
+       **same DOM node** across a page change and across the buttons disappearing, which is
+       the only way the announce-once property can fail (moving the `<p>` inside
+       `pageCount > 1 && …` compiles, renders and looks right). Mutation checks: that move →
+       3 fail; rendering at `totalCount === 0` → 1; unclamped `lastRow` → 3; an `aria-label`
+       that drops the visible word → 6; `aria-disabled` for `disabled` → 1.
 9. [ ] `feat(frontend): server-side paging på transaktionslisten` —
        `src/pages/TransactionsPage.jsx`, `TransactionsPage.css`, new
        `src/pages/TransactionsPage.test.jsx`. Page reset via **set-state-during-render**, not
