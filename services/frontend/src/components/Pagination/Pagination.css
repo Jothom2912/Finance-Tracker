@@ -1,0 +1,60 @@
+/* Pager til transaktionslisten. Knapperne er modelleret på
+   .budget-toggle-btn (BudgetProgressSection.css) — der findes ikke et delt
+   komponentbibliotek. Fokusringen kommer gratis fra index.css'
+   button:focus-visible-regel og gentages derfor ikke her. */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.pagination-count {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagination-position {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  /* Sidetallet skifter bredde (9 → 10), så teksten omkring det ikke skal
+     hoppe: reserver plads frem for at lade knapperne rykke. */
+  min-width: 6.5rem;
+  text-align: center;
+}
+
+.pagination-btn {
+  padding: 0.5rem 0.875rem;
+  background: none;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-brand-500);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: var(--color-bg-sunken);
+  color: var(--color-brand-600);
+}
+
+.pagination-btn:disabled {
+  color: var(--color-text-muted);
+  border-color: var(--color-border-light);
+  cursor: default;
+}
