@@ -314,3 +314,14 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
+
+/* Sideskift dæmper den gamle tabel frem for at erstatte den med en spinner,
+   som ville kollapse sidens højde og scroll-hoppe brugeren. Transitionen
+   neutraliseres globalt af prefers-reduced-motion-blokken i index.css. */
+.transactions-results {
+  transition: opacity var(--transition-fast);
+}
+
+.transactions-results.is-stale {
+  opacity: 0.55;
+}

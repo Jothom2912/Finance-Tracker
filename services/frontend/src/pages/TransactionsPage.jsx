@@ -4,6 +4,7 @@ import TransactionForm from '../components/TransactionForm/TransactionForm';
 import TransactionsList from '../components/TransactionsList/TransactionsList';
 import FilterComponent from '../components/FilterComponent/FilterComponent';
 import Modal from '../components/Modal/Modal';
+import Pagination from '../components/Pagination/Pagination';
 
 import { useCategories } from '../hooks/useCategories';
 import { useAllSubcategories } from '../hooks/useSubcategories';
@@ -13,6 +14,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useNotifications } from '../hooks/useNotifications';
 import { useConfirm } from '../components/ConfirmDialog/ConfirmDialog';
 import { formatLocalISODate } from '../lib/formatters';
+import { pageCountOf } from '../lib/pagination';
 import { BANK_FORMAT_OPTIONS } from '../lib/bankFormats';
 
 import '../components/FilterComponent/FilterComponent.css';
@@ -56,20 +58,43 @@ function TransactionsPage() {
     [filterStartDate, filterEndDate, selectedCategory],
   );
 
+  // Fritekstsøgning (dansk stemming via analytics-læsesiden). Aktiv
+  // søgning erstatter den filtrerede liste; tom søgning = uændret side.
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebouncedValue(searchTerm);
+
+  const [page, setPage] = useState(1);
+
+  // Ét udtryk over ALT der ændrer hvilket resultatsæt vi ser på. Dermed
+  // dækkes FilterComponents datopresets automatisk, og et sjette filter
+  // tilføjet senere kommer med af sig selv — hvor det at pakke de enkelte
+  // settere ind ville misse det i tavshed.
+  const resultsKey = `${filterStartDate}|${filterEndDate}|${selectedCategory}|${debouncedSearchTerm}`;
+  const [lastResultsKey, setLastResultsKey] = useState(resultsKey);
+
+  // Nulstilling UNDER render, ikke i en useEffect: med en effekt har den
+  // render der går FORUD for effekten allerede de nye filtre og det gamle
+  // sidetal, så et request med skip=100 mod et friskfiltreret sæt bliver
+  // sendt og kortvarigt vist, før nulstillingen lander.
+  let effectivePage = page;
+  if (resultsKey !== lastResultsKey) {
+    setLastResultsKey(resultsKey);
+    setPage(1);
+    effectivePage = 1;
+  }
+
   const {
     transactions,
+    totalCount,
+    isPaging,
     loading: txLoading,
     error: txError,
     create: createTx,
     update: updateTx,
     remove: removeTx,
     uploadCsv,
-  } = useTransactions(filters);
+  } = useTransactions(filters, effectivePage);
 
-  // Fritekstsøgning (dansk stemming via analytics-læsesiden). Aktiv
-  // søgning erstatter den filtrerede liste; tom søgning = uændret side.
-  const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const {
     isSearchActive,
     results: searchResults,
@@ -77,6 +102,23 @@ function TransactionsPage() {
     loading: searchLoading,
     error: searchError,
   } = useTransactionSearch(debouncedSearchTerm);
+
+  // Søgningen kan endnu ikke pages (step 10), så den får ingen pager frem for
+  // en pager hvis knapper ikke gør noget. Listens total må ikke bruges her:
+  // de to sæt er forskellige populationer.
+  const activeTotalCount = isSearchActive ? null : totalCount;
+  const pageCount = activeTotalCount != null ? pageCountOf(activeTotalCount) : null;
+
+  // Totalen kan krympe under os (slet sidste række på side 2). Betinget af at
+  // serveren HAR svaret — deraf null-kontrakten på totalCount — og konvergerer
+  // i ét skridt fordi pageCountOf bunder i 1. Bevidst ikke gjort i mutationens
+  // onSuccess: dér kender klienten ikke den nye total før refetchen lander.
+  // Kan ikke kollidere med nulstillingen ovenfor: efter den er effectivePage 1,
+  // og 1 > pageCount er umuligt.
+  if (pageCount != null && effectivePage > pageCount) {
+    setPage(pageCount);
+    effectivePage = pageCount;
+  }
 
   // Persistens for formularen — mutation-hook'et ejer invalideringen,
   // så handleTransactionSaved kun lukker modal + toaster.
@@ -88,6 +130,9 @@ function TransactionsPage() {
   const handleTransactionSaved = useCallback((isEdit) => {
     setShowFormModal(false);
     setTransactionToEdit(null);
+    // Til side 1, så den nye/rettede række faktisk er på skærmen. Rækkefølgen
+    // er date DESC, så en ny transaktion lander øverst — altså på side 1.
+    setPage(1);
     showSuccess(isEdit ? 'Transaktion opdateret!' : 'Transaktion tilføjet!');
   }, [showSuccess]);
 
@@ -146,6 +191,8 @@ function TransactionsPage() {
     clearMessages();
     try {
       const result = await uploadCsv({ file: csvFile, bankFormat });
+      // Samme grund som ved gem: de importerede rækker skal være synlige.
+      setPage(1);
       showSuccess(result.message || `CSV uploadet! ${result.imported_count || ''} transaktioner importeret.`);
     } catch (err) {
       showError(err.message || 'Fejl ved CSV upload.');
@@ -287,15 +334,42 @@ function TransactionsPage() {
         ) : (isSearchActive ? searchError : txError) ? (
           <p className="message-display error">Fejl: {isSearchActive ? searchError : txError}</p>
         ) : (
-          <TransactionsList
-            transactions={isSearchActive ? searchResults : transactions}
-            onEdit={handleEditTransaction}
-            onDelete={handleDeleteTransaction}
-            onCreateTransaction={() => { setShowFormModal(true); clearMessages(); }}
-            onQuickCategorize={handleQuickCategorize}
-            categories={categories}
-            allSubcategories={allSubcategories}
-          />
+          <>
+            {/*
+              Sideskift DÆMPER den gamle tabel i stedet for at erstatte den med
+              en spinner: en spinner ville kollapse sidens højde og scroll-hoppe
+              brugeren. prefers-reduced-motion i index.css neutraliserer allerede
+              transitionen globalt.
+            */}
+            <div
+              className={`transactions-results${isPaging ? ' is-stale' : ''}`}
+              aria-busy={isPaging}
+            >
+              <TransactionsList
+                transactions={isSearchActive ? searchResults : transactions}
+                onEdit={handleEditTransaction}
+                onDelete={handleDeleteTransaction}
+                onCreateTransaction={() => { setShowFormModal(true); clearMessages(); }}
+                onQuickCategorize={handleQuickCategorize}
+                categories={categories}
+                allSubcategories={allSubcategories}
+                // En tom søgning er ikke tom "for de valgte filtre", og et CTA
+                // om at oprette sin FØRSTE transaktion er forkert når listen
+                // udenfor søgningen er fuld af rækker.
+                emptyMessage={
+                  isSearchActive
+                    ? `Ingen transaktioner matcher “${debouncedSearchTerm}”.`
+                    : 'Ingen transaktioner fundet for de valgte filtre.'
+                }
+                showEmptyAction={!isSearchActive}
+              />
+            </div>
+            <Pagination
+              page={effectivePage}
+              totalCount={activeTotalCount}
+              onPageChange={setPage}
+            />
+          </>
         )}
       </div>
     </div>

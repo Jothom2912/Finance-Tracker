@@ -18,6 +18,12 @@ function TransactionsList({
   onQuickCategorize,
   categories = [],
   allSubcategories = [],
+  // Defaults = dagens tekst og dagens knap, så ingen eksisterende kalder
+  // ændrer adfærd. Findes fordi en tom SØGNING ikke er tom af "de valgte
+  // filtre", og fordi et CTA til at oprette sin "første" transaktion er
+  // forkert når man netop har søgt forgæves i en liste fuld af rækker.
+  emptyMessage = 'Ingen transaktioner fundet for de valgte filtre.',
+  showEmptyAction = true,
 }) {
   const [editingRowId, setEditingRowId] = useState(null);
 
@@ -55,10 +61,12 @@ function TransactionsList({
   if (transactions.length === 0) {
     return (
       <div className="transactions-empty-state">
-        <p>Ingen transaktioner fundet for de valgte filtre.</p>
-        <button className="empty-state-action" onClick={onCreateTransaction}>
-          Tilføj din første transaktion
-        </button>
+        <p>{emptyMessage}</p>
+        {showEmptyAction && (
+          <button className="empty-state-action" onClick={onCreateTransaction}>
+            Tilføj din første transaktion
+          </button>
+        )}
       </div>
     );
   }
