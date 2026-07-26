@@ -338,7 +338,7 @@ flip, old path last.
        removed → 1. `npm run build` and `eslint src` clean. **Not driven in a browser** — same
        constraint as step 9, and the scope change (search now covers the active date range) is
        exactly the kind of thing a human should see once; noted under Verification.
-11. [ ] `feat(transaction)!: total_count-envelope på GET /api/v1/transactions/` — the risky
+11. [x] `feat(transaction)!: total_count-envelope på GET /api/v1/transactions/` — the risky
        step. `app/application/dto.py` (+`TransactionListResultDTO`),
        `ports/inbound.py:27`, `service.py:163-175`, `rest_api.py:51-72`,
        `tests/unit/test_transaction_service.py:293-364`,
@@ -362,6 +362,35 @@ flip, old path last.
        in the same commit as the shape change. The e2e edit must be in this commit:
        `len({"total_count": …, "items": …}) >= 3` is `2 >= 3`, a **failing** assertion, so
        omitting it leaves the e2e suite red. ~+35/−15 plus test updates.
+       **Done in `09143182`** (173 unit + 56 integration green). Four notes.
+       **(a) The e2e suite had two sites, not one.** Besides
+       `len(list_resp.json()) >= 3`, `test_list_with_date_filter` did
+       `all(tx["date"].startswith("2025-01") for tx in resp.json())` — iterating an
+       envelope yields its *keys*, so `"total_count".startswith("2025-01")` is False and
+       the test fails. A `for tx in resp.json()` over a response body is the general
+       shape of this trap; `grep` for `len(` alone would not have found it.
+       **(b) `count_filtered` had to be stubbed in the unit suite's `_build_service`.**
+       `uow.transactions` is an `AsyncMock`, so an unstubbed `count_filtered` returns a
+       mock, and `TransactionListResultDTO` validates `total_count: int` — every existing
+       list test would have failed on Pydantic validation rather than on anything
+       interesting. Defaulted to `0`, with the tests that care setting a real number.
+       **(c) Mutation check 1 had a hole, now closed.** Deleting the `category_id`
+       branch from `_filter_clauses` failed only the *row* assertions: no test counted a
+       category-filtered set, so half the shared clause was unproven. Added
+       `test_the_total_sees_the_category_filter_too` as its own test — kept apart from the
+       row assertion so it cannot be masked by that one failing first. With
+       `transaction_type` the plan's claim held as written (7 tests fail across both
+       files). **(d) The one-transaction property is now pinned**, which the plan asserted
+       in prose only: `uow.__aenter__.await_count == 1` fails if the count moves into its
+       own `async with`, which reads fine and would widen the disagreement window from
+       "concurrent insert between two statements" to "anything in between". Other
+       mutations, each alone: `total_count=len(results)` → 1 unit + 4 REST;
+       `skip`/`limit` forwarded to the count → 1 unit; `response_model` back to
+       `list[TransactionResponse]` → 10 REST tests (500s, since the DTO no longer
+       validates). Between this commit and step 12 **analytics' backfill is broken at
+       HEAD** — it reads `.json()` as a list. Green (its tests mock transaction-service
+       with `respx`), loud when run (`TypeError`), and manual-only. That is the documented
+       ordering, not an oversight; step 12 is the repair.
 12. [ ] `fix(analytics): backfill læser envelope-formen fra transaktionslisten` —
        `services/analytics-service/app/tools/backfill.py:127-180`, its test at `:99-105` and
        `:190-201`. Reads `body["items"]` and `body["total_count"]`, plus
