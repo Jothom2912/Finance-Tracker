@@ -391,7 +391,7 @@ flip, old path last.
        HEAD** — it reads `.json()` as a list. Green (its tests mock transaction-service
        with `respx`), loud when run (`TypeError`), and manual-only. That is the documented
        ordering, not an oversight; step 12 is the repair.
-12. [ ] `fix(analytics): backfill læser envelope-formen fra transaktionslisten` —
+12. [x] `fix(analytics): backfill læser envelope-formen fra transaktionslisten` —
        `services/analytics-service/app/tools/backfill.py:127-180`, its test at `:99-105` and
        `:190-201`. Reads `body["items"]` and `body["total_count"]`, plus
        `if len(seen_ids) >= total: break` after the existing short-page break, plus a note
@@ -408,6 +408,28 @@ flip, old path last.
        (`len(full_page) * 10`) so both the short-page condition and the total condition are
        out of play and it is still the `seen_ids` guard that stops the loop — otherwise that
        test stops proving anything. ~+12/−8.
+       **Done in `a8b97bff`** (123 analytics tests green). Two notes, one of them a lesson
+       about how these termination tests fail.
+       **(a) A positive test for the new stop condition was added** —
+       `test_total_count_stops_the_loop_when_the_set_divides_evenly`. The three existing
+       tests all pass with the `total_count` break deleted, because in each of them either
+       the short page or `seen_ids` stops the loop first; the new condition was
+       unfalsifiable without a case where it is the *only* one that can fire (full page,
+       all-new ids, total equal to one page).
+       **(b) The first version of that test hung instead of failing.** Its stub returned
+       endlessly-new ids, so deleting the `total_count` break left nothing to terminate the
+       loop and pytest span forever — the 216k-request behaviour, reproduced inside the
+       suite. Fixed by having the stub repeat its last page after three, so `seen_ids`
+       still terminates and the assertion fails cleanly on the request count (1 with the
+       break, 4 without). **This is a property of the whole family**: deleting the
+       `seen_ids` guard *also* hangs the suite rather than failing it (verified — had to
+       kill the run), because that guard is the only stop that does not take the source at
+       its word. A termination guard cannot be mutation-checked by "which test goes red"
+       alone; the honest reading is "the suite no longer terminates", and a test that pins
+       one guard must leave another one standing. Mutation checks: reverting to
+       `.json()`-as-a-list → all four tests fail with `TypeError: string indices must be
+       integers` (loud, never a silent zero-row backfill); `total_count` break removed →
+       the new test fails `4 == 1`; `seen_ids` guard removed → the suite hangs.
 13. [ ] `docs(dev-notes): P1-14 close-out` — `services/transaction-service/README.md` (the
        list returns an envelope; `skip`/`limit` 422 out of range), the finding
        (`status: resolved` + `resolved-by`), `BACKLOG.md` (P1-14 → `done 2026-07-26` with the
