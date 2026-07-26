@@ -169,7 +169,7 @@ flip, old path last.
        `notification-service/app/adapters/outbound/postgres_notification_repository.py:71-81`;
        index-served via `ix_transactions_user_id` and `ix_transactions_dedup_key`
        (migration 011). ~+55/−10.
-6. [ ] `feat(frontend): pak transaktions-envelope ud og send skip/limit` — new
+6. [x] `feat(frontend): pak transaktions-envelope ud og send skip/limit` — new
        `src/lib/pagination.js` (`PAGE_SIZE = 50`, `pageCountOf` flooring at 1),
        `src/api/transactions.jsx`, new `src/api/transactions.test.jsx`. **No change to
        `crudFactory.jsx`**: the premise that `fetchAll` is unusable holds only for a
@@ -187,6 +187,18 @@ flip, old path last.
        default are both 50; shared page state is only coherent if "page 2" means the same row
        range in both modes, or the pager text flips between "1–50 af 93" and "1–100 af 400"
        in the same widget. ~+30/−3 plus ~70 test lines.
+       **Done in `74e3f8ea`**, with two deviations, both additive: `pagination.test.jsx`
+       (7 cases) because `pageCountOf`'s floor-at-1 is what step 9's clamp rests on and
+       untested domain logic is not accepted here; and the follow-up **filed as P3-36 in the
+       same commit**, because the code comment names it and a comment pointing at a
+       non-existent backlog line is broken at HEAD — the decision note already claimed the
+       removal was "filed rather than left to memory", and it was not. Both mutation checks
+       bite: `if (skip)` → the two `skip=0` cases fail; deleting the `Array.isArray` branch →
+       the three transition cases fail. **HEAD between step 6 and step 7 renders a broken
+       transactions page** — `useTransactions` still does `query.data ?? []`, so
+       `TransactionsList` gets an object and `.map` throws. Green (all mocks are at the API
+       boundary) but not runnable; step 7 is the repair, and this is what the risk section
+       means by the frontend stack reverting as a range rather than per commit.
 7. [ ] `feat(frontend): useTransactions tager side og returnerer totalCount` —
        `src/hooks/useTransactions.jsx`, `src/hooks/useTransactions.test.jsx`. Signature
        `useTransactions(filters, page = 1)`; `transactionsQueryKey(accountId, filters, page)`;
