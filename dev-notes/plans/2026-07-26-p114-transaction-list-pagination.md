@@ -294,7 +294,7 @@ flip, old path last.
        `npm run build` is clean. **Still not driven in a browser** — the repo has no Playwright
        or Puppeteer and its e2e suite is API-level, so a real UI drive needs a human at
        `npm run dev`; noted under Verification.
-10. [ ] `fix(frontend): søgning respekterer aktive filtre og kan pages` —
+10. [x] `fix(frontend): søgning respekterer aktive filtre og kan pages` —
        `src/hooks/useTransactionSearch.jsx`, its test, `TransactionsPage.jsx`. `$offset: Int!`
        added to the document — the only thing missing, since the resolver already takes it
        (`gateway-service/.../graphql_api.py:497-523`) — `limit: 100` → `PAGE_SIZE`, `page` in
@@ -317,6 +317,27 @@ flip, old path last.
        month. That is the correct fix — the filter panel was visually active and being ignored
        — but anyone used to searching all history will read it as a regression; global search
        belongs in an explicit "Søg i hele historikken" toggle, not here. ~+20/−8.
+       **Done in `92ab86f0`** (335 tests, up from 319: +7 hook, +8 page). Three notes.
+       **(a) `totalCount` flipped to `?? null` here too**, which the plan called "symmetric
+       with step 7" without naming the consequence: the status line needs its own
+       `searchTotalCount != null` guard, or an active search renders "null resultater" for one
+       paint before the answer lands. **(b) `isPaging` had to be routed, not just returned** —
+       `activeIsPaging = isSearchActive ? searchIsPaging : isPaging`, because the table's dim
+       previously read the *list's* flag unconditionally, so a background list refetch would
+       have dimmed search results (the other population) and a search page change would not
+       have dimmed anything. Two tests pin both directions. **(c) The `$offset: Int!`
+       declaration is pinned by asserting on `gqlRequest.mock.calls[0][0]`** — the document is
+       the first argument, so it needs no export. Worth the seemingly tautological test because
+       this is the one mutation a mocked suite otherwise cannot see: sending `offset` without
+       declaring it fails *document validation* at the gateway, i.e. every search on every page
+       fails hard, and nothing in a mocked test would notice. Mutation checks, each alone:
+       `page` out of the search key → 3 fail; `limit: 100` → 2; `offset` dropped from the
+       variables → 3; `$offset: Int!` removed from the document → 1; `?? 0` → 1; `filters` not
+       forwarded → 1; `page` not forwarded → 3; `activeTotalCount = totalCount` → 2;
+       `activeIsPaging = isPaging` → 2; the interval back in the status line → 1; the null-guard
+       removed → 1. `npm run build` and `eslint src` clean. **Not driven in a browser** — same
+       constraint as step 9, and the scope change (search now covers the active date range) is
+       exactly the kind of thing a human should see once; noted under Verification.
 11. [ ] `feat(transaction)!: total_count-envelope på GET /api/v1/transactions/` — the risky
        step. `app/application/dto.py` (+`TransactionListResultDTO`),
        `ports/inbound.py:27`, `service.py:163-175`, `rest_api.py:51-72`,
