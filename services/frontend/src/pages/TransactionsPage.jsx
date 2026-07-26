@@ -83,18 +83,10 @@ function TransactionsPage() {
     effectivePage = 1;
   }
 
-  const {
-    transactions,
-    totalCount,
-    isPaging,
-    loading: txLoading,
-    error: txError,
-    create: createTx,
-    update: updateTx,
-    remove: removeTx,
-    uploadCsv,
-  } = useTransactions(filters, effectivePage);
-
+  // Søgningen kaldes FØR listen, fordi listen gates på isSearchActive (se
+  // nedenfor). Rækkefølgen er den eneste kobling mellem de to — begge kaldes
+  // ubetinget, så hook-rækkefølgen er stabil.
+  //
   // filters MED: søgningen respekterer det aktive datofilter — panelet stod
   // synligt aktivt og blev ignoreret. Bemærk adfærdsændringen: default-filtret
   // er den aktuelle måned, så søgning dækker nu kun den. Global søgning hører i
@@ -112,6 +104,22 @@ function TransactionsPage() {
     loading: searchLoading,
     error: searchError,
   } = useTransactionSearch(debouncedSearchTerm, filters, effectivePage);
+
+  // enabled: !isSearchActive — mens en søgning er aktiv vises søgeresultaterne,
+  // og listens svar bliver kastet væk. Uden gaten koster hvert sideklik under
+  // søgning et ubrugt REST-request. Mutationerne (create/update/remove/uploadCsv)
+  // er upåvirkede: kun queryen pauses, så gem og CSV-upload virker under søgning.
+  const {
+    transactions,
+    totalCount,
+    isPaging,
+    loading: txLoading,
+    error: txError,
+    create: createTx,
+    update: updateTx,
+    remove: removeTx,
+    uploadCsv,
+  } = useTransactions(filters, effectivePage, { enabled: !isSearchActive });
 
   // Én pager over to populationer — hver med sin egen total. Listens total må
   // ikke stå over søgeresultater og omvendt.

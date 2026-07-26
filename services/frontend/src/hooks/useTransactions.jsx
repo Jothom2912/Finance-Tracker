@@ -13,7 +13,18 @@ export function transactionsQueryKey(accountId, filters, page) {
   return ['transactions', { accountId, filters, page }];
 }
 
-export function useTransactions(filters, page = 1) {
+/**
+ * @param filters   dato/kategori-udsnit — sendes også til useTransactionSearch
+ * @param page      1-indekseret sidetal
+ * @param options.enabled
+ *   false = hent ikke listen. Findes fordi TransactionsPage viser ENTEN listen
+ *   ELLER søgeresultater: mens en søgning er aktiv bliver listens svar kastet
+ *   væk, og uden dette flag koster hvert sideklik under søgning et ubrugt
+ *   REST-request (og en cache-post per side, der er forældet når søgningen
+ *   forlades). Kun *queryen* pauses — mutationerne nedenfor er uafhængige, så
+ *   gem/slet/CSV-upload virker uændret mens listen er slået fra.
+ */
+export function useTransactions(filters, page = 1, { enabled = true } = {}) {
   const queryClient = useQueryClient();
   const accountId = localStorage.getItem('account_id');
 
@@ -25,6 +36,7 @@ export function useTransactions(filters, page = 1) {
         skip: (page - 1) * PAGE_SIZE,
         limit: PAGE_SIZE,
       }),
+    enabled,
     // Behold forrige sides rækker mens den nye henter — tabellen kollapser ikke
     // i højden ved sideskift. Samme mønster som useTransactionSearch.
     placeholderData: keepPreviousData,

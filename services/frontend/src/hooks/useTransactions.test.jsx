@@ -280,6 +280,88 @@ describe('useTransactions', () => {
     });
   });
 
+  describe('enabled', () => {
+    it('henter ikke når enabled er false', async () => {
+      transactionsApi.fetchTransactions.mockResolvedValue(page([{ id: 1 }]));
+
+      const { wrapper } = createQueryClientWrapper();
+      const { result } = renderHook(
+        () => useTransactions(filters, 1, { enabled: false }),
+        { wrapper },
+      );
+
+      // Ingen fetch, og ingen falsk "indlæser"-tilstand som siden ville vise.
+      expect(transactionsApi.fetchTransactions).not.toHaveBeenCalled();
+      expect(result.current.loading).toBe(false);
+      expect(result.current.transactions).toEqual([]);
+      expect(result.current.totalCount).toBeNull();
+    });
+
+    it('henter ikke ved sideskift mens den er slået fra — det var hele pointen', async () => {
+      transactionsApi.fetchTransactions.mockResolvedValue(page([{ id: 1 }]));
+
+      const { wrapper } = createQueryClientWrapper();
+      const { rerender } = renderHook(
+        ({ p }) => useTransactions(filters, p, { enabled: false }),
+        { wrapper, initialProps: { p: 1 } },
+      );
+
+      rerender({ p: 2 });
+      rerender({ p: 3 });
+
+      expect(transactionsApi.fetchTransactions).not.toHaveBeenCalled();
+    });
+
+    it('henter når den slås til igen (søgning forlades)', async () => {
+      transactionsApi.fetchTransactions.mockResolvedValue(page([{ id: 1 }]));
+
+      const { wrapper } = createQueryClientWrapper();
+      const { result, rerender } = renderHook(
+        ({ e }) => useTransactions(filters, 1, { enabled: e }),
+        { wrapper, initialProps: { e: false } },
+      );
+
+      expect(transactionsApi.fetchTransactions).not.toHaveBeenCalled();
+
+      rerender({ e: true });
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(transactionsApi.fetchTransactions).toHaveBeenCalledTimes(1);
+      expect(result.current.transactions).toEqual([{ id: 1 }]);
+    });
+
+    // Kun queryen pauses. Ville mutationerne også slå fra, kunne man ikke gemme
+    // eller CSV-importere mens en søgning står aktiv.
+    it('lader mutationer virke selv om queryen er slået fra', async () => {
+      transactionsApi.deleteTransaction.mockResolvedValue(undefined);
+
+      const { wrapper, client } = createQueryClientWrapper();
+      const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+      const { result } = renderHook(
+        () => useTransactions(filters, 1, { enabled: false }),
+        { wrapper },
+      );
+
+      await act(async () => {
+        await result.current.remove(1);
+      });
+
+      expect(transactionsApi.deleteTransaction.mock.calls[0][0]).toBe(1);
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['transactions'] });
+      expect(transactionsApi.fetchTransactions).not.toHaveBeenCalled();
+    });
+
+    it('henter som standard når options udelades', async () => {
+      transactionsApi.fetchTransactions.mockResolvedValue(page([]));
+
+      const { wrapper } = createQueryClientWrapper();
+      const { result } = renderHook(() => useTransactions(filters, 1), { wrapper });
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(transactionsApi.fetchTransactions).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('remove', () => {
     it('delegates to API and invalidates transactions + dashboard caches', async () => {
       transactionsApi.fetchTransactions.mockResolvedValue(page([]));

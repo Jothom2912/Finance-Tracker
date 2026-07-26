@@ -311,6 +311,52 @@ describe('TransactionsPage — søgning', () => {
     await waitFor(() => expect(lastCall()[1]).toBe(1));
   });
 
+  // Listen hentes ikke mens søgningen vises: dens svar ville blive kastet væk,
+  // og under paginering kostede det ét ubrugt REST-request per sideklik.
+  describe('slår listehentningen fra under søgning', () => {
+    it('gater listen på !isSearchActive', () => {
+      mockList();
+      mockSearch({ isSearchActive: true, results: rows(PAGE_SIZE), totalCount: 400 });
+      renderPage();
+      search();
+
+      expect(lastCall()[2]).toEqual({ enabled: false });
+    });
+
+    it('holder listen tændt når der ikke søges', () => {
+      mockList();
+      mockSearch();
+      renderPage();
+
+      expect(lastCall()[2]).toEqual({ enabled: true });
+    });
+
+    it('tænder listen igen når søgningen ryddes', async () => {
+      mockList();
+      mockSearch({ isSearchActive: true, results: rows(PAGE_SIZE), totalCount: 400 });
+      renderPage();
+      search();
+      expect(lastCall()[2]).toEqual({ enabled: false });
+
+      mockSearch();
+      search('');
+
+      await waitFor(() => expect(lastCall()[2]).toEqual({ enabled: true }));
+    });
+
+    // Gaten må ikke fryse sidetallet: pageren driver stadig søgningens offset.
+    it('pager stadig søgeresultaterne mens listen er slået fra', async () => {
+      mockList();
+      mockSearch({ isSearchActive: true, results: rows(PAGE_SIZE), totalCount: 400 });
+      renderPage();
+      search();
+      fireEvent.click(naeste());
+
+      await waitFor(() => expect(lastSearchCall()[2]).toBe(2));
+      expect(lastCall()[2]).toEqual({ enabled: false });
+    });
+  });
+
   // Listens total må ikke stå over søgeresultater: to forskellige populationer.
   it('bruger ikke listens total over søgeresultater', () => {
     mockList({ totalCount: 93 });
