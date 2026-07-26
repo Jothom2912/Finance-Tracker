@@ -99,7 +99,10 @@ def stub_services(respx_mock: respx.MockRouter) -> None:
     def transactions_page(request: Any) -> Response:
         skip = int(request.url.params.get("skip", 0))
         rows = TRANSACTIONS[skip : skip + PAGE_SIZE]
-        return Response(200, json=rows)
+        # Envelope-formen fra P1-14 step 11. Reverteres backfillen til at læse
+        # svaret som en liste, fejler den her HØJLYDT (TypeError på str-index),
+        # aldrig ved i tavshed at backfille nul rækker.
+        return Response(200, json={"total_count": len(TRANSACTIONS), "items": rows})
 
     respx_mock.get("http://transaction-service:8002/api/v1/transactions/").mock(side_effect=transactions_page)
     respx_mock.get("http://goal-service:8006/api/v1/goals").mock(return_value=Response(200, json=GOALS))
@@ -187,20 +190,62 @@ async def test_live_events_win_over_backfill(
 async def test_terminates_when_source_ignores_pagination(
     es: AsyncElasticsearch, index_prefix: str, backfill_settings: Settings, respx_mock: respx.MockRouter
 ) -> None:
-    """transaction-services find_by_account ignorerer skip/limit og
-    returnerer alt for kontoen på hver side — backfillen skal stoppe på
-    første gentagne side i stedet for at loope uendeligt (observeret i
-    compose-stakken ved 216k+ requests)."""
+    """En kilde der ignorerer skip/limit og returnerer alt på hver side skal
+    stoppe backfillen på første gentagne side i stedet for at loope uendeligt
+    (observeret i compose-stakken ved 216k+ requests).
+
+    Bemærk totalen: den ligger LANGT foran (``PAGE_SIZE * 10``), så hverken
+    kort-side-betingelsen eller total_count-betingelsen er i spil, og det er
+    stadig seen_ids-guarden der stopper loopet. Rapporterede kilden sin egen
+    sidelængde som total, ville testen bestå uden guarden og holde op med at
+    bevise noget."""
     stub_services(respx_mock)
     # Overstyr transaktions-stubben: ignorér skip helt og returnér en
     # FULD side hver gang (ellers stopper kort-side-betingelsen loopet
     # før guarden overhovedet er i spil).
     full_page = [{**TRANSACTIONS[1], "id": 100 + i, "description": f"Række {i}"} for i in range(PAGE_SIZE)]
     respx_mock.get("http://transaction-service:8002/api/v1/transactions/").mock(
-        return_value=Response(200, json=full_page)
+        return_value=Response(200, json={"total_count": PAGE_SIZE * 10, "items": full_page})
     )
 
     await BackfillRunner(es, backfill_settings).run([USER_ID])
 
+    counts = await index_counts(es, index_prefix)
+    assert counts["transactions"] == PAGE_SIZE
+
+
+@respx.mock
+async def test_total_count_stops_the_loop_when_the_set_divides_evenly(
+    es: AsyncElasticsearch, index_prefix: str, backfill_settings: Settings, respx_mock: respx.MockRouter
+) -> None:
+    """``total_count`` spares den tomme ekstra-request på et sæt der går op.
+
+    Kilden svarer med en FULD side af nye id'er, så hverken kort-side- eller
+    seen_ids-betingelsen kan stoppe loopet på side 1. Totalen siger PAGE_SIZE,
+    og er dermed den ene betingelse der kan.
+
+    Kilden holder op med at være ny efter tre sider — med uendeligt nye id'er
+    ville denne test **hænge** frem for at fejle når total_count-betingelsen
+    fjernes (målt: den gjorde netop det i første udgave). Nu stopper
+    seen_ids-guarden loopet, og assertionen på request-tallet fejler rent:
+    1 side med betingelsen, 4 uden.
+    """
+    stub_services(respx_mock)
+    _DISTINCT_PAGES = 3
+
+    def full_page(request: Any) -> Response:
+        skip = int(request.url.params.get("skip", 0))
+        page = min(skip // PAGE_SIZE, _DISTINCT_PAGES - 1)  # sidste side gentages
+        rows = [
+            {**TRANSACTIONS[1], "id": 1000 + page * PAGE_SIZE + i, "description": f"Række {page}-{i}"}
+            for i in range(PAGE_SIZE)
+        ]
+        return Response(200, json={"total_count": PAGE_SIZE, "items": rows})
+
+    route = respx_mock.get("http://transaction-service:8002/api/v1/transactions/").mock(side_effect=full_page)
+
+    await BackfillRunner(es, backfill_settings).run([USER_ID])
+
+    assert route.call_count == 1
     counts = await index_counts(es, index_prefix)
     assert counts["transactions"] == PAGE_SIZE

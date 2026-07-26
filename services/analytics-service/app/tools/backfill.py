@@ -127,10 +127,14 @@ class BackfillRunner:
     async def _backfill_transactions(self, http: httpx.AsyncClient, user_id: int, account_id: int) -> None:
         base = self._config.transaction_service_url.rstrip("/")
         seen_ids: set[int] = set()
+        total = 0
         skip = 0
         while True:
             headers = make_service_auth_header(user_id, self._config)  # frisk token per side
-            rows: list[dict[str, Any]] = (
+            # Envelope-formen ({"total_count", "items"}) siden P1-14 step 11.
+            # PAGE_SIZE skal blive <= endpointets le-bound (200), ellers 422'er
+            # HVER side — den sidder præcis på bounden uden margin.
+            body: dict[str, Any] = (
                 (
                     await http.get(
                         f"{base}/api/v1/transactions/",
@@ -141,12 +145,16 @@ class BackfillRunner:
                 .raise_for_status()
                 .json()
             )
-            # Stop når siden ikke bidrager med nye id'er — ikke kun ved
-            # kort side. transaction-services find_by_account ignorerer
-            # skip/limit og returnerer ALT for kontoen på hver "side";
-            # uden dette guard looper pagineringen uendeligt (observeret
-            # ved 216k+ requests). Dækker både korrekt paginering (kort
-            # side) og ignoreret paginering (første gentagne side).
+            rows: list[dict[str, Any]] = body["items"]
+            total = body["total_count"]
+            # Stop når siden ikke bidrager med nye id'er — ikke kun ved kort
+            # side. Guarden blev tilføjet fordi en tidligere repo-metode
+            # ignorerede skip/limit og returnerede ALT for kontoen på hver
+            # "side", hvilket loopede uendeligt (observeret ved 216k+
+            # requests). Den metode findes ikke længere, men guarden bliver:
+            # den er den eneste stopbetingelse der ikke tager kilden på ordet.
+            # Hverken kort side eller total_count kan erstatte den — en kilde
+            # der gentager en side vil villigt også oplyse en plausibel total.
             new_rows = [row for row in rows if row["id"] not in seen_ids]
             if not new_rows:
                 break
@@ -176,8 +184,17 @@ class BackfillRunner:
                 )
             if len(rows) < PAGE_SIZE:
                 break
+            # total_count er en EKSTRA stopbetingelse, aldrig den eneste og
+            # aldrig en assertion: totalen kan vokse mens vi pager (live
+            # imports), så >= frem for ==, og et misforhold logges frem for at
+            # kaste. Den sparer én tom ekstra-request når sættet går præcis op
+            # i PAGE_SIZE.
+            if len(seen_ids) >= total:
+                break
             skip += PAGE_SIZE
-        logger.info("Konto %d: %d transaktioner", account_id, len(seen_ids))
+        # "%d af %d": et misforhold mellem indekserede rækker og kildens egen
+        # total er synligt i loggen frem for at skulle udledes bagefter.
+        logger.info("Konto %d: %d af %d transaktioner", account_id, len(seen_ids), total)
 
     async def _backfill_goals(self, http: httpx.AsyncClient, user_id: int, account_id: int) -> None:
         # goal-service lister mål per konto (kræver X-Account-ID).
