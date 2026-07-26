@@ -95,18 +95,28 @@ function TransactionsPage() {
     uploadCsv,
   } = useTransactions(filters, effectivePage);
 
+  // filters MED: søgningen respekterer det aktive datofilter — panelet stod
+  // synligt aktivt og blev ignoreret. Bemærk adfærdsændringen: default-filtret
+  // er den aktuelle måned, så søgning dækker nu kun den. Global søgning hører i
+  // en eksplicit "søg i hele historikken"-toggle, ikke her.
+  // Sidetallet DELES med listen: de to resultatsæt er gensidigt udelukkende
+  // (isSearchActive skifter både overskrift og array), der er én pager, og
+  // debouncedSearchTerm ligger i resultsKey, så søgning ind/ud/ændret nulstiller
+  // til side 1. Et separat searchPage skulle have egne nulstillingsregler og
+  // ville genopvække et forældet sidetal når brugeren skrev samme ord igen.
   const {
     isSearchActive,
     results: searchResults,
     totalCount: searchTotalCount,
+    isPaging: searchIsPaging,
     loading: searchLoading,
     error: searchError,
-  } = useTransactionSearch(debouncedSearchTerm);
+  } = useTransactionSearch(debouncedSearchTerm, filters, effectivePage);
 
-  // Søgningen kan endnu ikke pages (step 10), så den får ingen pager frem for
-  // en pager hvis knapper ikke gør noget. Listens total må ikke bruges her:
-  // de to sæt er forskellige populationer.
-  const activeTotalCount = isSearchActive ? null : totalCount;
+  // Én pager over to populationer — hver med sin egen total. Listens total må
+  // ikke stå over søgeresultater og omvendt.
+  const activeTotalCount = isSearchActive ? searchTotalCount : totalCount;
+  const activeIsPaging = isSearchActive ? searchIsPaging : isPaging;
   const pageCount = activeTotalCount != null ? pageCountOf(activeTotalCount) : null;
 
   // Totalen kan krympe under os (slet sidste række på side 2). Betinget af at
@@ -239,9 +249,15 @@ function TransactionsPage() {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        {isSearchActive && !searchLoading && !searchError && (
-          <p className="transaction-search-status">
-            {searchResults.length} af {searchTotalCount} resultater for “{debouncedSearchTerm}”
+        {/*
+          Kun totalen her; rækkeintervallet ligger i pageren. Den gamle tekst
+          "50 af 400 resultater" meldte en afkortning brugeren ikke kunne gøre
+          noget ved. Samme dæmpning som tabellen, fordi keepPreviousData kort
+          viser det forrige søgeords tal ved siden af det nye ord.
+        */}
+        {isSearchActive && !searchLoading && !searchError && searchTotalCount != null && (
+          <p className={`transaction-search-status${searchIsPaging ? ' is-stale' : ''}`}>
+            {searchTotalCount} resultater for “{debouncedSearchTerm}”
           </p>
         )}
       </div>
@@ -342,8 +358,8 @@ function TransactionsPage() {
               transitionen globalt.
             */}
             <div
-              className={`transactions-results${isPaging ? ' is-stale' : ''}`}
-              aria-busy={isPaging}
+              className={`transactions-results${activeIsPaging ? ' is-stale' : ''}`}
+              aria-busy={activeIsPaging}
             >
               <TransactionsList
                 transactions={isSearchActive ? searchResults : transactions}

@@ -62,14 +62,25 @@ function mockList({ transactions = rows(PAGE_SIZE), totalCount = 93, isPaging = 
   return api;
 }
 
-function mockSearch({ isSearchActive = false, results = [], totalCount = 0 } = {}) {
-  useTransactionSearch.mockReturnValue({
+function mockSearch({
+  isSearchActive = false,
+  results = [],
+  totalCount = null,
+  isPaging = false,
+} = {}) {
+  useTransactionSearch.mockImplementation(() => ({
     isSearchActive,
     results,
     totalCount,
+    isPaging,
     loading: false,
     error: null,
-  });
+  }));
+}
+
+/** Seneste (query, filters, page) useTransactionSearch blev kaldt med. */
+function lastSearchCall() {
+  return useTransactionSearch.mock.calls[useTransactionSearch.mock.calls.length - 1];
 }
 
 function renderPage() {
@@ -247,12 +258,103 @@ describe('TransactionsPage — tomtilstanden kan ikke lyve', () => {
   });
 });
 
-describe('TransactionsPage — søgning (endnu ikke pageable)', () => {
-  it('viser ingen pager over søgeresultater, så ingen knap lover noget den ikke kan', async () => {
-    mockSearch({ isSearchActive: true, results: rows(50), totalCount: 400 });
-    renderPage();
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'netto' } });
+describe('TransactionsPage — søgning', () => {
+  /** Aktiv søgning: skriv i feltet efter at søge-mocken er sat. */
+  function search(term = 'netto') {
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: term } });
+  }
 
-    expect(screen.queryByRole('navigation', { name: 'Sidenavigation' })).not.toBeInTheDocument();
+  // Den rapporterede fejl: filterpanelet stod synligt aktivt over en søgning der
+  // ignorerede det. Bemærk adfærdsændringen — default-filtret er den aktuelle
+  // måned, så søgning dækker nu kun den.
+  it('sender de aktive filtre med i søgningen', () => {
+    renderPage();
+    fireEvent.change(screen.getByLabelText(/fra dato/i), { target: { value: '2026-05-01' } });
+
+    const [, filters] = lastSearchCall();
+    expect(filters).toMatchObject({ startDate: '2026-05-01' });
+  });
+
+  it('pager søgeresultaterne med søgningens egen total', async () => {
+    mockSearch({ isSearchActive: true, results: rows(PAGE_SIZE), totalCount: 400 });
+    renderPage();
+    search();
+
+    expect(screen.getByText('Viser 1–50 af 400 transaktioner')).toBeInTheDocument();
+    fireEvent.click(naeste());
+
+    await waitFor(() => expect(lastSearchCall()[2]).toBe(2));
+  });
+
+  // Sidetallet deles med listen: pageren står over ét af to gensidigt
+  // udelukkende sæt, så begge hooks skal se samme side.
+  it('giver liste og søgning samme sidetal', async () => {
+    mockSearch({ isSearchActive: true, results: rows(PAGE_SIZE), totalCount: 400 });
+    renderPage();
+    search();
+    fireEvent.click(naeste());
+
+    await waitFor(() => expect(lastSearchCall()[2]).toBe(2));
+    expect(lastCall()[1]).toBe(2);
+  });
+
+  it('nulstiller til side 1 når søgningen ryddes', async () => {
+    mockSearch({ isSearchActive: true, results: rows(PAGE_SIZE), totalCount: 400 });
+    renderPage();
+    search();
+    fireEvent.click(naeste());
+    await waitFor(() => expect(lastSearchCall()[2]).toBe(2));
+
+    mockSearch();
+    search('');
+
+    await waitFor(() => expect(lastCall()[1]).toBe(1));
+  });
+
+  // Listens total må ikke stå over søgeresultater: to forskellige populationer.
+  it('bruger ikke listens total over søgeresultater', () => {
+    mockList({ totalCount: 93 });
+    mockSearch({ isSearchActive: true, results: rows(7), totalCount: 7 });
+    renderPage();
+    search();
+
+    expect(screen.getByText('Viser 1–7 af 7 transaktioner')).toBeInTheDocument();
+    expect(screen.queryByText(/af 93 transaktioner/)).not.toBeInTheDocument();
+  });
+
+  it('statuslinjen melder kun totalen — intervallet hører i pageren', () => {
+    mockSearch({ isSearchActive: true, results: rows(PAGE_SIZE), totalCount: 400 });
+    renderPage();
+    search();
+
+    expect(screen.getByText('400 resultater for “netto”')).toBeInTheDocument();
+    expect(screen.queryByText(/50 af 400 resultater/)).not.toBeInTheDocument();
+  });
+
+  it('viser ingen statuslinje før søgningen har svaret', () => {
+    mockSearch({ isSearchActive: true, results: [], totalCount: null });
+    renderPage();
+    search();
+
+    expect(screen.queryByText(/resultater for/)).not.toBeInTheDocument();
+  });
+
+  it('dæmper både tabel og statuslinje mens en ny søgeside hentes', () => {
+    mockSearch({ isSearchActive: true, results: rows(PAGE_SIZE), totalCount: 400, isPaging: true });
+    renderPage();
+    search();
+
+    expect(document.querySelector('.transactions-results')).toHaveClass('is-stale');
+    expect(document.querySelector('.transaction-search-status')).toHaveClass('is-stale');
+  });
+
+  // isPaging fra LISTEN må ikke dæmpe søgeresultaterne: det er det andet sæt.
+  it('dæmper ikke søgeresultater fordi listen pager i baggrunden', () => {
+    mockList({ isPaging: true });
+    mockSearch({ isSearchActive: true, results: rows(3), totalCount: 3 });
+    renderPage();
+    search();
+
+    expect(document.querySelector('.transactions-results')).not.toHaveClass('is-stale');
   });
 });
