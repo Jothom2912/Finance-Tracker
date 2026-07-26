@@ -75,6 +75,13 @@ async def list_transactions(
     # non-HTTP callers.  Layered validation, not drift — do not
     # "de-duplicate" either one away.  Mirrors
     # ``analytics-service/app/adapters/inbound/rest_api.py:111-112``.
+    #
+    # ``le=200`` is a CROSS-SERVICE contract, not just a local guard:
+    # analytics' backfill (``app/tools/backfill.py``, ``PAGE_SIZE = 200``)
+    # sits exactly on this bound with no margin.  Lowering it makes EVERY
+    # backfill page 422 — a full re-index fails, and it fails per-page rather
+    # than up front.  Raise it freely; to lower it, lower ``PAGE_SIZE`` first
+    # and ship that before this.
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> TransactionListResultDTO:
