@@ -294,6 +294,45 @@ async def test_skip_past_the_end_returns_an_empty_page(client: httpx.AsyncClient
     assert response.json() == []
 
 
+@pytest.mark.parametrize(
+    ("params", "offending_field"),
+    [
+        ({"limit": 201}, "limit"),
+        ({"limit": 0}, "limit"),
+        ({"skip": -1}, "skip"),
+    ],
+)
+async def test_out_of_range_pagination_is_a_422_not_a_500(
+    client: httpx.AsyncClient, params: dict, offending_field: str
+) -> None:
+    """Out-of-range paging is a client error, and it names the field.
+
+    All three of these returned **500** before the ``Query(...)`` bounds
+    landed: a bare annotation is type-validated but unbounded, so the value
+    travelled as far as ``TransactionFiltersDTO`` inside the handler body,
+    where a ``pydantic.ValidationError`` is no longer something FastAPI can
+    translate into a response.  A caller could not tell "you asked for too
+    much" from "the service is broken".
+    """
+    response = await _get(client, params)
+
+    assert response.status_code == 422
+    assert offending_field in str(response.json())
+
+
+async def test_the_boundary_values_are_still_accepted(client: httpx.AsyncClient) -> None:
+    """``limit=200`` must stay legal: analytics' backfill pages at exactly 200.
+
+    ``analytics-service/app/tools/backfill.py:48`` sets ``PAGE_SIZE = 200``,
+    which sits *on* the ``le`` bound with no margin — an off-by-one here would
+    422 every page of a backfill run rather than degrade.  ``skip=0`` is the
+    common case and must not be treated as "unset".
+    """
+    for params in ({"limit": 200}, {"limit": 1}, {"skip": 0}):
+        response = await _get(client, {**_FILLER_ONLY, **params})
+        assert response.status_code == 200, params
+
+
 # --------------------------------------------------------------------------
 # Auth — the endpoint is not reachable without a valid token.
 # --------------------------------------------------------------------------

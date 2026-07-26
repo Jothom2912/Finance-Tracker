@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, Form, UploadFile, status
+from fastapi import APIRouter, Depends, Form, Query, UploadFile, status
 
 from app.application.dto import (
     BulkCreateResultDTO,
@@ -57,8 +57,18 @@ async def list_transactions(
     start_date: date | None = None,
     end_date: date | None = None,
     transaction_type: TransactionType | None = None,
-    skip: int = 0,
-    limit: int = 50,
+    # ``Query(...)`` rather than a bare annotation: a bare ``skip: int = 0``
+    # is type-validated by FastAPI but carries no bounds, so ``?limit=201``
+    # used to reach ``TransactionFiltersDTO`` inside the handler body and
+    # raise ``pydantic.ValidationError`` where FastAPI can no longer
+    # translate it — a pure input error surfacing as 500.  The bounds are
+    # deliberately duplicated against the DTO's own ``Field`` constraints:
+    # these guard the HTTP boundary, those guard construction from
+    # non-HTTP callers.  Layered validation, not drift — do not
+    # "de-duplicate" either one away.  Mirrors
+    # ``analytics-service/app/adapters/inbound/rest_api.py:111-112``.
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> list[TransactionResponse]:
     filters = TransactionFiltersDTO(
         account_id=account_id,
