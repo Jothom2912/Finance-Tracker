@@ -2,6 +2,7 @@ import { createCrudApi } from './crudFactory';
 import apiClient from '../utils/apiClient';
 import { parseApiError } from './errors';
 import { TRANSACTION_SERVICE_URL } from '../config/serviceUrls';
+import { PAGE_SIZE } from '../lib/pagination';
 
 const crud = createCrudApi('/transactions', { baseUrl: TRANSACTION_SERVICE_URL });
 
@@ -21,13 +22,45 @@ export async function deleteTransaction(id) {
   return crud.remove(id);
 }
 
-export async function fetchTransactions({ startDate, endDate, categoryId } = {}) {
-  const params = {};
+export async function fetchTransactions({
+  startDate,
+  endDate,
+  categoryId,
+  skip = 0,
+  limit = PAGE_SIZE,
+} = {}) {
+  // skip sættes ubetinget: `if (skip)` ville droppe skip=0, altså side 1 —
+  // det almindelige tilfælde.
+  const params = { skip, limit };
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
   if (categoryId) params.category_id = categoryId;
-  const results = await crud.fetchAll(params);
-  return results.map(fromServiceResponse);
+  const body = await crud.fetchAll(params);
+  const { items, totalCount } = unpackTransactionList(body);
+  return { items: items.map(fromServiceResponse), totalCount };
+}
+
+/**
+ * Læser både den nuværende bare liste og den kommende {total_count, items}-envelope.
+ *
+ * MIDLERTIDIG: Array-grenen findes udelukkende for at denne læser kan deployes
+ * FØR serveren skifter form (P1-14 step 11), så der ikke er et vindue hvor et
+ * gammelt bundle kalder en ny server og blanker siden. I det vindue er totalen
+ * en tilnærmelse (`items.length`, dvs. "Viser 1–50 af 50") — mindre end sandheden,
+ * men mere end i dag, hvor der ikke står noget.
+ * Fjernes sammen med sin test når envelopen er ude: se P3-36 i BACKLOG.md og
+ * decisions/2026-07-26-transaction-list-envelope.md.
+ */
+function unpackTransactionList(body) {
+  if (Array.isArray(body)) {
+    return { items: body, totalCount: body.length };
+  }
+  return {
+    items: body?.items ?? [],
+    // null, ikke 0: 0 betyder "tom periode" og ville lade en clamp på
+    // sidetallet udløse på et gæt. Kun et rigtigt tal er et tal.
+    totalCount: typeof body?.total_count === 'number' ? body.total_count : null,
+  };
 }
 
 export async function uploadTransactionsCsv({ file, bankFormat = 'internal' }) {
