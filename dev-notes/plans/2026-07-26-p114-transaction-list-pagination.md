@@ -114,12 +114,12 @@ without breaking the client.
 Following P1-13's sequence (`9145333d` → `14a6fee2`): docs first, new code unwired, then the
 flip, old path last.
 
-1. [ ] `docs(dev-notes): plan for P1-14 — paginering af transaktionslisten` — this file,
+1. [x] `docs(dev-notes): plan for P1-14 — paginering af transaktionslisten` — this file,
        `00-INDEX.md`.
-2. [ ] `docs(dev-notes): beslutning — total_count-envelope på transaktionslisten` — new
+2. [x] `docs(dev-notes): beslutning — total_count-envelope på transaktionslisten` — new
        `decisions/2026-07-26-transaction-list-envelope.md`, `00-INDEX.md`,
        `backlog/BACKLOG.md` (P1-14 → `in-progress`, link plan + decision).
-3. [ ] `test(transaction): REST-lag-tests for transaktionslisten` — new
+3. [x] `test(transaction): REST-lag-tests for transaktionslisten` — new
        `services/transaction-service/tests/integration/test_transaction_list_api.py`,
        asserting the **current** bare-list contract. The service has **zero** tests on its
        HTTP boundary today, so its most-read endpoint has never been exercised through the
@@ -140,7 +140,7 @@ flip, old path last.
        `user_id` or `sub` and `require_exp` defaults `False` (per the P2-02 correction), so no
        `exp` is needed. **Seed more than one page**, or mutation check 3 cannot fail.
        ~150 new lines, no production code touched.
-4. [ ] `fix(transaction): Query-bounds på skip/limit — 422 i stedet for 500` —
+4. [x] `fix(transaction): Query-bounds på skip/limit — 422 i stedet for 500` —
        `rest_api.py:51-72`, `skip: int = Query(default=0, ge=0)` and
        `limit: int = Query(default=50, ge=1, le=200)`, matching
        `analytics-service/app/adapters/inbound/rest_api.py:103-134`. Today `?limit=201`
@@ -155,7 +155,7 @@ flip, old path last.
        Its own step: separate defect, separate rollback, and bundling a
        status-code change into a shape change would make neither bisectable. +3 cases in
        step 3's file (`?limit=201`, `?limit=0`, `?skip=-1` → 422). ~4 lines.
-5. [ ] `feat(transaction): count_filtered + delt filterklausul i transaktions-repoet` —
+5. [x] `feat(transaction): count_filtered + delt filterklausul i transaktions-repoet` —
        `app/application/ports/outbound.py` (+`count_filtered`, same filter params **minus**
        `skip`/`limit` — the omission *is* the contract),
        `postgres_transaction_repository.py` (extract `_filter_clauses`, add
