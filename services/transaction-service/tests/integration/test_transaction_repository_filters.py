@@ -148,3 +148,59 @@ async def test_limit_applies_without_other_filters(repo) -> None:
     results = await repo.find_filtered(_USER, limit=3)
 
     assert [t.description for t in results] == ["after range", "in range #3", "other account"]
+
+
+async def test_count_honours_every_filter(repo) -> None:
+    """The count must agree with the rows, filter for filter.
+
+    Asserted against ``find_filtered`` rather than a hardcoded 3, so the two
+    paths are compared directly: dropping a branch from ``_filter_clauses``
+    changes both sides in different ways and this fails.  (P1-14 mutation
+    check 1.)
+    """
+    from app.domain.entities import TransactionType
+
+    filters = dict(
+        account_id=1,
+        start_date=date(2026, 2, 1),
+        end_date=date(2026, 2, 28),
+        transaction_type=TransactionType.EXPENSE,
+    )
+
+    total = await repo.count_filtered(_USER, **filters)
+    rows = await repo.find_filtered(_USER, **filters, limit=200)
+
+    assert total == len(rows) == 3
+
+
+async def test_count_ignores_pagination(repo) -> None:
+    """A page of 1 out of 3 still reports 3.
+
+    This is the whole point of the endpoint's ``total_count``: the number must
+    describe the filter set, never the window.  ``count_filtered`` takes no
+    ``skip``/``limit`` at all, so the only way to break this is to add them —
+    which is P1-14 mutation check 2.
+    """
+    from app.domain.entities import TransactionType
+
+    filters = dict(
+        account_id=1,
+        start_date=date(2026, 2, 1),
+        end_date=date(2026, 2, 28),
+        transaction_type=TransactionType.EXPENSE,
+    )
+
+    page = await repo.find_filtered(_USER, **filters, skip=2, limit=1)
+
+    assert len(page) == 1
+    assert await repo.count_filtered(_USER, **filters) == 3
+
+
+async def test_count_is_scoped_to_the_user(repo) -> None:
+    """The other user's row sits inside the filter set and must not be counted."""
+    in_february = dict(account_id=1, start_date=date(2026, 2, 1), end_date=date(2026, 2, 28))
+
+    # _USER has three expenses plus the income row on 2026-02-10; _OTHER_USER
+    # has exactly one row, on 2026-02-12, in the same account and range.
+    assert await repo.count_filtered(_USER, **in_february) == 4
+    assert await repo.count_filtered(_OTHER_USER, **in_february) == 1

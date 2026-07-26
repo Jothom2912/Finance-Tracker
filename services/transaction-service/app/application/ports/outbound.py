@@ -64,6 +64,29 @@ class ITransactionRepository(ABC):
     ) -> list[Transaction]: ...
 
     @abstractmethod
+    async def count_filtered(
+        self,
+        user_id: int,
+        account_id: int | None = None,
+        category_id: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        transaction_type: TransactionType | None = None,
+    ) -> int:
+        """Count every row matching the filters, **ignoring** pagination.
+
+        The absence of ``skip``/``limit`` here *is* the contract: this is the
+        total a caller pages through, so a signature able to accept a window
+        would be a signature able to quietly return the size of one page.
+
+        Implementations must share their filter predicates with
+        :meth:`find_filtered`.  A count computed from a different filter set
+        would put an authoritative-looking number above rows that cannot add
+        up to it — the same defect P1-14 exists to remove, one layer down.
+        """
+        ...
+
+    @abstractmethod
     async def update(self, transaction_id: int, user_id: int, **fields: object) -> Transaction: ...
 
     @abstractmethod
