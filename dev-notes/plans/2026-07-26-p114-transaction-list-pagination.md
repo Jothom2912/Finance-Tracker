@@ -20,8 +20,14 @@ it is showing of how many.
 
 Done when: June 2026 for account 1 is reachable in full — 93 rows across pages — the pager
 reads "Viser 1–50 af 93" on page one and "Viser 51–93 af 93" on page two, and the sum of the
-listed amounts reconciles with the **16 739,83** analytics reports for the same period.
+listed amounts reconciles with what analytics reports for the same period.
 Proven by re-running the finding's measurement against the API *and* by driving the UI.
+
+**Corrected 2026-07-26 after measuring:** this line first named a fixed **16 739,83**, copied
+from P1-13's plan. Analytics, Postgres and the listed rows now all agree on **16 709,83** for
+93 rows — the target number was inherited from a 94-row snapshot a day older than this plan's
+own finding. See [Verification](#measured-2026-07-26-against-the-rebuilt-container-steps-1112-in-place).
+The reconciliation is what the Done-when is about; the literal was never the contract.
 
 ## Context
 
@@ -435,7 +441,10 @@ flip, old path last.
        (`status: resolved` + `resolved-by`), `BACKLOG.md` (P1-14 → `done 2026-07-26` with the
        measurement; P3-06's pagination clause trimmed to virtualisation only), the decision
        note (`status: implemented`), a session log, and one `00-INDEX.md` line per new file.
-14. [ ] **Verification** — see below.
+14. [~] **Verification** — see below. Everything automatable is done and recorded
+       (2026-07-26): the API measurement against the rebuilt container, the Postgres and
+       analytics reconciliation, the bounds, the e2e run and its three pre-existing
+       failures. **The UI drive is the one open item** and needs a human at `npm run dev`.
 
 ## Verification
 
@@ -468,6 +477,45 @@ April → total_count: 50 with 50 items    # "one row from silent loss" now read
 reconciled against `select count(*) from transactions where user_id=1 and account_id=1 and
 date between …` in Postgres.
 
+### Measured 2026-07-26, against the rebuilt container (steps 11–12 in place)
+
+Image rebuilt and the **running container grepped** for `TransactionListResultDTO` before
+believing the build (per the per-worker-staleness lesson; only `transaction-service` needs it
+— the four `transaction-*` workers have their own `build:` blocks but none of them serve this
+endpoint). The measurement ran *inside* the container so the JWT secret never left it.
+
+| Period | API `total_count` | API `len(items)` | Postgres `count(*)` |
+|---|---|---|---|
+| June 2026 | **93** | 50 | 93 |
+| July 2026 | 62 | 50 | 62 |
+| April 2026 | 50 | 50 | 50 |
+
+June's two pages partition the set exactly: 50 + 43 = 93 ids, disjoint, and **both pages
+report `total_count: 93`** — the total describes the set, not the window. Bounds hold on the
+live service: `limit=201`, `limit=0`, `skip=-1` → **422**; `limit=200` → 200 OK with 200 rows.
+
+**Two numbers in this plan were wrong, and both were inherited rather than measured.**
+
+*July is 62, not 61.* One row was created at 17:15 today (`MobilePay …`, 25,00, dated
+2026-07-27), i.e. after the finding was written this morning. The dataset is live; a
+row-count in a plan is a timestamp, not a constant.
+
+*June is 16 709,83, not 16 739,83.* All three stores agree exactly on 16 709,83: Postgres
+(`sum(amount) where transaction_type='expense'`), the listed rows summed over both pages, and
+analytics' `/overview` (`total_expenses`, with ES `total_count: 93`). The 16 739,83 in this
+plan's Done-when was copied from [P1-13's plan](../plans/2026-07-25-p113-budget-spend-from-analytics.md),
+which measured it on 2026-07-25 against **94** June rows — and this plan's own finding
+records **93** rows a day later. The difference is 30,00 on exactly one row, so the row count
+and the sum drifted together and the Done-when paired the new count with the old sum. It was
+internally inconsistent from the moment it was written. (`transactions` has no
+`is_deleted`/`deleted_at` column, contrary to the repo's soft-delete convention, so the row
+is simply gone and cannot be inspected — worth its own line, filed as **P3-37**.)
+
+What P1-14 actually claims is unaffected and now holds exactly: **the listed rows reconcile
+with what analytics reports for the same period.** The lesson is about the Done-when, not the
+fix — a target number copied from an earlier plan inherits that plan's snapshot of a live
+dataset, and stops being a contract the moment the data moves.
+
 **The UI drive cannot be automated in this repo** — there is no Playwright or Puppeteer in
 `services/frontend/package.json` and `tests/e2e/` talks to the API, not a browser. So the
 checks below are a human at `npm run dev`, and any claim that they passed must come from
@@ -477,9 +525,39 @@ not.
 
 **From the UI**, which is what the finding actually demands: select June 2026 on account 1,
 page through, count 93 rows, and reconcile the sum of the listed amounts against the
-**16 739,83** analytics reports for the period. Also confirm the pager reads "Viser 1–50 af
-93" then "Viser 51–93 af 93", that a date preset resets to page 1, and that a search now
-respects the active date range.
+**16 709,83** analytics reports for the period (see the correction above). Also confirm the
+pager reads "Viser 1–50 af 93" then "Viser 51–93 af 93", that a date preset resets to page 1,
+and that a search now respects the active date range. **Still not done** — this is the one
+box in this plan that no amount of tooling here can tick.
+
+### The e2e suite: 21 passed, 3 failed — all pre-existing, none on this path
+
+`make test-e2e` does not run locally (`uv run pytest` in the root has no environment; the
+root has `pytest.ini` but no `pyproject.toml`, and CI `pip install`s pytest globally). Ran as
+`uvx --with pytest-asyncio --with httpx --with requests --with python-jose pytest tests/e2e
+-m e2e`. The two files P1-14 touched pass, including both edited assertions.
+
+The three failures are all in `test_budget_month_closed_e2e.py`, and all three are the same
+number: the close allocates **5 000** (the whole budget) where the test expects **2 000**,
+i.e. spend was read as **0** at close time. Established, not assumed:
+
+*   `make ci-status` shows the **E2E job already red on master at `e2b38207` (2026-07-25
+    22:58)** — before P1-14 began. (The specific failing tests could not be read from that
+    run: `gh` is unauthenticated here.)
+*   There is no code path from this plan's change to that test. Since P1-13 budget-service
+    reads spend from `analytics/overview`
+    (`services/budget-service/app/adapters/outbound/analytics_port.py:40`), and a repo-wide
+    grep for `v1/transactions` finds exactly two callers: the frontend and analytics'
+    backfill.
+*   The test's own three expenses **do** reach ES — 9 hits for `"E2E expense"`, 3 000,00 per
+    user across three runs — and `/overview` reports 3 000,00 for all three accounts *now*.
+    So the rows arrive; the test just closes the month before the projection lands.
+
+That is an unsynchronised read-after-write in the test (it polls for the *allocation* but not
+for the *spend* it depends on), and it has been latent since P1-13 moved spend to the read
+side. Filed as **P2-30** rather than fixed here: it is a different service's test, it needs a
+poll-until-spend-appears helper, and folding it into P1-14 would put an unrelated red-to-green
+in a pagination commit.
 
 **Mutation checks** — a reviewer should watch each of these fail the right tests:
 
