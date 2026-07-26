@@ -1,7 +1,7 @@
 ---
 title: P1-14 — the transactions page pages the whole period, with an honest total
 date: 2026-07-26
-status: in-progress
+status: done
 backlog-items: [P1-14]
 related:
   - ../findings/2026-07-26-transaction-list-truncated-at-50.md
@@ -436,15 +436,17 @@ flip, old path last.
        `.json()`-as-a-list → all four tests fail with `TypeError: string indices must be
        integers` (loud, never a silent zero-row backfill); `total_count` break removed →
        the new test fails `4 == 1`; `seen_ids` guard removed → the suite hangs.
-13. [ ] `docs(dev-notes): P1-14 close-out` — `services/transaction-service/README.md` (the
+13. [x] `docs(dev-notes): P1-14 close-out` — `services/transaction-service/README.md` (the
        list returns an envelope; `skip`/`limit` 422 out of range), the finding
        (`status: resolved` + `resolved-by`), `BACKLOG.md` (P1-14 → `done 2026-07-26` with the
        measurement; P3-06's pagination clause trimmed to virtualisation only), the decision
        note (`status: implemented`), a session log, and one `00-INDEX.md` line per new file.
-14. [~] **Verification** — see below. Everything automatable is done and recorded
-       (2026-07-26): the API measurement against the rebuilt container, the Postgres and
-       analytics reconciliation, the bounds, the e2e run and its three pre-existing
-       failures. **The UI drive is the one open item** and needs a human at `npm run dev`.
+14. [x] **Verification** — see below. The automatable half is recorded (2026-07-26): the API
+       measurement against the rebuilt container, the Postgres and analytics reconciliation,
+       the bounds, and the e2e run with its three pre-existing failures. **The UI drive was
+       done by the user** at `npm run dev` — pagination confirmed working; the page opened on
+       62 rows because the default filter is the current month (July), which matches the API
+       and Postgres exactly. June's 93 is one date preset away.
 
 ## Verification
 
@@ -501,15 +503,31 @@ live service: `limit=201`, `limit=0`, `skip=-1` → **422**; `limit=200` → 200
 row-count in a plan is a timestamp, not a constant.
 
 *June is 16 709,83, not 16 739,83.* All three stores agree exactly on 16 709,83: Postgres
-(`sum(amount) where transaction_type='expense'`), the listed rows summed over both pages, and
-analytics' `/overview` (`total_expenses`, with ES `total_count: 93`). The 16 739,83 in this
-plan's Done-when was copied from [P1-13's plan](../plans/2026-07-25-p113-budget-spend-from-analytics.md),
-which measured it on 2026-07-25 against **94** June rows — and this plan's own finding
-records **93** rows a day later. The difference is 30,00 on exactly one row, so the row count
-and the sum drifted together and the Done-when paired the new count with the old sum. It was
-internally inconsistent from the moment it was written. (`transactions` has no
-`is_deleted`/`deleted_at` column, contrary to the repo's soft-delete convention, so the row
-is simply gone and cannot be inspected — worth its own line, filed as **P3-37**.)
+(84 expense rows of 93 total), the listed rows summed over both pages, and analytics'
+`/overview` (`total_expenses`, with ES `total_count: 93`).
+
+**The cause is in-tree and was found by looking, after a first wrong guess.** My initial
+reading — recorded in commit `41747a6a` and corrected here — was that a row had been
+hard-deleted and could not be inspected, since `transactions` has no soft-delete column. That
+was wrong, and the answer was two directories away: **[P3-20](../findings/2026-07-25-cleanup-script-desyncs-read-model.md),
+shipped earlier the same day, names the row** — `cleanup_pg_duplicates.py` deleted **tx id
+864, 30,00**, a real duplicate still sitting in the database, and reconciled ES from 85 /
+16 739,83 to 84 / 16 709,83 for June. So:
+
+*   P1-13 measured 16 739,83 on 2026-07-25 **against the read side, which still held the
+    duplicate**. Its backlog line calls that figure "= Postgres eksakt"; at that moment
+    Postgres held the duplicate too, so it was — and both were 30,00 too high.
+*   This plan's Done-when copied that literal, while its own finding recorded the post-cleanup
+    row count of 93. It paired the new count with the pre-cleanup sum and was internally
+    inconsistent from the moment it was written.
+
+The lesson is not "the number drifted" but **"I diagnosed drift instead of reading the log of
+the change that caused it"** — the phantom-row work was mine, this morning, and I still guessed
+at a hard-delete. `grep` for the delta (`16 709`) would have landed on the answer in one call.
+
+`transactions` genuinely has no `is_deleted`/`deleted_at` column, contrary to the repo's own
+soft-delete convention, and that is worth fixing on its own terms — filed as **P3-37**, with
+the false "cannot be inspected" premise removed from it.
 
 What P1-14 actually claims is unaffected and now holds exactly: **the listed rows reconcile
 with what analytics reports for the same period.** The lesson is about the Done-when, not the
@@ -627,4 +645,34 @@ precisely because it tolerates both shapes. The frontend stack reverts 10→9→
 range revert. There is no feature flag; a `PAGE_SIZE`-based kill switch would reintroduce the
 `&limit=10000` shortcut this plan and P1-13's decision both reject, so it is not wired.
 
-## Outcome (fill in when done)
+## Outcome
+
+**Shipped 2026-07-26 in 12 commits** — `74e3f8ea` → `41747a6a`, plus this close-out. The
+transactions page now states how many rows it is showing of how many, and every row in the
+selected period is reachable.
+
+**What made this safe was the ordering, not a safety net.** The tolerant reader shipped in step
+6, the breaking envelope in step 11. In between, pagination worked against the *old* server —
+which already honoured `skip`/`limit` — with `items.length` standing in for the total. No deploy
+window existed in which an old bundle met the new shape, so no shim was needed and none was
+written. The cost was one dead code branch, filed as P3-36 in the commit that introduced it.
+
+**One shared filter definition is the invariant that keeps the number honest.**
+`_filter_clauses` returns *predicates*, not a `Select`, so the count path cannot inherit the row
+path's `OFFSET/LIMIT` — the bug class the whole endpoint exists to avoid is unrepresentable
+rather than merely tested against. Mutation-checking it exposed a hole: no test counted a
+category-filtered set, so half the shared clause was unproven until
+`test_the_total_sees_the_category_filter_too` was added.
+
+**Where the plan was wrong.** Both errors were about *numbers I inherited instead of measuring*.
+The Done-when copied 16 739,83 from P1-13; July's 61 was a row count with a one-day shelf life.
+And when the live stack disagreed, I theorised a hard-delete rather than reading
+[the P3-20 finding from the same morning](../findings/2026-07-25-cleanup-script-desyncs-read-model.md),
+which names the row (tx 864, 30,00). Recorded in full under Verification and in the
+[session log](../sessions/2026-07-26-p114-transaction-list-pagination.md), because the wrong
+version is committed in `41747a6a` and a silent fix would leave that message unexplained.
+
+**Deferred, deliberately**: P3-35 (the list is user-scoped, search is account-scoped — one pager
+over two populations), P3-36 (remove the tolerant reader), P3-37 (`transactions` hard-deletes,
+against the repo's own convention), P2-30 (the e2e budget-close race, red on master since before
+this work began), and P3-06's remaining virtualisation clause.

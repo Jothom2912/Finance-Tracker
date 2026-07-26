@@ -1,7 +1,7 @@
 ---
 title: The transaction list endpoint returns a {total_count, items} envelope
 date: 2026-07-26
-status: accepted
+status: implemented
 supersedes: null
 promoted-to-adr: null
 ---
@@ -185,7 +185,27 @@ that the envelope belongs to *paginated* endpoints, not to lists in general, whi
 analytics uses it.
 
 **Unblocks** an honest pager, and with it the reconciliation P1-13 made possible but could not
-deliver: after this the dashboard's 16 739,83 for June sits above 93 rows the user can
+deliver: after this the dashboard's June figure sits above 93 rows the user can
 actually reach and add up, instead of above 50 that cannot sum to it. It also removes the last
 consumer of the assumption that a bare list from this endpoint is complete, which is what let
 the same 50-row ceiling bite twice in two services.
+
+## Implemented 2026-07-26
+
+`09143182` (server envelope) and `a8b97bff` (analytics' backfill), with the frontend's
+tolerant reader ahead of both in `74e3f8ea` — so there was no window in which an old client
+met the new shape. Verified against the running stack: June 2026 for account 1 reads
+`total_count: 93` with 50 items, both pages report the same total, and the listed expenses sum
+to what analytics reports (16 709,83 — the 16 739,83 named above was inherited from P1-13's
+94-row snapshot; see the finding).
+
+Two things this note claimed that the implementation refined:
+
+*   **`total_count` is `null`, not `0`, before the server answers** — on both read paths. `0`
+    means "empty period", and a page clamp that fires on a guess moves the user off a page for
+    no reason. The distinction is what lets the empty state avoid lying.
+*   **The bare-array branch in the frontend reader is now dead** and can go; it is P3-36, filed
+    in the same commit that introduced the branch rather than left to memory.
+
+The `planned-transactions` exception held: it is still a bare array, and nothing needed it to
+change.

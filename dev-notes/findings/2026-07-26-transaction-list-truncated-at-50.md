@@ -3,8 +3,8 @@ title: The transactions page silently shows only the 50 newest rows in the selec
 date: 2026-07-26
 severity: HIGH
 area: frontend, transaction
-status: open
-resolved-by: null
+status: resolved
+resolved-by: P1-14 (2026-07-26)
 ---
 
 # The transactions page silently shows only the 50 newest rows in the selected period
@@ -86,4 +86,36 @@ defect, not hygiene. Filed as P1-14; the virtualisation clause can stay in P3-06
 ## Verification when fixed
 
 June 2026 for account 1 must be reachable in full: 93 rows across pages, and the sum of
-the listed amounts must reconcile with the 16 739,83 analytics reports for the same period.
+the listed amounts must reconcile with what analytics reports for the same period.
+
+## Resolved — P1-14, 2026-07-26
+
+Measured against the rebuilt container (`92ab86f0`, `09143182`, `a8b97bff`):
+
+| Period | `total_count` | items on page 1 | Postgres |
+|---|---|---|---|
+| June 2026 | **93** | 50 | 93 |
+| July 2026 | 62 | 50 | 62 |
+| April 2026 | 50 | 50 | 50 |
+
+June's two pages partition the set exactly (50 + 43 = 93, disjoint) and both report
+`total_count: 93`. The listed rows sum to **16 709,83** in expenses, which is what analytics'
+`/overview` reports for the same period, to the øre.
+
+**The number in the line above was wrong when this finding was written.** It said 16 739,83,
+carried over from P1-13's measurement on 2026-07-25 — which counted **94** June rows, while
+this finding recorded **93** the next day. The departed row is named in
+[the cleanup-script finding](2026-07-25-cleanup-script-desyncs-read-model.md): **tx id 864,
+30,00**, a real duplicate that `cleanup_pg_duplicates.py` deleted during P3-20 earlier the
+same day, which also reconciled ES for June from 85 / 16 739,83 to 84 / 16 709,83. P1-13 had
+measured against the read side while it still held that duplicate. So this finding paired the
+post-cleanup row count with the pre-cleanup sum. The reconciliation holds exactly; only the
+literal was stale.
+
+The search half of this finding is fixed too: `useTransactionSearch` now receives `filters`
+and a page. Note the resulting behaviour change — with the default filter being the current
+month, search now covers that month rather than all history. That is the correct reading of a
+visibly active filter panel, but it will read as a regression to anyone used to global search.
+
+Not closed by this finding: the two read paths still count different populations (the REST
+list is user-scoped, search is account-scoped via `X-Account-ID`) — P3-35.

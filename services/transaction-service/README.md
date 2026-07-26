@@ -90,7 +90,7 @@ app/
 | Method | Path | Description | Auth |
 |--------|------|-------------|------|
 | `POST` | `/api/v1/transactions/` | Create transaction | Yes |
-| `GET` | `/api/v1/transactions/` | List (with filters) | Yes |
+| `GET` | `/api/v1/transactions/` | List (with filters) — returns a `{total_count, items}` envelope, **not** a bare array | Yes |
 | `GET` | `/api/v1/transactions/{id}` | Get by ID | Yes |
 | `DELETE` | `/api/v1/transactions/{id}` | Delete transaction | Yes |
 | `POST` | `/api/v1/transactions/import-csv` | Import CSV file | Yes |
@@ -122,7 +122,27 @@ app/
 - `category_id` — filter by category
 - `start_date` / `end_date` — date range filter
 - `transaction_type` — `income` or `expense`
-- `skip` / `limit` — pagination (default: 0/50, max limit: 200)
+- `skip` / `limit` — pagination (default: 0/50, max limit: 200). Out of range is a **422**,
+  not a 500: the bounds sit on `Query(...)` at the HTTP boundary, where FastAPI can still
+  translate them, and are duplicated on `TransactionFiltersDTO` for non-HTTP callers.
+
+### List response shape
+
+`GET /api/v1/transactions/` returns an envelope (P1-14, breaking):
+
+```json
+{ "total_count": 93, "items": [ { "id": 1, "...": "..." } ] }
+```
+
+`total_count` is the size of the **filtered set**, not of the returned page — a page of 50
+out of 93 says so, so a caller can tell "here is a page" from "that is all there was". Rows
+and count are read in the same DB transaction; under READ COMMITTED a concurrent insert can
+leave the total one ahead of the page, which is accepted (no row is lost or duplicated).
+
+Callers must send `skip`/`limit` explicitly — the default page of 50 is what silently
+truncated both the transactions page and analytics' backfill before P1-14. `PAGE_SIZE` in
+`analytics-service/app/tools/backfill.py` is 200 and sits exactly on the `le` bound: raise it
+and every page 422s.
 
 ## Event Publishing (Transactional Outbox)
 
