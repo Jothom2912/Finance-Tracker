@@ -1,6 +1,5 @@
 import { vi, describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, fireEvent } from '@testing-library/react';
 import Pagination from './Pagination';
 
 function setup(props = {}) {
@@ -109,18 +108,18 @@ describe('Pagination', () => {
       expect(screen.getByText('Side 2 af 2')).toBeInTheDocument();
     });
 
-    it('kalder onPageChange med næste side', async () => {
+    it('kalder onPageChange med næste side', () => {
       const { onPageChange } = setup({ page: 1, totalCount: 93 });
 
-      await userEvent.click(naeste());
+      fireEvent.click(naeste());
 
       expect(onPageChange).toHaveBeenCalledWith(2);
     });
 
-    it('kalder onPageChange med forrige side', async () => {
+    it('kalder onPageChange med forrige side', () => {
       const { onPageChange } = setup({ page: 2, totalCount: 93 });
 
-      await userEvent.click(forrige());
+      fireEvent.click(forrige());
 
       expect(onPageChange).toHaveBeenCalledWith(1);
     });
