@@ -199,7 +199,7 @@ flip, old path last.
        `TransactionsList` gets an object and `.map` throws. Green (all mocks are at the API
        boundary) but not runnable; step 7 is the repair, and this is what the risk section
        means by the frontend stack reverting as a range rather than per commit.
-7. [ ] `feat(frontend): useTransactions tager side og returnerer totalCount` —
+7. [x] `feat(frontend): useTransactions tager side og returnerer totalCount` —
        `src/hooks/useTransactions.jsx`, `src/hooks/useTransactions.test.jsx`. Signature
        `useTransactions(filters, page = 1)`; `transactionsQueryKey(accountId, filters, page)`;
        `placeholderData: keepPreviousData` (the pattern already at
@@ -211,6 +211,17 @@ flip, old path last.
        post-mutation background refetch where a dim would be noise. Prefix invalidation
        (`invalidateFinancialData.js:21-27`) is unaffected by the extra key member. ~+15/−8
        plus ~10 test sites updated.
+       **Done in `c89f594e`** (20 tests, up from 9), which also **repairs HEAD** — the page
+       gets an array again. One addition beyond the plan: a test that pins
+       `isPlaceholderData` *against* `isFetching` by driving a post-mutation background
+       refetch, since every other paging assertion passes under either. Mutation checks, one
+       at a time: drop `page` from the key → 5 fail; `page * PAGE_SIZE` → 5 fail; `?? 0`
+       instead of `?? null` → the 2 null cases fail; `isFetching` → exactly the new refetch
+       test fails. Still **unverified in a browser**: the api-layer tests mock `apiClient` and
+       the hook tests mock the api module, so the two halves are never composed against a real
+       response. The live drive belongs in step 9, where there is a pager to observe; the
+       server side of it (`skip`/`limit` honoured, `limit=200` → 200 rows) was already measured
+       against the running service in step 4.
 8. [ ] `feat(frontend): Pagination-komponent med "Viser 1–50 af 93"` — new
        `src/components/Pagination/{Pagination.jsx,Pagination.css,Pagination.test.jsx}`.
        Unused this step; the test proves it standalone, so the step is trivially green.
