@@ -149,18 +149,37 @@ den fejlmode dette item findes for at rette.
    kunne give forskellige svar. Kontrol efter bumpet: samme urørte venv gik til
    0.1.1-med-markør på et almindeligt `uv sync --dev`. Diffen er udelukkende versionslinjen;
    664 tests grønne på tværs af de 9 dependents.
-2. [ ] **`typecheck`-target i analytics' Makefile** — `uv run mypy` (configen ligger i
-   pyproject), plus linjen i `help`. Ret samtidig `[tool.mypy]` så den er eksplicit om
-   `mypy_path` for shared, i stedet for at arve CI's `PYTHONPATH` ved held.
-   *Commit 2.*
-3. [ ] **Slet `pyrightconfig.json`** i roden. *Commit 2* (samme logiske enhed: der er én
-   checker nu).
-4. [ ] **CI-step.** I `python-services`-jobbet, efter `Ruff format check`:
-   et `Typecheck (mypy)`-step der kører `uv run mypy` når `${{ matrix.service }}` er på
-   allowlisten, og printer et `::notice` "typecheck not enabled for <svc> (P2-31)" ellers.
-   Allowlisten starter med `analytics-service` alene. Hvorfor et notice og ikke et tavst skip:
-   P3-40 lærte os at et step der skippes ser identisk ud med et step der lykkes.
-   *Commit 3.*
+2. [x] **`typecheck`-target i analytics' Makefile** — gjort, `4b09ecd7`. `uv run mypy`, med i
+   `check`, linje i `help`.
+   **Deviation: ingen `mypy_path`.** Planen sagde at gøre den eksplicit; det er nu forkert.
+   Efter trin 1 resolves shared som *installerede* pakker via `py.typed`, og at pege mypy på
+   kildekoden oveni er netop det der producerer goal-services `Source file found twice under
+   different module names`. Venv'et er eneste sandhedskilde. Begrundelsen står som kommentar
+   i Makefilen, så den ikke bliver "rettet" tilbage.
+   **Fangst undervejs: gaten kører mypy 2.1.0, ikke 1.11.0.** Alle baseline-tal i Context er
+   fra 1.11 via `uvx`; analytics' `uv.lock` pinner 2.1.0. Kontrol B er derfor kørt om under
+   2.1.0 — alle tre `SyncTrigger`-kaldsteder flagges også dér. Uden det tjek ville "beviset"
+   have handlet om en anden checker end den der kører.
+3. [x] **Slet `pyrightconfig.json`** — gjort, `4b09ecd7`. Kun notes refererede den;
+   `architecture/infrastructure.md`s påstand om pyright-dækning rettet i samme commit.
+4. [x] **CI-step** — gjort, `de39bb6f`. `Typecheck (mypy)` mellem `Ruff format check` og
+   `Bandit`, allowlisten `TYPECHECK_SERVICES: "analytics-service"`, shell-betingelse frem for
+   `if:` (et `if:`-skippet step vises som "skipped" og kan ikke skelnes fra "fine").
+   Verificeret bredere end det ene tilfælde: matchlogikken kørt mod alle 12 servicenavne,
+   delstreng-fælder (`analytics`, `analytics-service-x`, `xanalytics-service`) afvist korrekt,
+   to-navns-liste gater begge, begge grene af step-kroppen kørt.
+   **Note til kontrol C:** steppet kører for *alle* 12 services (betingelsen er indeni), så
+   step-conclusion kan ikke bruges som bevis. Den verificerbare asymmetri er
+   annotationerne: de 11 ikke-gatede skal have et `::notice`, og `analytics-service` skal
+   **ikke** have et. Mangler noticen for de 11, er betingelsen forkert; findes den for
+   analytics, gater den ikke.
+
+   **Ekstra, uden for planen: `shared/domain` havde ingen CI** (`9dec9338`). Matrixen dækkede
+   3 af 4 shared-pakker. Hullet var usynligt fordi en naiv tilføjelse ville have *fejlet*:
+   `domain` brugte den gamle `[project.optional-dependencies] dev`, så `uv sync --dev`
+   afinstallerede pytest og `uv run pytest` døde med `Failed to spawn`. Konverteret til
+   `[dependency-groups]`; dep-gruppe-skiftet forældede analytics/gateway/budgets locks, som
+   er re-locket. 42 tests kører nu i CI, run 19/19 grøn.
 5. [ ] **Kontrol — bevis at gaten fanger fejlklassen, ikke bare at den er grøn.** Se
    [Verification](#verification). Dette trin producerer ingen commit på master.
 6. [ ] **Udrulning, i målt rækkefølge, én commit per service**: user (4) → notification (5) →
@@ -192,9 +211,12 @@ ikke kun en treatment — lektien fra P3-40.
    Kørt og bekræftet — teksten står i [Context](#context). Det er beviset for at gaten
    *ville* have fanget produktionsfejlen, og det er det nærmeste vi kommer, indtil P3-23
    gør banking gate-bar.
-4. **Kontrol C — at CI-steppet faktisk kørte:** åbn run-loggen for det pushede commit og
-   verificér at `Typecheck (mypy)` har output for `analytics-service` og notice-linjen for de
-   elleve andre. Et grønt *run* er også grønt hvis steppet blev skippet.
+4. **Kontrol C — at CI-steppet faktisk gatede, og kun der hvor det skal:** steppet kører for
+   alle 12 services (betingelsen ligger i shell-kroppen), så en grøn step-conclusion beviser
+   intet. Verificér i stedet asymmetrien i run-annotationerne: `::notice` for de elleve
+   ikke-gatede services, og **intet** notice for `analytics-service`. Begge retninger skal
+   holde — mangler noticen bredt, er betingelsen forkert; findes den for analytics, gater
+   gaten ingenting.
 5. **Ingen regression:** `make -C services/analytics-service test` og `make ci-status` grøn
    for branchen.
 6. **Aldrig** pipe et af ovenstående gennem `tail`/`head` før et `&& git commit` — exit-koden
