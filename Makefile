@@ -130,9 +130,15 @@ test: ## Run tests for all services
 # interpolerer ind i stakken (P2-26). Uden det fejler de med en besked om
 # den manglende variabel frem for et vildledende 401. CI sætter variablerne
 # som job-env og har ingen .env — deraf `[ -f .env ]`.
+# Der er ingen pyproject.toml i repo-roden, så `uv run pytest` fandt ingen
+# pytest og målet har aldrig kunnet køre lokalt — kun CI virkede, fordi den
+# pip-installerer pytest selv. --with giver et ephemeral env med samme
+# afhængigheder som CI's e2e-job.
 test-e2e: ## Run E2E tests (requires Docker services running)
 	set -a; [ -f .env ] && . ./.env; set +a; \
-	uv run pytest tests/e2e/ -v -m e2e
+	uv run --with pytest --with pytest-asyncio --with httpx \
+	       --with python-jose --with requests \
+	       pytest tests/e2e/ -v -m e2e
 
 lint: ## Run ruff linter on all Python services
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir lint; done
