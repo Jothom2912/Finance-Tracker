@@ -88,7 +88,15 @@ async def update_monthly_budget(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
+# response_model=None is load-bearing, not decoration: this file has
+# `from __future__ import annotations`, which makes the `-> None` return
+# annotation evaluate to NoneType rather than None. FastAPI 0.115.0 (what
+# requirements.txt pins, and therefore what the image runs) reads that as a
+# real response model and asserts at import time on a 204. Newer FastAPI --
+# what uv.lock resolves for tests and mypy -- does not, which is why CI was
+# green while the container was dead. See
+# dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md
+@router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_monthly_budget(
     budget_id: int,
     account_id: int = Query(...),
@@ -116,7 +124,15 @@ async def copy_monthly_budget(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
-@router.post("/close", status_code=status.HTTP_204_NO_CONTENT)
+# response_model=None is load-bearing, not decoration: this file has
+# `from __future__ import annotations`, which makes the `-> None` return
+# annotation evaluate to NoneType rather than None. FastAPI 0.115.0 (what
+# requirements.txt pins, and therefore what the image runs) reads that as a
+# real response model and asserts at import time on a 204. Newer FastAPI --
+# what uv.lock resolves for tests and mypy -- does not, which is why CI was
+# green while the container was dead. See
+# dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md
+@router.post("/close", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def close_month(
     account_id: int = Query(...),
     month: int = Query(..., ge=1, le=12),

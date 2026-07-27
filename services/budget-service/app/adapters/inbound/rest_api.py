@@ -68,7 +68,15 @@ async def update_budget(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
+# response_model=None is load-bearing, not decoration: this file has
+# `from __future__ import annotations`, which makes the `-> None` return
+# annotation evaluate to NoneType rather than None. FastAPI 0.115.0 (what
+# requirements.txt pins, and therefore what the image runs) reads that as a
+# real response model and asserts at import time on a 204. Newer FastAPI --
+# what uv.lock resolves for tests and mypy -- does not, which is why CI was
+# green while the container was dead. See
+# dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md
+@router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_budget(
     budget_id: int,
     service: IBudgetService = Depends(get_budget_service),
