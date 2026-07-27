@@ -34,7 +34,8 @@ decisions and their reasons.
 - **What goes where**
   - Fixed a finding → set its `status: resolved`, fill `resolved-by`, update backlog item.
   - Architecture changed (new service/event/flow, removed component) → update
-    `architecture/overview.md` / `architecture/services/<svc>.md` / `architecture/event-catalog.md`.
+    `architecture/overview.md` and the owning `architecture/services/<svc>.md`. There is no
+    central event catalog — each event is documented in the service that *publishes* it.
   - Discovered a problem you are not fixing now → new finding in `findings/` + backlog item.
   - Made a non-obvious choice → decision in `decisions/` (promote to `docs/adr/NNNN-slug.md`
     only for long-term structural decisions; follow the `docs/adr/0001…` numbering scheme).
