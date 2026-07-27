@@ -227,8 +227,8 @@ den fejlmode dette item findes for at rette.
      `init_typed` hvis de får pluginet.**
      **Versionsdrift noteret:** notification låser mypy 2.3.0, analytics 2.1.0. Ikke et
      problem i dag, men gaten er ikke den samme checker på tværs af services.
-   - [ ] **goal-service — trukket ud af bølgen, se
-     [P2-34](../findings/2026-07-27-goal-entity-two-runtime-types.md).** Målt til **23 fejl,
+   - [x] **goal-service — trukket ud af bølgen** (afgjort `993f28f1`, ikke udført — se
+     [P2-34](../findings/2026-07-27-goal-entity-two-runtime-types.md)). Målt til **23 fejl,
      ikke tabellens 1** (og 1-tallet var selv målefejlen). 15 mekaniske, 3 kendte
      (P2-32 ×2, P2-33), men fem ægte, hvoraf fire sidder på samme problem: `Goal` bygges med
      `float` af det ene repository og `Decimal` af det andet, `models.py` erklærer
@@ -247,7 +247,7 @@ den fejlmode dette item findes for at rette.
      **Note til resten af bølgen:** `check: lint format-check ## kommentar` har sine
      prerequisites *før* `##`. Et `typecheck` tilføjet efter kommentaren ser rigtigt ud i
      diffen og kører aldrig. Verificér med `make -n check`, ikke ved at læse Makefilen.
-   - [x] **budget-service** — `PENDING`. Målt gennem `uv run`: **26 fejl, ikke tabellens
+   - [x] **budget-service** — `7d938fdb`. Målt gennem `uv run`: **26 fejl, ikke tabellens
      11**. To af dem var ikke typefejl men en **manglende afhængighed**: servicen importerer
      `contracts.*` men erklærede ikke `finans-tracker-contracts` (7 andre services gør), og
      kompenserede med `PYTHONPATH=../../shared/contracts` i tre Makefile-targets. Docker
@@ -271,7 +271,7 @@ den fejlmode dette item findes for at rette.
      `IS NULL` → 0 rækker → 409), compilede jeg statement'et frem for at tro på det. En
      fejlsti man kun har ræsonneret sig til er samme slags påstand som en uverificeret
      portdocstring — jf. sync-trigger-fundet.
-   - [x] **saga-service** — `PENDING`. **Første service hvor den ærlige måling gav *færre*
+   - [x] **saga-service** — `9c2e59b3`. **Første service hvor den ærlige måling gav *færre*
      fejl end tabellen: 2, ikke 11.** Servicen er allerede annoteret; tabellens 11 var
      import-støj som deps opløser. Fordi retningen var uventet, blev
      `disallow_untyped_defs` probet med en uannoteret funktion frem for antaget aktiv —
@@ -294,7 +294,7 @@ den fejlmode dette item findes for at rette.
      Kontrolleret begge veje, og efter en løsnet Protocol specifikt at den ikke blev *tom*:
      `correlation_id: int | None` mod `str | None` flagges stadig. Mutability- og
      optionality-aksen blev løsnet, typeaksen ikke. 54 tests grønne (50 + 4 nye).
-   - [x] **transaction-service** — `PENDING`. 26 fejl, som gen-målingen i trin 1 forudsagde
+   - [x] **transaction-service** — `0642bc67`. 26 fejl, som gen-målingen i trin 1 forudsagde
      (27). Men **26 fejl var 6 rødder**, og den nyttige lektie er at fejltællinger ikke
      rangerer arbejde: 20 af de 26 var én rod, og den rod var den vigtigste ting i hele
      bølgen indtil nu.
@@ -322,7 +322,7 @@ den fejlmode dette item findes for at rette.
        comprehension der har brug for det.
      Kontrol: en `str` mod porten og en felt-typo begge fanget — hvor `object | None`
      tidligere gjorde typo'en umulig at skelne. 263 tests grønne (247 + 16 nye).
-   - [x] **categorization-service** — `PENDING`. **Sidste service i bølgen.** Målt gennem
+   - [x] **categorization-service** — `302cc437`. **Sidste service i bølgen.** Målt gennem
      `uv run`: 20 fejl, ikke tabellens 17 — men **20 fejl var 8 rødder**, og fordelingen er
      omvendt af transactions: dér var den største klynge det vigtigste fund, her er den
      kendt gæld, og de små rødder bar indholdet.
@@ -447,3 +447,49 @@ ikke kun en treatment — lektien fra P3-40.
   rammer det, ikke nu.
 - **Rollback for gaten:** ét servicenavn ud af CI-allowlisten. Det er derfor formen er en
   liste og ikke tolv kopierede steps.
+
+## Outcome
+
+Landet 2026-07-27 over 7 trin og **8 af 12 services** — analytics som pilot (`4b09ecd7`),
+derefter user (`b63962ca`), notification (`0295ab98`), ai (`508c20ab`), budget (`7d938fdb`),
+saga (`9c2e59b3`), transaction (`0642bc67`), categorization (`302cc437`). Gaten er
+`uv run mypy` i hver services `Makefile` + ét CI-step gated af `TYPECHECK_SERVICES` i
+`ci.yml`: indrullering er ét servicenavn på en liste, rollback er at fjerne det. Niveauet blev
+default-mypy plus `disallow_untyped_defs`, `warn_unused_ignores`, `warn_redundant_casts` og
+`no_implicit_optional` — identisk config på alle 8, verificeret flag for flag.
+`pyrightconfig.json` slettet. CLAUDE.md's mypy-afsnit er ikke længere ASPIRATIONAL.
+
+**Forudsætningen var `py.typed` på alle fire `shared/*`** (`67c29dcc`, versionsbump
+`617bbc11`). Uden markøren er contracts- og domain-typer `Any`, og gaten er grøn på netop den
+bug den findes for at fange — målt: 5 fejl uden, 16 med.
+
+**Verificeret som kontrol, ikke kun treatment** — lektien fra P3-40.
+`make verify-typecheck-gate` (`scripts/verify_typecheck_gate.py`, `69a8ac6a`) læser
+run-annotationerne og kræver asymmetri i **begge** retninger: `::notice` for hver ikke-gatet
+service og intet notice for de gatede. Sluttal 8 gatede / 4 ikke-gatede, og scriptet er bevist
+i stand til at blive rødt (goal midlertidigt på allowlisten → `FAILED`, exit 1). En grøn
+step-conclusion beviser intet, fordi steppet kører for alle 12.
+
+**Udbyttet var ikke typefejl, men usande kontrakter.** Fem ting ingen test havde:
+`x-retry-count` sammenlignet som `str` mod `int` inde i `except Exception` → uendelig
+redelivery (→ P2-36); `int(None)` på en utestet ejerskabs-gren i saga; `categorization_client:
+object | None`, hvor application-laget afhang af ingenting; `SerializableEvent` der krævede
+settable attrs på en frozen `BaseEvent` (rettet i shared, `7f071ba3`); og outbox-porten der
+erklærer en fremmed entitet i 4 af 7 services (→ P2-32). Dertil P2-35 (Optional id), P2-33
+(INTERNAL_API_KEY) og P2-34 (goal, trukket ud).
+
+**Hvad den ikke dækker, målt.** `tests/` er uden for scope på alle 8 (`packages = ["app"]`) —
+131 testfiler mod 256 app-filer, hvilket gør `tests/` til det største usikrede areal i den kode
+gaten ellers dækker (→ P3-41, hvis rækkefølge-begrundelse dermed er udtømt). Ikke `--strict`,
+så `Any` flyder frit. 26 begrundede ignores, kun forsvarlige fordi `warn_unused_ignores` får
+dem til at fejle af sig selv når fixet lander. Og ikke runtime: bølgens sidste fejl var et
+`-> None` tilføjet for `disallow_untyped_defs`, som dræbte budget-services container ved import
+mens `make check` var grøn, fordi tests kører `uv.lock` og imaget `requirements.txt`
+(`71476703` → **P2-37**). Tredje gang i ét item at checken og virkeligheden læste fra hver sin
+kopi.
+
+**Banking er stadig udenfor** — og det er den service hvor fejlen var. `P2-31 beskytter ikke
+banking mod den fejl der motiverede P2-31`, indtil P3-23 giver den en `pyproject.toml`. Det stod
+i planens beslutninger fra starten og gælder uændret ved lukning.
+
+Fuld sessionshistorie: [sessions/2026-07-27-p231-typecheck-gate.md](../sessions/2026-07-27-p231-typecheck-gate.md).
