@@ -13,7 +13,9 @@ name plus the annotation is enough to reproduce a failure locally, which is
 better than reading the log anyway.
 
 Set GH_TOKEN (or GITHUB_TOKEN) to lift the 60-requests/hour anonymous rate
-limit, or if the repo ever goes private. Nothing else is required.
+limit, or if the repo ever goes private. If neither is set, `gh auth token` is
+tried, so a one-off `gh auth login` is enough and no token has to live in a
+dotfile. Nothing else is required.
 
 Usage::
 
@@ -30,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -61,6 +64,23 @@ def _repo_slug() -> str:
     if not match:
         raise SystemExit(f"ci-status: cannot parse a GitHub repo from origin: {url}")
     return match.group("slug")
+
+
+def _token() -> str | None:
+    """GH_TOKEN, GITHUB_TOKEN, or whatever `gh` has in the keychain.
+
+    The `gh` fallback means nobody has to keep a token in a dotfile to get past
+    the 60/hour anonymous cap — `gh auth login` once is enough. Absence is not
+    an error: everything here works unauthenticated, just rate-limited.
+    """
+    token = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN")
+    if token:
+        return token
+    try:
+        result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout.strip() or None
 
 
 def _get(url: str, token: str | None) -> dict:
@@ -133,9 +153,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    import os
-
-    token = os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN")
+    token = _token()
     slug = _repo_slug()
     branch = args.branch or _git("rev-parse", "--abbrev-ref", "HEAD")
 

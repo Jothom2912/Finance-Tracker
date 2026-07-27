@@ -262,12 +262,16 @@ ikke kun en treatment — lektien fra P3-40.
    ikke-gatet service, og **intet** notice for dem på allowlisten. Begge retninger skal
    holde — mangler noticen bredt, er betingelsen forkert; findes den for en gatet service,
    gater gaten ingenting.
-   **Kørt og grøn 2026-07-27** (run #239, `c55342b0`): 10 med notice, 2 uden, allowliste
-   `analytics-service user-service`. Gentages ved hver ny service på allowlisten — det er
-   samme kontrol, med to tal der skal flytte sig i hver sin retning.
-   Praktisk: annotationerne hentes per job via `/repos/{slug}/check-runs/{job_id}/annotations`
-   på det anonyme API (~14 kald per kørsel, loft 60/t). **Sæt `GH_TOKEN`** hvis kontrollen
-   skal køres mere end fire gange i timen; `scripts/ci_status.py` læser samme variabel.
+   **Automatiseret: `make verify-typecheck-gate`** (`scripts/verify_typecheck_gate.py`).
+   Kør den efter hver service der kommer på allowlisten — begge tal skal flytte sig, og
+   scriptet læser den forventede allowliste ud af `ci.yml` frem for at have sin egen kopi.
+   Kørt grøn 2026-07-27: run #239 (10/2) og run #240 (9/3, `c7438541`).
+   **Bevist at den kan blive rød:** med `goal-service` midlertidigt tilføjet til
+   allowlisten i `ci.yml` melder den `FAILED — goal-service is on the allowlist but
+   emitted a ::notice`, exit 1. En kontrol der kun er set sige grøn er ikke en kontrol.
+   Praktisk: ~15 anonyme API-kald per kørsel mod et loft på 60/t, hvilket er den bindende
+   begrænsning under udrulningen. `gh auth login` én gang er nok — begge scripts falder
+   tilbage til `gh auth token`, så ingen token behøver ligge i en dotfil.
 5. **Ingen regression:** `make -C services/analytics-service test` og `make ci-status` grøn
    for branchen.
 6. **Aldrig** pipe et af ovenstående gennem `tail`/`head` før et `&& git commit` — exit-koden

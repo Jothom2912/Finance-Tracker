@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps install-hooks ci-status notes-check compose-check dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint lint-repo format format-check check clean clean-test-containers
+.PHONY: help install-deps install-hooks ci-status verify-typecheck-gate notes-check compose-check dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint lint-repo format format-check check clean clean-test-containers
 
 INFRA_SERVICES = postgres postgres-transactions postgres-categorization postgres-account postgres-budget postgres-goals postgres-banking rabbitmq redis
 USER_SERVICE_DIR = services/user-service
@@ -56,6 +56,7 @@ help: ## Show available targets
 	@printf '    lint                      Run ruff linter on all Python services\n'
 	@printf '    lint-repo                 Lint+format-check whole repo (incl. scripts/, tests/)\n'
 	@printf '    ci-status                 Latest CI run for this branch (exit 1 if red)\n'
+	@printf '    verify-typecheck-gate     Prove the mypy gate covers exactly its allowlist\n'
 	@printf '    notes-check               dev-notes index drift, dead links, frontmatter\n'
 	@printf '    compose-check             docker-compose per-worker image drift (P3-40)\n'
 	@printf '    format                    Auto-format all Python services\n'
@@ -164,6 +165,14 @@ lint-repo: ## Lint + format-check the WHOLE repo, incl. scripts/ and tests/
 # conclusions are readable without `gh`. GH_TOKEN lifts the 60/hour cap.
 ci-status: ## Show the latest CI run for the current branch (exit 1 if red)
 	@python3 scripts/ci_status.py
+
+# P2-31 Kontrol C. The typecheck step runs for every python-service (the
+# allowlist is a conditional inside the shell body), so its conclusion is
+# `success` everywhere and proves nothing. This reads the run annotations
+# instead: a ::notice for each non-gated service, none for the gated ones.
+# Re-run it whenever a service joins the allowlist — both counts must move.
+verify-typecheck-gate: ## Prove the mypy gate covers exactly its allowlist (P2-31 Kontrol C)
+	@python3 scripts/verify_typecheck_gate.py
 
 # The vault's index, links and frontmatter are maintained by hand, so they drift
 # silently — a 2026-07-27 review found an open finding that had never been
