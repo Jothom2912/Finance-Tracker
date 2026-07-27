@@ -123,6 +123,32 @@ jobs:
             ruff format --check .
           fi
 
+      # P2-31: the typecheck gate, rolled out one service at a time.
+      # TYPECHECK_SERVICES is the allowlist — putting a service's name here is
+      # what turns its annotations from documentation into a constraint, and is
+      # the only edit needed to enrol it (plus mypy + [tool.mypy] in its
+      # pyproject). Removing a name is the rollback.
+      #
+      # A shell conditional rather than a job-level `if:` on purpose: an `if:`
+      # skipped step renders as "skipped" in the UI, which reads the same as
+      # "fine" at a glance. That ambiguity is what P3-40 cost us, so the
+      # else-branch prints a notice and the log always states which it was.
+      #
+      # No `--ignore-missing-imports` and no MYPYPATH: shared/{contracts,domain,
+      # auth,messaging} are resolved as installed packages via their py.typed
+      # markers. Without those markers a cross-package type silently becomes
+      # `Any` and this step goes green on exactly the bug it exists to catch
+      # (measured — see the finding).
+      - name: Typecheck (mypy)
+        env:
+          TYPECHECK_SERVICES: "analytics-service"
+        run: |
+          if [[ " $TYPECHECK_SERVICES " == *" ${{ matrix.service }} "* ]]; then
+            uv run mypy
+          else
+            echo "::notice::typecheck not enabled for ${{ matrix.service }} (P2-31 rollout)"
+          fi
+
       # -ll -ii: fail on findings that are MEDIUM+ severity AND MEDIUM+
       # confidence. Low-severity findings (B101 asserts in consumers, B110,
       # B105 on an empty-string default) are accepted noise for this codebase;
