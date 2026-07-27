@@ -16,6 +16,9 @@ actually run — a green *run* would also be green if the step had been skipped.
 
 ## Next up
 
+- **P2-31** — ingen statisk typecheck kører nogen steder, trods CLAUDE.md's zero-errors-policy.
+  Fandt sin egen begrundelse 2026-07-27: en `str` mod en `SyncTrigger`-port brød alle
+  bank-syncs i to dage, og hverken tests, CI eller hooks blinkede.
 - **P2-25** — transaction soft-delete + gone-vs-not-yet in the categorization write-back
   (the only P2 that is a data-model decision, so it gates P3-37).
 - **P2-21** — k8s manifest drift: 6 workloads + 1 DB in compose have no manifest, so
@@ -32,6 +35,7 @@ actually run — a green *run* would also be green if the step had been skipped.
 | [product-surface sweep](findings/2026-07-26-product-surface-sweep.md) | HIGH | P2-26..29, P3-24..34, F2-08..13 |
 | [k8s manifest drift](findings/2026-07-25-k8s-manifest-drift.md) | MEDIUM | P2-21 |
 | [transaction hard-delete → DLQ](findings/2026-07-25-transaction-hard-delete-categorized-dlq.md) | MEDIUM | P2-25 |
+| [ingen typecheck nogen steder](findings/2026-07-27-sync-trigger-double-value.md) | HIGH | P2-31 (+ P3-41) |
 | [worker migration ordering](findings/2026-07-25-worker-migration-ordering.md) | LOW | P3-17 |
 | [eval seed writes to prod index](findings/2026-07-26-eval-seed-writes-to-prod-index.md) | LOW | P3-21 |
 | [non-UUID saga_id poison](findings/2026-07-25-saga-reply-non-uuid-poison.md) | LOW | P3-19 |
