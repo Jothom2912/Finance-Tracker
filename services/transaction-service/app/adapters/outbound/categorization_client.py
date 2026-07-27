@@ -34,6 +34,7 @@ class CategorizationClient:
     def __init__(self) -> None:
         self._base_url = settings.CATEGORIZATION_SERVICE_URL.rstrip("/")
         self._timeout = settings.CATEGORIZATION_TIMEOUT_S
+        self._headers = {"X-Internal-API-Key": settings.INTERNAL_API_KEY} if settings.INTERNAL_API_KEY else {}
 
     async def categorize(
         self,
@@ -45,6 +46,7 @@ class CategorizationClient:
                 response = await client.post(
                     f"{self._base_url}/api/v1/categorize/",
                     json={"description": description, "amount": amount},
+                    headers=self._headers,
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -80,6 +82,7 @@ class CategorizationClient:
                 response = await client.post(
                     f"{self._base_url}/api/v1/categorize/batch",
                     json=payload,
+                    headers=self._headers,
                 )
                 response.raise_for_status()
                 results = response.json()

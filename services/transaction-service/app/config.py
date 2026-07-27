@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     CATEGORIZATION_SERVICE_URL: str = "http://localhost:8005"
     CATEGORIZATION_TIMEOUT_S: float = 0.5
+    INTERNAL_API_KEY: str | None = None
 
 
 settings = Settings()

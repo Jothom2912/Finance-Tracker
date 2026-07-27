@@ -292,6 +292,7 @@ services:
       ENVIRONMENT: development
       CATEGORIZATION_SERVICE_URL: http://categorization-service:8005
       CATEGORIZATION_TIMEOUT_S: "0.5"
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
     depends_on:
       postgres-transactions:
         condition: service_healthy
