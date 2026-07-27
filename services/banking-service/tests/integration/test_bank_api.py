@@ -21,7 +21,7 @@ os.environ.setdefault("ENABLE_BANKING_KEY_PATH", "dummy.pem")
 os.environ.setdefault("ENABLE_BANKING_REDIRECT_URI", "http://localhost/callback")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/test")
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.config import settings
@@ -48,7 +48,13 @@ class FakeBankingService:
 
 def make_auth_header(user_id: int = 1) -> dict[str, str]:
     token = jwt.encode(
-        {"user_id": user_id, "username": "testuser"}, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM
+        {
+            "user_id": user_id,
+            "username": "testuser",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        },
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
     )
     return {"Authorization": f"Bearer {token}"}
 

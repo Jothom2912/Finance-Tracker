@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
 
 import pytest_asyncio
 from app import models  # noqa: F401
@@ -16,7 +17,14 @@ from sqlalchemy.pool import StaticPool
 
 
 def _token(user_id: int) -> str:
-    return jwt.encode({"user_id": user_id}, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+        {
+            "user_id": user_id,
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        },
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
 
 
 def _auth(user_id: int) -> dict[str, str]:

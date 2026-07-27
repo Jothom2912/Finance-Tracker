@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import httpx
@@ -100,14 +100,21 @@ def _token(user_id: int) -> str:
 
     The secret is read off the live ``settings`` object rather than a literal,
     so this keeps working regardless of which test module in this directory
-    imported ``app.config`` first.  No ``exp`` claim is needed:
-    ``require_exp`` defaults to ``False`` in the shared auth package (P2-02),
-    and ``decode_token`` accepts either ``user_id`` or ``sub``.
+    imported ``app.config`` first.  An ``exp`` claim is required since P1-15
+    turned on ``require_exp`` in the shared auth package; ``decode_token``
+    still accepts either ``user_id`` or ``sub``.
     """
     from app.config import settings
     from jose import jwt
 
-    return jwt.encode({"user_id": user_id}, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+        {
+            "user_id": user_id,
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        },
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
 
 
 def _auth(user_id: int = _USER) -> dict[str, str]:

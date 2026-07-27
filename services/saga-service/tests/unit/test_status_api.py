@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from app.adapters.outbound.postgres_saga_repository import PostgresSagaRepository
@@ -17,7 +17,13 @@ OTHER_USER_ID = 2
 
 def make_auth_header(user_id: int = OWNER_USER_ID) -> dict[str, str]:
     token = jwt.encode(
-        {"user_id": user_id, "username": "testuser"}, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM
+        {
+            "user_id": user_id,
+            "username": "testuser",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        },
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
     )
     return {"Authorization": f"Bearer {token}"}
 

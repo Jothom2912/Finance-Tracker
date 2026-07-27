@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import app.adapters.inbound.saga_api as saga_api
 import app.adapters.outbound.saga_client as sc
 from app import auth
@@ -7,6 +9,17 @@ from app.adapters.outbound.saga_client import SagaServiceClient
 from app.main import app
 from fastapi.testclient import TestClient
 from jose import jwt
+
+
+def _claims(user_id: int = 42) -> dict:
+    """Token claims for the gateway's shared auth dependency.
+
+    ``exp`` is mandatory since P1-15 turned on ``require_exp``.
+    """
+    return {
+        "user_id": user_id,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+    }
 
 
 class _FakeResponse:
@@ -65,7 +78,7 @@ def test_saga_route_passes_incoming_authorization_to_client(monkeypatch) -> None
 
     monkeypatch.setattr(saga_api, "SagaServiceClient", FakeSagaServiceClient)
 
-    token = jwt.encode({"user_id": 42}, auth.SECRET_KEY, algorithm=auth.JWT_ALGORITHM)
+    token = jwt.encode(_claims(), auth.SECRET_KEY, algorithm=auth.JWT_ALGORITHM)
     client = TestClient(app)
     resp = client.get("/api/v1/sagas/s-1", headers={"Authorization": f"Bearer {token}"})
 
@@ -83,7 +96,7 @@ def test_saga_route_still_enforces_ownership(monkeypatch) -> None:
 
     monkeypatch.setattr(saga_api, "SagaServiceClient", FakeSagaServiceClient)
 
-    token = jwt.encode({"user_id": 42}, auth.SECRET_KEY, algorithm=auth.JWT_ALGORITHM)
+    token = jwt.encode(_claims(), auth.SECRET_KEY, algorithm=auth.JWT_ALGORITHM)
     client = TestClient(app)
     resp = client.get("/api/v1/sagas/s-1", headers={"Authorization": f"Bearer {token}"})
 

@@ -12,6 +12,7 @@ Kræver Docker kørende.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -30,7 +31,15 @@ _JWT_ALGORITHM = "HS256"
 
 
 def _make_token(user_id: int = 1) -> str:
-    return jwt.encode({"sub": str(user_id), "user_id": user_id}, _JWT_SECRET, algorithm=_JWT_ALGORITHM)
+    return jwt.encode(
+        {
+            "sub": str(user_id),
+            "user_id": user_id,
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        },
+        _JWT_SECRET,
+        algorithm=_JWT_ALGORITHM,
+    )
 
 
 # ---------------------------------------------------------------------------
