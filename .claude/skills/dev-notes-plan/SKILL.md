@@ -36,9 +36,23 @@ Two backlog files, same conventions:
 - IDs are stable and sequential within priority (`P1-01`, `P2-07`, …) — never renumber.
 - Move items between priority sections rather than editing IDs; status field tracks
   `open | in-progress | done | wont-do`.
+- **One line per row.** The tables are the queue and must stay readable; a row is a
+  pointer, not a document. A description that needs more than ~1 line goes in an
+  `### P2-26` section under **Item details** at the bottom, and the row links to it as
+  `[→ detail](#p2-26)`. Heading = the bare ID, so the anchor resolves and
+  `grep -n '### P2-26'` lands on it.
+- **Never put a completion report in a row.** How it went — commits, measurements,
+  corrections, what it spawned — belongs in the shipping plan's **Outcome** section and
+  the session log. The row gets `done YYYY-MM-DD` plus links. This is the rule that had
+  to be applied retroactively on 2026-07-27, when single cells had reached 2 800
+  characters and the file cost ~15k tokens to read.
 
 ## Closing a plan
 
 When the work ships: set `status: done`, fill the **Outcome** section (deviations,
 follow-ups spawned), mark linked backlog items/findings, and write a session log
 (`dev-notes/sessions/`).
+
+The plan's **Outcome** section is where the shipping narrative lives — measurements,
+deviations, claims that turned out wrong. Do not duplicate it into the backlog row; the
+row links here.
