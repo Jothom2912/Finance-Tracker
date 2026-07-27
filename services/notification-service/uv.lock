@@ -517,7 +517,7 @@ dev = [
 
 [[package]]
 name = "finans-tracker-messaging"
-version = "0.1.1"
+version = "0.1.2"
 source = { directory = "../shared/messaging" }
 dependencies = [
     { name = "aio-pika" },

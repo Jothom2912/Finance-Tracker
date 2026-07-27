@@ -28,10 +28,27 @@ class SerializableEvent(Protocol):
     Declared as a Protocol so this package has no hard dependency on
     ``finans-tracker-contracts`` — any object with ``event_type``,
     ``correlation_id`` and ``to_json()`` publishes fine.
+
+    Both members are declared read-only (``@property``) rather than as plain
+    attributes, because a plain attribute in a Protocol demands a *settable*
+    one from the implementation. That made the docstring above false: the
+    reference implementation ``contracts.base.BaseEvent`` is
+    ``ConfigDict(frozen=True)`` and so never satisfied its own protocol, and
+    neither could any frozen envelope a service builds. Nothing here writes to
+    either member — the publisher logs them and ``OutboxRepository._build``
+    reads them — so read-only is also the accurate description.
+
+    ``correlation_id`` is optional for the same reason: ``OutboxEntry`` declares
+    it ``str | None``, the ``outbox_events`` column is ``nullable=True``, and
+    ``_build`` reads it with ``getattr(event, "correlation_id", None)``. The
+    protocol was the only place in this package claiming it was mandatory.
     """
 
-    event_type: str
-    correlation_id: str
+    @property
+    def event_type(self) -> str: ...
+
+    @property
+    def correlation_id(self) -> str | None: ...
 
     def to_json(self) -> str: ...
 
