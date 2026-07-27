@@ -65,5 +65,13 @@ historien om hvordan det gik, og de lektier der ikke hører til ét enkelt trin.
   læser `services/*/` på disk. Valget var bevidst (vagtens værdi er at den *kører*, og scriptet er
   allerede wired i CI, `make` og pre-commit), men konsekvensen er en omdøbning til
   `build_hygiene_check.py` når nogen alligevel rører filen.
-- **CI er ikke kørt** på de tre commits i skrivende stund — alt er verificeret lokalt, inkl. e2e.
-  `make ci-status` efter push.
+- ~~CI er ikke kørt~~ **CI grøn på `d555f20e`**: alle 19 jobs, inkl. E2E og rule 4's første
+  kørsel i CI (run `30311338979`). Den ene der betød noget var E2E — den er den eneste
+  CI-halvdel der *bygger og starter* images, altså den eneste der kan se fejlmoden dette item
+  handlede om, og lokalt kørte den mod et image jeg selv havde bygget frem for rene lag.
+- **CI bygger ikke budget-imaget uden for E2E.** Runtime-beviset for dette item — `app.main`
+  importerbar i containeren under imagets versioner, tre workers oppe — er stadig kun lokalt.
+  Det er samme asymmetri som `make check`-fælden, en etage højere: CI kan være grøn på en
+  service hvis image ingen har startet. E2E dækker det tilfældigt for de services der deltager i
+  et flow; der er ingen regel der siger at nye services gør. Kandidat til eget item, hvis det
+  skal lukkes frem for dokumenteres.

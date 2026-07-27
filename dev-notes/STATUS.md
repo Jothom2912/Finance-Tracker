@@ -15,8 +15,10 @@ Sidst shippet: **P2-37** (2026-07-28) — budget-services image installerer fra 
 andre, så tests, mypy og container læser samme fil. Tre commits: `560cd54a` (Dockerfile +
 `requirements.txt` slettet), `8d7c8f59` (tre døde `freeze:`-targets), `18bd5fc8` (vagt i
 `scripts/compose_check.py` mod at en service igen har begge filer, verificeret rød på både
-transaction og budget). **CI er ikke kørt endnu** — alt verificeret lokalt, inkl. 24 e2e og
-runtime-start af alle tre budget-workers. `make ci-status` efter push.
+transaction og budget). CI grøn på `d555f20e` — alle **19** jobs, inkl. E2E og det omdøbte
+`Build-hygiene check`-step, som er rule 4's første kørsel i CI (run `30311338979`).
+Runtime-beviset er lokalt: container op, alembic kørt, `app.main` importeret under fastapi
+0.136.3 med alle tre 204-ruter, og alle tre workers oppe.
 [Plan + Outcome](plans/2026-07-28-p237-budget-single-install-path.md#outcome) ·
 [session-log](sessions/2026-07-28-p237-single-install-path.md).
 
