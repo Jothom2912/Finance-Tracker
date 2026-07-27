@@ -227,8 +227,17 @@ den fejlmode dette item findes for at rette.
      `init_typed` hvis de får pluginet.**
      **Versionsdrift noteret:** notification låser mypy 2.3.0, analytics 2.1.0. Ikke et
      problem i dag, men gaten er ikke den samme checker på tværs af services.
+   - [ ] **goal-service — trukket ud af bølgen, se
+     [P2-34](../findings/2026-07-27-goal-entity-two-runtime-types.md).** Målt til **23 fejl,
+     ikke tabellens 1** (og 1-tallet var selv målefejlen). 15 mekaniske, 3 kendte
+     (P2-32 ×2, P2-33), men fem ægte, hvoraf fire sidder på samme problem: `Goal` bygges med
+     `float` af det ene repository og `Decimal` af det andet, `models.py` erklærer
+     `Mapped[float]` på en `Numeric`-kolonne, og forskellen når ud i event-payloads via
+     `str()` som `"100.0"` mod `"100.00"`. Dertil `Goal.status: str | None` hvor `GoalStatus`
+     findes. Risiko-klausulen nedenfor er anvendt bevidst: at lukke fire ignores på ét
+     pengetypnings-problem ville gøre `ignore` til normalen i stedet for undtagelsen.
    - Resterende, i målt rækkefølge:
-   goal (1 + path-config-fejlen) → ai (0, men mål igen med deps installeret først) →
+   ai (0, men mål igen med deps installeret først) →
    budget (11) → saga (11) → transaction (12) → categorization (17). Hver service:
    `mypy` i dev-group, `[tool.mypy]`-blok kopieret fra analytics, `typecheck`-target,
    navn på CI-allowlisten. Blokeret indtil P3-23/P3-39: **banking, account**. Eget item:
