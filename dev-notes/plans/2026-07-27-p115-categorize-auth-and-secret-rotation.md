@@ -1,7 +1,7 @@
 ---
 title: "P1-15 + P2-26: lås /api/v1/categorize, rotér den delte HS256-nøgle, slå require_exp til"
 date: 2026-07-27
-status: in-progress     # open | in-progress | done | superseded  ← kun trin 16 (CI efter push) mangler
+status: done            # open | in-progress | done | superseded
 backlog-items: [P1-15, P2-26]
 related:
   - findings/2026-07-26-categorize-endpoint-unauthenticated.md
@@ -221,7 +221,7 @@ Rækkefølgen er ikke kosmetisk. To steder er den bærende:
 14. [x] Live: A4's to curl-prober, plus et token uden `exp` mod hver af de 12 services → 401.
 15. [x] `grep -rn "dev-secret-key-change-in-production"` over trackede filer → kun
     dev-notes' historiske omtaler tilbage. Samme for `dev-internal-api-key-…`.
-16. [ ] `make ci-status` grøn efter push, og bekræft at e2e-jobbet **kørte** (ikke skipped).
+16. [x] `make ci-status` grøn efter push, og bekræft at e2e-jobbet **kørte** (ikke skipped).
 17. [x] Ret de forkerte påstande i BACKLOG.md: P1-15's "already has S2S config", P2-26's
     "one line per `app/auth.py`" (analytics er ikke på shared-pakken), og P2-15's "remove
     real EB app id from tracked files" (det trackede id er sandbox og bevidst).
@@ -242,6 +242,63 @@ Rækkefølgen er ikke kosmetisk. To steder er den bærende:
 Rollback generelt: hver fase er sin egen commit, så `git revert` pr. fase virker. B3 er den
 eneste der ikke er rent revertbar — filen forbliver untrackt, hvilket er det ønskede.
 
-## Outcome (fill in when done)
+## Outcome
 
-<!-- udfyldes ved close-out -->
+**Lukket 2026-07-27.** CI-run `30266231499` på `4ce958b3`: 18/18 success, ingen skipped
+jobs, e2e-jobbet kørte 4m22s. Alle fire faser landet, hver som sin egen commit.
+
+### Hvad der virkede som planlagt
+
+Rækkefølgen. "Afsender før håndhæver" holdt to gange, ikke kun i A1→A2: da C3 viste at
+syv testfiler mintede tokens uden `exp`, var det samme form — testene måtte sætte `exp`
+før services krævede det, ellers var den mellemliggende commit rød. Det blev C1a→C1b.
+Rotationen som én `compose up -d` gav heller ingen delvis-udrulnings-problemer.
+
+### Fire påstande der ikke holdt ved verifikation
+
+De tre kendte fra planens Context, plus én mere:
+
+4. **"Fail fast ved startup, som user-service gør" (D1).** user-service fail-faster ikke
+   ved startup — den fejler lukket per request med 503, fordi den er *håndhæver*. De tre
+   D1-services er *afsendere*, så 503-mønsteret har intet modstykke. Fulgte i stedet
+   P1-06-konventionen fra `banking/saga/account auth.py`.
+
+### To ting planen ikke forudså
+
+**C2's instruktion ville have været dekorativ.** Planen foreslog
+`options={"require_exp": True}` til analytics. Det er *jose*-stavemåden; analytics bruger
+PyJWT, som ignorerer ukendte options-nøgler tavst. Verificeret empirisk at et token uden
+`exp` slap igennem med den stavemåde. Korrekt er `options={"require": ["exp"]}`. Der står
+nu en kommentar ved kaldet, fordi den næste der ser en afvigelse fra de 11 andre services
+vil være tilbøjelig til at "rette" den.
+
+**banking-sync-scheduler kørte på dev-defaulten.** Dens compose-blok satte aldrig
+`INTERNAL_API_KEY`, så den kaldte account-service med den committede dev-streng — og efter
+B1's rotation sendte den en nøgle account-service ikke længere accepterer. Verificeret live
+at nøglerne ikke matchede. Fejlen var usynlig fordi scheduleren først rører account-service
+når der findes en rigtig bank-forbindelse: den ville have ramt i produktion, ikke i test.
+Det er den stærkeste begrundelse for D1 der findes, og den stod ikke i rækken.
+
+### To pre-eksisterende fund undervejs
+
+- [gateway-default-account-307](../findings/2026-07-27-gateway-default-account-307.md) —
+  fallback-stien for default-konto har været død. Rettet.
+- [e2e-alert-categorization-race](../findings/2026-07-27-e2e-alert-categorization-race.md) —
+  budget-alert-suiten var flaky på to races, begge fordi barrieren ventede på et andet
+  read-model end det system-under-test læser. Rettet; 24/24 fem kørsler i træk.
+
+Derudover: `make test-e2e` havde aldrig kunnet køre lokalt (ingen root-`pyproject`, så
+`uv run pytest` fandt ingen pytest). Rettet først, ellers kunne planens eget
+verifikationstrin 13 ikke udføres.
+
+### Efterladt åbent
+
+- **P2-15** (SOPS/secretGenerator) og **P1-08**'s historik-omskrivning — bevidst uden for scope.
+- **Rotation gør ikke den gamle værdi u-disclosed.** Den har ligget i et offentligt repos
+  historik; denne plan skiftede værdien og sikrede at den nye ikke committes.
+- **analytics-service er stadig ikke på shared-pakken.** Valgt one-liner frem for migrering:
+  PyJWT→jose-swap plus lowercase-settings i netop den service der står udenfor, og værdien
+  (konsolidering) er ortogonal til dette plans mål. Hører i eget backlog-item.
+- **account-service og banking-service kan ikke køre `make test`/`make lint` lokalt** —
+  pip/requirements-baserede uden venv, og bankings `psycopg2` kan ikke bygges fra kilde.
+  CI dækker dem. Ikke rejst som backlog-item endnu.
