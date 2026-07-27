@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.outbound.sql_result import rowcount
 from app.application.ports.outbound import IMonthlyBudgetRepository
 from app.domain.entities import BudgetLine, MonthlyBudget
 from app.models import BudgetLineModel, MonthlyBudgetModel
@@ -124,7 +125,7 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
             ),
         )
         await self._session.flush()
-        return result.rowcount > 0
+        return rowcount(result) > 0
 
     async def mark_closed(self, budget_id: int) -> bool:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -137,7 +138,7 @@ class PostgresMonthlyBudgetRepository(IMonthlyBudgetRepository):
             .values(closed_at=now),
         )
         await self._session.flush()
-        return result.rowcount > 0
+        return rowcount(result) > 0
 
     @staticmethod
     def _to_entity(model: MonthlyBudgetModel) -> MonthlyBudget:

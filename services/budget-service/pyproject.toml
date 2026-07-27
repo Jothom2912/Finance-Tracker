@@ -21,23 +21,44 @@ dependencies = [
     "finans-tracker-auth",
     "finans-tracker-messaging",
     "finans-tracker-domain",
+    "finans-tracker-contracts",
 ]
 
 [tool.uv.sources]
 finans-tracker-auth = { path = "../shared/auth" }
+finans-tracker-contracts = { path = "../shared/contracts" }
 finans-tracker-messaging = { path = "../shared/messaging" }
 finans-tracker-domain = { path = "../shared/domain" }
 
 [dependency-groups]
 dev = [
     "ruff",
+    "mypy",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
     "respx>=0.21.0",
     "testcontainers[postgres]>=4.14.2",
     "aiosqlite>=0.22.1",
+    "types-python-jose",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["app"]
+# Settings() takes no arguments because pydantic-settings fills required fields
+# from the environment; without the plugin mypy reads the class body literally.
+# init_typed is not optional: the default plugin synthesises an __init__ with
+# every field as Any, which is *weaker* than the native dataclass_transform
+# handling pydantic v2 already gives mypy.
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.pydantic-mypy]
+init_typed = true

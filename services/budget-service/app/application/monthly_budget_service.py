@@ -317,7 +317,12 @@ class MonthlyBudgetService:
         )
 
         # --- Atomic write: closed_at + outbox in one commit -------------------
-        closed = await self._uow.monthly_budgets.mark_closed(budget.id)
+        # P2-35, and the one of the three sites with no runtime guard: budget came
+        # from get_by_account_and_period above, so id is set — but a None here would
+        # compile to `WHERE id IS NULL` (verified), hit 0 rows, and surface as
+        # MonthlyBudgetAlreadyClosed, i.e. a 409 pointing away from the real cause.
+        # See dev-notes/findings/2026-07-27-optional-id-hides-unpersisted-entity.md
+        closed = await self._uow.monthly_budgets.mark_closed(budget.id)  # type: ignore[arg-type]
         if not closed:
             raise MonthlyBudgetAlreadyClosed(month, year)
 
@@ -408,7 +413,10 @@ class MonthlyBudgetService:
     async def _to_response(self, budget: MonthlyBudget) -> MonthlyBudgetResponse:
         category_names = await self._category_port.get_all_names()
         return MonthlyBudgetResponse(
-            id=budget.id,
+            # P2-35, same as service.py's _to_dto: pydantic's `id: int` is the runtime
+            # guard, the Optional is the imprecision.
+            # See dev-notes/findings/2026-07-27-optional-id-hides-unpersisted-entity.md
+            id=budget.id,  # type: ignore[arg-type]
             month=budget.month,
             year=budget.year,
             total_budget=round(budget.total_budget, 2),

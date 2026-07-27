@@ -247,8 +247,32 @@ den fejlmode dette item findes for at rette.
      **Note til resten af bølgen:** `check: lint format-check ## kommentar` har sine
      prerequisites *før* `##`. Et `typecheck` tilføjet efter kommentaren ser rigtigt ud i
      diffen og kører aldrig. Verificér med `make -n check`, ikke ved at læse Makefilen.
+   - [x] **budget-service** — `PENDING`. Målt gennem `uv run`: **26 fejl, ikke tabellens
+     11**. To af dem var ikke typefejl men en **manglende afhængighed**: servicen importerer
+     `contracts.*` men erklærede ikke `finans-tracker-contracts` (7 andre services gør), og
+     kompenserede med `PYTHONPATH=../../shared/contracts` i tre Makefile-targets. Docker
+     skjulte det, fordi imaget `pip install`er `/shared/contracts` direkte. Fixet er
+     deklarationen, ikke `ignore_missing_imports` — sidstnævnte er præcis Context-målingens
+     fejlmode, hvor `Any` gør gaten grøn på bugen. `PYTHONPATH`-hackene er væk med samme
+     begrundelse som trin 2's: kildetræ til tests + installeret kopi til mypy er to
+     sandhedskilder for én pakke.
+     Af de resterende 24 var 21 mekaniske: 13 returtyper (routes + `lifespan`),
+     `types-python-jose`, 3× `Result[Any].rowcount` (samme `rowcount()`-helper som
+     notification, nu i `adapters/outbound/sql_result.py`), og 3× `dto: X = ...` — en
+     `EllipsisType`-default der kun fandtes for at komme efter `Query(...)`; `dto` er flyttet
+     først i signaturen, hvilket FastAPI behandler identisk.
+     P2-32 igen (**omfanget i fundet bekræftet: 7 services, budget er nr. 2**), og de sidste
+     tre er
+     [Optional id](../findings/2026-07-27-optional-id-hides-unpersisted-entity.md) → **P2-35**,
+     behandlet med begrundede ignores. Kontrolleret begge veje — og kontrollen dækkede
+     bevidst *også* et forkert felt i en `contracts`-event, for at bevise at den nye
+     deklaration gør de typer skarpe og ikke blot tavse. 117 tests grønne (61+56).
+     **Ny vane værd at bære videre:** da fundet påstod noget om SQL (`== None` →
+     `IS NULL` → 0 rækker → 409), compilede jeg statement'et frem for at tro på det. En
+     fejlsti man kun har ræsonneret sig til er samme slags påstand som en uverificeret
+     portdocstring — jf. sync-trigger-fundet.
    - Resterende, i målt rækkefølge:
-   budget (11) → saga (11) → transaction (12) → categorization (17). Hver service:
+   saga (11) → transaction (27 målt) → categorization (17). Hver service:
    `mypy` i dev-group, `[tool.mypy]`-blok kopieret fra analytics, `typecheck`-target,
    navn på CI-allowlisten. Blokeret indtil P3-23/P3-39: **banking, account**. Eget item:
    **gateway**.

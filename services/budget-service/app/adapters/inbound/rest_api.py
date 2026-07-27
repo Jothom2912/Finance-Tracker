@@ -24,7 +24,7 @@ async def list_budgets(
     account_id: int,
     service: IBudgetService = Depends(get_budget_service),
     user_id: int = Depends(get_current_user_id),
-):
+) -> list[BudgetResponseDTO]:
     return await service.list_budgets(account_id=account_id, user_id=user_id)
 
 
@@ -33,7 +33,7 @@ async def get_budget(
     budget_id: int,
     service: IBudgetService = Depends(get_budget_service),
     user_id: int = Depends(get_current_user_id),
-):
+) -> BudgetResponseDTO:
     budget = await service.get_budget(budget_id, user_id)
     if not budget:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")
@@ -45,7 +45,7 @@ async def create_budget(
     dto: BudgetCreateDTO,
     service: IBudgetService = Depends(get_budget_service),
     user_id: int = Depends(get_current_user_id),
-):
+) -> BudgetResponseDTO:
     try:
         return await service.create_budget(user_id, dto)
     except (AccountRequiredForBudget, CategoryRequiredForBudget, CategoryNotFoundForBudget) as e:
@@ -58,7 +58,7 @@ async def update_budget(
     dto: BudgetUpdateDTO,
     service: IBudgetService = Depends(get_budget_service),
     user_id: int = Depends(get_current_user_id),
-):
+) -> BudgetResponseDTO:
     try:
         result = await service.update_budget(budget_id, user_id, dto)
         if not result:
@@ -73,6 +73,6 @@ async def delete_budget(
     budget_id: int,
     service: IBudgetService = Depends(get_budget_service),
     user_id: int = Depends(get_current_user_id),
-):
+) -> None:
     if not await service.delete_budget(budget_id, user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Budget not found")

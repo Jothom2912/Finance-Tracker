@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.outbound.sql_result import rowcount
 from app.application.ports.outbound import IBudgetRepository
 from app.domain.entities import Budget
 from app.models import BudgetModel
@@ -56,7 +57,7 @@ class PostgresBudgetRepository(IBudgetRepository):
     async def delete(self, budget_id: int) -> bool:
         result = await self._db.execute(delete(BudgetModel).where(BudgetModel.id == budget_id))
         await self._db.commit()
-        return result.rowcount > 0
+        return rowcount(result) > 0
 
     @staticmethod
     def _to_entity(model: BudgetModel) -> Budget:

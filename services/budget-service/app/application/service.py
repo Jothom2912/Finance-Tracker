@@ -93,7 +93,12 @@ class BudgetService(IBudgetService):
     @staticmethod
     def _to_dto(budget: Budget) -> BudgetResponseDTO:
         return BudgetResponseDTO(
-            id=budget.id,
+            # P2-35: Budget.id is Optional because the entity also exists before it
+            # is persisted, but every caller of this mapper hands in a row read from
+            # the repository. pydantic's `id: int` already rejects None at runtime, so
+            # the annotation is the only thing that is imprecise here.
+            # See dev-notes/findings/2026-07-27-optional-id-hides-unpersisted-entity.md
+            id=budget.id,  # type: ignore[arg-type]
             amount=budget.amount,
             budget_date=budget.budget_date,
             account_id=budget.account_id,
