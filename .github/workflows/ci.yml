@@ -152,9 +152,17 @@ jobs:
           fi
 
   # The shared packages were outside CI entirely, even though all 12 services
-  # import them — a break here is worse than a break in one service. All three
-  # were in fact failing `ruff format --check` on committed code, unnoticed
+  # import them — a break here is worse than a break in one service. Three of
+  # them were in fact failing `ruff format --check` on committed code, unnoticed
   # (fixed in 3f003510).
+  #
+  # `domain` was left out of that fix and stayed uncovered until 2026-07-27 —
+  # its 42 tests had never run here. It was invisible because adding it would
+  # have *failed*: it used the legacy `[project.optional-dependencies] dev`
+  # form, so `uv sync --dev` uninstalled pytest and installed nothing, and
+  # `uv run pytest` died with `Failed to spawn`. Converted to
+  # `[dependency-groups]` like the other three. Keep all four in this list;
+  # the matrix is the only thing that makes a shared package's tests real.
   #
   # Separate job rather than matrix entries in python-services: that job's
   # bandit step hard-fails when there is no `app/` directory, and these
@@ -170,6 +178,7 @@ jobs:
           - contracts
           - messaging
           - auth
+          - domain
 
     defaults:
       run:

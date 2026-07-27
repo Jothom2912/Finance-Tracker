@@ -643,8 +643,12 @@ version = "0.1.1"
 source = { directory = "../shared/domain" }
 
 [package.metadata]
-requires-dist = [{ name = "pytest", marker = "extra == 'dev'" }]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
 
 [[package]]
 name = "finans-tracker-messaging"
