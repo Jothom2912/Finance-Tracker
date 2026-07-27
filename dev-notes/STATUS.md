@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P2-37)
+# Status — 2026-07-28 (efter P3-23)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,9 +9,21 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-37 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
+**Intet aktivt item.** P3-23 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
 
-Sidst shippet: **P2-37** (2026-07-28) — budget-services image installerer fra `uv.lock` som de 9
+Sidst shippet: **P3-23** (2026-07-28) — banking-service på uv + pyproject, med lockfile,
+dev/runtime-split og på typecheck-gaten (**9 af 12**; install-sti **11 af 12**). Fire commits:
+`6e9c8bda` (pyproject + `uv.lock`, `requirements.txt` slettet, `python-jose` ud af runtime),
+`6a998bc0` (Dockerfile på `uv sync --frozen --no-dev`), `0fd25d59` (mypy-gaten), + docs.
+Udbyttet gentog P2-31's mønster: de 31 første mypy-fejl var **fire allerede kendte kontrakt-items**
+(P2-32/33/35/36) plus fem ægte annotations-fejl — ingen nye bugs.
+Runtime-verificeret lokalt: `app.main` + alle fire worker-moduler importerer under imagets
+fastapi 0.140.7, container op, alembic kørt, alle fire workers forbundet til RabbitMQ.
+**CI har ikke kørt på dette endnu** — se `make ci-status`.
+[Plan + Outcome](plans/2026-07-28-p323-banking-uv-pyproject.md#outcome) ·
+[session-log](sessions/2026-07-28-p323-banking-uv-pyproject.md).
+
+Den før det: **P2-37** (2026-07-28) — budget-services image installerer fra `uv.lock` som de 9
 andre, så tests, mypy og container læser samme fil. Tre commits: `560cd54a` (Dockerfile +
 `requirements.txt` slettet), `8d7c8f59` (tre døde `freeze:`-targets), `18bd5fc8` (vagt i
 `scripts/compose_check.py` mod at en service igen har begge filer, verificeret rød på både
@@ -32,12 +44,6 @@ oprydning.
 
 ## Next up
 
-- **P3-23** — banking-service på uv + pyproject. Nu øverst, og P2-37 skærpede begrundelsen: uden
-  den kan banking ikke komme på typecheck-gaten, altså **beskytter P2-31 ikke den service hvor
-  fejlen var** — og bankings `fastapi==0.115.0`-pin er *præcis* den fælde budget lige blev
-  befriet fra, klar til at udløses den dag nogen tilføjer et `-> None`. Giver samtidig banking en
-  lockfile (P2-37's form: **10 af 12** services installerer nu fra `uv.lock`, kun account og
-  banking mangler) og et sted at låse P3-26's sårbare pins.
 - **P2-25** — transaction soft-delete + gone-vs-not-yet i categorization-write-backen (den
   eneste P2 der er en data-model-beslutning, så den gater P3-37).
 - **P2-21** — k8s manifest drift: 6 workloads + 1 DB i compose har ingen manifest, så
@@ -51,6 +57,11 @@ oprydning.
 
 Ikke akut, selvom titlen lyder sådan: **P2-36** (`x-retry-count` → uendelig redelivery) — hver
 writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne republishes. Hærdning.
+
+**P2-32/33/35/36 har nu hver et fodfæste i banking.** P3-23 efterlod dem som
+`# type: ignore[...]  # P2-3x` (grep dem frem med `grep -rn 'ignore\[' services/banking-service/app`).
+`warn_unused_ignores` er slået til, så **den service der fejler når et af de fire items fixes,
+er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i samme commit.
 
 ## Open findings worth knowing before you touch anything
 
@@ -71,8 +82,9 @@ writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne repub
 
 ## Standing traps
 
-- `account-service` and `banking-service` are pip-based with no venv: `make test` / `make lint`
-  fail locally regardless of the code. banking's suite runs **only** in CI. See P3-39.
+- `account-service` is pip-based with no venv: `make test` / `make lint` fail locally regardless
+  of the code, and repo-wide `make lint`/`make check` abort on it before reaching the other
+  eleven. See P3-39 (banking's half closed by P3-23; its suite now runs locally, 68 passed).
 - Never pipe a verification command through `tail`/`head` — the pipeline's exit code is the
   last command's, so `check | tail && git commit` commits on a failing check.
 - **Workers are still second-class in compose**: P3-40 fixed the *image* half, but P3-17 is
@@ -80,12 +92,13 @@ writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne repub
 - **En grøn `make check` er stadig ikke et løfte om at containeren starter** — men grunden er
   ændret. Den *todelte* årsag (budgets image `pip install`ede `requirements.txt` mens tests læste
   `uv.lock`) er væk med P2-37, og `make compose-check` fejler nu hvis den kommer tilbage. Tilbage
-  står at `check` er statisk: den importerer ikke `app.main` under imagets versioner. account og
-  banking har desuden stadig ingen lockfile, så for *dem* er der ikke engang en fil at være enig
-  med (P3-23/P3-01).
-- **`tests/` er ikke typechecket** på nogen af de 8 gatede services (`packages = ["app"]`), og
-  de 4 udenfor er slet ikke dækket — antag ikke at en typefejl er fanget i goal, banking,
-  account eller gateway.
+  står at `check` er statisk: den importerer ikke `app.main` under imagets versioner. `account`
+  har desuden stadig ingen lockfile, så for *den* er der ikke engang en fil at være enig med
+  (P3-01). Det billige modtræk, brugt i både P2-37 og P3-23:
+  `docker run --rm <image> python -c "import app.main"` plus samme import af hvert worker-modul.
+- **`tests/` er ikke typechecket** på nogen af de 9 gatede services (`packages = ["app"]`), og
+  de 3 udenfor er slet ikke dækket — antag ikke at en typefejl er fanget i goal, account
+  eller gateway.
 - **`make notes-check` verificerer mekanik, ikke sandhed.** Den var grøn mens denne fil sagde
   at P2-31 ikke var påbegyndt. Kandidater til at lukke det hul står i
   [session-loggen](sessions/2026-07-27-p115-p226-and-notes-infra.md) under Open ends.
