@@ -639,7 +639,7 @@ dev = [
 
 [[package]]
 name = "finans-tracker-domain"
-version = "0.1.0"
+version = "0.1.1"
 source = { directory = "../shared/domain" }
 
 [package.metadata]
@@ -648,7 +648,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "finans-tracker-messaging"
-version = "0.1.0"
+version = "0.1.1"
 source = { directory = "../shared/messaging" }
 dependencies = [
     { name = "aio-pika" },
