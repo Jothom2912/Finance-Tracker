@@ -24,6 +24,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff",
+    "mypy",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
@@ -38,3 +39,20 @@ finans-tracker-messaging = { path = "../shared/messaging" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["app"]
+# Settings() takes no arguments because pydantic-settings fills required fields
+# from the environment; without the plugin mypy reads the class body literally.
+# init_typed is not optional: the default plugin synthesises an __init__ with
+# every field as Any, which is *weaker* than the native dataclass_transform
+# handling pydantic v2 already gives mypy.
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.pydantic-mypy]
+init_typed = true

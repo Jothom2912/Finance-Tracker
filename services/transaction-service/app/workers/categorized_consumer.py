@@ -40,13 +40,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import async_session_factory
 from app.models import CategoryModel, ProcessedEventModel, TransactionModel
+from app.workers.retry_headers import retry_count
 
 logger = logging.getLogger(__name__)
 
 QUEUE_NAME = "transaction_service.transaction_categorized"
 ROUTING_KEY = "transaction.categorized"
 MAX_RETRIES = 5
-RETRY_HEADER = "x-retry-count"
 
 
 class TransactionCategorizedConsumer(ConsumerBase):
@@ -97,13 +97,13 @@ class TransactionCategorizedConsumer(ConsumerBase):
     @staticmethod
     async def _stale_backoff(message: AbstractIncomingMessage, transaction_id: int) -> None:
         """Exponential wait before the base republishes a not-found-yet event."""
-        retry_count = int((message.headers or {}).get(RETRY_HEADER, 0))
-        if retry_count < MAX_RETRIES:
-            delay = 2**retry_count
+        retries = retry_count(message)
+        if retries < MAX_RETRIES:
+            delay = 2**retries
             logger.warning(
                 "Transaction %s not found yet (retry=%d/%d, backoff=%ds)",
                 transaction_id,
-                retry_count + 1,
+                retries + 1,
                 MAX_RETRIES,
                 delay,
             )

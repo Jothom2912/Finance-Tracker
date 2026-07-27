@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Self
+from typing import Any, Protocol, Self
 
 from contracts.base import BaseEvent
 
@@ -190,6 +191,61 @@ class ISubCategoryReadRepository(ABC):
     async def find_by_ids(self, subcategory_ids: list[int]) -> dict[int, SubCategory]: ...
 
 
+class CategorizationOutcome(Protocol):
+    """What the application layer reads off a sync categorization result.
+
+    Read-only properties rather than plain attributes: the adapter's
+    ``CategorizationResult`` is a frozen dataclass, and a plain attribute in a
+    Protocol demands a *settable* one — the same trap that made
+    ``messaging.SerializableEvent`` unsatisfiable by its own reference
+    implementation. Nothing here writes to these.
+    """
+
+    @property
+    def category_id(self) -> int: ...
+
+    @property
+    def subcategory_id(self) -> int: ...
+
+    @property
+    def merchant_id(self) -> int | None: ...
+
+    @property
+    def tier(self) -> str: ...
+
+    @property
+    def confidence(self) -> str: ...
+
+
+class ICategorizationClient(Protocol):
+    """Port for categorization-service's sync /categorize endpoint.
+
+    Declared here so the application service depends on a port rather than on
+    ``object``, which is what it used to be annotated as: a parameter typed
+    ``object`` documents nothing and lets any call through, so the graceful-
+    degradation contract below was unenforced in both directions.
+
+    Both methods degrade to ``None`` rather than raising — the caller saves the
+    transaction uncategorized and the async pipeline picks it up from the
+    ``transaction.created`` event.
+    """
+
+    async def categorize(
+        self,
+        description: str,
+        amount: float,
+    ) -> CategorizationOutcome | None: ...
+
+    # Sequence return for the same invariance reason as add_batch above: the
+    # adapter returns list[CategorizationResult | None], and even though
+    # CategorizationResult satisfies CategorizationOutcome, list is invariant so
+    # the two list types are unrelated. The caller only iterates the result.
+    async def categorize_batch(
+        self,
+        items: list[dict[str, Any]],
+    ) -> Sequence[CategorizationOutcome | None]: ...
+
+
 class IOutboxRepository(ABC):
     """Port for the transactional outbox.
 
@@ -206,10 +262,14 @@ class IOutboxRepository(ABC):
         aggregate_id: str,
     ) -> None: ...
 
+    # Sequence, not list: callers build concrete lists of a *subclass* of
+    # BaseEvent, and list is invariant, so list[tuple[TransactionCreatedEvent, ...]]
+    # is not a list[tuple[BaseEvent, ...]]. Nothing here mutates the argument, so
+    # the covariant type is both accepted and the accurate one.
     @abstractmethod
     async def add_batch(
         self,
-        entries: list[tuple[BaseEvent, str, str]],
+        entries: Sequence[tuple[BaseEvent, str, str]],
     ) -> None: ...
 
     @abstractmethod

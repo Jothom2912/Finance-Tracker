@@ -294,8 +294,35 @@ den fejlmode dette item findes for at rette.
      Kontrolleret begge veje, og efter en løsnet Protocol specifikt at den ikke blev *tom*:
      `correlation_id: int | None` mod `str | None` flagges stadig. Mutability- og
      optionality-aksen blev løsnet, typeaksen ikke. 54 tests grønne (50 + 4 nye).
-   - Resterende, i målt rækkefølge:
-   transaction (27 målt) → categorization (17). Hver service:
+   - [x] **transaction-service** — `PENDING`. 26 fejl, som gen-målingen i trin 1 forudsagde
+     (27). Men **26 fejl var 6 rødder**, og den nyttige lektie er at fejltællinger ikke
+     rangerer arbejde: 20 af de 26 var én rod, og den rod var den vigtigste ting i hele
+     bølgen indtil nu.
+     - **`x-retry-count` læses fem steder på fire måder** →
+       [finding](../findings/2026-07-27-retry-header-read-five-ways.md) → **P2-36**. De to
+       saga-consumere (transaction + banking, kopi-pastet) special-caser `bytes` og
+       sammenligner så den rå header med en int: `'3' >= 3` er `TypeError`. Og fordi
+       læsningen står **inde i** `except Exception`, ackes beskeden hverken eller
+       republishes → uendelig redelivery uden at tælleren rykker. Rettet i transaction med
+       én testet helper; de øvrige fire steder er P2-36. Bevidst adfærdsdelta, dokumenteret.
+     - **`categorization_client: object | None`** — application-laget afhang af `object`,
+       altså af ingenting, hvilket er dårligere end både en port og en konkret adapter.
+       Erstattet af `ICategorizationClient` + `CategorizationOutcome` som Protocols i
+       ports-modulet. **To lektioner fra tidligere i samme session anvendt med det samme:**
+       read-only properties (`CategorizationResult` er også `frozen=True`, så plain
+       attributter ville have fejlet præcis som `SerializableEvent`), og `Sequence` frem for
+       `list` på returtypen — `list[CategorizationResult | None]` er ikke en
+       `list[CategorizationOutcome | None]`, fordi `list` er invariant. Den nye port fangede
+       mismatchet i `dependencies.py` med det samme.
+     - **`add_batch(entries: list[...])`** → `Sequence`, samme invarians-årsag.
+     - **P2-32 i en tredje form**: `class TransactionOutboxAdapter(OutboxRepository,
+       IOutboxRepository)` — base-class-konflikt frem for tilskrivning. Begrundet ignore.
+       **Tredje service af 7; omfanget i P2-32 er nu bekræftet tre gange.**
+     - `external_id`-narrowing gennem en list comprehension: filtret flyttet ind i den
+       comprehension der har brug for det.
+     Kontrol: en `str` mod porten og en felt-typo begge fanget — hvor `object | None`
+     tidligere gjorde typo'en umulig at skelne. 263 tests grønne (247 + 16 nye).
+   - Resterende, i målt rækkefølge: categorization (17). Hver service:
    `mypy` i dev-group, `[tool.mypy]`-blok kopieret fra analytics, `typecheck`-target,
    navn på CI-allowlisten. Blokeret indtil P3-23/P3-39: **banking, account**. Eget item:
    **gateway**.

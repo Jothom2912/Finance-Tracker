@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from contracts.base import BaseEvent
 from messaging import OutboxRepository
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +10,13 @@ from app.application.ports.outbound import IOutboxRepository
 from app.models import OutboxEventModel
 
 
-class TransactionOutboxAdapter(OutboxRepository, IOutboxRepository):
+# P2-32, in its multiple-inheritance shape: both bases declare fetch_pending, and
+# they return two different classes both named OutboxEntry — the shared one and this
+# service's domain copy. Fields are identical so duck-typing carries it; the fix is a
+# mapping in the adapter, which is a runtime change spanning 7 services.
+# warn_unused_ignores makes this line fail the day it lands.
+# See dev-notes/findings/2026-07-27-outbox-port-declares-foreign-entity.md
+class TransactionOutboxAdapter(OutboxRepository, IOutboxRepository):  # type: ignore[misc]
     """Port-conforming adapter over the shared outbox repository.
 
     The service port's ``add_batch`` takes ``(event, aggregate_type,
@@ -24,6 +32,6 @@ class TransactionOutboxAdapter(OutboxRepository, IOutboxRepository):
 
     async def add_batch(  # type: ignore[override]
         self,
-        entries: list[tuple[BaseEvent, str, str]],
+        entries: Sequence[tuple[BaseEvent, str, str]],
     ) -> None:
         await self.add_entries(entries)

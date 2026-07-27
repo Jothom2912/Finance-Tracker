@@ -25,7 +25,12 @@ from app.application.dto import (
     UpdateTransactionDTO,
 )
 from app.application.ports.inbound import ITransactionService
-from app.application.ports.outbound import DedupKey, ExternalIdKey, IUnitOfWork
+from app.application.ports.outbound import (
+    DedupKey,
+    ExternalIdKey,
+    ICategorizationClient,
+    IUnitOfWork,
+)
 from app.domain.entities import PlannedTransaction, Transaction
 from app.domain.exceptions import (
     CSVImportException,
@@ -56,7 +61,7 @@ class TransactionService(ITransactionService):
     def __init__(
         self,
         uow: IUnitOfWork,
-        categorization_client: object | None = None,
+        categorization_client: ICategorizationClient | None = None,
     ) -> None:
         self._uow = uow
         self._cat_client = categorization_client
@@ -450,9 +455,12 @@ class TransactionService(ITransactionService):
             plain_items = [item for item in dto.items if not item.external_id]
             async with self._uow:
                 if ext_items:
+                    # Filtered off dto.items rather than off ext_items so the
+                    # external_id narrowing survives into the tuple — ext_items has
+                    # the same members, but its element type still says `str | None`.
                     existing_ext = await self._uow.transactions.find_existing_external_ids(
                         user_id,
-                        [(item.account_id, item.external_id) for item in ext_items],
+                        [(item.account_id, item.external_id) for item in dto.items if item.external_id],
                     )
                     legacy_keys = await self._uow.transactions.find_existing_dedup_keys(
                         user_id,

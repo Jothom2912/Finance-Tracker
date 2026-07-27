@@ -22,6 +22,7 @@ from app.application.service import TransactionService
 from app.config import settings
 from app.database import async_session_factory
 from app.domain.exceptions import TransactionNotFoundException
+from app.workers.retry_headers import retry_count
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -97,10 +98,8 @@ class TransactionSagaCommandConsumer:
             await message.ack()
 
         except Exception as exc:
-            retry_count = (message.headers or {}).get("x-retry-count", 0)
-            if isinstance(retry_count, bytes):
-                retry_count = int(retry_count)
-            if retry_count >= MAX_RETRIES:
+            retries = retry_count(message)
+            if retries >= MAX_RETRIES:
                 logger.error("Max retries for %s saga=%s — sending failure reply", event_type, saga_id, exc_info=True)
                 await self._publish_reply(
                     saga_id,
@@ -112,8 +111,8 @@ class TransactionSagaCommandConsumer:
                 )
                 await message.ack()
             else:
-                logger.warning("Retrying %s saga=%s (attempt %d)", event_type, saga_id, retry_count + 1, exc_info=True)
-                await self._republish(message, retry_count + 1)
+                logger.warning("Retrying %s saga=%s (attempt %d)", event_type, saga_id, retries + 1, exc_info=True)
+                await self._republish(message, retries + 1)
                 await message.ack()
 
     async def _handle_bulk_import(self, body: dict) -> dict:
