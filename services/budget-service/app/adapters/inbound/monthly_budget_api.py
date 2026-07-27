@@ -88,13 +88,15 @@ async def update_monthly_budget(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# response_model=None is load-bearing, not decoration: this file has
-# `from __future__ import annotations`, which makes the `-> None` return
-# annotation evaluate to NoneType rather than None. FastAPI 0.115.0 (what
-# requirements.txt pins, and therefore what the image runs) reads that as a
-# real response model and asserts at import time on a 204. Newer FastAPI --
-# what uv.lock resolves for tests and mypy -- does not, which is why CI was
-# green while the container was dead. See
+# response_model=None is explicit rather than load-bearing, and it is worth knowing
+# which: this file has `from __future__ import annotations`, which makes the `-> None`
+# return annotation evaluate to NoneType rather than None. FastAPI 0.115.0 read that as
+# a real response model and asserted at import time on a 204 -- which is how a green CI
+# shipped a container that died at import. Since P2-37 the image installs from uv.lock
+# like the tests do, so the two-sources-of-truth split that made it fatal is gone and
+# the pinned FastAPI tolerates the annotation. Keep the argument anyway: it states that
+# a 204 route has no body, and it is the line that would stop a FastAPI downgrade from
+# resurrecting the import error. See
 # dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md
 @router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_monthly_budget(
@@ -124,13 +126,15 @@ async def copy_monthly_budget(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
-# response_model=None is load-bearing, not decoration: this file has
-# `from __future__ import annotations`, which makes the `-> None` return
-# annotation evaluate to NoneType rather than None. FastAPI 0.115.0 (what
-# requirements.txt pins, and therefore what the image runs) reads that as a
-# real response model and asserts at import time on a 204. Newer FastAPI --
-# what uv.lock resolves for tests and mypy -- does not, which is why CI was
-# green while the container was dead. See
+# response_model=None is explicit rather than load-bearing, and it is worth knowing
+# which: this file has `from __future__ import annotations`, which makes the `-> None`
+# return annotation evaluate to NoneType rather than None. FastAPI 0.115.0 read that as
+# a real response model and asserted at import time on a 204 -- which is how a green CI
+# shipped a container that died at import. Since P2-37 the image installs from uv.lock
+# like the tests do, so the two-sources-of-truth split that made it fatal is gone and
+# the pinned FastAPI tolerates the annotation. Keep the argument anyway: it states that
+# a 204 route has no body, and it is the line that would stop a FastAPI downgrade from
+# resurrecting the import error. See
 # dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md
 @router.post("/close", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def close_month(
