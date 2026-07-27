@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+from typing import Any, cast
 from uuid import UUID
 
 from messaging import utcnow
-from sqlalchemy import func, select, update
+from sqlalchemy import CursorResult, Result, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ports.outbound import INotificationRepository
 from app.domain.entities import Notification, NotificationType
 from app.models import NotificationModel
+
+
+def _rowcount(result: Result[Any]) -> int:
+    """Rows touched by a DML statement.
+
+    ``AsyncSession.execute`` is annotated as returning ``Result``, which has no
+    ``rowcount`` — but for UPDATE/DELETE it always hands back a ``CursorResult``,
+    which does. The narrowing is a stub limitation, not a runtime uncertainty, so
+    it lives here once instead of at each call site.
+    """
+    return cast("CursorResult[Any]", result).rowcount
 
 
 def _to_entity(model: NotificationModel) -> Notification:
@@ -94,7 +106,7 @@ class PostgresNotificationRepository(INotificationRepository):
             )
             .values(read_at=func.coalesce(NotificationModel.read_at, utcnow()))
         )
-        return result.rowcount > 0
+        return _rowcount(result) > 0
 
     async def mark_all_read(self, user_id: int) -> int:
         result = await self._session.execute(
@@ -106,7 +118,7 @@ class PostgresNotificationRepository(INotificationRepository):
             )
             .values(read_at=utcnow())
         )
-        return int(result.rowcount)
+        return _rowcount(result)
 
     async def dismiss(self, notification_id: UUID, user_id: int) -> bool:
         # The guard replaces the previous coalesce: an already-dismissed row no
@@ -122,4 +134,4 @@ class PostgresNotificationRepository(INotificationRepository):
             )
             .values(dismissed_at=utcnow())
         )
-        return result.rowcount > 0
+        return _rowcount(result) > 0

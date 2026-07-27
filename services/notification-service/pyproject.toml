@@ -26,6 +26,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff",
+    "mypy",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
@@ -43,3 +44,19 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["app"]
+# Settings() takes no arguments at the call site because pydantic-settings fills
+# required fields from the environment. Without the plugin mypy reads the class
+# body literally and demands JWT_SECRET as a named argument. The fix is the
+# plugin, not a default on the field — a default is what P1-15 removed.
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.pydantic-mypy]
+init_typed = true

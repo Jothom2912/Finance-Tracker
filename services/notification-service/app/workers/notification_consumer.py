@@ -60,7 +60,12 @@ class NotificationConsumer(ConsumerBase):
         self._email = LogEmailAdapter()
         self._account_owner = AccountServiceAdapter(
             base_url=settings.ACCOUNT_SERVICE_URL,
-            api_key=settings.INTERNAL_API_KEY,
+            # Declared `str | None`, but app.config raises at import time if it
+            # is unset, so it is a `str` by the time we get here. The type is
+            # what is wrong, not the code — and it is wrong the same way in six
+            # services (P2-33), so it is not fixed one call site at a time.
+            # warn_unused_ignores makes this line fail once P2-33 lands.
+            api_key=settings.INTERNAL_API_KEY,  # type: ignore[arg-type]
             timeout=settings.ACCOUNT_SERVICE_TIMEOUT,
         )
 
