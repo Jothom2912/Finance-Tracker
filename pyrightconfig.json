@@ -1,6 +1,0 @@
-{
-  "extraPaths": [
-    "services/goal-service",
-    "services/shared/contracts"
-  ]
-}

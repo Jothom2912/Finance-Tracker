@@ -12,7 +12,10 @@ source: architecture audit 2026-07-07
 - **Kubernetes** (`k8s/`, flat Kustomize, no base/overlays): superset of compose — all apps + 19 workers + infra + frontend + KEDA health ScaledJob + HPA (user & transaction only) + in-cluster monitoring. Images `finance-tracker/*:local`, `imagePullPolicy: Never` → local clusters only. `replicas: 1` everywhere.
 - **Monitoring**: dual stacks (compose overlay + `k8s/monitoring/`), black-box only (no app exposes `/metrics`; deliberate per `docs/MONITORING.md`). Only 2 alert rules. Config duplicated between `monitoring/` and `k8s/monitoring/config/`.
 - **CI**: GitHub Actions matrix (ruff + bandit + pytest) for **7 of 10** Python services — categorization, banking, saga missing; bandit neutered with `|| true`; e2e job can pass green with all tests skipped (conftest skips when health endpoints unreachable; the gitignored PEM bind-mount breaks banking-service in CI invisibly).
-- **Tests**: ~650 (490 Python + 170 Vitest); root `make test` covers only 6 of 11 services; e2e covers health/auth/tx CRUD/CSV/budget-close but NOT bank sync saga, categorization outcomes, or ai-service; pyright scoped to goal-service + contracts only.
+- **Tests**: ~650 (490 Python + 170 Vitest); root `make test` covers only 6 of 11 services; e2e covers health/auth/tx CRUD/CSV/budget-close but NOT bank sync saga, categorization outcomes, or ai-service; **typecheck: mypy, blokerende på `analytics-service`
+  alene** (P2-31-pilot, `make -C services/analytics-service typecheck`, mypy 2.1.0 låst i dens
+  `uv.lock`) — de øvrige 11 har ingen gate endnu, og banking/account kan ikke få en før P3-23.
+  Rodens `pyrightconfig.json` er slettet 2026-07-27; der er én checker.
 
 ## Cross-service duplication map (measured, md5/diff)
 
