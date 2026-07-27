@@ -1,7 +1,7 @@
 ---
 title: P2-31 — statisk typecheck som gate, med analytics-service som pilot
 date: 2026-07-27
-status: open
+status: done
 backlog-items: [P2-31]
 related:
   - ../findings/2026-07-27-sync-trigger-double-value.md
@@ -364,11 +364,32 @@ den fejlmode dette item findes for at rette.
    navn på CI-allowlisten. Blokeret indtil P3-23/P3-39: **banking, account**. Eget item:
    **gateway**.
    Dette trin skal ikke afsluttes i én session; gaten er allerede reel efter trin 4.
-7. [ ] **CLAUDE.md.** Erstat ASPIRATIONAL-noten med hvad der er sandt: hvilke services
+7. [x] **CLAUDE.md.** Erstat ASPIRATIONAL-noten med hvad der er sandt: hvilke services
    gaten dækker, at niveauet er default-mypy og ikke `--strict`, og at banking/account er
    udenfor med henvisning til P3-23. Samme sted: en linje om at
    `py.typed` er obligatorisk på nye shared-pakker.
    *Commit sidst i hver bølge, så noten aldrig overdriver dækningen.*
+
+   Gjort 2026-07-27, efter kontrol C var kørt grøn mod et **grønt** run (8/4). Rækkefølgen
+   viste sig at være det vigtigste ved trinnet: havde noten været skrevet før pushet, ville
+   den have påstået dækning på et tidspunkt hvor master ikke kunne starte budget-service.
+
+   **Bølgen lukkede med sin egen fejlmode i tredje forklædning.** E2E blev rød på
+   categorization-pushet, men fejlen var budgets gate-commit fire commits tidligere — som
+   sammen med tre andre aldrig havde haft en CI-kørsel. Et `-> None` tilføjet for
+   `disallow_untyped_defs` dræbte containeren ved import, fordi
+   `from __future__ import annotations` gør annotationen til `NoneType` og imagets FastAPI
+   0.115.0 læser det som en response model på en 204. Se
+   [fundet](../findings/2026-07-27-none-annotation-204-fastapi-split.md) → **P2-37**.
+
+   Det væsentlige er ikke fixet, men mønstret: `make check` kørte `uv.lock` (0.136.3),
+   containeren kørte `requirements.txt` (0.115.0). Tredje gang i denne ene plan at checken
+   og virkeligheden læste fra hver sin kopi — efter `MYPYPATH`-mod-kildekode og budgets
+   `PYTHONPATH`-mod-`contracts`. Gaten er altså reel for typer, men et grønt `check` er ikke
+   et løfte om at imaget starter, og det står nu i CLAUDE.md.
+
+   Ærligt om hvordan det blev fundet: kun fordi et E2E-job var rødt. Fire ugennemkørte
+   commits på en lokal branch er en risiko uafhængigt af deres indhold.
 
 ## Verification
 
