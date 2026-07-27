@@ -4,7 +4,7 @@ date: 2026-07-27
 severity: HIGH
 area: budget, CI, deps
 status: resolved
-resolved-by: eksplicit `response_model=None` på de tre 204-ruter (2026-07-27) — symptomet lukket og verificeret mod begge FastAPI-versioner; rodårsagen (requirements.txt ≢ uv.lock) er P2-37
+resolved-by: eksplicit `response_model=None` på de tre 204-ruter (2026-07-27) — symptomet; rodårsagen (requirements.txt ≢ uv.lock) lukket af P2-37 2026-07-28, `560cd54a`+`8d7c8f59`+`18bd5fc8`
 scheduled-as: P2-37
 ---
 
@@ -120,5 +120,14 @@ allerede havde læst.
   `freeze`-targets kan slettes samtidig. account og banking hører under P3-23/P3-01, hvor de
   får en lockfile — og bemærk at bankings `fastapi==0.115.0`-pin er den fælde `## Omfang`
   ovenfor beskriver, altså et *særskilt* problem fra drift'en.
+
+  **Lukket 2026-07-28** præcis som beskrevet: `560cd54a` (Dockerfile + `requirements.txt`
+  slettet), `8d7c8f59` (de 3 døde `freeze`-targets), `18bd5fc8` (vagten, verificeret rød på både
+  transaction og budget). Rodårsagen bag denne finding findes dermed ikke længere i budget —
+  `frontmatter: resolved-by` ovenfor beskriver kun symptom-fixet fra 2026-07-27. Imaget kører nu
+  fastapi 0.136.3, og `app.main` er verificeret importerbar *i containeren* med alle tre 204-ruter
+  registreret. Detaljer: [P2-37-planens Outcome](../plans/2026-07-28-p237-budget-single-install-path.md#outcome).
+  Uændret gælder: **banking er stadig pinnet på 0.115.0 uden lockfile**, så fælden i `## Omfang`
+  venter dér indtil P3-23.
 - [per-worker image staleness](2026-07-25-per-worker-image-staleness.md) — samme familie:
   det der køres er ikke det der blev testet.

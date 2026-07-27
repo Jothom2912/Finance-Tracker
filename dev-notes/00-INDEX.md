@@ -86,6 +86,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [plans/2026-07-27-p115-categorize-auth-and-secret-rotation.md](plans/2026-07-27-p115-categorize-auth-and-secret-rotation.md) — P1-15+P2-26: `require_internal_api_key` på `/categorize` (afsender før håndhæver) + `user_id` fjernet fra DTO'en fordi ingen legitim kalder sender det + rotation af den delte HS256-nøgle til `${VAR:?}`-interpolation (39 literals) + `require_exp` på 11 shared-kaldsteder og analytics' hånd-rullede.
 - [plans/2026-07-27-p340-worker-image-sharing.md](plans/2026-07-27-p340-worker-image-sharing.md) — P3-40: de 26 workers deler deres API-services image i stedet for at bygge deres eget; A/B-verificeret mod den kommando der er brudt i dag.
 - [plans/2026-07-27-p231-static-typecheck-gate.md](plans/2026-07-27-p231-static-typecheck-gate.md) — P2-31: mypy som hård gate, pilot analytics-service; målt at default-mypy fanger `SyncTrigger`-fejlen, men kun når shared-pakkerne har `py.typed`.
+- [plans/2026-07-28-p237-budget-single-install-path.md](plans/2026-07-28-p237-budget-single-install-path.md) — P2-37: budget-services image installerer fra `uv.lock` som de 9 andre, så tests og container læser samme fil; risikoen er ikke Dockerfile-formen men at alle 13 deployede pins bumper i ét hug.
 - [plans/2026-07-20-f203-mid-month-budget-alerts.md](plans/2026-07-20-f203-mid-month-budget-alerts.md) — F2-03: budget-alert-scheduler (worker-loop) evaluerer åbne budgetter for løbende måned → `budget.line_threshold_crossed` (80%/100%) → notification-service.
 
 ## Decisions

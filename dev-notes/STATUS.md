@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P2-31)
+# Status — 2026-07-28 (efter P2-37)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,38 +9,41 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-31 lukkede 2026-07-27 og efterlod en klynge på seks nye items
-(P2-32…P2-37) plus et efterslæb i noterne, som er ryddet 2026-07-28. Næste item er ikke valgt —
-se **Next up**, hvor rækkefølgen nu har en begrundelse den ikke havde før.
+**Intet aktivt item.** P2-37 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
 
-Sidst shippet: **P2-31** (2026-07-27) — mypy som hård gate på **8 af 12** services, styret af
+Sidst shippet: **P2-37** (2026-07-28) — budget-services image installerer fra `uv.lock` som de 9
+andre, så tests, mypy og container læser samme fil. Tre commits: `560cd54a` (Dockerfile +
+`requirements.txt` slettet), `8d7c8f59` (tre døde `freeze:`-targets), `18bd5fc8` (vagt i
+`scripts/compose_check.py` mod at en service igen har begge filer, verificeret rød på både
+transaction og budget). **CI er ikke kørt endnu** — alt verificeret lokalt, inkl. 24 e2e og
+runtime-start af alle tre budget-workers. `make ci-status` efter push.
+[Plan + Outcome](plans/2026-07-28-p237-budget-single-install-path.md#outcome) ·
+[session-log](sessions/2026-07-28-p237-single-install-path.md).
+
+Den før det: **P2-31** (2026-07-27) — mypy som hård gate på **8 af 12** services, styret af
 `TYPECHECK_SERVICES` i `ci.yml`. CI grøn på `36428508` (run `30308332057`). Verificeret som
-kontrol via `make verify-typecheck-gate` (8 gatede / 4 ikke-gatede, bevist i stand til at blive
-rød) — en grøn step-conclusion beviser intet, da steppet kører for alle 12.
+kontrol via `make verify-typecheck-gate`.
 [Plan + Outcome](plans/2026-07-27-p231-static-typecheck-gate.md#outcome) ·
-[session-log](sessions/2026-07-27-p231-typecheck-gate.md).
-
-Udbyttet var **usande kontrakter, ikke typefejl** — det er derfor de seks nye items er
-kontrakt-items og ikke oprydning.
+[session-log](sessions/2026-07-27-p231-typecheck-gate.md). Udbyttet var **usande kontrakter, ikke
+typefejl** — det er derfor de seks items den affødte (P2-32…P2-37) er kontrakt-items og ikke
+oprydning.
 
 ## Next up
 
-Den samlende tråd for de to øverste er **én install-sti per service**; de er samme arbejde
-anvendt på hver sin service, og tilsammen lukker de hullet P2-31 efterlod.
-
-- **P2-37** — budget-service på `uv sync --frozen` som de 9 andre. Målt 2026-07-28: drift
-  mellem `requirements.txt` og `uv.lock` er mulig i **præcis én** service, og det er den der
-  udstedte en død container fra en grøn gate. Fixet fjerner fejlklassen frem for at overvåge
-  den, og `freeze`-præmissen i den oprindelige beskrivelse var usand ([detail](backlog/BACKLOG.md#p2-37)).
-- **P3-23** — banking-service på uv + pyproject. Uden den kan banking ikke komme på
-  typecheck-gaten, altså **beskytter P2-31 ikke den service hvor fejlen var**. Giver samtidig
-  banking en lockfile (P2-37's form) og et sted at låse P3-26's sårbare pins.
+- **P3-23** — banking-service på uv + pyproject. Nu øverst, og P2-37 skærpede begrundelsen: uden
+  den kan banking ikke komme på typecheck-gaten, altså **beskytter P2-31 ikke den service hvor
+  fejlen var** — og bankings `fastapi==0.115.0`-pin er *præcis* den fælde budget lige blev
+  befriet fra, klar til at udløses den dag nogen tilføjer et `-> None`. Giver samtidig banking en
+  lockfile (P2-37's form: **10 af 12** services installerer nu fra `uv.lock`, kun account og
+  banking mangler) og et sted at låse P3-26's sårbare pins.
 - **P2-25** — transaction soft-delete + gone-vs-not-yet i categorization-write-backen (den
   eneste P2 der er en data-model-beslutning, så den gater P3-37).
 - **P2-21** — k8s manifest drift: 6 workloads + 1 DB i compose har ingen manifest, så
   `apply -k` taber notification-feeden og den automatiske ADR-0003-kæde i stilhed.
   CI-check-halvdelen er nu billigere: `scripts/compose_check.py` er stedet at lægge
-  compose-vs-kustomization-diffen — og P2-37's vagt hører samme sted.
+  compose-vs-kustomization-diffen, og P2-37 har allerede udvidet den fil fra "compose-check" til
+  build hygiene — så der er præcedens for en tredje regel, men også en optjent omdøbning til
+  `build_hygiene_check.py` at gøre først.
 - **P2-27/28/29** — rate limiting, taxonomy write auth, CSV upload bounds. Alle fra
   product-surface-sweepet; hver er lille og uafhængig.
 
@@ -72,8 +75,12 @@ writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne repub
   last command's, so `check | tail && git commit` commits on a failing check.
 - **Workers are still second-class in compose**: P3-40 fixed the *image* half, but P3-17 is
   open — workers override `command:` and so skip the migrations that run in the API's `CMD`.
-- **En grøn `make check` er ikke et løfte om at containeren starter.** `uv.lock` styrer tests
-  og typecheck; budget-services image `pip install`er `requirements.txt`. Se P2-37.
+- **En grøn `make check` er stadig ikke et løfte om at containeren starter** — men grunden er
+  ændret. Den *todelte* årsag (budgets image `pip install`ede `requirements.txt` mens tests læste
+  `uv.lock`) er væk med P2-37, og `make compose-check` fejler nu hvis den kommer tilbage. Tilbage
+  står at `check` er statisk: den importerer ikke `app.main` under imagets versioner. account og
+  banking har desuden stadig ingen lockfile, så for *dem* er der ikke engang en fil at være enig
+  med (P3-23/P3-01).
 - **`tests/` er ikke typechecket** på nogen af de 8 gatede services (`packages = ["app"]`), og
   de 4 udenfor er slet ikke dækket — antag ikke at en typefejl er fanget i goal, banking,
   account eller gateway.
@@ -81,4 +88,5 @@ writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne repub
   at P2-31 ikke var påbegyndt. Kandidater til at lukke det hul står i
   [session-loggen](sessions/2026-07-27-p115-p226-and-notes-infra.md) under Open ends.
 - `make ci-status` for the current branch's CI; `make notes-check` before committing notes;
-  `make compose-check` before committing `docker-compose.yml`.
+  `make compose-check` before committing `docker-compose.yml` **or adding a dependency file to a
+  service** — den bærer nu to regler (worker-image-deling + én install-sti per service).
