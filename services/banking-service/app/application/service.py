@@ -271,7 +271,7 @@ class BankingService:
         # eventet; taber det, persisteres intet.
         async with self._uow:
             if await self._uow.connections.try_claim_sync(
-                connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS, trigger.value
+                connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS, trigger
             ):
                 await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
                 await self._uow.commit()
@@ -291,7 +291,7 @@ class BankingService:
             # prøv claim én gang til; taber vi igen, afleverer vi vinderens id.
             async with self._uow:
                 if await self._uow.connections.try_claim_sync(
-                    connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS, trigger.value
+                    connection_id, saga_id, now, settings.SYNC_CLAIM_TTL_SECONDS, trigger
                 ):
                     await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
                     await self._uow.commit()
@@ -306,9 +306,7 @@ class BankingService:
 
         if status in _TERMINAL_SAGA_STATUSES:
             async with self._uow:
-                if await self._uow.connections.steal_sync_claim(
-                    connection_id, existing_id, saga_id, now, trigger.value
-                ):
+                if await self._uow.connections.steal_sync_claim(connection_id, existing_id, saga_id, now, trigger):
                     await self._add_sync_start_event(saga_id, conn, connection_id, user_id, account_name, date_from)
                     await self._uow.commit()
                     logger.info(

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from app.application.ports.outbound import IBankConnectionRepository
 from app.application.service import BankingService
 from app.config import settings
 from app.domain.entities import BankConnection
@@ -24,7 +25,13 @@ def uow() -> MagicMock:
     mock.commit = AsyncMock()
     mock.rollback = AsyncMock()
     mock.accounts = AsyncMock()
-    mock.connections = AsyncMock()
+    # spec'd mod porten frem for bar AsyncMock. Bemærk hvad det *ikke* køber:
+    # `spec` begrænser attribut-navne, ikke argumenttyper, så den ville ikke
+    # selv have fanget at de ni tests herunder kaldte `try_claim_sync` med en
+    # `str` i to dage mens porten erklærede `SyncTrigger`. Typen dækkes af
+    # `test_try_claim_sync_receives_the_enum_not_its_value` nedenfor; dette
+    # lukker den tilstødende fejl (et metodenavn der ikke findes på porten).
+    mock.connections = AsyncMock(spec=IBankConnectionRepository)
     mock.pending_auth = AsyncMock()
     mock.outbox = AsyncMock()
     # P3-14: claim vindes som default, saa eksisterende happy-path-tests
@@ -562,3 +569,46 @@ async def test_sync_conflict_without_status_port_fails_active(
     assert saga_id == "running-saga"
     assert already_running is True
     uow.outbox.add.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("trigger", list(SyncTrigger))
+async def test_try_claim_sync_receives_the_enum_not_its_value(
+    service: BankingService,
+    uow: MagicMock,
+    trigger: SyncTrigger,
+) -> None:
+    """Kalderen skal sende ``SyncTrigger``, ikke ``trigger.value``.
+
+    Regression for et to dage gammelt brud (b16d402f → rettet her): porten
+    erklærer ``trigger: SyncTrigger`` og adapteren gør ``.value`` på den, men
+    ``service.py`` sendte allerede den udpakkede streng, så adapteren ramte
+    ``AttributeError: 'str' object has no attribute 'value'`` — en 500 der nåede
+    browseren som en CORS-fejl, fordi exceptionen kastes før CORS-middlewaren
+    kan sætte sine headers.
+
+    De ni øvrige tests der rører ``try_claim_sync`` fangede intet, fordi en
+    uspecificeret ``AsyncMock`` tager imod hvad som helst. Denne asserter på
+    *typen* af argumentet, hvilket er den eneste ting der faktisk holder
+    kontrakten i hævd i et service-lag uden mypy.
+
+    Parametriseret over hele enummet, så en ny trigger-værdi arver dækningen
+    frem for at skulle huskes.
+    """
+    connection_id = uuid4()
+    uow.connections.get_by_id.return_value = BankConnection(
+        id=connection_id,
+        account_id=1,
+        user_id=2,
+        session_id="sess-1",
+        bank_name="Nordea",
+        bank_country="DK",
+        bank_account_uid="uid-1",
+    )
+    uow.accounts.get_projection.return_value = (2, "Main Account")
+
+    await service.start_sync_saga(connection_id, user_id=2, trigger=trigger)
+
+    passed = uow.connections.try_claim_sync.await_args.args[-1]
+    assert isinstance(passed, SyncTrigger), f"fik {type(passed).__name__}, ikke SyncTrigger"
+    assert passed is trigger
