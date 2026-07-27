@@ -1,32 +1,62 @@
 SHELL := /bin/bash
-.PHONY: install-deps test test-unit test-integration lint format format-check security check clean
+.PHONY: help install-deps dev test test-unit test-integration lint typecheck format format-check security check migrate migrate-down clean
+
+help:
+	@printf 'Available targets:\n'
+	@printf '  install-deps     Install all dependencies (runtime + dev)\n'
+	@printf '  dev              Start service with hot-reload on port 8009\n'
+	@printf '  test             Run unit + integration tests\n'
+	@printf '  test-unit        Run unit tests only\n'
+	@printf '  test-integration Run integration tests only\n'
+	@printf '  lint             Run ruff linter\n'
+	@printf '  format           Auto-format code with ruff\n'
+	@printf '  security         Run bandit\n'
+	@printf '  check            Run lint + format check + security + tests\n'
+	@printf '  migrate          Run database migrations to latest\n'
+	@printf '  migrate-down     Rollback last migration\n'
+	@printf '  clean            Remove generated artifacts\n'
 
 install-deps:
-	python -m pip install --upgrade pip
-	python -m pip install -r requirements.txt pytest ruff bandit
+	uv sync --dev
 
+dev:
+	uv run uvicorn app.main:app --reload --port 8009
+
+# P3-23: the PYTHONPATH=../shared/contracts:../shared prefix these targets carried is
+# gone. The three shared packages are declared path-dependencies now, so they are in
+# the venv. Keeping both would give pytest the source tree and mypy the installed
+# copy — two sources of truth for one package, which is the mistake budget-service's
+# makefile documents from the other side.
 test:
-	PYTHONPATH=../shared/contracts:../shared:. pytest tests -v
+	uv run pytest tests/unit -v
+	uv run pytest tests/integration -v
 
 test-unit:
-	PYTHONPATH=../shared/contracts:../shared:. pytest tests/unit -v
+	uv run pytest tests/unit -v
 
 test-integration:
-	PYTHONPATH=../shared/contracts:../shared:. pytest tests/integration -v
+	uv run pytest tests/integration -v
 
 lint:
-	ruff check .
+	uv run ruff check .
 
 format:
-	ruff format .
+	uv run ruff check . --fix
+	uv run ruff format .
 
 format-check:
-	ruff format --check .
+	uv run ruff format --check .
 
 security:
-	bandit -r app -x tests
+	uv run bandit -r app -x tests
 
 check: lint format-check security test
+
+migrate:
+	uv run alembic upgrade head
+
+migrate-down:
+	uv run alembic downgrade -1
 
 clean:
 	rm -rf .pytest_cache .ruff_cache htmlcov .coverage

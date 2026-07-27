@@ -11,28 +11,20 @@ masked until 2026-07-25 because the ``ruff format --check`` step failed
 earlier in the same job and aborted it (commit d5630a6e fixed the formatting
 and thereby uncovered this).
 
-Same shape as the other seven services' conftests: set the env and put the
-service root plus the shared packages on ``sys.path`` so a bare
-``pytest tests`` works with no incantation.  banking-service has no
-``pyproject.toml`` (requirements.txt only), so the path setup cannot come
-from a package install.
+P3-23 removed the ``sys.path`` half of this file.  It used to insert the
+service root and ``shared/{contracts,messaging,auth}`` because there was no
+``pyproject.toml`` to install from — that premise is gone: the three shared
+packages are declared path-dependencies and ``uv sync`` puts them in the venv.
+Keeping the insertion would import them from the source tree while mypy reads
+the installed copy, which is two sources of truth for one package.  The env
+defaults stay; they are what makes collection possible at all.
 """
 
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
-
-SERVICE_ROOT = Path(__file__).resolve().parents[1]
-SHARED = SERVICE_ROOT.parent / "shared"
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 # Required since P1-15/D1 removed the dev-string default from config.py.
 os.environ.setdefault("INTERNAL_API_KEY", "test-internal-api-key")
-
-for path in (SERVICE_ROOT, SHARED / "contracts", SHARED / "messaging", SHARED / "auth"):
-    path_str = str(path)
-    if path.exists() and path_str not in sys.path:
-        sys.path.insert(0, path_str)
