@@ -43,12 +43,13 @@ jobs:
       - name: Ruff format check
         run: ruff format --check services scripts tests
 
-      # P3-40. Belongs in this job rather than a Docker one because it is a
-      # static read of docker-compose.yml — stdlib only, no daemon, no build.
-      # The regression it catches (a worker re-growing its own `build:` block)
-      # shows up as a *passing* live verification against stale code, so it
-      # must not depend on anyone thinking to look.
-      - name: Compose image-sharing check
+      # P3-40 + P2-37. Belongs in this job rather than a Docker one because both
+      # rules are static reads — docker-compose.yml and the presence of files under
+      # services/* — stdlib only, no daemon, no build. The regressions they catch
+      # (a worker re-growing its own `build:` block; a service growing a second
+      # install path) both show up as a *passing* verification against code that
+      # isn't shipping, so neither can depend on anyone thinking to look.
+      - name: Build-hygiene check (image sharing + install paths)
         run: python3 scripts/compose_check.py
 
   python-services:

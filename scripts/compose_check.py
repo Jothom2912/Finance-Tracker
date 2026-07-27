@@ -1,6 +1,27 @@
-"""Check docker-compose.yml for the image-sharing rule P3-40 established.
+"""Build-hygiene checks: what a service *deploys* must be what we verified.
 
-Why this exists: until 2026-07-27 every worker/consumer/scheduler carried its
+Two rules, one script, one failure mode in common — **a green run that proves
+nothing**. Both regressions look like success: the build passes, the container
+runs, the verification goes green, and the thing it exercised is not the thing
+that ships. That shared symptom is why they live together despite reading
+different files, and it is why this is a script rather than a review convention.
+(The name is still ``compose_check.py`` for the wiring's sake; the scope is
+build hygiene. Rule 4 reads ``services/*/`` on disk, not compose.)
+
+Rules 1-3 come from P3-40 (per-worker image staleness), rule 4 from P2-37
+(two install paths in one service).
+
+Why rule 4 exists: budget-service's image ran ``pip install -r
+requirements.txt`` (FastAPI 0.115.0) while its tests and its mypy gate read
+``uv.lock`` (0.136.3). On 2026-07-27 that shipped a container which died at
+import while all 117 tests and the whole typecheck gate were green — a service
+cannot have two disagreeing sources of truth for one dependency. Note the
+condition is *both files present*: ``account`` and ``banking`` carry only a
+``requirements.txt`` and so cannot drift; they have one untruthfully-pinned
+source instead of two disagreeing ones, which is P3-23/P3-01's problem, not
+this one's.
+
+Why this exists (rules 1-3): until 2026-07-27 every worker/consumer/scheduler carried its
 own ``build:`` block pointing at the same Dockerfile as its API service, so
 Compose built and tagged a *separate image per compose service*. The result was
 not a broken system but a lying one — ``docker compose build banking-service``
@@ -30,6 +51,10 @@ What it checks:
 3. **Every referenced tag is built** — each ``image: finance-tracker-*`` must be
    produced by exactly one service that declares ``build:``, so no worker can
    reference an image nothing in the file creates.
+4. **One install path per service** — a directory under ``services/`` must not
+   contain both ``uv.lock`` and ``requirements.txt``. Whichever one the
+   Dockerfile reads, the other is a second answer to "what versions does this
+   service run", and nothing reconciles them.
 
 Usage::
 
@@ -49,6 +74,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 COMPOSE = REPO_ROOT / "docker-compose.yml"
+SERVICES = REPO_ROOT / "services"
 
 # Tags this repo builds itself, as opposed to `postgres:16` and friends.
 LOCAL_IMAGE_PREFIX = "finance-tracker-"
@@ -156,6 +182,30 @@ def check(project: str | None, services: list[Service], problems: list[str]) -> 
             problems.append(f"`{image}` is built by more than one service: {', '.join(owners)}")
 
 
+def check_install_paths(problems: list[str]) -> int:
+    """Rule 4: no service directory may hold both ``uv.lock`` and ``requirements.txt``.
+
+    Returns the number of service directories inspected, so the summary line can
+    report coverage — a check that silently found nothing to look at is the same
+    failure as the ones it guards against.
+    """
+    inspected = 0
+    for directory in sorted(SERVICES.iterdir()):
+        if not directory.is_dir():
+            continue
+        inspected += 1
+        lock = directory / "uv.lock"
+        requirements = directory / "requirements.txt"
+        if lock.is_file() and requirements.is_file():
+            problems.append(
+                f"services/{directory.name}: has both `uv.lock` and `requirements.txt` — "
+                "two sources of truth for one dependency set. The image reads one and the "
+                "tests read the other, so a green `make check` says nothing about what "
+                "ships (P2-37). Delete whichever the Dockerfile does not install from."
+            )
+    return inspected
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--quiet", action="store_true", help="only print problems")
@@ -165,16 +215,23 @@ def main() -> int:
         print(f"compose-check: {COMPOSE} not found", file=sys.stderr)
         return 1
 
+    if not SERVICES.is_dir():
+        print(f"compose-check: {SERVICES} not found", file=sys.stderr)
+        return 1
+
     project, services = parse(COMPOSE.read_text(encoding="utf-8"))
     problems: list[str] = []
     check(project, services, problems)
+    inspected = check_install_paths(problems)
 
     if problems:
-        print(f"compose-check: {len(problems)} problem(s) in docker-compose.yml\n", file=sys.stderr)
+        print(f"compose-check: {len(problems)} problem(s)\n", file=sys.stderr)
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         print(
-            "\nSee dev-notes/findings/2026-07-25-per-worker-image-staleness.md for why this rule exists.",
+            "\nWhy these rules exist: "
+            "dev-notes/findings/2026-07-25-per-worker-image-staleness.md (rules 1-3), "
+            "dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md (rule 4).",
             file=sys.stderr,
         )
         return 1
@@ -184,7 +241,8 @@ def main() -> int:
         images = len({s.image for s in services if s.build})
         print(
             f"compose-check: {len(services)} services, {images} built images, "
-            f"{workers} workers sharing them. No problems."
+            f"{workers} workers sharing them; {inspected} service dirs with one install "
+            f"path each. No problems."
         )
     return 0
 

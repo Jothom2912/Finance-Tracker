@@ -58,7 +58,7 @@ help: ## Show available targets
 	@printf '    ci-status                 Latest CI run for this branch (exit 1 if red)\n'
 	@printf '    verify-typecheck-gate     Prove the mypy gate covers exactly its allowlist\n'
 	@printf '    notes-check               dev-notes index drift, dead links, frontmatter\n'
-	@printf '    compose-check             docker-compose per-worker image drift (P3-40)\n'
+	@printf '    compose-check             build hygiene: worker image drift + install paths\n'
 	@printf '    format                    Auto-format all Python services\n'
 	@printf '    format-check              Check formatting without changes\n'
 	@printf '    check                     Run all quality checks\n'
@@ -180,10 +180,13 @@ verify-typecheck-gate: ## Prove the mypy gate covers exactly its allowlist (P2-3
 notes-check: ## Check dev-notes/ for index drift, dead links and bad frontmatter
 	@python3 scripts/notes_check.py
 
-# P3-40: workers must share their API service's image, not fork a second one off
-# the same Dockerfile. The regression's symptom is a *passing* live verification
-# against stale code, so it cannot be left to review. Stdlib-only, sub-second.
-compose-check: ## Check docker-compose.yml for per-worker image drift (P3-40)
+# Two build-hygiene rules with one symptom in common: a green run that proves
+# nothing. P3-40 — workers must share their API service's image, not fork a second
+# one off the same Dockerfile. P2-37 — a service must not carry both `uv.lock` and
+# `requirements.txt`, or its tests and its image install different versions. Both
+# regressions show up as a *passing* verification against code that isn't shipping,
+# so neither can be left to review. Stdlib-only, sub-second.
+compose-check: ## Build hygiene: worker image drift (P3-40) + one install path per service (P2-37)
 	@python3 scripts/compose_check.py
 
 check: ## Run all quality checks (lint + format + tests)
