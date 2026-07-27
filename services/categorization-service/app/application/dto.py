@@ -6,12 +6,18 @@ from pydantic import BaseModel, Field
 
 
 class CategorizeRequestDTO(BaseModel):
-    """Input for sync /categorize endpoint."""
+    """Input for sync /categorize endpoint.
+
+    No ``user_id``: the sync path runs global rules only. Per-user rule
+    layering (F1-02) happens on the async consumer path, which reads
+    ``user_id`` from the event. transaction-service — the only caller —
+    has never sent the field, so accepting it only ever served an
+    attacker probing other users' rules (P1-15).
+    """
 
     transaction_id: int | None = None
     description: str
     amount: float
-    user_id: int | None = None
 
 
 class CategorizeResponseDTO(BaseModel):

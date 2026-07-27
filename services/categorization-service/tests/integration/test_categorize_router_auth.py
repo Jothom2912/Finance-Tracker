@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import pytest
 from app.adapters.inbound import categorize_api
-from app.application.dto import CategorizeResponseDTO
+from app.adapters.inbound.categorize_api import MAX_BATCH_ITEMS
+from app.application.dto import CategorizeRequestDTO, CategorizeResponseDTO
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -39,8 +40,15 @@ class _StubService:
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    async def _build(**_kwargs):  # type: ignore[no-untyped-def]
+def built_with() -> list[int | None]:
+    """Records the ``user_id`` the router asks the factory to scope to."""
+    return []
+
+
+@pytest.fixture()
+def client(monkeypatch: pytest.MonkeyPatch, built_with: list[int | None]) -> TestClient:
+    async def _build(user_id: int | None = None):  # type: ignore[no-untyped-def]
+        built_with.append(user_id)
         return _StubService()
 
     monkeypatch.setattr(categorize_api, "build_categorization_service", _build)
@@ -94,6 +102,71 @@ class TestBatchEndpoint:
         )
         assert response.status_code == 200
         assert len(response.json()) == 1
+
+
+class TestBatchBounds:
+    """A3 — the batch is bounded at the same 500 as
+    BulkCreateTransactionDTO, its only real producer."""
+
+    def test_at_the_ceiling_is_accepted(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/categorize/batch",
+            json=[BODY] * MAX_BATCH_ITEMS,
+            headers={"X-Internal-API-Key": KEY},
+        )
+        assert response.status_code == 200
+
+    def test_over_the_ceiling_is_422(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/categorize/batch",
+            json=[BODY] * (MAX_BATCH_ITEMS + 1),
+            headers={"X-Internal-API-Key": KEY},
+        )
+        assert response.status_code == 422
+
+    def test_empty_batch_is_422(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/categorize/batch",
+            json=[],
+            headers={"X-Internal-API-Key": KEY},
+        )
+        assert response.status_code == 422
+
+    def test_oversized_batch_is_rejected_before_auth_is_moot(self, client: TestClient) -> None:
+        """Auth still runs first — an unauthenticated oversized batch must
+        not reveal which limit it tripped."""
+        response = client.post(
+            "/api/v1/categorize/batch",
+            json=[BODY] * (MAX_BATCH_ITEMS + 1),
+        )
+        assert response.status_code == 401
+
+
+class TestUserIdIsGone:
+    """A3 — the field that made the endpoint an oracle is removed, not
+    just fenced in. Pydantic ignores unknown keys by default, so the
+    assertion is that it has no effect, not that it 422s."""
+
+    def test_user_id_in_body_does_not_scope_the_engine(self, client: TestClient, built_with: list[int | None]) -> None:
+        response = client.post(
+            "/api/v1/categorize/",
+            json={**BODY, "user_id": 1},
+            headers={"X-Internal-API-Key": KEY},
+        )
+        assert response.status_code == 200
+        assert built_with == [None]
+
+    def test_batch_user_id_does_not_scope_the_engine(self, client: TestClient, built_with: list[int | None]) -> None:
+        response = client.post(
+            "/api/v1/categorize/batch",
+            json=[{**BODY, "user_id": 1}, {**BODY, "user_id": 2}],
+            headers={"X-Internal-API-Key": KEY},
+        )
+        assert response.status_code == 200
+        assert built_with == [None]
+
+    def test_dto_has_no_user_id_field(self) -> None:
+        assert "user_id" not in CategorizeRequestDTO.model_fields
 
 
 class TestUnconfiguredKey:

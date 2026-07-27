@@ -1,25 +1,31 @@
 """Sync categorization endpoint — tier 1 (rule engine), returns instantly.
 
-Called by transaction-service during transaction creation.
+Called by transaction-service during transaction creation, and by nothing
+else: this router is S2S-only (P1-15).
 Falls back to uncategorized if the pipeline returns only fallback.
 
-The service is built per request (not via Depends) because the user
-scope lives in the body: with ``user_id`` set, the engine layers that
-user's own rules on top of the global engine (F1-02).
+The sync path runs **global rules only**. Per-user rule layering (F1-02)
+lives on the async consumer path, which takes ``user_id`` from the event.
+That is not a change in behavior: transaction-service has never sent a
+``user_id`` on this path, so the body field only ever let an unauthenticated
+caller probe another user's private rules through the ``tier`` field.
 """
 
 from __future__ import annotations
 
-import logging
 from hmac import compare_digest
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
 
 from app.application.dto import CategorizeRequestDTO, CategorizeResponseDTO
 from app.config import settings
 from app.dependencies import build_categorization_service
 
-logger = logging.getLogger(__name__)
+# Same ceiling as transaction-service's BulkCreateTransactionDTO, which is
+# the only producer of batches — an unbounded list would be a cheap way to
+# tie up the rule engine.
+MAX_BATCH_ITEMS = 500
 
 
 def require_internal_api_key(
@@ -56,7 +62,7 @@ categorize_router = APIRouter(
     response_model=CategorizeResponseDTO,
 )
 async def categorize_single(body: CategorizeRequestDTO) -> CategorizeResponseDTO:
-    service = await build_categorization_service(user_id=body.user_id)
+    service = await build_categorization_service(user_id=None)
     return await service.categorize(body)
 
 
@@ -64,13 +70,11 @@ async def categorize_single(body: CategorizeRequestDTO) -> CategorizeResponseDTO
     "/batch",
     response_model=list[CategorizeResponseDTO],
 )
-async def categorize_batch(body: list[CategorizeRequestDTO]) -> list[CategorizeResponseDTO]:
-    # Batches come from single-user flows (CSV import); a mixed batch
-    # would be a caller bug — fall back to global rules and say so.
-    user_ids = {item.user_id for item in body if item.user_id is not None}
-    if len(user_ids) > 1:
-        logger.warning("Mixed user_ids in categorize batch — using global rules only")
-    user_id = next(iter(user_ids)) if len(user_ids) == 1 else None
-
-    service = await build_categorization_service(user_id=user_id)
+async def categorize_batch(
+    body: Annotated[
+        list[CategorizeRequestDTO],
+        Body(min_length=1, max_length=MAX_BATCH_ITEMS),
+    ],
+) -> list[CategorizeResponseDTO]:
+    service = await build_categorization_service(user_id=None)
     return await service.categorize_batch(body)
