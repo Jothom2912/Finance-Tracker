@@ -34,11 +34,16 @@ GOAL_SERVICE = "http://localhost:8006/api/v1"
 TRANSACTION_SERVICE = "http://localhost:8002/api/v1"
 BUDGET_SERVICE = "http://localhost:8003/api/v1"
 CATEGORIZATION_SERVICE = "http://localhost:8005/api/v1"
+ANALYTICS_SERVICE = "http://localhost:8012/api/v1/analytics"
 RABBITMQ_API = "http://localhost:15672/api"
 
 JWT_SECRET = "dev-secret-key-change-in-production"
 JWT_ALGORITHM = "HS256"
 POLL_TIMEOUT = 15.0
+# Forbruget skal hele vejen gennem outbox → RabbitMQ → ES-projektionen, og
+# projektions-consumeren kører med prefetch 1 (P2-19), så én ack-rundtur pr.
+# event. Rundere end de 15s ovenfor med vilje — det er en længere kæde.
+SPEND_POLL_TIMEOUT = 40.0
 
 pytestmark = pytest.mark.e2e
 
@@ -70,6 +75,47 @@ async def _poll_until(
             return last_result
         await asyncio.sleep(interval)
     pytest.fail(f"Timed out waiting for {desc} (last result: {last_result})")
+
+
+async def _await_spend_on_read_side(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    account_id: int,
+    expected: float,
+) -> float:
+    """Bloker indtil analytics rapporterer ``expected`` som junis samlede forbrug.
+
+    Siden P1-13 læser ``close_month`` forbruget fra analytics' ``/overview``
+    (``budget-service/app/adapters/outbound/analytics_port.py``), altså fra
+    ES-read-modellen — ikke fra transaction-service synkront. Skriv-svaret på
+    de tre POST'er nedenfor siger derfor intet om hvad lukningen kommer til at
+    se: uden denne gate læser den ``spent=0``, allokerer hele budgettet, og
+    alle tre tests fejler med ``5000.0 == 2000.0`` (P2-30).
+
+    Vi poller det tal lukningen selv slår op — samme endpoint, samme
+    datointerval som ``budget_period(2026, 6, 1)`` — frem for at sove en
+    tilfældig periode. Testen venter allerede på *allokeringen*; det der
+    manglede var at vente på *forbruget*.
+    """
+    deadline = asyncio.get_event_loop().time() + SPEND_POLL_TIMEOUT
+    observed: float | None = None
+    while asyncio.get_event_loop().time() < deadline:
+        resp = await client.get(
+            f"{ANALYTICS_SERVICE}/overview?account_id={account_id}&start_date=2026-06-01&end_date=2026-06-30",
+            headers=headers,
+        )
+        if resp.status_code == 200:
+            observed = float(resp.json().get("total_expenses", 0.0))
+            if abs(observed - expected) < 0.01:
+                return observed
+        await asyncio.sleep(1.0)
+
+    pytest.fail(
+        f"Forbruget nåede aldrig ES-read-modellen: analytics rapporterer "
+        f"total_expenses={observed} for konto {account_id} i juni 2026, "
+        f"forventede {expected}. close_month ville have læst det tal og "
+        f"allokeret et for stort overskud."
+    )
 
 
 def _psql_budget(sql: str) -> str:
@@ -199,6 +245,11 @@ async def test_context():
                 },
             )
             assert resp.status_code == 201, f"Transaction creation failed: {resp.text}"
+
+        # 6b. Vent på at de tre udgifter er nået ES-read-modellen, som er der
+        #     close_month henter forbruget fra (P1-13). Uden denne gate lukker
+        #     test 1 måneden mod spent=0.
+        await _await_spend_on_read_side(client, headers, account_id, expected=3000.0)
 
         # 7. Create monthly budget (total 5000)
         resp = await client.post(
