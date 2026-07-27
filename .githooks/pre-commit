@@ -41,7 +41,12 @@ done < <(git diff --cached --name-only -z --diff-filter=ACM -- '*.py')
 # *missing* line in the index, which no per-file check can see.
 notes_touched=$(git diff --cached --name-only --diff-filter=ACMD -- 'dev-notes/*.md')
 
-if [ ${#staged[@]} -eq 0 ] && [ -z "$notes_touched" ]; then
+# Same reasoning for docker-compose.yml (P3-40): a worker that re-grows its own
+# `build:` block does not fail anything — it makes the next live verification
+# pass against stale code. CI backstops this, but the hook is where it is cheap.
+compose_touched=$(git diff --cached --name-only --diff-filter=ACM -- 'docker-compose.yml')
+
+if [ ${#staged[@]} -eq 0 ] && [ -z "$notes_touched" ] && [ -z "$compose_touched" ]; then
     exit 0
 fi
 
@@ -50,8 +55,18 @@ if [ -n "$notes_touched" ]; then
     python3 scripts/notes_check.py --quiet || notes_status=1
 fi
 
+compose_status=0
+if [ -n "$compose_touched" ]; then
+    python3 scripts/compose_check.py --quiet || compose_status=1
+fi
+
+# Written as an if rather than `[ a ] || [ b ] && exit 1`: under `set -e` that
+# form aborts the hook when BOTH checks pass, because the && list then exits 1.
 if [ ${#staged[@]} -eq 0 ]; then
-    exit $notes_status
+    if [ $notes_status -ne 0 ] || [ $compose_status -ne 0 ]; then
+        exit 1
+    fi
+    exit 0
 fi
 
 # Prefer a ruff on PATH; fall back to uvx, which every dev here already has
@@ -89,7 +104,7 @@ if [ $ruff_status -ne 0 ]; then
     echo "            Bypass with: git commit --no-verify" >&2
 fi
 
-if [ $ruff_status -ne 0 ] || [ $notes_status -ne 0 ]; then
+if [ $ruff_status -ne 0 ] || [ $notes_status -ne 0 ] || [ $compose_status -ne 0 ]; then
     exit 1
 fi
 

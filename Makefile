@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps install-hooks ci-status dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint lint-repo format format-check check clean clean-test-containers
+.PHONY: help install-deps install-hooks ci-status notes-check compose-check dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint lint-repo format format-check check clean clean-test-containers
 
 INFRA_SERVICES = postgres postgres-transactions postgres-categorization postgres-account postgres-budget postgres-goals postgres-banking rabbitmq redis
 USER_SERVICE_DIR = services/user-service
@@ -56,6 +56,8 @@ help: ## Show available targets
 	@printf '    lint                      Run ruff linter on all Python services\n'
 	@printf '    lint-repo                 Lint+format-check whole repo (incl. scripts/, tests/)\n'
 	@printf '    ci-status                 Latest CI run for this branch (exit 1 if red)\n'
+	@printf '    notes-check               dev-notes index drift, dead links, frontmatter\n'
+	@printf '    compose-check             docker-compose per-worker image drift (P3-40)\n'
 	@printf '    format                    Auto-format all Python services\n'
 	@printf '    format-check              Check formatting without changes\n'
 	@printf '    check                     Run all quality checks\n'
@@ -168,6 +170,12 @@ ci-status: ## Show the latest CI run for the current branch (exit 1 if red)
 # indexed. Stdlib-only, runs in well under a second.
 notes-check: ## Check dev-notes/ for index drift, dead links and bad frontmatter
 	@python3 scripts/notes_check.py
+
+# P3-40: workers must share their API service's image, not fork a second one off
+# the same Dockerfile. The regression's symptom is a *passing* live verification
+# against stale code, so it cannot be left to review. Stdlib-only, sub-second.
+compose-check: ## Check docker-compose.yml for per-worker image drift (P3-40)
+	@python3 scripts/compose_check.py
 
 check: ## Run all quality checks (lint + format + tests)
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir check; done

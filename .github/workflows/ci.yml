@@ -43,6 +43,14 @@ jobs:
       - name: Ruff format check
         run: ruff format --check services scripts tests
 
+      # P3-40. Belongs in this job rather than a Docker one because it is a
+      # static read of docker-compose.yml — stdlib only, no daemon, no build.
+      # The regression it catches (a worker re-growing its own `build:` block)
+      # shows up as a *passing* live verification against stale code, so it
+      # must not depend on anyone thinking to look.
+      - name: Compose image-sharing check
+        run: python3 scripts/compose_check.py
+
   python-services:
     name: ${{ matrix.service }} - Python 3.11
     runs-on: ubuntu-latest
