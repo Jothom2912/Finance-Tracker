@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
+    # No dev-string default: an unconfigured key must make /categorize
+    # answer 503, not accept a well-known value (P1-15).
+    INTERNAL_API_KEY: str | None = None
 
 
 settings = Settings()

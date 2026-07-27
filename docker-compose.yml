@@ -479,6 +479,7 @@ services:
       JWT_SECRET: dev-secret-key-change-in-production
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
+      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
     depends_on:
       postgres-categorization:
         condition: service_healthy
