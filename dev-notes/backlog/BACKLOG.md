@@ -127,7 +127,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P3-37 | `transactions` has no soft-delete column, against the repo's own convention. [→ detail](#p3-37) | transaction, analytics | M | open | [P1-14 verification](../plans/2026-07-26-p114-transaction-list-pagination.md) |
 | P3-38 | Search paging hits Elasticsearch's `max_result_window` cliff at page 200; the REST list has no such cliff. [→ detail](#p3-38) | analytics, frontend | M | open | [P1-14 review](../plans/2026-07-26-p114-transaction-list-pagination.md), [decision](../decisions/2026-07-26-transaction-list-envelope.md) |
 | P3-39 | `account-service` and `banking-service` cannot run `make test` or `make lint` locally, and `banking-service`'s suite. [→ detail](#p3-39) | infra, DX | M | open | [P1-15 outcome](../plans/2026-07-27-p115-categorize-auth-and-secret-rotation.md) |
-| P3-40 | Workers share their API service's image instead of each declaring `build:`, so `compose build <svc>` cannot leave them on stale code. [→ detail](#p3-40) | infrastructure | S | open | [findings/2026-07-25-per-worker-image-staleness.md](../findings/2026-07-25-per-worker-image-staleness.md) |
+| P3-40 | Workers share their API service's image instead of each declaring `build:`, so `compose build <svc>` cannot leave them on stale code. [→ detail](#p3-40) | infrastructure | S | done 2026-07-27 | [plan](../plans/2026-07-27-p340-worker-image-sharing.md), [findings/2026-07-25-per-worker-image-staleness.md](../findings/2026-07-25-per-worker-image-staleness.md) |
 
 ---
 

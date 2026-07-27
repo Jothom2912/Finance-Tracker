@@ -5,6 +5,7 @@ surprised us, what turned out wrong — not a source of architecture facts. Read
 specific one when you need the story behind a change; do not load this file as
 context by default. Add a line here (not to `00-INDEX.md`) for every new log.
 
+- [sessions/2026-07-27-p340-worker-image-sharing.md](2026-07-27-p340-worker-image-sharing.md) — P3-40 shipped: 26 workers deler API-imaget; A/B bevist (samme kommandoer: 0 markør-hits på gammel compose, 1 på ny).
 - [sessions/2026-07-26-p320-cleanup-script-outbox.md](2026-07-26-p320-cleanup-script-outbox.md) — P3-20 shipped: ES juli 17.666,17 → 17.528,17 (= Postgres eksakt), 0 fantomer tilbage for rigtige brugere.
 - [sessions/2026-07-26-product-surface-sweep.md](2026-07-26-product-surface-sweep.md) — documentation-only sweep of what the backlog was not looking at.
 - [sessions/2026-07-26-p114-transaction-list-pagination.md](2026-07-26-p114-transaction-list-pagination.md) — P1-14 shipped: transaktionslisten pages hele perioden med `{total_count, items}` (juni 93, målt = Postgres = analytics 16 709,83).

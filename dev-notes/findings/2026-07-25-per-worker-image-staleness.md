@@ -3,9 +3,9 @@ title: Rebuilding a service does not rebuild its workers (per-worker build block
 date: 2026-07-25
 severity: MEDIUM
 area: infrastructure
-status: open
+status: resolved
 backlog: [P3-40]
-resolved-by: null
+resolved-by: plans/2026-07-27-p340-worker-image-sharing.md (P3-40, 2026-07-27)
 ---
 
 # Rebuilding a service does not rebuild its workers
@@ -69,6 +69,15 @@ docker compose exec -T banking-saga-command-consumer grep -c own_claim app/worke
 
 Option 1 also cuts build time and image storage substantially — the banking Dockerfile is
 currently built four times to produce four byte-identical images.
+
+**Resolved 2026-07-27** by P3-40 (option 1): the 26 workers now reference
+`image: finance-tracker-<api-svc>` instead of declaring `build:`, the project name is pinned
+so those literals cannot drift from the directory name, and `scripts/compose_check.py` fails
+CI if a worker re-grows a `build:` block. Verified as an A/B — the same
+`build banking-service` + `force-recreate` pair gives 0 marker hits on the old file and 1 on
+the new, with all four banking workers picking it up from a single build.
+Option 3 (git-SHA banner) was deliberately not done: it makes staleness visible, and this
+makes it impossible.
 
 **Related**: [worker-migration-ordering](2026-07-25-worker-migration-ordering.md) (same
 "workers are second-class citizens of the compose file" root), P3-17.
