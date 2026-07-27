@@ -48,7 +48,7 @@ async def get_banking_service(
     uow = SQLAlchemyUnitOfWork(session)
     account_port = AccountServiceAdapter(
         base_url=settings.ACCOUNT_SERVICE_URL,
-        api_key=settings.INTERNAL_API_KEY,
+        api_key=settings.INTERNAL_API_KEY,  # type: ignore[arg-type]  # P2-33: INTERNAL_API_KEY is Optional[str] in config but mandatory in practice
         timeout=settings.ACCOUNT_SERVICE_TIMEOUT,
     )
     return BankingService(

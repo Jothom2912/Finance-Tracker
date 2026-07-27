@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
+from types import TracebackType
 from typing import Any, Optional, Protocol, Self
 from uuid import UUID
 
@@ -127,7 +128,12 @@ class IUnitOfWork(ABC):
     async def __aenter__(self) -> Self: ...
 
     @abstractmethod
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None: ...
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None: ...
 
     @abstractmethod
     async def commit(self) -> None: ...

@@ -186,10 +186,16 @@ class BankingSagaCommandConsumer:
             await message.ack()
 
         except Exception as exc:
+            # P2-36: aio-pika types header values as the full AMQP FieldValue union,
+            # and this reader narrows only `bytes`. Every writer in this repo sets an
+            # int, so the other branches are unreachable for our own republishes —
+            # which is why P2-36 is hardening, not a live bug, and why the narrowing
+            # is not tightened here: choosing what a str or Decimal header should mean
+            # is that item's decision, not a side effect of enrolling in the gate.
             retry_count = (message.headers or {}).get("x-retry-count", 0)
             if isinstance(retry_count, bytes):
                 retry_count = int(retry_count)
-            if retry_count >= MAX_RETRIES:
+            if retry_count >= MAX_RETRIES:  # type: ignore[operator]  # P2-36
                 logger.error("Max retries for %s saga=%s — sending failure reply", event_type, saga_id, exc_info=True)
                 await self._publish_reply(
                     saga_id,
@@ -201,8 +207,14 @@ class BankingSagaCommandConsumer:
                 )
                 await message.ack()
             else:
-                logger.warning("Retrying %s saga=%s (attempt %d)", event_type, saga_id, retry_count + 1, exc_info=True)
-                await self._republish(message, retry_count + 1)
+                logger.warning(
+                    "Retrying %s saga=%s (attempt %d)",
+                    event_type,
+                    saga_id,
+                    retry_count + 1,  # type: ignore[operator]  # P2-36
+                    exc_info=True,
+                )
+                await self._republish(message, retry_count + 1)  # type: ignore[operator,arg-type]  # P2-36
                 await message.ack()
 
     async def _handle_fetch_transactions(self, body: dict) -> dict:

@@ -148,12 +148,18 @@ class BankingService:
 
                 existing = await self._uow.connections.get_active_by_uid(uid, account_id)
                 if existing is not None:
-                    await self._uow.connections.update_status(existing.id, "active")
+                    # P2-35 (both calls below): BankConnection.id is Optional[UUID]
+                    # because the entity is constructible before persistence, while
+                    # every port method that takes a connection_id requires UUID.
+                    # `existing` came from the repository, so it always has an id —
+                    # the Optional is what hides the unpersisted case rather than
+                    # modelling it. The ignores go when P2-35 splits the two states.
+                    await self._uow.connections.update_status(existing.id, "active")  # type: ignore[arg-type]  # P2-35
                     # Reconsent produced a fresh EB session: refresh the
                     # stored session_id and consent expiry, otherwise the
                     # expiry gate would keep rejecting a renewed consent.
                     await self._uow.connections.update_consent(
-                        existing.id,
+                        existing.id,  # type: ignore[arg-type]  # P2-35
                         session_id,
                         consent_expires_at,
                     )

@@ -9,9 +9,10 @@ help:
 	@printf '  test-unit        Run unit tests only\n'
 	@printf '  test-integration Run integration tests only\n'
 	@printf '  lint             Run ruff linter\n'
+	@printf '  typecheck        Run mypy (P2-31 gate)\n'
 	@printf '  format           Auto-format code with ruff\n'
 	@printf '  security         Run bandit\n'
-	@printf '  check            Run lint + format check + security + tests\n'
+	@printf '  check            Run lint + format check + typecheck + security + tests\n'
 	@printf '  migrate          Run database migrations to latest\n'
 	@printf '  migrate-down     Rollback last migration\n'
 	@printf '  clean            Remove generated artifacts\n'
@@ -40,6 +41,12 @@ test-integration:
 lint:
 	uv run ruff check .
 
+# P2-31/P3-23: config lives in pyproject's [tool.mypy]. No MYPYPATH — shared/* resolve
+# as installed packages via py.typed; pointing mypy at their source as well is what
+# produces "Source file found twice". The venv is the single source of truth.
+typecheck:
+	uv run mypy
+
 format:
 	uv run ruff check . --fix
 	uv run ruff format .
@@ -50,7 +57,7 @@ format-check:
 security:
 	uv run bandit -r app -x tests
 
-check: lint format-check security test
+check: lint format-check typecheck security test
 
 migrate:
 	uv run alembic upgrade head

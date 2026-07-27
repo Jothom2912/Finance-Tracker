@@ -86,7 +86,7 @@ async def run_once(
             service = service_factory(session)
             try:
                 saga_id, already_running = await service.start_sync_saga(
-                    conn.id,  # type: ignore[arg-type]  # rows fra DB har altid id
+                    conn.id,  # type: ignore[arg-type]  # P2-35: rows fra DB har altid id
                     user_id=conn.user_id,
                     bearer_token=None,
                     trigger=SyncTrigger.SCHEDULED,
@@ -147,7 +147,7 @@ def _build_service_factory() -> ServiceFactory:
     )
     account_port = AccountServiceAdapter(
         base_url=settings.ACCOUNT_SERVICE_URL,
-        api_key=settings.INTERNAL_API_KEY,
+        api_key=settings.INTERNAL_API_KEY,  # type: ignore[arg-type]  # P2-33: INTERNAL_API_KEY is Optional[str] in config but mandatory in practice
         timeout=settings.ACCOUNT_SERVICE_TIMEOUT,
     )
 

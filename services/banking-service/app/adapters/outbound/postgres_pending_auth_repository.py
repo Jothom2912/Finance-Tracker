@@ -7,6 +7,7 @@ from uuid import uuid4
 from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.outbound.sql_result import rowcount
 from app.models.pending_authorization import PendingAuthorizationModel
 
 
@@ -65,4 +66,4 @@ class PostgresPendingAuthRepository:
             )
         )
         await self._session.flush()
-        return result.rowcount
+        return rowcount(result)

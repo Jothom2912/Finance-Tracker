@@ -1,15 +1,29 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, overload
 from uuid import UUID
 
 from contracts.events.bank import SyncTrigger
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.outbound.sql_result import rowcount
 from app.domain.entities import BankConnection
 from app.models.bank_connection import BankConnectionModel
+
+
+# Overloaded because the function is None-preserving: the single
+# ``Optional -> Optional`` signature it used to carry made every aware-datetime
+# caller look like it might get ``None`` back, which is why ``claim_sync``'s
+# ``naive_now - timedelta(...)`` read as an error against a ``None`` left operand
+# (P3-23). The behaviour is unchanged; only the signature now says what it does.
+@overload
+def _to_naive_utc(dt: datetime) -> datetime: ...
+
+
+@overload
+def _to_naive_utc(dt: None) -> None: ...
 
 
 def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
@@ -135,7 +149,7 @@ class PostgresBankConnectionRepository:
             )
             .values(sync_saga_id=saga_id, sync_started_at=naive_now, sync_trigger=trigger.value)
         )
-        return result.rowcount == 1
+        return rowcount(result) == 1
 
     async def steal_sync_claim(
         self,
@@ -159,7 +173,7 @@ class PostgresBankConnectionRepository:
                 sync_trigger=trigger.value,
             )
         )
-        return result.rowcount == 1
+        return rowcount(result) == 1
 
     async def escalate_trigger_to_manual(self, connection_id: UUID, saga_id: str) -> bool:
         """Opgrader et fremmed claims trigger til ``manual``.
@@ -180,7 +194,7 @@ class PostgresBankConnectionRepository:
             )
             .values(sync_trigger=SyncTrigger.MANUAL.value)
         )
-        return result.rowcount == 1
+        return rowcount(result) == 1
 
     async def update_consent(
         self,
