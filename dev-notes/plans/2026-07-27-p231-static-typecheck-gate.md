@@ -236,8 +236,18 @@ den fejlmode dette item findes for at rette.
      `str()` som `"100.0"` mod `"100.00"`. Dertil `Goal.status: str | None` hvor `GoalStatus`
      findes. Risiko-klausulen nedenfor er anvendt bevidst: at lukke fire ignores på ét
      pengetypnings-problem ville gøre `ignore` til normalen i stedet for undtagelsen.
+   - [x] **ai-service** — `508c20ab`. Tabellens 0 var hul (fastapi/pydantic/ollama
+     uresolvede); ærlig måling gav **3**. Settings() løst med pluginet + `init_typed`,
+     en manglende returtype på `event_generator`, og `_call() -> str` hvor ollama typer
+     `message.content` som optional. Sidstnævnte er allerede håndteret i koden — `None`
+     fejler `model_validate_json` som `ValidationError` og tager fallbacket — så
+     annotationen var det eneste forkerte og blev gjort sand uden adfærdsændring.
+     Kontrolleret at gaten bider: en `int` mod `chat(model: str)` flagges, og mypy
+     resolver ollamas egne typer. 91 tests grønne.
+     **Note til resten af bølgen:** `check: lint format-check ## kommentar` har sine
+     prerequisites *før* `##`. Et `typecheck` tilføjet efter kommentaren ser rigtigt ud i
+     diffen og kører aldrig. Verificér med `make -n check`, ikke ved at læse Makefilen.
    - Resterende, i målt rækkefølge:
-   ai (0, men mål igen med deps installeret først) →
    budget (11) → saga (11) → transaction (12) → categorization (17). Hver service:
    `mypy` i dev-group, `[tool.mypy]`-blok kopieret fra analytics, `typecheck`-target,
    navn på CI-allowlisten. Blokeret indtil P3-23/P3-39: **banking, account**. Eget item:
