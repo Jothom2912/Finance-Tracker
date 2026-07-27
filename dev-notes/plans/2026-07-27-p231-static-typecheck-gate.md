@@ -65,7 +65,15 @@ Found 1 error in 1 file (checked 41 source files)
 
 **4. Baseline per service** (mypy 1.11, `--ignore-missing-imports`, shared på `MYPYPATH`,
 deps **ikke** installeret — så tallene er nedre grænser, og de er ikke sammenlignelige på
-tværs, fordi kun analytics har en `[tool.mypy]`-blok mypy selv læser):
+tværs, fordi kun analytics har en `[tool.mypy]`-blok mypy selv læser).
+
+> **Korrektion 2026-07-27, efter trin 1.** Tallene nedenfor er ca. det halve af virkeligheden,
+> ikke "en smule lave". Målt gennem servicens eget venv med deps installeret er
+> **transaction-service 27 fejl, ikke 12** (28 efter `py.typed`). Værre: da jeg gen-målte
+> tabellen efter trin 1 fik jeg *identiske* tal og læste det først som "py.typed havde ingen
+> effekt" — men opsætningen var blind for spørgsmålet, fordi `MYPYPATH` mod kildekoden får
+> mypy til at analysere `domain` som source uanset markøren. En måling der ikke kan skifte
+> værdi er ikke en måling. Trin 6 skal måle per service gennem `uv run`, ikke `uvx` + `MYPYPATH`.
 
 | Service | Fejl | Noter |
 |---|---|---|
@@ -129,13 +137,18 @@ den fejlmode dette item findes for at rette.
 
 ## Steps
 
-1. [ ] **`py.typed` på `shared/domain` og `shared/messaging`.** To tomme filer
-   (`domain/domain/py.typed`, `messaging/messaging/py.typed`) + `[tool.hatch.build]`
-   force-include hvis wheelen ikke tager dem med af sig selv (verificér — `packages = ["domain"]`
-   bør, men det er et af de steder hvor "bør" har kostet os to dage før).
-   Bevis: analytics' `uv run mypy` går fra 1 fejl til 0.
-   *Commit 1.* Dette trin har værdi alene, uafhængigt af resten af planen: uden det er alle
-   contracts-typer `Any` i hver service, også i IDE'en.
+1. [x] **`py.typed` på `shared/domain` og `shared/messaging`** — gjort 2026-07-27,
+   `67c29dcc` + `617bbc11`. Ingen `force-include` nødvendig: begge wheels blev bygget og
+   indholdet listet, `packages = ["domain"]` tager filen med, som i contracts.
+   Bevis: analytics' `uv run mypy` gik fra `1 error` til
+   `Success: no issues found in 41 source files`. 123 tests grønne.
+   **Deviation (godkendt undervejs): versionsbump til 0.1.1 + re-lock af 11 `uv.lock`.**
+   Markøren nåede ikke ud af sig selv — path-deps installeres som kopier, ikke editable, og
+   uv genopretter dem ikke ved uændret version. Målt: `uv sync --dev` i user-service sagde
+   "Audited" og beholdt `messaging 0.1.0` uden markør, så `make typecheck` lokalt og i CI
+   kunne give forskellige svar. Kontrol efter bumpet: samme urørte venv gik til
+   0.1.1-med-markør på et almindeligt `uv sync --dev`. Diffen er udelukkende versionslinjen;
+   664 tests grønne på tværs af de 9 dependents.
 2. [ ] **`typecheck`-target i analytics' Makefile** — `uv run mypy` (configen ligger i
    pyproject), plus linjen i `help`. Ret samtidig `[tool.mypy]` så den er eksplicit om
    `mypy_path` for shared, i stedet for at arve CI's `PYTHONPATH` ved held.
