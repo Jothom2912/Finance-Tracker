@@ -3,8 +3,9 @@ title: "/api/v1/categorize is unauthenticated and takes user_id from the request
 date: 2026-07-26
 severity: CRITICAL
 area: categorization
-status: open
-resolved-by: null
+status: resolved
+backlog: [P1-15]
+resolved-by: P1-15 (2026-07-27) — see plans/2026-07-27-p115-categorize-auth-and-secret-rotation.md and decisions/2026-07-27-categorize-internal-only.md
 ---
 
 # `/api/v1/categorize` is unauthenticated and takes `user_id` from the request body

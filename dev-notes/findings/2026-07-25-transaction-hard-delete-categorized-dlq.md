@@ -4,6 +4,7 @@ date: 2026-07-25
 severity: MEDIUM
 area: transaction
 status: open
+backlog: [P2-25]
 resolved-by: null
 ---
 

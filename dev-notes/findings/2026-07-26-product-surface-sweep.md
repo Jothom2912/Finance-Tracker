@@ -4,6 +4,7 @@ date: 2026-07-26
 severity: HIGH
 area: cross-cutting
 status: open
+backlog: [F2-08, F2-13, P1-15, P2-26, P2-27, P2-28, P2-29, P3-18, P3-24, P3-25, P3-26, P3-27, P3-28, P3-29, P3-30, P3-31, P3-32, P3-33, P3-34]
 resolved-by: null
 ---
 

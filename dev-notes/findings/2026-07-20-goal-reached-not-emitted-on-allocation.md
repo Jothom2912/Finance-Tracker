@@ -4,6 +4,7 @@ title: "Surplus allocation completing a goal emits no event → no goal-reached 
 date: 2026-07-20
 severity: MEDIUM
 status: resolved
+backlog: [F1-08]
 resolved-by: F1-08 (2026-07-20) — goal-service emits GoalReachedEvent from the allocation path; notification-service consumes goal.reached. Live e2e verified.
 area: goal-service, notification-service
 discovered-by: F1-01 e2e prep

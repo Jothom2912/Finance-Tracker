@@ -4,6 +4,7 @@ date: 2026-07-25
 severity: HIGH
 area: budget, transaction
 status: resolved
+backlog: [P1-13]
 resolved-by: ../plans/2026-07-25-p113-budget-spend-from-analytics.md
 ---
 

@@ -4,6 +4,7 @@ date: 2026-07-26
 severity: HIGH
 area: frontend, transaction
 status: resolved
+backlog: [P1-14]
 resolved-by: P1-14 (2026-07-26)
 ---
 

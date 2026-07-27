@@ -4,6 +4,7 @@ date: 2026-07-26
 severity: LOW
 area: ai, analytics, tests
 status: open
+backlog: [P3-21]
 resolved-by: null
 ---
 

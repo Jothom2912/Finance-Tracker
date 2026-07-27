@@ -12,7 +12,8 @@ Both humans and AI agents read and write here. Agents: follow the `dev-notes` sk
 
 | Folder | Contents | When to write here |
 |--------|----------|--------------------|
-| `architecture/` | System overview, per-service breakdowns, data flows, event catalog | When the architecture *changes* or understanding deepens |
+| `STATUS.md` | Where the work stands: active plan, next up, open findings, standing traps | When the active plan changes, an item finishes, or a session ends |
+| `architecture/` | System overview, per-service breakdowns, data flows (events are documented in the publishing service, not centrally) | When the architecture *changes* or understanding deepens |
 | `patterns/` | One file per recurring pattern: what, why, canonical implementation, gotchas | When a pattern is introduced, changes shape, or its gotchas grow |
 | `findings/` | Audit findings: problems, risks, tech debt (severity-tagged) | After any audit/review; mark items `resolved` when fixed |
 | `plans/` | Implementation plans for features/refactors (one file per plan) | Before starting non-trivial work |
@@ -29,13 +30,19 @@ Both humans and AI agents read and write here. Agents: follow the `dev-notes` sk
   `open | in-progress | done | resolved | superseded | wont-do`.
 - **Never delete** a finding/decision — mark it `resolved`/`superseded` with a pointer to
   what replaced it. History is the point.
-- **Update the index**: `00-INDEX.md` lists every document with a one-line hook. Add a line
-  when you add a file.
+- **Update the index**: `00-INDEX.md` lists every document with a one-clause hook — enough
+  to decide whether to open it, no more. Session logs are indexed in
+  `sessions/00-SESSIONS.md` instead. `make notes-check` fails on a file that is in neither.
+- **Retrieval is by ID**: backlog/feature IDs are this vault's primary key. Put the ID in
+  `backlog:` frontmatter so `grep -rn P1-15 dev-notes/` returns the whole story — finding,
+  item, plan, decision, session.
 - **Formal ADRs** live in `docs/adr/` (repo docs, numbered `NNNN-slug.md`). `decisions/`
   here is the lightweight day-to-day log; promote a decision to `docs/adr/` when it shapes
-  the system long-term. ⚠ There are currently two ADR numbering schemes in `docs/`
-  (`docs/adr/0001…` and `docs/ADR-002/003-*.md`) — see finding [MAINT-ADR-numbering] in
-  `findings/`.
+  the system long-term. ⚠ There are still two ADR numbering schemes in `docs/`
+  (`docs/adr/0001…` and `docs/ADR-002/003-*.md`); `docs/adr/NNNN-slug.md` is the surviving
+  one — never add to the other. Recorded under repo hygiene in
+  [findings/2026-07-07-architecture-audit.md](findings/2026-07-07-architecture-audit.md);
+  there is no `MAINT-ADR-numbering` finding, despite what this line used to claim.
 - **Language**: English for durable docs (matches repo docs). Danish is fine in session
   notes.
 - **Cross-link** liberally: `[text](relative/path.md)` — keeps the graph navigable in

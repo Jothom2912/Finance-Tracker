@@ -6,6 +6,7 @@ document itself is where detail belongs. `make notes-check` fails on a file that
 here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/00-SESSIONS.md).
 
 ## Meta
+- [STATUS.md](STATUS.md) — where the work stands: active plan, next up, open findings, standing traps. **Read first.**
 - [README.md](README.md) — how this knowledge base works: structure, conventions, statuses.
 
 ## Architecture (living documents)

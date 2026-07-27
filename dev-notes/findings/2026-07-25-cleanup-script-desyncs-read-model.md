@@ -4,6 +4,7 @@ date: 2026-07-25
 severity: MEDIUM
 area: transaction, analytics, tooling
 status: resolved
+backlog: [P3-20]
 resolved-by: plans/2026-07-26-p320-cleanup-script-outbox.md
 ---
 

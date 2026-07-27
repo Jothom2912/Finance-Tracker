@@ -4,6 +4,7 @@ date: 2026-07-25
 severity: LOW
 area: saga
 status: open
+backlog: [P3-19]
 resolved-by: null
 ---
 

@@ -5,6 +5,7 @@ date: 2026-07-17
 severity: LOW
 area: goal-service
 status: resolved
+backlog: [P3-16]
 resolved-by: P3-16 soft-delete, commit 5cd613e5 (2026-07-17) — see [plans/2026-07-17-p316-goal-soft-delete.md](../plans/2026-07-17-p316-goal-soft-delete.md)
 ---
 
