@@ -10,8 +10,9 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 ## Active
 
 Nothing in flight. Last shipped: **P3-40** (2026-07-27) — workers share their API service's
-image, so `compose build <svc>` no longer leaves them on stale code. Before that, P1-15 +
-P2-26 with CI green (run `30266231499`).
+image, so `compose build <svc>` no longer leaves them on stale code. CI green at `5a9d60df`
+(run `30282200565`, 18/18), with the new `Compose image-sharing check` step confirmed to have
+actually run — a green *run* would also be green if the step had been skipped.
 
 ## Next up
 

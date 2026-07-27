@@ -104,6 +104,9 @@ the old setup would have gotten wrong:
 ## Outcome
 
 2 commits: `f3534abb` (compose), `f42d0a43` (guard). E2E 24/24, stack 51/51 running.
+CI green at `5a9d60df` (run `30282200565`, 18/18); the `Compose image-sharing check` step was
+verified present and `success` in the `repo-lint` job, not merely inferred from the run's
+conclusion — a skipped step and a passing step give the same colour at run level.
 
 **The A/B was run rather than reasoned about**, because this is the one item whose failure
 mode is a verification that passes. A marker comment went into
