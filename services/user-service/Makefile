@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev test test-unit test-integration lint typecheck format format-check check migrate migrate-down freeze clean
+.PHONY: help install-deps dev test test-unit test-integration lint typecheck format format-check check migrate migrate-down clean
 
 help: ## Show available targets
 	@printf 'Available targets:\n'
@@ -15,7 +15,6 @@ help: ## Show available targets
 	@printf '  check               Run all quality checks\n'
 	@printf '  migrate             Run database migrations to latest\n'
 	@printf '  migrate-down        Rollback last migration\n'
-	@printf '  freeze              Generate requirements.txt from pyproject.toml\n'
 	@printf '  clean               Remove generated artifacts\n'
 
 install-deps: ## Install all dependencies (prod + dev)
@@ -56,9 +55,6 @@ migrate: ## Run database migrations to latest
 
 migrate-down: ## Rollback last migration
 	uv run alembic downgrade -1
-
-freeze: ## Generate requirements.txt from pyproject.toml (for Docker builds)
-	uv export --no-dev --no-hashes > requirements.txt
 
 clean: ## Remove generated artifacts
 	rm -rf .venv .pytest_cache .ruff_cache .coverage *.egg-info
