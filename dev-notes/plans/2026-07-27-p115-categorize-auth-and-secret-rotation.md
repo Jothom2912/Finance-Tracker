@@ -1,7 +1,7 @@
 ---
 title: "P1-15 + P2-26: lås /api/v1/categorize, rotér den delte HS256-nøgle, slå require_exp til"
 date: 2026-07-27
-status: open            # open | in-progress | done | superseded
+status: in-progress     # open | in-progress | done | superseded
 backlog-items: [P1-15, P2-26]
 related:
   - findings/2026-07-26-categorize-endpoint-unauthenticated.md
@@ -138,23 +138,23 @@ Rækkefølgen er ikke kosmetisk. To steder er den bærende:
 
 ### Fase A — luk endpointet (den kritiske del)
 
-1. [ ] **A1: transaction-service sender nøglen.** `app/config.py` får
+1. [x] **A1: transaction-service sender nøglen.** `app/config.py` får
    `INTERNAL_API_KEY: str | None = None`; `categorization_client.py` læser den i `__init__`
    og sætter `headers={"X-Internal-API-Key": ...}` på begge `client.post` (:46, :81).
    Mønster fra `goal-service/app/adapters/outbound/account_adapter.py:10-16,28`.
    `docker-compose.yml` transaction-service-blokken (:277-299) og de tre
    transaction-workers der konstruerer klienten får `INTERNAL_API_KEY`.
    *Harmløs alene* — categorization-service ignorerer stadig headeren.
-2. [ ] **A2: categorization-service kræver nøglen.** Ny `require_internal_api_key` kopieret
+2. [x] **A2: categorization-service kræver nøglen.** Ny `require_internal_api_key` kopieret
    fra `user-service/app/adapters/inbound/rest_api.py:16-28` — `compare_digest`, 503 når
    ukonfigureret, 401 ved mismatch. **Ikke** account-services `!=`-variant (:17-24).
    `config.py` får `INTERNAL_API_KEY: str | None = None` (fail-closed, ikke dev-streng-default).
    Dependency på `categorize_router` (`categorize_api.py:22`), ikke pr. endpoint.
-3. [ ] **A3: fjern `user_id` fra `CategorizeRequestDTO`** (`app/application/dto.py:8-14`) og
+3. [x] **A3: fjern `user_id` fra `CategorizeRequestDTO`** (`app/application/dto.py:8-14`) og
    forenkl `categorize_batch`'s user-udledning (`categorize_api.py:38-46` falder væk).
    `build_categorization_service(user_id=None)` overalt på HTTP-stien. Bind batch med
    `max_items` (foreslået 500, samme loft som `BulkCreateTransactionDTO`).
-4. [ ] **A4: live-bevis.** Gentag findings' egen demonstration: `curl` mod
+4. [x] **A4: live-bevis.** Gentag findings' egen demonstration: `curl` mod
    `localhost:8005/api/v1/categorize/` med `"SHOP N PLAY"` og `user_id: 1` uden credentials
    → skal være **401** (var 200 med `tier:"rule", subcategory_id:5`). Med korrekt header →
    200. Og: opret en transaktion via API og bekræft at den stadig får `category_name` — sync-stien
