@@ -43,8 +43,13 @@ Both humans and AI agents read and write here. Agents: follow the `dev-notes` sk
   one — never add to the other. Recorded under repo hygiene in
   [findings/2026-07-07-architecture-audit.md](findings/2026-07-07-architecture-audit.md);
   there is no `MAINT-ADR-numbering` finding, despite what this line used to claim.
-- **Language**: English for durable docs (matches repo docs). Danish is fine in session
-  notes.
+- **Language**: Danish or English, per document — write in whichever makes the reasoning
+  clearest, and do not mix them inside one file. English is *preferred* for
+  `architecture/` and `patterns/`, which are read as reference rather than narrative.
+  (This rule used to say "English for durable docs, Danish only in session notes"; roughly
+  40% of findings and plans are Danish, so it described an intention nobody followed.
+  Corrected 2026-07-27 to describe practice — an unenforced convention is worse than none,
+  because it makes every other rule here look optional.)
 - **Cross-link** liberally: `[text](relative/path.md)` — keeps the graph navigable in
   Obsidian and in plain editors.
 

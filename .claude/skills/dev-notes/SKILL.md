@@ -57,7 +57,8 @@ it about services you are not touching. Scope it.
   - Dated files are named `YYYY-MM-DD-short-slug.md`. Never invent dates — use today's.
   - Never delete findings/decisions; set `status: resolved | superseded` with a link to
     what resolved/replaced them.
-  - English for durable docs; keep frontmatter fields intact (they are queried).
+  - Danish or English per document, not mixed inside one; English preferred for
+    `architecture/` and `patterns/`. Keep frontmatter fields intact — they are queried.
 
 - **What goes where**
   - Fixed a finding → set its `status: resolved`, fill `resolved-by`, update backlog item.

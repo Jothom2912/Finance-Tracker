@@ -4,6 +4,7 @@ date: 2026-07-25
 severity: MEDIUM
 area: infrastructure
 status: open
+backlog: [P3-40]
 resolved-by: null
 ---
 
