@@ -102,7 +102,7 @@ On goal mutations, events are written to the `outbox_events` table in the same D
 | `JWT_ALGORITHM` | No | `HS256` | JWT algorithm |
 | `USER_SERVICE_URL` | No | `http://user-service:8001` | User-service URL for account validation |
 | `USER_SERVICE_TIMEOUT` | No | `2.0` | HTTP timeout for user-service calls (seconds) |
-| `INTERNAL_API_KEY` | No | `dev-internal-api-key-change-in-production` | Internal API key for service-to-service auth |
+| `INTERNAL_API_KEY` | Yes | — | Internal API key for service-to-service auth; startup fails without it (P1-15) |
 | `ENVIRONMENT` | No | `development` | Runtime environment |
 
 ## Testing

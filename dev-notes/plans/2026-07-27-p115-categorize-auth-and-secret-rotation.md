@@ -1,7 +1,7 @@
 ---
 title: "P1-15 + P2-26: lås /api/v1/categorize, rotér den delte HS256-nøgle, slå require_exp til"
 date: 2026-07-27
-status: in-progress     # open | in-progress | done | superseded
+status: in-progress     # open | in-progress | done | superseded  ← kun trin 16 (CI efter push) mangler
 backlog-items: [P1-15, P2-26]
 related:
   - findings/2026-07-26-categorize-endpoint-unauthenticated.md
@@ -204,7 +204,7 @@ Rækkefølgen er ikke kosmetisk. To steder er den bærende:
 
 ### Fase D — fail-closed på de tre dev-streng-defaults
 
-11. [ ] **D1:** `goal/config.py:13`, `banking/config.py:17`, `notification/config.py:11`
+11. [x] **D1:** `goal/config.py:13`, `banking/config.py:17`, `notification/config.py:11`
     defaulter til `dev-internal-api-key-change-in-production`. Skift til `None` + fail fast
     ved startup, som user-service gør. **Risiko:** en container der ikke får variablen
     crash-looper nu i stedet for at køre med en kendt nøgle — det er meningen, men
@@ -212,20 +212,20 @@ Rækkefølgen er ikke kosmetisk. To steder er den bærende:
 
 ### Verifikation
 
-12. [ ] Per-service unit/integration: `make -C services/categorization-service test`,
+12. [x] Per-service unit/integration: `make -C services/categorization-service test`,
     `make -C services/transaction-service test`, og de øvrige berørte services.
     categorization-services egne tests kalder service-objektet direkte, ikke routeren, så
     A2 brækker ingen eksisterende test — det betyder også at der **skal skrives en ny test**
     for 401/200 på routeren, ellers er dependencyen utestet.
-13. [ ] `make test-e2e` — hele suiten, 24/24. Forventet at fange B1/B2-uoverensstemmelser.
-14. [ ] Live: A4's to curl-prober, plus et token uden `exp` mod hver af de 12 services → 401.
-15. [ ] `grep -rn "dev-secret-key-change-in-production"` over trackede filer → kun
+13. [x] `make test-e2e` — hele suiten, 24/24. Forventet at fange B1/B2-uoverensstemmelser.
+14. [x] Live: A4's to curl-prober, plus et token uden `exp` mod hver af de 12 services → 401.
+15. [x] `grep -rn "dev-secret-key-change-in-production"` over trackede filer → kun
     dev-notes' historiske omtaler tilbage. Samme for `dev-internal-api-key-…`.
 16. [ ] `make ci-status` grøn efter push, og bekræft at e2e-jobbet **kørte** (ikke skipped).
-17. [ ] Ret de forkerte påstande i BACKLOG.md: P1-15's "already has S2S config", P2-26's
+17. [x] Ret de forkerte påstande i BACKLOG.md: P1-15's "already has S2S config", P2-26's
     "one line per `app/auth.py`" (analytics er ikke på shared-pakken), og P2-15's "remove
     real EB app id from tracked files" (det trackede id er sandbox og bevidst).
-18. [ ] Bekræft at bank-sync stadig virker efter rotationen — EB-stien deler `INTERNAL_API_KEY`
+18. [x] Bekræft at bank-sync stadig virker efter rotationen — EB-stien deler `INTERNAL_API_KEY`
     med banking-service (D1), så en fejl her rammer den fulde ADR-0003-kæde, ikke kun auth.
 
 ## Risks & rollback
