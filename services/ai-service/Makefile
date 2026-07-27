@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev test test-unit lint format format-check check clean
+.PHONY: help install-deps dev test test-unit lint typecheck format format-check check clean
 
 help: ## Show available targets
 	@printf 'Available targets:\n'
@@ -8,6 +8,7 @@ help: ## Show available targets
 	@printf '  test                Run all tests\n'
 	@printf '  test-unit           Run unit tests only\n'
 	@printf '  lint                Run ruff linter\n'
+	@printf '  typecheck           Run mypy (P2-31 gate)\n'
 	@printf '  format              Auto-format code with ruff\n'
 	@printf '  format-check        Check code formatting\n'
 	@printf '  check               Run all quality checks\n'
@@ -34,6 +35,12 @@ test-eval-retrieval: ## Retrieval-eval alene mod ES-hybrid (kræver compose-stak
 lint: ## Run ruff linter
 	uv run ruff check .
 
+# P2-31: config lives in pyproject's [tool.mypy]. No MYPYPATH — shared/* resolve
+# as installed packages via py.typed; pointing mypy at their source as well is
+# what produces "Source file found twice". The venv is the single source of truth.
+typecheck: ## Run mypy (P2-31 gate)
+	uv run mypy
+
 format: ## Auto-format code with ruff
 	uv run ruff format .
 	uv run ruff check --fix .
@@ -41,7 +48,7 @@ format: ## Auto-format code with ruff
 format-check: ## Check code formatting without changes
 	uv run ruff format --check .
 
-check: lint format-check ## Run all quality checks (lint + format)
+check: lint format-check typecheck ## Run all quality checks (lint + format + types)
 
 clean: ## Remove generated artifacts
 	rm -rf .venv .pytest_cache .ruff_cache .coverage *.egg-info

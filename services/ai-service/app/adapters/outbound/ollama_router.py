@@ -70,7 +70,11 @@ class OllamaRouter:
         current_period = datetime.now().strftime("%Y-%m")
         system_prompt = _ROUTER_SYSTEM_PROMPT_TEMPLATE.format(current_period=current_period)
 
-        def _call() -> str:
+        # Ollama types message.content as optional and it genuinely can be
+        # None. That is already handled — None fails model_validate_json as a
+        # ValidationError and takes the fallback below — so the annotation was
+        # the only thing that was wrong.
+        def _call() -> str | None:
             response = get_ollama_client().chat(
                 model=settings.LLM_ROUTER_MODEL,
                 messages=[
@@ -92,7 +96,9 @@ class OllamaRouter:
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         try:
-            intent = ResolvedIntent.model_validate_json(raw)
+            # `or ""` keeps pydantic's signature happy; both None and "" raise
+            # ValidationError, and the warning below still logs the real `raw`.
+            intent = ResolvedIntent.model_validate_json(raw or "")
         except ValidationError:
             logger.warning("Router output failed validation, falling back to transaction_search: %s", raw)
             intent = ResolvedIntent(

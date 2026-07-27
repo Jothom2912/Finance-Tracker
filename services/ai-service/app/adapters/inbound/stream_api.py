@@ -8,6 +8,7 @@ addEventListener("intent_resolved", ...) directly.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -62,7 +63,7 @@ async def chat_stream(
 ) -> EventSourceResponse:
     token = _get_token(request)
 
-    async def event_generator():
+    async def event_generator() -> AsyncIterator[ServerSentEvent]:
         async for event in run_pipeline(
             question=body.question,
             user_id=user_id,
