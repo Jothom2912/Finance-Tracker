@@ -3,6 +3,23 @@ set -euo pipefail
 
 echo "=== Finance Tracker Kubernetes setup ==="
 
+# k8s/secrets.yaml holder den delte HS256-nøgle og er gitignored (P2-26), så
+# et frisk clone har den ikke. Fanget her frem for at lade `kubectl apply -k`
+# fejle på en manglende fil i kustomization'en — samme fail-closed som
+# compose's ${JWT_SECRET:?}, blot med en besked man kan handle på.
+if [ ! -f k8s/secrets.yaml ]; then
+  cat >&2 <<'MSG'
+k8s/secrets.yaml findes ikke (den er gitignored med vilje).
+
+  cp k8s/secrets.yaml.example k8s/secrets.yaml
+
+Udfyld derefter JWT_SECRET, SECRET_KEY og INTERNAL_API_KEY. JWT_SECRET og
+SECRET_KEY skal have samme værdi — det er én delt nøgle, gateway-service
+læser den blot under det gamle navn.
+MSG
+  exit 1
+fi
+
 echo "Checking kubectl / Kubernetes cluster..."
 kubectl get nodes
 

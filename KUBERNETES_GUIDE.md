@@ -48,6 +48,24 @@ Close and reopen PowerShell afterwards.
 
 ## 2. Start the full Kubernetes setup
 
+### First: create the secret file
+
+`k8s/secrets.yaml` holds the shared HS256 signing key and is **gitignored**, so
+a fresh clone does not have it. Copy the template and fill in the three empty
+fields:
+
+```powershell
+Copy-Item k8s/secrets.yaml.example k8s/secrets.yaml
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # JWT_SECRET
+python -c "import secrets; print(secrets.token_urlsafe(32))"   # INTERNAL_API_KEY
+```
+
+`JWT_SECRET` and `SECRET_KEY` must hold the **same** value — it is one shared
+key, and gateway-service simply reads it under the older name. If they diverge,
+gateway verifies tokens no other service can issue.
+
+`k8s-up.ps1` / `k8s-up.sh` stop with this instruction if the file is missing.
+
 From the project root:
 
 ```powershell
@@ -82,7 +100,7 @@ Instead of running all these commands manually:
 ```powershell
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/secrets.yaml    # gitignored — see section 2
 kubectl apply -f k8s/infra/
 kubectl apply -f k8s/apps/
 kubectl apply -f k8s/workers/

@@ -2,6 +2,18 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Finance Tracker Kubernetes setup ===" -ForegroundColor Cyan
 
+# k8s/secrets.yaml holder den delte HS256-nøgle og er gitignored (P2-26), så
+# et frisk clone har den ikke. Fanget her frem for at lade `kubectl apply -k`
+# fejle på en manglende fil i kustomization'en.
+if (-not (Test-Path "k8s/secrets.yaml")) {
+  Write-Host "k8s/secrets.yaml findes ikke (den er gitignored med vilje)." -ForegroundColor Red
+  Write-Host "  Copy-Item k8s/secrets.yaml.example k8s/secrets.yaml" -ForegroundColor Yellow
+  Write-Host "Udfyld derefter JWT_SECRET, SECRET_KEY og INTERNAL_API_KEY." -ForegroundColor Yellow
+  Write-Host "JWT_SECRET og SECRET_KEY skal have samme vaerdi - det er een delt" -ForegroundColor Yellow
+  Write-Host "noegle, gateway-service laeser den blot under det gamle navn." -ForegroundColor Yellow
+  throw "k8s/secrets.yaml is required."
+}
+
 Write-Host "Checking kubectl / Kubernetes cluster..." -ForegroundColor Cyan
 kubectl get nodes
 

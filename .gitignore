@@ -62,3 +62,4 @@ dev-notes/.obsidian/
 
 # Local ChromaDB sanity-check databases (contain personal transaction data)
 services/ai-service/test_chromadb_sanity*/
+k8s/secrets.yaml
