@@ -106,3 +106,41 @@ def test_get_saga_status_strips_fetched_items_but_keeps_user_id(client: TestClie
     assert context["total_fetched"] == 2
     assert context["new_imported"] == 2
     assert context["duplicates_skipped"] == 0
+
+
+@pytest.mark.parametrize(
+    ("context", "case"),
+    [
+        ({}, "user_id missing entirely"),
+        ({"user_id": None}, "user_id present but null"),
+        ({"user_id": "not-a-number"}, "user_id not coercible to int"),
+        ({"user_id": ["1"]}, "user_id is a list"),
+    ],
+)
+def test_get_saga_status_denies_when_context_owner_is_unusable(
+    monkeypatch: pytest.MonkeyPatch,
+    context: dict[str, object],
+    case: str,
+) -> None:
+    """A saga whose context carries no usable owner is 403, never 500.
+
+    The ownership check coerces ``context["user_id"]`` to int, and P2-31's gate
+    flagged that it fed ``int()`` a possibly-None value. Rewriting it to spell the
+    None case out is only safe if every unusable shape still denies access rather
+    than raising — so the shapes are pinned here, not argued about.
+    """
+    saga = _make_saga()
+    saga.context = context
+
+    async def fake_get_by_id(self: PostgresSagaRepository, saga_id: str) -> SagaInstance | None:
+        return saga if saga_id == SAGA_ID else None
+
+    async def fake_get_by_correlation_id(self: PostgresSagaRepository, correlation_id: str) -> SagaInstance | None:
+        return None
+
+    monkeypatch.setattr(PostgresSagaRepository, "get_by_id", fake_get_by_id)
+    monkeypatch.setattr(PostgresSagaRepository, "get_by_correlation_id", fake_get_by_correlation_id)
+
+    resp = TestClient(app).get(f"/api/v1/sagas/{SAGA_ID}", headers=make_auth_header())
+
+    assert resp.status_code == 403, case

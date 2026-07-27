@@ -271,8 +271,31 @@ den fejlmode dette item findes for at rette.
      `IS NULL` → 0 rækker → 409), compilede jeg statement'et frem for at tro på det. En
      fejlsti man kun har ræsonneret sig til er samme slags påstand som en uverificeret
      portdocstring — jf. sync-trigger-fundet.
+   - [x] **saga-service** — `PENDING`. **Første service hvor den ærlige måling gav *færre*
+     fejl end tabellen: 2, ikke 11.** Servicen er allerede annoteret; tabellens 11 var
+     import-støj som deps opløser. Fordi retningen var uventet, blev
+     `disallow_untyped_defs` probet med en uannoteret funktion frem for antaget aktiv —
+     og **den første probe var selv blind**: `str.replace` på en anchor der ikke fandtes er
+     en tavs no-op, så "ingen ny fejl" betød "ingen ny kode". Tredje gentagelse af trin 1's
+     lektie, nu på verifikationsværktøjet i stedet for på målingen.
+     De 2 fejl var begge reelle:
+     - `outbox_adapter.py:52` → [SerializableEvent krævede settable
+       attributter](../findings/2026-07-27-serializable-event-demands-mutable-attrs.md).
+       Rettet i shared (`messaging` 0.1.2), egen commit før denne. **Kun saga kunne se det**:
+       budget og user kalder gennem egen port, hvor P2-32-ignoren står, og
+       `# type: ignore[assignment]` slår typen fast for alle senere kald på navnet — én
+       begrundet ignore skjulte en anden, urelateret usand kontrakt.
+     - `main.py:51` → `int((instance.context or {}).get("user_id"))` på en ejerskabs-check.
+       `int(None)` var *tilsigtet* fanget af `except TypeError`, så None-grenen er nu skrevet
+       ud. Grenen var **utestet** (den eksisterende 403-test dækker kun forkert bruger, ikke
+       manglende `user_id`), så fire shapes er pinnet — og de nye tests er kørt mod den
+       **gamle** kode først: 9/9 grønne der også, hvilket er beviset for at ændringen er
+       adfærdsneutral frem for påstanden om det.
+     Kontrolleret begge veje, og efter en løsnet Protocol specifikt at den ikke blev *tom*:
+     `correlation_id: int | None` mod `str | None` flagges stadig. Mutability- og
+     optionality-aksen blev løsnet, typeaksen ikke. 54 tests grønne (50 + 4 nye).
    - Resterende, i målt rækkefølge:
-   saga (11) → transaction (27 målt) → categorization (17). Hver service:
+   transaction (27 målt) → categorization (17). Hver service:
    `mypy` i dev-group, `[tool.mypy]`-blok kopieret fra analytics, `typecheck`-target,
    navn på CI-allowlisten. Blokeret indtil P3-23/P3-39: **banking, account**. Eget item:
    **gateway**.

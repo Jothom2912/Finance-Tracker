@@ -47,8 +47,13 @@ async def get_saga_status(saga_id: str, user_id: int = Depends(get_current_user_
         if instance is None:
             raise HTTPException(status_code=404, detail="Saga not found")
 
+        # The missing-key case is spelled out rather than left to int(None) raising
+        # TypeError: the except still has work to do (a non-numeric or list value),
+        # but relying on it for the common "no user_id in context" path made the
+        # annotation false. Both routes land on owner_id = None and a 403.
+        raw_owner_id = (instance.context or {}).get("user_id")
         try:
-            owner_id = int((instance.context or {}).get("user_id"))
+            owner_id = int(raw_owner_id) if raw_owner_id is not None else None
         except (TypeError, ValueError):
             owner_id = None
         if owner_id is None or owner_id != user_id:
