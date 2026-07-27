@@ -1,4 +1,5 @@
 ---
+title: Deleting a goal with allocation history returns 500 (FK violation)
 id: F-2026-07-17-01
 date: 2026-07-17
 severity: LOW

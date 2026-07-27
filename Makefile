@@ -163,6 +163,12 @@ lint-repo: ## Lint + format-check the WHOLE repo, incl. scripts/ and tests/
 ci-status: ## Show the latest CI run for the current branch (exit 1 if red)
 	@python3 scripts/ci_status.py
 
+# The vault's index, links and frontmatter are maintained by hand, so they drift
+# silently — a 2026-07-27 review found an open finding that had never been
+# indexed. Stdlib-only, runs in well under a second.
+notes-check: ## Check dev-notes/ for index drift, dead links and bad frontmatter
+	@python3 scripts/notes_check.py
+
 check: ## Run all quality checks (lint + format + tests)
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir check; done
 	$(MAKE) -C $(FRONTEND_DIR) check

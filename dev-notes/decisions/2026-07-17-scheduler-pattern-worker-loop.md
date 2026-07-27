@@ -1,7 +1,7 @@
 ---
 date: 2026-07-17
-topic: Scheduler pattern for periodic jobs — in-service worker-loop container, not KEDA cron
-status: active
+title: Scheduler pattern for periodic jobs — in-service worker-loop container, not KEDA cron
+status: accepted
 ---
 
 # Scheduler pattern: in-service worker-loop container

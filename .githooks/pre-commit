@@ -34,8 +34,24 @@ while IFS= read -r -d '' file; do
     staged+=("$file")
 done < <(git diff --cached --name-only -z --diff-filter=ACM -- '*.py')
 
-if [ ${#staged[@]} -eq 0 ]; then
+# dev-notes/ is checked whenever a note is touched — its index, links and
+# frontmatter are hand-maintained and drift the same silent way CI did. Also
+# stdlib-only and sub-second, so it belongs in the hook rather than only in CI.
+# Runs on the whole vault, not just staged notes: the failure it catches is a
+# *missing* line in the index, which no per-file check can see.
+notes_touched=$(git diff --cached --name-only --diff-filter=ACMD -- 'dev-notes/*.md')
+
+if [ ${#staged[@]} -eq 0 ] && [ -z "$notes_touched" ]; then
     exit 0
+fi
+
+notes_status=0
+if [ -n "$notes_touched" ]; then
+    python3 scripts/notes_check.py --quiet || notes_status=1
+fi
+
+if [ ${#staged[@]} -eq 0 ]; then
+    exit $notes_status
 fi
 
 # Prefer a ruff on PATH; fall back to uvx, which every dev here already has
@@ -60,15 +76,21 @@ fi
 #
 # `|| status=1` rather than letting -e abort: both checks should report, so a
 # single commit attempt shows every problem instead of one per retry.
-status=0
-"${ruff_cmd[@]}" check "${staged[@]}" || status=1
-"${ruff_cmd[@]}" format --check "${staged[@]}" || status=1
+ruff_status=0
+"${ruff_cmd[@]}" check "${staged[@]}" || ruff_status=1
+"${ruff_cmd[@]}" format --check "${staged[@]}" || ruff_status=1
 
-if [ $status -ne 0 ]; then
+# Reported separately from the notes check so the advice matches the failure —
+# a hook that blames ruff for a missing index line is worse than no hook.
+if [ $ruff_status -ne 0 ]; then
     echo >&2
     echo "pre-commit: ruff would fail CI on these files." >&2
     echo "            Fix with: ${ruff_cmd[*]} format <files>" >&2
     echo "            Bypass with: git commit --no-verify" >&2
 fi
 
-exit $status
+if [ $ruff_status -ne 0 ] || [ $notes_status -ne 0 ]; then
+    exit 1
+fi
+
+exit 0

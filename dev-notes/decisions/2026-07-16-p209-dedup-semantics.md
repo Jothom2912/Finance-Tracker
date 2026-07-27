@@ -1,7 +1,7 @@
 ---
 date: 2026-07-16
-topic: P2-09 dedup semantics — external_id key, transition fallback, IntegrityError backstop
-status: active
+title: P2-09 dedup semantics — external_id key, transition fallback, IntegrityError backstop
+status: accepted
 ---
 
 # P2-09: bank-import dedup on (account_id, external_id)

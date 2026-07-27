@@ -1,4 +1,5 @@
 ---
+title: goal-service migration 004 is Postgres-only — sqlite migration tests are red
 id: F-2026-07-12-01
 date: 2026-07-12
 severity: LOW

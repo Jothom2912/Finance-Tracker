@@ -1,7 +1,7 @@
 ---
 date: 2026-07-17
-topic: F1-04 — manual close-month button in UI; scheduled day-7 close deferred to backlog
-status: active
+title: F1-04 — manual close-month button in UI; scheduled day-7 close deferred to backlog
+status: accepted
 ---
 
 # F1-04: manual "Luk måned" button supersedes ADR-0003's out-of-scope line

@@ -1,7 +1,7 @@
 ---
 title: The transaction list endpoint returns a {total_count, items} envelope
 date: 2026-07-26
-status: implemented
+status: accepted
 supersedes: null
 promoted-to-adr: null
 ---

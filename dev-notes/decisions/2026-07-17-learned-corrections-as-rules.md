@@ -1,7 +1,7 @@
 ---
 date: 2026-07-17
-topic: F1-03 — learned corrections stored as auto-managed user rules, not merchant rows
-status: active
+title: F1-03 — learned corrections stored as auto-managed user rules, not merchant rows
+status: accepted
 ---
 
 # F1-03: learned corrections are RULES, not merchant-table rows
