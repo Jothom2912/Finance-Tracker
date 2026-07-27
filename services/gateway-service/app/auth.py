@@ -84,8 +84,12 @@ def get_account_id_from_headers(
         if user_id is None:
             return None
         try:
+            # Trailing slash er påkrævet: account-service ruter
+            # ``/api/v1/accounts/``, og uden slash svarer FastAPI 307, som
+            # httpx ikke følger by default. Denne sti returnerede derfor
+            # altid None — se findings/2026-07-27-gateway-default-account-307.
             resp = httpx.get(
-                f"{ACCOUNT_SERVICE_URL}/api/v1/accounts",
+                f"{ACCOUNT_SERVICE_URL}/api/v1/accounts/",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=ACCOUNT_SERVICE_TIMEOUT,
             )
