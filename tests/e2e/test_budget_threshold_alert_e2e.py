@@ -37,6 +37,7 @@ TRANSACTION_SERVICE = "http://localhost:8002/api/v1"
 BUDGET_SERVICE = "http://localhost:8003/api/v1"
 CATEGORIZATION_SERVICE = "http://localhost:8005/api/v1"
 NOTIFICATION_SERVICE = "http://localhost:8008/api/v1"
+ANALYTICS_SERVICE = "http://localhost:8012/api/v1"
 
 POLL_TIMEOUT = 20.0
 
@@ -44,6 +45,14 @@ POLL_TIMEOUT = 20.0
 YEAR, MONTH = 2026, 7
 TICK_TODAY = "date(2026, 7, 18)"  # → July has 31 days ⇒ days_remaining = 13
 EXPECTED_DAYS_REMAINING = 13
+
+# Every seed description embeds this keyword so the *rule* tier decides the
+# category. Without it the descriptions match nothing, all tiers are exhausted,
+# and the fallback tier rewrites the rows to "Diverse" — asynchronously, which
+# is what made this suite flaky. Keep the keyword and the category in sync;
+# both come from the global (user_id IS NULL) taxonomy seeded by cat-service.
+RULE_KEYWORD = "REMA1000"
+RULE_CATEGORY_NAME = "Mad & drikke"
 
 pytestmark = pytest.mark.e2e
 
@@ -136,23 +145,70 @@ def _effective_expense_category(account_id: int) -> tuple[int, float] | None:
     return int(cat_str.strip()), float(sum_str.strip())
 
 
-async def _await_stable_category(account_id: int, expected_sum: float, desc: str) -> int:
-    """Wait until the account's dominant expense category is STABLE — async
-    categorization can move a transaction (e.g. seed-id → rule-matched id) after
-    creation, so we require two identical reads before budgeting against it."""
+async def _await_category(account_id: int, expected_cat_id: int, expected_sum: float, desc: str) -> int:
+    """Wait until the account's July expenses have landed in the category the
+    rule engine is *known* to assign, at the expected sum.
 
-    async def _stable():
-        first = _effective_expense_category(account_id)
-        if not first or abs(first[1] - expected_sum) >= 0.01:
+    This used to wait for the dominant category to be "stable" — two identical
+    reads 2s apart — and budget against whatever it saw. That is a guess, not a
+    barrier: async categorization always rewrites these rows, so the fixture
+    raced the correction. When the correction was slow the fixture budgeted
+    against the create-time category, spend later landed elsewhere, and the
+    per-line alert never fired. See dev-notes finding
+    2026-07-27-e2e-alert-categorization-race.
+
+    Now the expected category is derived from a global keyword rule
+    (``RULE_KEYWORD`` → ``RULE_CATEGORY_NAME``), so there is a right answer to
+    wait for and a wrong answer to fail on.
+    """
+
+    async def _settled():
+        got = _effective_expense_category(account_id)
+        if not got:
             return None
-        await asyncio.sleep(2.0)
-        second = _effective_expense_category(account_id)
-        if second == first:
-            return first
+        cat_id, total = got
+        if cat_id != expected_cat_id or abs(total - expected_sum) >= 0.01:
+            return None
+        return got
+
+    cat_id, _ = await _poll_until(_settled, timeout=40.0, interval=2.0, desc=desc)
+    return cat_id
+
+
+async def _await_analytics_spend(token: str, account_id: int, category_id: int, expected: float, desc: str) -> None:
+    """Wait until *analytics* reports the spend — not just the transaction DB.
+
+    The scheduler does not read transactions; it reads ``expenses_by_category``
+    off analytics' overview endpoint (P1-13, see
+    ``decisions/2026-07-25-budget-spend-from-analytics.md``). Analytics is an
+    Elasticsearch read-side fed by its own projection consumer, so it lags the
+    transaction DB by an unbounded amount.
+
+    Waiting on postgres-transactions and then ticking is therefore the wrong
+    barrier: the tick reports ``failed_upstream: 0`` and emits nothing, because
+    from analytics' point of view the money has not been spent yet. Poll the
+    same source the scheduler reads.
+    """
+
+    async def _visible():
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(
+                f"{ANALYTICS_SERVICE}/analytics/overview",
+                params={
+                    "account_id": account_id,
+                    "start_date": f"{YEAR}-{MONTH:02d}-01",
+                    "end_date": f"{YEAR}-{MONTH:02d}-31",
+                },
+                headers=_auth(token),
+            )
+            if r.status_code != 200:
+                return None
+        for bucket in r.json().get("expenses_by_category") or []:
+            if bucket.get("category_id") == category_id and abs(float(bucket.get("amount", 0.0)) - expected) < 0.01:
+                return bucket
         return None
 
-    cat_id, _ = await _poll_until(_stable, timeout=40.0, interval=2.0, desc=desc)
-    return cat_id
+    await _poll_until(_visible, timeout=60.0, interval=2.0, desc=desc)
 
 
 def _run_alert_tick() -> str:
@@ -222,22 +278,27 @@ async def test_context():
         assert resp.status_code == 200, f"Category list failed: {resp.text}"
         expense_cats = [c for c in resp.json() if c["type"] == "expense"]
         assert expense_cats, "No expense categories found"
-        seed_cat = expense_cats[0]
+        # Budget against the category the rule tier will assign, not against
+        # whichever category happens to sort first — the latter is a leftover
+        # from earlier runs and guarantees a drift the fixture then races.
+        seed_cat = next((c for c in expense_cats if c["name"] == RULE_CATEGORY_NAME), None)
+        assert seed_cat is not None, (
+            f"expected global category {RULE_CATEGORY_NAME!r} for keyword {RULE_KEYWORD!r}; "
+            f"found {[c['name'] for c in expense_cats]}"
+        )
 
         # 850 of 1000 budget ⇒ 85% (crosses 80, not 100)
         for i, amount in enumerate([500.0, 350.0]):
-            await _create_expense(client, headers, account_id, seed_cat["id"], seed_cat["name"], amount, f"E2E {i}")
+            await _create_expense(
+                client, headers, account_id, seed_cat["id"], seed_cat["name"], amount, f"{RULE_KEYWORD} E2E {i}"
+            )
 
-        # Async categorization may move the transactions to a different category
-        # than the one supplied at create time. The per-line alert matches on the
-        # *effective* category, so wait for it to settle and budget against it.
-        category_id = await _await_stable_category(
-            account_id, expected_sum=850.0, desc="categorization to settle at 850"
+        # Create-time category and rule-tier outcome now agree, so this is a
+        # barrier with a right answer rather than a stability guess.
+        category_id = await _await_category(
+            account_id, seed_cat["id"], expected_sum=850.0, desc="categorization to settle at 850"
         )
-
-        # Resolve the effective category's name for the notification-text check.
-        cat_by_id = {c["id"]: c["name"] for c in resp.json()}
-        category_name = cat_by_id.get(category_id, str(category_id))
+        category_name = seed_cat["name"]
 
         resp = await client.post(
             f"{BUDGET_SERVICE}/monthly-budgets?account_id={account_id}",
@@ -245,6 +306,12 @@ async def test_context():
             json={"month": MONTH, "year": YEAR, "lines": [{"category_id": category_id, "amount": 1000.0}]},
         )
         assert resp.status_code == 201, f"Budget creation failed: {resp.text}"
+
+        # The scheduler reads spend from analytics, so the ES projection must
+        # have caught up before any tick can see the 850.
+        await _await_analytics_spend(
+            _make_token(user_id), account_id, category_id, 850.0, desc="analytics to report 850"
+        )
 
     return {
         "user_id": user_id,
@@ -293,13 +360,24 @@ class TestBudgetThresholdAlertE2E:
         # Push spend over budget: +400 ⇒ 1250 total = 125%
         async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
             await _create_expense(
-                client, headers, ctx["account_id"], ctx["category_id"], ctx["category_name"], 400.0, "E2E over"
+                client,
+                headers,
+                ctx["account_id"],
+                ctx["category_id"],
+                ctx["category_name"],
+                400.0,
+                f"{RULE_KEYWORD} E2E over",
             )
 
-        settled_cat = await _await_stable_category(
-            ctx["account_id"], expected_sum=1250.0, desc="over-budget spend to settle at 1250"
+        await _await_category(
+            ctx["account_id"],
+            ctx["category_id"],
+            expected_sum=1250.0,
+            desc="over-budget spend to settle at 1250",
         )
-        assert settled_cat == ctx["category_id"], f"category drifted from {ctx['category_id']} to {settled_cat}"
+        await _await_analytics_spend(
+            ctx["token"], ctx["account_id"], ctx["category_id"], 1250.0, desc="analytics to report 1250"
+        )
 
         _run_alert_tick()  # both 80 and 100 now at/over threshold for this account
 
