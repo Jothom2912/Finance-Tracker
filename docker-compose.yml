@@ -1,3 +1,9 @@
+# P3-40: pinnet med vilje. Uden dette udleder Compose projektnavnet — og dermed
+# image-taggene — af mappenavnet, mens workerne refererer `finance-tracker-<svc>`
+# som en literal. En klon i en anders navngivet mappe ville så bygge
+# `mit-repo-banking-service` og lade workerne pulle et image der ikke findes.
+name: finance-tracker
+
 # ACTIVE_-prefixed vars (deliberately NOT plain ENABLE_BANKING_*, which .env
 # defines for the legacy monolith) select which Enable Banking app compose
 # runs with. Unset → sandbox defaults below. Set ENABLE_BANKING_ACTIVE_APP_ID
@@ -129,6 +135,7 @@ services:
     build:
       context: .
       dockerfile: services/user-service/Dockerfile
+    image: finance-tracker-user-service
     restart: unless-stopped
     ports:
       - "8001:8001"
@@ -170,6 +177,7 @@ services:
     build:
       context: .
       dockerfile: services/goal-service/Dockerfile
+    image: finance-tracker-goal-service
     restart: unless-stopped
     ports:
       - "8006:8006"
@@ -196,9 +204,7 @@ services:
         condition: service_healthy
 
   goal-outbox-worker:
-    build:
-      context: .
-      dockerfile: services/goal-service/Dockerfile
+    image: finance-tracker-goal-service
     command: ["python", "-m", "app.workers.outbox_publisher"]
     restart: on-failure
     environment:
@@ -215,9 +221,7 @@ services:
         condition: service_healthy
 
   goal-budget-consumer:
-    build:
-      context: .
-      dockerfile: services/goal-service/Dockerfile
+    image: finance-tracker-goal-service
     command: ["python", "-m", "app.workers.budget_month_closed_consumer"]
     restart: on-failure
     environment:
@@ -234,9 +238,7 @@ services:
         condition: service_healthy
 
   user-outbox-worker:
-    build:
-      context: .
-      dockerfile: services/user-service/Dockerfile
+    image: finance-tracker-user-service
     command: ["python", "-m", "app.workers.outbox_publisher"]
     restart: on-failure
     environment:
@@ -278,6 +280,7 @@ services:
     build:
       context: .
       dockerfile: services/transaction-service/Dockerfile
+    image: finance-tracker-transaction-service
     restart: unless-stopped
     ports:
       - "8002:8002"
@@ -303,6 +306,7 @@ services:
     build:
       context: .
       dockerfile: services/account-service/Dockerfile
+    image: finance-tracker-account-service
     restart: unless-stopped
     ports:
       - "8004:8003"
@@ -339,9 +343,7 @@ services:
       start_period: 10s
 
   account-outbox-publisher:
-    build:
-      context: .
-      dockerfile: services/account-service/Dockerfile
+    image: finance-tracker-account-service
     command: ["python", "-m", "app.workers.outbox_publisher"]
     # P2-16: manglede restart-policy — et crash stoppede account-event-levering
     # i stilhed. on-failure matcher søster-workerne (outbox-workers).
@@ -356,9 +358,7 @@ services:
         condition: service_healthy
 
   account-service-consumer:
-    build:
-      context: .
-      dockerfile: services/account-service/Dockerfile
+    image: finance-tracker-account-service
     command: ["python", "-m", "app.consumers.worker"]
     restart: unless-stopped
     environment:
@@ -375,9 +375,7 @@ services:
         condition: service_healthy
 
   transaction-outbox-worker:
-    build:
-      context: .
-      dockerfile: services/transaction-service/Dockerfile
+    image: finance-tracker-transaction-service
     command: ["python", "-m", "app.workers.outbox_publisher"]
     restart: on-failure
     environment:
@@ -392,9 +390,7 @@ services:
         condition: service_healthy
 
   transaction-categorized-consumer:
-    build:
-      context: .
-      dockerfile: services/transaction-service/Dockerfile
+    image: finance-tracker-transaction-service
     command: ["python", "-m", "app.workers.categorized_consumer"]
     restart: on-failure
     environment:
@@ -411,9 +407,7 @@ services:
         condition: service_healthy
 
   transaction-taxonomy-consumer:
-    build:
-      context: .
-      dockerfile: services/transaction-service/Dockerfile
+    image: finance-tracker-transaction-service
     command: ["python", "-m", "app.workers.taxonomy_sync_consumer"]
     restart: on-failure
     environment:
@@ -430,9 +424,7 @@ services:
         condition: service_healthy
 
   transaction-saga-command-consumer:
-    build:
-      context: .
-      dockerfile: services/transaction-service/Dockerfile
+    image: finance-tracker-transaction-service
     command: ["python", "-m", "app.workers.saga_command_consumer"]
     restart: on-failure
     environment:
@@ -467,6 +459,7 @@ services:
     build:
       context: .
       dockerfile: services/categorization-service/Dockerfile
+    image: finance-tracker-categorization-service
     restart: unless-stopped
     ports:
       - "8005:8005"
@@ -487,9 +480,7 @@ services:
         condition: service_healthy
 
   categorization-outbox-worker:
-    build:
-      context: .
-      dockerfile: services/categorization-service/Dockerfile
+    image: finance-tracker-categorization-service
     command: ["python", "-m", "app.workers.outbox_publisher"]
     restart: on-failure
     environment:
@@ -504,9 +495,7 @@ services:
         condition: service_healthy
 
   categorization-transaction-consumer:
-    build:
-      context: .
-      dockerfile: services/categorization-service/Dockerfile
+    image: finance-tracker-categorization-service
     command: ["python", "-m", "app.workers.transaction_consumer"]
     restart: on-failure
     environment:
@@ -521,9 +510,7 @@ services:
         condition: service_healthy
 
   categorization-correction-consumer:
-    build:
-      context: .
-      dockerfile: services/categorization-service/Dockerfile
+    image: finance-tracker-categorization-service
     command: ["python", "-m", "app.workers.category_corrected_consumer"]
     restart: on-failure
     environment:
@@ -541,6 +528,7 @@ services:
     build:
       context: .
       dockerfile: services/ai-service/Dockerfile
+    image: finance-tracker-ai-service
     restart: unless-stopped
     ports:
       - "8007:8004"
@@ -589,6 +577,7 @@ services:
     build:
       context: .
       dockerfile: services/budget-service/Dockerfile
+    image: finance-tracker-budget-service
     restart: unless-stopped
     ports:
       - "8003:8003"
@@ -615,9 +604,7 @@ services:
         condition: service_healthy
 
   budget-outbox-worker:
-    build:
-      context: .
-      dockerfile: services/budget-service/Dockerfile
+    image: finance-tracker-budget-service
     command: ["python", "-m", "app.workers.outbox_publisher"]
     restart: on-failure
     environment:
@@ -636,9 +623,7 @@ services:
   # OBS ved deploy mod en DB med historik: foerste tick lukker ALLE aabne
   # fortidsmaaneder (by design). Single replica — se scheduler-pattern-decision.
   budget-month-close-scheduler:
-    build:
-      context: .
-      dockerfile: services/budget-service/Dockerfile
+    image: finance-tracker-budget-service
     command: ["python", "-m", "app.workers.month_close_scheduler"]
     restart: on-failure
     environment:
@@ -663,9 +648,7 @@ services:
   # threshold. Stateless re-emit; notification-service dedups on source_key.
   # Single replica — same worker-loop pattern as month-close.
   budget-alert-scheduler:
-    build:
-      context: .
-      dockerfile: services/budget-service/Dockerfile
+    image: finance-tracker-budget-service
     command: ["python", "-m", "app.workers.budget_alert_scheduler"]
     restart: on-failure
     environment:
@@ -706,6 +689,7 @@ services:
     build:
       context: .
       dockerfile: services/banking-service/Dockerfile
+    image: finance-tracker-banking-service
     restart: unless-stopped
     ports:
       - "8009:8009"
@@ -734,9 +718,7 @@ services:
         condition: service_healthy
 
   banking-outbox-worker:
-    build:
-      context: .
-      dockerfile: services/banking-service/Dockerfile
+    image: finance-tracker-banking-service
     command: ["python", "-m", "app.workers.outbox_publisher"]
     restart: on-failure
     environment:
@@ -752,9 +734,7 @@ services:
         condition: service_healthy
 
   banking-account-projection-consumer:
-    build:
-      context: .
-      dockerfile: services/banking-service/Dockerfile
+    image: finance-tracker-banking-service
     command: ["python", "-m", "app.consumers.account_projection_consumer"]
     restart: on-failure
     environment:
@@ -772,9 +752,7 @@ services:
         condition: service_started
 
   banking-saga-command-consumer:
-    build:
-      context: .
-      dockerfile: services/banking-service/Dockerfile
+    image: finance-tracker-banking-service
     command: ["python", "-m", "app.workers.saga_command_consumer"]
     restart: on-failure
     environment:
@@ -796,9 +774,7 @@ services:
   # sweeper ALLE stale forbindelser (sekventielt). Single replica; races
   # mod manuel sync er ufarlige via P3-14-claimet.
   banking-sync-scheduler:
-    build:
-      context: .
-      dockerfile: services/banking-service/Dockerfile
+    image: finance-tracker-banking-service
     command: ["python", "-m", "app.workers.sync_scheduler"]
     restart: on-failure
     environment:
@@ -823,6 +799,7 @@ services:
     build:
       context: .
       dockerfile: services/gateway-service/Dockerfile
+    image: finance-tracker-gateway-service
     restart: unless-stopped
     ports:
       - "8010:8010"
@@ -854,6 +831,7 @@ services:
     build:
       context: .
       dockerfile: services/analytics-service/Dockerfile
+    image: finance-tracker-analytics-service
     restart: unless-stopped
     ports:
       - "8012:8000"
@@ -869,9 +847,7 @@ services:
         condition: service_healthy
 
   analytics-projection-consumer:
-    build:
-      context: .
-      dockerfile: services/analytics-service/Dockerfile
+    image: finance-tracker-analytics-service
     command: ["python", "-m", "app.workers.projection_consumer"]
     restart: on-failure
     environment:
@@ -887,9 +863,7 @@ services:
   # AI-20: skriver description_vector via Ollama (bge-m3) på egen kø —
   # Ollama-nedetid rammer aldrig kerneprojektionerne ovenfor.
   analytics-embedding-consumer:
-    build:
-      context: .
-      dockerfile: services/analytics-service/Dockerfile
+    image: finance-tracker-analytics-service
     command: ["python", "-m", "app.workers.embedding_consumer"]
     restart: on-failure
     environment:
@@ -929,6 +903,7 @@ services:
     build:
       context: .
       dockerfile: services/saga-service/Dockerfile
+    image: finance-tracker-saga-service
     restart: unless-stopped
     ports:
       - "8011:8011"
@@ -949,9 +924,7 @@ services:
         condition: service_healthy
 
   saga-outbox-worker:
-    build:
-      context: .
-      dockerfile: services/saga-service/Dockerfile
+    image: finance-tracker-saga-service
     command: ["python", "-m", "app.workers.outbox_publisher"]
     restart: on-failure
     environment:
@@ -966,9 +939,7 @@ services:
         condition: service_healthy
 
   saga-reply-consumer:
-    build:
-      context: .
-      dockerfile: services/saga-service/Dockerfile
+    image: finance-tracker-saga-service
     command: ["python", "-m", "app.workers.saga_reply_consumer"]
     restart: on-failure
     environment:
@@ -983,9 +954,7 @@ services:
         condition: service_healthy
 
   saga-start-consumer:
-    build:
-      context: .
-      dockerfile: services/saga-service/Dockerfile
+    image: finance-tracker-saga-service
     command: ["python", "-m", "app.workers.saga_start_consumer"]
     restart: on-failure
     environment:
@@ -1000,9 +969,7 @@ services:
         condition: service_healthy
 
   saga-timeout-worker:
-    build:
-      context: .
-      dockerfile: services/saga-service/Dockerfile
+    image: finance-tracker-saga-service
     command: ["python", "-m", "app.workers.saga_timeout_worker"]
     restart: on-failure
     environment:
@@ -1039,6 +1006,7 @@ services:
     build:
       context: .
       dockerfile: services/notification-service/Dockerfile
+    image: finance-tracker-notification-service
     restart: unless-stopped
     ports:
       - "8008:8008"
@@ -1060,9 +1028,7 @@ services:
         condition: service_healthy
 
   notification-consumer:
-    build:
-      context: .
-      dockerfile: services/notification-service/Dockerfile
+    image: finance-tracker-notification-service
     command: ["python", "-m", "app.workers.notification_consumer"]
     restart: on-failure
     environment:
