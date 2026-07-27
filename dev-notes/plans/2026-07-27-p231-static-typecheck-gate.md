@@ -180,8 +180,20 @@ den fejlmode dette item findes for at rette.
    afinstallerede pytest og `uv run pytest` døde med `Failed to spawn`. Konverteret til
    `[dependency-groups]`; dep-gruppe-skiftet forældede analytics/gateway/budgets locks, som
    er re-locket. 42 tests kører nu i CI, run 19/19 grøn.
-5. [ ] **Kontrol — bevis at gaten fanger fejlklassen, ikke bare at den er grøn.** Se
+5. [x] **Kontrol — bevis at gaten fanger fejlklassen, ikke bare at den er grøn.** Se
    [Verification](#verification). Dette trin producerer ingen commit på master.
+   Alle fire kontroller kørt. Kontrol C afsluttet 2026-07-27 mod run #239 på `c55342b0`,
+   hvor allowlisten er to services: **10 ikke-gatede med `::notice`, 0 for analytics og
+   user.** Begge retninger. Step-conclusion var `success` for alle 12 — som forudset
+   beviser den ingenting, og det var annotationerne der bar dommen.
+   **Måleren fejlede først, gaten gjorde ikke.** Første kørsel meldte RØD fordi
+   navne-parseren ledte efter `job (navn)`, mens CI navngiver jobs `navn - Python 3.11`;
+   begge gatede services blev talt som ikke-gatede-uden-notice. Rådata var korrekte og
+   *så* korrekte ud, hvilket er fælden: at læse tabellen med øjnene og kalde det grønt
+   ville have flyttet dommen fra maskinen til mig og efterladt måleren i stykker.
+   Parseren har nu en hård exit hvis et jobnavn ikke kan udledes til `*-service` — en
+   blind parser skal sige fra, ikke gætte. Slægtning til trin 1's korrektion: dér kunne
+   målingen ikke skifte værdi, her målte den det forkerte navn.
 6. [ ] **Udrulning, i målt rækkefølge, én commit per service.**
    - [x] **user-service** — `b63962ca`. Ærlig måling gennem `uv run`: 4 fejl, og *samme 4*
      med og uden `disallow_untyped_defs`, så analytics' config kunne bruges uslækket.
@@ -223,10 +235,16 @@ ikke kun en treatment — lektien fra P3-40.
    gør banking gate-bar.
 4. **Kontrol C — at CI-steppet faktisk gatede, og kun der hvor det skal:** steppet kører for
    alle 12 services (betingelsen ligger i shell-kroppen), så en grøn step-conclusion beviser
-   intet. Verificér i stedet asymmetrien i run-annotationerne: `::notice` for de elleve
-   ikke-gatede services, og **intet** notice for `analytics-service`. Begge retninger skal
-   holde — mangler noticen bredt, er betingelsen forkert; findes den for analytics, gater
-   gaten ingenting.
+   intet. Verificér i stedet asymmetrien i run-annotationerne: `::notice` for hver
+   ikke-gatet service, og **intet** notice for dem på allowlisten. Begge retninger skal
+   holde — mangler noticen bredt, er betingelsen forkert; findes den for en gatet service,
+   gater gaten ingenting.
+   **Kørt og grøn 2026-07-27** (run #239, `c55342b0`): 10 med notice, 2 uden, allowliste
+   `analytics-service user-service`. Gentages ved hver ny service på allowlisten — det er
+   samme kontrol, med to tal der skal flytte sig i hver sin retning.
+   Praktisk: annotationerne hentes per job via `/repos/{slug}/check-runs/{job_id}/annotations`
+   på det anonyme API (~14 kald per kørsel, loft 60/t). **Sæt `GH_TOKEN`** hvis kontrollen
+   skal køres mere end fire gange i timen; `scripts/ci_status.py` læser samme variabel.
 5. **Ingen regression:** `make -C services/analytics-service test` og `make ci-status` grøn
    for branchen.
 6. **Aldrig** pipe et af ovenstående gennem `tail`/`head` før et `&& git commit` — exit-koden
