@@ -16,9 +16,14 @@ actually run — a green *run* would also be green if the step had been skipped.
 
 ## Next up
 
-- **P2-31** — ingen statisk typecheck kører nogen steder, trods CLAUDE.md's zero-errors-policy.
-  Fandt sin egen begrundelse 2026-07-27: en `str` mod en `SyncTrigger`-port brød alle
-  bank-syncs i to dage, og hverken tests, CI eller hooks blinkede.
+- **P2-31 — valgt som næste 2026-07-27.** Ingen statisk typecheck kører nogen steder, trods
+  CLAUDE.md's zero-errors-policy. Fandt sin egen begrundelse samme dag: en `str` mod en
+  `SyncTrigger`-port brød alle bank-syncs i to dage, og hverken tests, CI eller hooks
+  blinkede. Prioriteret foran P2-25 fordi annotationerne allerede findes overalt — de er
+  bare ulæste, så udbyttet er stort i forhold til arbejdet.
+  **Start plan-først**: valg af checker (mypy vs. pyright, hvoraf sidstnævnte allerede har en
+  ubrugt config i roden), pilotservice, og hvordan gaten indføres uden at drukne i
+  eksisterende fejl. banking/account kan ikke være pilot — de mangler pyproject (P3-39).
 - **P2-25** — transaction soft-delete + gone-vs-not-yet in the categorization write-back
   (the only P2 that is a data-model decision, so it gates P3-37).
 - **P2-21** — k8s manifest drift: 6 workloads + 1 DB in compose have no manifest, so
