@@ -83,7 +83,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P2-35 | `id: Optional[int]` på domain-entiteter gør persisteret og upersisteret entitet til samme type, så hver læse-sti får den svagere invariant (budget 3 entiteter, categorization 6, account 2, goal 1). Pydantic vagter de fleste kaldsteder; `mark_closed(budget.id)` gør ikke, og et `None` dér bliver `WHERE id IS NULL` → vildledende 409. Vælg mellem assert, split type (`Persisted*`) eller status quo | cross, domain | M | open | [findings/2026-07-27-optional-id-hides-unpersisted-entity.md](../findings/2026-07-27-optional-id-hides-unpersisted-entity.md) |
 | P2-34 | `goal-service`: `Goal` bygges med `float` af det ene repository og `Decimal` af det andet, `Mapped[float]` mod en `Numeric`-kolonne, og forskellen lækker ud i event-payloads via `str()`; desuden `Goal.status` som magic string hvor `GoalStatus` findes. Blokerer servicen for typecheck-gaten (23 fejl, 5 ægte) | goal, domain | M | open | [findings/2026-07-27-goal-entity-two-runtime-types.md](../findings/2026-07-27-goal-entity-two-runtime-types.md) |
 | P2-33 | `INTERNAL_API_KEY` er typet `str \| None = None` i 6 services men obligatorisk i mindst 3 (banking ×2, goal, notification) — beslut per service hvilket af de to legitime mønstre der gælder: påkrævet felt, eller transactions betingede header | cross, config | S | open | [findings/2026-07-27-internal-api-key-optional-but-mandatory.md](../findings/2026-07-27-internal-api-key-optional-but-mandatory.md) |
-| P2-31 | Ingen statisk typecheck kører nogen steder, trods CLAUDE.md's zero-errors-policy. [→ detail](#p2-31) | cross, CI | M | open | [findings/2026-07-27-sync-trigger-double-value.md](../findings/2026-07-27-sync-trigger-double-value.md), [plan](../plans/2026-07-27-p231-static-typecheck-gate.md) |
+| P2-31 | mypy som hård gate. Landet på 8 af 12 services; goal/banking/account/gateway udenfor med hver sin blocker, og `tests/` er ikke dækket. [→ detail](#p2-31) | cross, CI | M | **done 2026-07-27** | [findings/2026-07-27-sync-trigger-double-value.md](../findings/2026-07-27-sync-trigger-double-value.md), [plan](../plans/2026-07-27-p231-static-typecheck-gate.md) |
 | P2-30 | `test_budget_month_closed_e2e.py` closes the month before the spend it depends on has reached the read side. [→ detail](#p2-30) | budget, analytics, test | S | **done 2026-07-27** | [P1-14 verification](../plans/2026-07-26-p114-transaction-list-pagination.md), [P1-13 plan](../plans/2026-07-25-p113-budget-spend-from-analytics.md) |
 
 ## P3 — Nice-to-have (consistency, hygiene, docs)
@@ -328,6 +328,36 @@ Non-UUID `saga_id` retries to the DLQ instead of being rejected as poison: `saga
 
 **Ingen statisk typecheck kører nogen steder.** CLAUDE.md foreskriver "mypy for type checking (zero errors policy)"; målt 2026-07-27 kalder **0 af 13 services** mypy i deres Makefile eller i CI, kun `analytics-service` har overhovedet en mypy-config (som intet invokerer), og rodens `pyrightconfig.json` er en ren IDE-hjælpefil hvis `extraPaths` dækker 2 services. Typeannotationer er derfor dokumentation, ikke begrænsninger — hvilket er hvordan `service.py` kunne sende `str` til en port der erklærer `SyncTrigger` og bryde **alle** bank-syncs i to dage uden at nogen gate blinkede. Dette er den eneste af de tre tavsheder i fundet der er generel: den anden (uspecificerede mocks, P3-41) er en konsekvens, og den tredje (forældet image) er lukket af P3-40. Rækkefølge: start med ét service og `--strict` slået fra, ellers drukner det i eksisterende fejl; banking- og account-service kan ikke være først, fordi de mangler pyproject (P3-39). Bemærk at fixet her er billigere end det ser ud: annotationerne *findes* allerede overalt, de er bare ulæste
 
+**Outcome.** Landet 2026-07-27 over 7 trin og 8 services (analytics som pilot, derefter user,
+notification, ai, budget, saga, transaction, categorization). Gaten er `uv run mypy` i hver
+services `Makefile` + ét CI-step gated af `TYPECHECK_SERVICES`; indrullering er ét servicenavn
+på en liste, rollback er at fjerne det. Niveauet blev default-mypy plus `disallow_untyped_defs`,
+`warn_unused_ignores`, `warn_redundant_casts` og `no_implicit_optional` — identisk config på
+alle 8, verificeret flag for flag. **Forudsætningen var `py.typed` på alle fire `shared/*`**:
+uden markøren er contracts- og domain-typer `Any`, og gaten er grøn på netop den bug den findes
+for (målt: 5 fejl uden, 16 med).
+
+Verificeret som **kontrol, ikke kun treatment** — jf. P3-40. `make verify-typecheck-gate`
+læser run-annotationer og kræver asymmetri i begge retninger: `::notice` for hver ikke-gatet
+service og **intet** notice for de gatede. Sluttal 8 gated / 4 ikke-gatede, og scriptet er
+bevist i stand til at blive rødt. En grøn step-conclusion beviser intet, fordi steppet kører
+for alle 12.
+
+**Udbyttet var ikke typefejl, men usande kontrakter.** Fem ting ingen test havde: `x-retry-count`
+sammenlignet som `str` mod `int` inde i `except Exception` → uendelig redelivery (P2-36),
+`int(None)` på en utestet ejerskabs-gren i saga, `categorization_client: object | None` hvor
+application-laget afhang af ingenting, `SerializableEvent` der krævede settable attrs på en
+frozen `BaseEvent`, og outbox-porten der erklærer en fremmed entitet i 4 af 7 services (P2-32).
+Dertil P2-35 (Optional id) og P2-34 (goal, trukket ud).
+
+**Hvad den ikke dækker, målt:** `tests/` er uden for scope på alle 8 (`packages = ["app"]`) —
+131 testfiler mod 256 app-filer; ikke `--strict`, så `Any` flyder frit; 26 begrundede ignores,
+som kun er forsvarlige fordi `warn_unused_ignores` får dem til at fejle af sig selv; og ikke
+runtime. Det sidste er ikke teoretisk: bølgens egen sidste fejl var et `-> None` tilføjet for
+`disallow_untyped_defs`, som dræbte budget-services container ved import, mens `make check` var
+grøn — fordi tests kører `uv.lock` og imaget kører `requirements.txt` (P2-37). Tredje gang i ét
+item at checken og virkeligheden læste fra hver sin kopi
+
 ### P3-41
 
-**131 bare `AsyncMock()`/`MagicMock()` mod 9 spec'd, fordelt på 10 services** (transaction 24, banking 21 → nu 20, categorization 19, goal 15, analytics 14, ai 12, user 12, account 5, budget 5 med 7 spec'd, saga 4). Hvor mocken står ind for en **port**, betyder det at portens erklærede kontrakt ikke håndhæves nogen steder i testene: `banking-service`s ni `try_claim_sync`-tests sendte alle en `str` mod en `SyncTrigger`-port og var alle grønne. Vær præcis om hvad `spec=` køber: den fanger forkerte *metodenavne*, ikke forkerte *argumenttyper* — den ville ikke selv have fanget fejlen i fundet. Den er stadig værd at have (den fanger den tilstødende fejl, hvor et refactor omdøber en portmetode og mocken glad svarer på det gamle navn), men **P2-31 er det der lukker typehullet**; gør ikke dette først og tro at problemet er væk. Ikke alle 131 er ports — mocks der står ind for `httpx`-klienter eller clocks er uskyldige, så dette er en gennemgang, ikke en søg-og-erstat
+**131 bare `AsyncMock()`/`MagicMock()` mod 9 spec'd, fordelt på 10 services** (transaction 24, banking 21 → nu 20, categorization 19, goal 15, analytics 14, ai 12, user 12, account 5, budget 5 med 7 spec'd, saga 4). Hvor mocken står ind for en **port**, betyder det at portens erklærede kontrakt ikke håndhæves nogen steder i testene: `banking-service`s ni `try_claim_sync`-tests sendte alle en `str` mod en `SyncTrigger`-port og var alle grønne. Vær præcis om hvad `spec=` køber: den fanger forkerte *metodenavne*, ikke forkerte *argumenttyper* — den ville ikke selv have fanget fejlen i fundet. Den er stadig værd at have (den fanger den tilstødende fejl, hvor et refactor omdøber en portmetode og mocken glad svarer på det gamle navn), men **P2-31 lukkede kun typehullet i `app/`** — og det ændrer regnestykket her. *Korrigeret 2026-07-27, da P2-31 landede:* alle 8 gatede services kører `packages = ["app"]`, så de 131 testfiler er nu det største usikrede areal i den kode gaten ellers dækker. Den oprindelige rækkefølge-begrundelse ("P2-31 først, ellers lukkes det forkerte hul") er dermed opfyldt og udtømt: `spec=` er ikke længere det svagere alternativ til en typecheck, den er den eneste kontrol der findes inde i `tests/`. Præcisionen holder stadig — den fanger navne, ikke argumenttyper — så alternativet "tag `tests/` med i mypy-scope" bør vejes mod dette item frem for at antages underlegent. Ikke alle 131 er ports — mocks der står ind for `httpx`-klienter eller clocks er uskyldige, så dette er en gennemgang, ikke en søg-og-erstat
