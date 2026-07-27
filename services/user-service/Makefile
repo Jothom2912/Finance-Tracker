@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev test test-unit test-integration lint format format-check check migrate migrate-down freeze clean
+.PHONY: help install-deps dev test test-unit test-integration lint typecheck format format-check check migrate migrate-down freeze clean
 
 help: ## Show available targets
 	@printf 'Available targets:\n'
@@ -9,6 +9,7 @@ help: ## Show available targets
 	@printf '  test-unit           Run unit tests only\n'
 	@printf '  test-integration    Run integration tests only\n'
 	@printf '  lint                Run ruff linter\n'
+	@printf '  typecheck           Run mypy (P2-31 gate)\n'
 	@printf '  format              Auto-format code with ruff\n'
 	@printf '  format-check        Check code formatting\n'
 	@printf '  check               Run all quality checks\n'
@@ -35,6 +36,12 @@ test-integration: ## Run integration tests only
 lint: ## Run ruff linter
 	uv run ruff check .
 
+# P2-31: config i pyproject's [tool.mypy]. Ingen MYPYPATH — shared-pakkerne
+# resolves som installerede pakker via py.typed; at pege mypy paa deres kilde
+# oveni giver "Source file found twice under different module names".
+typecheck: ## Run mypy (P2-31 gate)
+	uv run mypy
+
 format: ## Auto-format code with ruff
 	uv run ruff format .
 	uv run ruff check --fix .
@@ -42,7 +49,7 @@ format: ## Auto-format code with ruff
 format-check: ## Check code formatting without changes
 	uv run ruff format --check .
 
-check: lint format-check ## Run all quality checks (lint + format)
+check: lint format-check typecheck ## Run all quality checks (lint + format + types)
 
 migrate: ## Run database migrations to latest
 	uv run alembic upgrade head

@@ -141,7 +141,7 @@ jobs:
       # (measured — see the finding).
       - name: Typecheck (mypy)
         env:
-          TYPECHECK_SERVICES: "analytics-service"
+          TYPECHECK_SERVICES: "analytics-service user-service"
         run: |
           if [[ " $TYPECHECK_SERVICES " == *" ${{ matrix.service }} "* ]]; then
             uv run mypy

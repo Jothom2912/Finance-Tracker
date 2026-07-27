@@ -25,7 +25,15 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self.users = PostgresUserRepository(session)
-        self.outbox = OutboxRepository(session, OutboxEventModel)
+        # Ignoren nedenfor er begrundet, ikke bekvemmelighed: porten erklærer
+        # fetch_pending -> list[app.domain.entities.OutboxEntry], men shared's
+        # OutboxRepository returnerer list[messaging.outbox.OutboxEntry] — to
+        # forskellige klasser med samme navn og (i dag) identiske felter, så
+        # duck-typing skjuler det. Porten er altså usand. Det rigtige fix er en
+        # mapping i denne adapter, hvilket er en runtime-ændring på 7 services;
+        # se findings/2026-07-27-outbox-port-declares-foreign-entity.md → P2-32.
+        # `warn_unused_ignores = true` gør at denne linje fejler når fixet lander.
+        self.outbox = OutboxRepository(session, OutboxEventModel)  # type: ignore[assignment]
 
     async def __aenter__(self) -> Self:
         return self

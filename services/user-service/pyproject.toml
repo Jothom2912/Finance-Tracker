@@ -23,6 +23,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff",
+    "mypy",
+    "types-python-jose",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
@@ -37,3 +39,16 @@ finans-tracker-messaging = { path = "../shared/messaging" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+# P2-31: samme niveau som analytics-service, som er pilotens reference. Målt på
+# denne service koster `disallow_untyped_defs` ingenting — 4 fejl med og uden
+# den — fordi annotationerne allerede findes. Ikke `--strict`: det er en
+# selvstændig beslutning per service, ikke en del af at komme på gaten.
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+packages = ["app"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
