@@ -204,7 +204,30 @@ den fejlmode dette item findes for at rette.
      så den selv fejler når fixet lander. Kontrolleret begge veje; 48 tests grønne.
      **Pointe værd at bære videre:** gaten fandt en falsk portkontrakt på sin første nye
      service, inden for en time. Det er items egen begrundelse, leveret igen.
-   - Resterende, i målt rækkefølge: notification (5) →
+   - [x] **notification-service** — `0295ab98`. Målt gennem `uv run`: **7 fejl, ikke
+     tabellens 5**. Fire rettet uden adfærdsændring: to `__aexit__` uden annotationer,
+     tre `Result[Any].rowcount` (samlet i én `_rowcount()`-helper — `execute()` er typet
+     `Result`, men returnerer `CursorResult` for DML), og `Settings()`-`call-arg`.
+     Den femte er
+     [INTERNAL_API_KEY](../findings/2026-07-27-internal-api-key-optional-but-mandatory.md)
+     → P2-33: samme løgn i 6 services, samme fejl venter i banking (2 kaldsteder) og goal,
+     så begrundet `# type: ignore` frem for en drive-by. Kontrolleret begge veje;
+     90 tests grønne.
+     **`disallow_untyped_defs` kostede to `__aexit__`-signaturer** — planens åbne spørgsmål
+     om at slække analytics' config er dermed besvaret med nej, ved den første service der
+     rammer det.
+     **Fangst med tilbagevirkende kraft: `pydantic.mypy` uden `init_typed` er værre end
+     intet plugin** (`f7fc0e9f`). Default-pluginet syntetiserer et `__init__` hvor alle
+     felter er `Any`; pydantic v2 bruger `dataclass_transform`, så mypy typer allerede
+     model-konstruktion nativt. Pluginet *erstattede* altså den native check med `Any` i
+     hele user-service fra `b63962ca` til nu. Sporet var to `type: ignore` i notifications
+     `dto.py` som pluginet afmeldte, og `warn_unused_ignores` fangede. Rettet begge steder
+     med `[tool.pydantic-mypy] init_typed = true`; user-service er stadig `Success`, så
+     regressionen var i dækningen, ikke i koden. **Alle senere services skal have
+     `init_typed` hvis de får pluginet.**
+     **Versionsdrift noteret:** notification låser mypy 2.3.0, analytics 2.1.0. Ikke et
+     problem i dag, men gaten er ikke den samme checker på tværs af services.
+   - Resterende, i målt rækkefølge:
    goal (1 + path-config-fejlen) → ai (0, men mål igen med deps installeret først) →
    budget (11) → saga (11) → transaction (12) → categorization (17). Hver service:
    `mypy` i dev-group, `[tool.mypy]`-blok kopieret fra analytics, `typecheck`-target,

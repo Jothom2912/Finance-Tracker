@@ -54,6 +54,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [findings/2026-07-27-gateway-default-account-307.md](findings/2026-07-27-gateway-default-account-307.md) — gatewayen kaldte account-service uden trailing slash, fik 307, og `httpx` følger ikke redirects (MEDIUM, løst i P1-15).
 - [findings/2026-07-27-e2e-alert-categorization-race.md](findings/2026-07-27-e2e-alert-categorization-race.md) — budget-alert-suiten ventede på transaction-DB'en mens scheduleren læser analytics' ES-read-side, og gættede på "stabil kategori" mod en pipeline der altid omskriver (MEDIUM, løst i P1-15).
 - [findings/2026-07-27-outbox-port-declares-foreign-entity.md](findings/2026-07-27-outbox-port-declares-foreign-entity.md) — outbox-porten lover domænets `OutboxEntry`, adapteren leverer shared's klasse af samme navn; 7 services, latent fordi felterne er identiske (LOW, → P2-32).
+- [findings/2026-07-27-internal-api-key-optional-but-mandatory.md](findings/2026-07-27-internal-api-key-optional-but-mandatory.md) — `INTERNAL_API_KEY` er typet `str | None` i 6 services, men obligatorisk i mindst 3; ikke ét forkert mønster seks steder, men to legitime mønstre hvor det obligatoriske bruger det valgfries type (LOW, → P2-33).
 - [findings/2026-07-27-sync-trigger-double-value.md](findings/2026-07-27-sync-trigger-double-value.md) — dobbelt `.value` brød **alle** bank-syncs i to dage; tre lag tavshed (bar AsyncMock, ingen typecheck nogen steder, forældet image) (HIGH, fix i `34e68040`, rodårsag → P2-31/P3-41).
 
 ## Backlog & plans
