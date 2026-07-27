@@ -42,6 +42,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.postgres_result_repository import PostgresCategorizationResultRepository
+from app.adapters.outbound.sql_result import rowcount
 from app.application.categorization_service import CategorizationService
 from app.application.dto import CategorizeRequestDTO
 from app.config import settings
@@ -107,6 +108,12 @@ class TransactionCreatedConsumer(ConsumerBase):
 
     async def _handle(self, session: AsyncSession, event_data: dict) -> None:
         """Run pipeline and write result + outbox within the caller's session."""
+        # The payload is an untyped dict off the wire, so transaction_id is
+        # `Any | None` to mypy. The guard against a missing one is the database:
+        # categorization_results.transaction_id is NOT NULL, so a None fails at
+        # flush with IntegrityError, the whole transaction rolls back and the
+        # message is retried/DLQ'd — no NULL audit row is written. Typing the
+        # payload properly is a behaviour change and out of scope for P2-31.
         transaction_id = event_data.get("transaction_id")
         description = event_data.get("description", "")
         amount_str = event_data.get("amount", "0")
@@ -133,7 +140,7 @@ class TransactionCreatedConsumer(ConsumerBase):
         await result_repo.save(
             CategorizationResultRecord(
                 id=None,
-                transaction_id=transaction_id,
+                transaction_id=transaction_id,  # type: ignore[arg-type]  # se note ved udtrækket
                 category_id=result.category_id,
                 subcategory_id=result.subcategory_id,
                 merchant_id=result.merchant_id,
@@ -145,7 +152,7 @@ class TransactionCreatedConsumer(ConsumerBase):
 
         await outbox_repo.add(
             event=TransactionCategorizedEvent(
-                transaction_id=transaction_id,
+                transaction_id=transaction_id,  # type: ignore[arg-type]  # se note ved udtrækket
                 category_id=result.category_id,
                 category_name=category_name,
                 subcategory_id=result.subcategory_id,
@@ -237,7 +244,7 @@ class TransactionCreatedConsumer(ConsumerBase):
                     ),
                 )
                 await session.commit()
-                deleted = result.rowcount
+                deleted = rowcount(result)
                 if deleted:
                     logger.info("Inbox cleanup: removed %d rows older than %d days", deleted, CLEANUP_DAYS)
             except Exception:

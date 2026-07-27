@@ -137,7 +137,7 @@ class CategoryCorrectedConsumer(ConsumerBase):
         existing = await repo.find_by_user_and_pattern(user_id, PatternType.MERCHANT, pattern)
         if existing is not None:
             await repo.update(
-                existing.id,
+                existing.id,  # type: ignore[arg-type]  # P2-35: fra find_by_user_and_pattern, altid persisteret
                 matches_subcategory_id=subcategory_id,
                 active=True,
             )

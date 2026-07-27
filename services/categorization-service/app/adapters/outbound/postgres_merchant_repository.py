@@ -25,10 +25,11 @@ class PostgresMerchantRepository(IMerchantRepository):
             )
             self._session.add(model)
         else:
-            model = await self._session.get(MerchantModel, merchant.id)
-            if model is None:
+            existing = await self._session.get(MerchantModel, merchant.id)
+            if existing is None:
                 msg = f"Merchant {merchant.id} not found"
                 raise ValueError(msg)
+            model = existing
             model.normalized_name = merchant.normalized_name
             model.display_name = merchant.display_name
             model.subcategory_id = merchant.subcategory_id

@@ -29,6 +29,39 @@ class FailingRuleEngine:
         raise RuntimeError("Rule engine exploded")
 
 
+class FakeMlCategorizer:
+    """Tier 2 fake: matches 'irma' -> subcategory 2, category 2."""
+
+    def predict(self, description: str) -> CategorizationResult | None:
+        if "irma" in description.lower():
+            return CategorizationResult(
+                category_id=2,
+                subcategory_id=2,
+                tier=CategorizationTier.ML,
+                confidence=Confidence.MEDIUM,
+            )
+        return None
+
+
+class FailingMlCategorizer:
+    def predict(self, description: str) -> CategorizationResult | None:
+        raise RuntimeError("ML exploded")
+
+
+class FakeLlmCategorizer:
+    """Tier 3 fake: matches 'føtex' -> subcategory 3, category 3."""
+
+    def predict(self, description: str, amount: float) -> CategorizationResult | None:
+        if "føtex" in description.lower():
+            return CategorizationResult(
+                category_id=3,
+                subcategory_id=3,
+                tier=CategorizationTier.LLM,
+                confidence=Confidence.LOW,
+            )
+        return None
+
+
 @pytest.fixture()
 def service() -> CategorizationService:
     return CategorizationService(
@@ -81,3 +114,51 @@ class TestCategorizationPipeline:
         assert len(responses) == 2
         assert responses[0].tier == "rule"
         assert responses[1].tier == "fallback"
+
+
+class TestOptionalTiers:
+    """The ML and LLM branches had no coverage before P2-31.
+
+    They were touched to bind the tier to a local before closing over it (mypy
+    does not narrow `self._ml` inside a lambda). These pin the tier-ordering
+    shapes so that change is demonstrably behaviour-neutral rather than
+    asserted to be — they pass against the pre-change code too.
+    """
+
+    @staticmethod
+    def _service(*, ml: object = None, llm: object = None) -> CategorizationService:
+        return CategorizationService(
+            rule_engine=FakeRuleEngine(),
+            fallback_subcategory_id=99,
+            fallback_category_id=8,
+            ml_categorizer=ml,  # type: ignore[arg-type]  # structural fakes
+            llm_categorizer=llm,  # type: ignore[arg-type]
+        )
+
+    async def test_rules_win_over_ml(self) -> None:
+        svc = self._service(ml=FakeMlCategorizer())
+        response = await svc.categorize(CategorizeRequestDTO(description="Netto Irma", amount=-10.0))
+        assert response.tier == "rule"
+
+    async def test_ml_runs_when_rules_miss(self) -> None:
+        svc = self._service(ml=FakeMlCategorizer())
+        response = await svc.categorize(CategorizeRequestDTO(description="Irma Torvehallerne", amount=-10.0))
+        assert response.tier == "ml"
+        assert response.category_id == 2
+
+    async def test_llm_runs_when_ml_misses(self) -> None:
+        svc = self._service(ml=FakeMlCategorizer(), llm=FakeLlmCategorizer())
+        response = await svc.categorize(CategorizeRequestDTO(description="Føtex Amager", amount=-10.0))
+        assert response.tier == "llm"
+        assert response.category_id == 3
+
+    async def test_ml_raising_falls_through_to_llm(self) -> None:
+        svc = self._service(ml=FailingMlCategorizer(), llm=FakeLlmCategorizer())
+        response = await svc.categorize(CategorizeRequestDTO(description="Føtex Amager", amount=-10.0))
+        assert response.tier == "llm"
+
+    async def test_all_tiers_miss_reaches_fallback(self) -> None:
+        svc = self._service(ml=FakeMlCategorizer(), llm=FakeLlmCategorizer())
+        response = await svc.categorize(CategorizeRequestDTO(description="Ukendt butik", amount=-10.0))
+        assert response.tier == "fallback"
+        assert response.needs_review is True

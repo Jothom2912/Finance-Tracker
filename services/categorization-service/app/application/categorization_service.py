@@ -64,20 +64,26 @@ class CategorizationService:
         if result is not None:
             return result
 
-        if self._ml is not None:
+        # Bind the tier locally before closing over it. `if self._ml is not None`
+        # does not narrow inside a lambda, because the lambda captures `self` and
+        # runs later, inside _try_tier — where an AttributeError would be swallowed
+        # as "tier failed" rather than surfacing.
+        ml = self._ml
+        if ml is not None:
             result = self._try_tier(
                 "ml",
                 desc_short,
-                lambda: self._ml.predict(description),
+                lambda: ml.predict(description),
             )
             if result is not None:
                 return result
 
-        if self._llm is not None:
+        llm = self._llm
+        if llm is not None:
             result = self._try_tier(
                 "llm",
                 desc_short,
-                lambda: self._llm.predict(description, amount),
+                lambda: llm.predict(description, amount),
             )
             if result is not None:
                 return result

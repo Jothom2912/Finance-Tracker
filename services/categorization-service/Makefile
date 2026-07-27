@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev test test-unit test-integration test-migrations test-all lint format format-check check migrate migrate-down freeze clean
+.PHONY: help install-deps dev test test-unit test-integration test-migrations test-all lint typecheck format format-check check migrate migrate-down freeze clean
 
 help: ## Show available targets
 	@printf 'Available targets:\n'
@@ -11,9 +11,10 @@ help: ## Show available targets
 	@printf '  test-migrations     Run Alembic migration tests against real Postgres (requires Docker)\n'
 	@printf '  test-all            Run every test target including Testcontainers migration suite\n'
 	@printf '  lint                Run ruff linter\n'
+	@printf '  typecheck           Run mypy (P2-31 gate)\n'
 	@printf '  format              Auto-format code with ruff\n'
 	@printf '  format-check        Check code formatting\n'
-	@printf '  check               Run all quality checks\n'
+	@printf '  check               Run all quality checks (lint + format + types)\n'
 	@printf '  migrate             Run database migrations to latest\n'
 	@printf '  migrate-down        Rollback last migration\n'
 	@printf '  freeze              Generate requirements.txt from pyproject.toml\n'
@@ -42,6 +43,12 @@ test-all: test test-migrations ## Run every test target. Use before pushing.
 lint: ## Run ruff linter
 	uv run ruff check .
 
+# P2-31: config lives in pyproject's [tool.mypy]. No MYPYPATH — shared/* resolve
+# as installed packages via py.typed; pointing mypy at their source as well is
+# what produces "Source file found twice". The venv is the single source of truth.
+typecheck: ## Run mypy (P2-31 gate)
+	uv run mypy
+
 format: ## Auto-format code with ruff
 	uv run ruff format .
 	uv run ruff check --fix .
@@ -49,7 +56,7 @@ format: ## Auto-format code with ruff
 format-check: ## Check code formatting without changes
 	uv run ruff format --check .
 
-check: lint format-check ## Run all quality checks (lint + format)
+check: lint format-check typecheck ## Run all quality checks (lint + format + types)
 
 migrate: ## Run database migrations to latest
 	uv run alembic upgrade head

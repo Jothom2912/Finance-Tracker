@@ -322,7 +322,44 @@ den fejlmode dette item findes for at rette.
        comprehension der har brug for det.
      Kontrol: en `str` mod porten og en felt-typo begge fanget — hvor `object | None`
      tidligere gjorde typo'en umulig at skelne. 263 tests grønne (247 + 16 nye).
-   - Resterende, i målt rækkefølge: categorization (17). Hver service:
+   - [x] **categorization-service** — `PENDING`. **Sidste service i bølgen.** Målt gennem
+     `uv run`: 20 fejl, ikke tabellens 17 — men **20 fejl var 8 rødder**, og fordelingen er
+     omvendt af transactions: dér var den største klynge det vigtigste fund, her er den
+     kendt gæld, og de små rødder bar indholdet.
+     - **9 af de 20 er P2-35** (`id: Optional[int]`). Categorization er den største af
+       fundets fire services (6 entiteter). Gated med begrundede ignores frem for trukket
+       ud som goal-service, fordi kriteriet i fundet aldrig var *antallet*: alle 9 er
+       repo-hentede entiteter, ingen målt divergens i data der forlader servicen. Roden
+       forklares én gang i modulets docstring frem for 9 gange inline; `warn_unused_ignores`
+       gør hver linje selvfejlende når P2-35 lander, uanset kommentarteksten.
+     - **`_to_dto(category: object)`** — transaction-services `object | None`-lektion i sin
+       anden service, nu på en mapper. `.type`, `.id`, `.name` var alle ukontrollerede.
+       Annoteret `Category`, og `hasattr(category.type, "value") else str(...)`-grenen
+       fjernet: der findes **præcis ét sted** i servicen der bygger en `Category`
+       (`postgres_category_repository._to_entity`), og det coercer altid med
+       `CategoryType(...)`. Grenen var altså død *ved konstruktion*, ikke sandsynligvis død
+       — verificeret med grep frem for antaget. To søsterforekomster i `CategoryUpdatedEvent`
+       / `CategoryDeletedEvent` fjernet på samme bevis; at rette én af tre ville have
+       efterladt en kommentar der modsiger koden ved siden af.
+     - **Narrowing dør i en lambda.** `if self._ml is not None` narrower ikke ind i
+       `lambda: self._ml.predict(...)`, fordi lambdaen fanger `self` og kaldes senere inde i
+       `_try_tier`. Ikke hypotetisk: en `AttributeError` dér ville blive slugt af
+       `except Exception` og logget som "tier failed" — samme tavshedsform som resten af
+       bølgen har fundet. Bundet lokalt.
+       **Begge grene var utestede** — ingen test konstruerede servicen med en ML/LLM-tier.
+       Fem shapes pinnet, og som i saga kørt mod den **gamle** kode først: 9/9 grønne dér
+       også, hvilket er beviset for neutralitet frem for påstanden om den.
+     - **P2-32 igen** i `unit_of_work.py` — **fjerde service af 7.**
+     - `Result[Any].rowcount` (samme `sql_result.rowcount()`-helper som notification og
+       budget, nu tredje kopi — værd at overveje som shared), merchant-repo hvor `model`
+       havde to typer i to grene, og `RuleEngineProvider.get()` uden returtype bag en
+       `# noqa: ANN201 — IRuleEngine protocol`, hvor annotationen bare var rigtig.
+     - `transaction_id` fra en utypet event-dict: ignore, men **vagten er verificeret** frem
+       for ræsonneret — `categorization_results.transaction_id` er `NOT NULL`, så en `None`
+       ruller hele transaktionen tilbage frem for at skrive en NULL-auditrække.
+     Kontrolleret begge veje, inkl. specifikt for mapperen: en felt-typo (`category.typ`)
+     flagges nu, hvor `object` gjorde den usynlig. 130 tests grønne (125 + 5 nye).
+   - Resterende: ingen. Hver service:
    `mypy` i dev-group, `[tool.mypy]`-blok kopieret fra analytics, `typecheck`-target,
    navn på CI-allowlisten. Blokeret indtil P3-23/P3-39: **banking, account**. Eget item:
    **gateway**.

@@ -4,6 +4,13 @@ This service owns the master category data and emits category.* and
 subcategory.* events via the transactional outbox for downstream
 consumers (per ADR-003, categorization-service is the sole taxonomy
 writer; transaction-service keeps event-synced read copies).
+
+P2-31/P2-35: the ``# type: ignore[arg-type]  # P2-35`` markers below are all one
+root — ``Category.id`` and ``SubCategory.id`` are ``Optional[int]`` because the
+entity also exists before it is written, but every site here got its entity back
+from a repository, where the id is always set. See
+``dev-notes/findings/2026-07-27-optional-id-hides-unpersisted-entity.md``.
+``warn_unused_ignores`` is on, so each marker fails on its own the day P2-35 lands.
 """
 
 from __future__ import annotations
@@ -28,7 +35,7 @@ from app.application.dto import (
     UpdateSubCategoryDTO,
 )
 from app.application.ports.outbound import IUnitOfWork
-from app.domain.entities import SubCategory
+from app.domain.entities import Category, SubCategory
 from app.domain.exceptions import (
     CategoryHasSubcategories,
     CategoryNotFound,
@@ -76,7 +83,7 @@ class CategoryService:
 
             await self._uow.outbox.add(
                 event=CategoryCreatedEvent(
-                    category_id=category.id,
+                    category_id=category.id,  # type: ignore[arg-type]  # P2-35
                     name=category.name,
                     category_type=category.type.value,
                     display_order=category.display_order,
@@ -125,10 +132,10 @@ class CategoryService:
 
             await self._uow.outbox.add(
                 event=CategoryUpdatedEvent(
-                    category_id=updated.id,
+                    category_id=updated.id,  # type: ignore[arg-type]  # P2-35
                     name=updated.name,
-                    category_type=updated.type.value if hasattr(updated.type, "value") else str(updated.type),
-                    display_order=getattr(updated, "display_order", 0),
+                    category_type=updated.type.value,
+                    display_order=updated.display_order,
                 ),
                 aggregate_type="category",
                 aggregate_id=str(updated.id),
@@ -150,10 +157,10 @@ class CategoryService:
 
             await self._uow.outbox.add(
                 event=CategoryDeletedEvent(
-                    category_id=existing.id,
+                    category_id=existing.id,  # type: ignore[arg-type]  # P2-35
                     name=existing.name,
-                    category_type=existing.type.value if hasattr(existing.type, "value") else str(existing.type),
-                    display_order=getattr(existing, "display_order", 0),
+                    category_type=existing.type.value,
+                    display_order=existing.display_order,
                 ),
                 aggregate_type="category",
                 aggregate_id=str(existing.id),
@@ -195,7 +202,7 @@ class CategoryService:
 
             await self._uow.outbox.add(
                 event=SubCategoryCreatedEvent(
-                    subcategory_id=sub.id,
+                    subcategory_id=sub.id,  # type: ignore[arg-type]  # P2-35
                     name=sub.name,
                     category_id=sub.category_id,
                     is_default=sub.is_default,
@@ -245,7 +252,7 @@ class CategoryService:
 
             await self._uow.outbox.add(
                 event=SubCategoryUpdatedEvent(
-                    subcategory_id=updated.id,
+                    subcategory_id=updated.id,  # type: ignore[arg-type]  # P2-35
                     name=updated.name,
                     category_id=updated.category_id,
                     is_default=updated.is_default,
@@ -286,7 +293,7 @@ class CategoryService:
 
             await self._uow.outbox.add(
                 event=SubCategoryDeletedEvent(
-                    subcategory_id=existing.id,
+                    subcategory_id=existing.id,  # type: ignore[arg-type]  # P2-35
                     name=existing.name,
                     category_id=existing.category_id,
                     is_default=existing.is_default,
@@ -299,19 +306,22 @@ class CategoryService:
     # ── Mapping ──
 
     @staticmethod
-    def _to_dto(category: object) -> CategoryResponseDTO:
-        cat_type = category.type.value if hasattr(category.type, "value") else str(category.type)
+    def _to_dto(category: Category) -> CategoryResponseDTO:
+        # `type` is always a CategoryType: the repository's _to_entity is the
+        # only place a Category is constructed, and it coerces with
+        # CategoryType(model.type). The former hasattr/str fallback guarded a
+        # state the type rules out.
         return CategoryResponseDTO(
-            id=category.id,
+            id=category.id,  # type: ignore[arg-type]  # P2-35
             name=category.name,
-            type=cat_type,
-            display_order=getattr(category, "display_order", 0),
+            type=category.type.value,
+            display_order=category.display_order,
         )
 
     @staticmethod
     def _to_sub_dto(sub: SubCategory) -> SubCategoryResponseDTO:
         return SubCategoryResponseDTO(
-            id=sub.id,
+            id=sub.id,  # type: ignore[arg-type]  # P2-35
             name=sub.name,
             category_id=sub.category_id,
             is_default=sub.is_default,

@@ -31,6 +31,7 @@ from sqlalchemy import select, text
 
 from app.adapters.outbound.postgres_rule_repository import PostgresRuleRepository
 from app.adapters.outbound.rule_engine import RuleEngine, TieredRuleEngine
+from app.application.ports.outbound import IRuleEngine
 from app.database import async_session_factory
 from app.domain.value_objects import PatternType
 from app.models import CategoryModel, SubCategoryModel
@@ -72,7 +73,7 @@ class RuleEngineProvider:
         await self._reload()
         logger.info("RuleEngineProvider warmup complete")
 
-    async def get(self, user_id: int | None = None):  # noqa: ANN201 — IRuleEngine protocol
+    async def get(self, user_id: int | None = None) -> IRuleEngine:
         """Return the cached engine (reloading if TTL expired).
 
         With a user_id, the user's own active rules are layered ON TOP

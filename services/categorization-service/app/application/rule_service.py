@@ -120,7 +120,9 @@ class RuleService(IRuleService):
         """subcategory_id -> (subcategory_name, category_id, category_name)."""
         categories = {c.id: c.name for c in await self._uow.categories.find_all()}
         return {
-            sub.id: (sub.name, sub.category_id, categories.get(sub.category_id, ""))
+            # P2-35: sub.id er Optional[int] på entiteten, men find_all() returnerer
+            # kun persisterede rækker. Se findings/2026-07-27-optional-id-...
+            sub.id: (sub.name, sub.category_id, categories.get(sub.category_id, ""))  # type: ignore[misc]
             for sub in await self._uow.subcategories.find_all()
         }
 

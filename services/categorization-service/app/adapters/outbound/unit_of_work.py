@@ -28,7 +28,10 @@ class SQLAlchemyUnitOfWork(IUnitOfWork):
         self.merchants = PostgresMerchantRepository(session)
         self.rules = PostgresRuleRepository(session)
         self.results = PostgresCategorizationResultRepository(session)
-        self.outbox = OutboxRepository(session, OutboxEventModel)
+        # P2-32: den konkrete OutboxRepository opfylder ikke IOutboxRepository som
+        # porten er skrevet i dag — porten erklærer en fremmed entitet. Fjerde
+        # service med samme rod; se findings/2026-07-27-outbox-port-declares-foreign-entity.md
+        self.outbox = OutboxRepository(session, OutboxEventModel)  # type: ignore[assignment]
 
     async def __aenter__(self) -> Self:
         return self
