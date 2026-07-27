@@ -19,7 +19,9 @@ Udbyttet gentog P2-31's mønster: de 31 første mypy-fejl var **fire allerede ke
 (P2-32/33/35/36) plus fem ægte annotations-fejl — ingen nye bugs.
 Runtime-verificeret lokalt: `app.main` + alle fire worker-moduler importerer under imagets
 fastapi 0.140.7, container op, alembic kørt, alle fire workers forbundet til RabbitMQ.
-**CI har ikke kørt på dette endnu** — se `make ci-status`.
+CI grøn på `e8865dcb` (run `30313411120`). Verificeret som **kontrol** via
+`make verify-typecheck-gate`: **9 gated / 3 not gated**, og banking rapporterer `notice=no` —
+altså at mypy faktisk kørte, ikke at steppet blev sprunget over.
 [Plan + Outcome](plans/2026-07-28-p323-banking-uv-pyproject.md#outcome) ·
 [session-log](sessions/2026-07-28-p323-banking-uv-pyproject.md).
 

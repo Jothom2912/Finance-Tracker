@@ -55,11 +55,12 @@ i første forsøg: 68 passed. Rækken er korrigeret.
 
 ## Open ends
 
-- **CI har ikke kørt på dette.** `make verify-typecheck-gate` kræver en pushet kørsel og afviste
-  derfor at bekræfte at banking nu er inde i gaten fra CI's side. Kontrollen er kørt *lokalt*
-  (bevidst typefejl → `make typecheck` rød → fjernet), men CI-halvdelen af P2-31's Kontrol C
-  mangler. **Næste skridt:** push, `make ci-status`, derefter `make verify-typecheck-gate` og
-  bekræft at den rapporterer 9 gatede / 3 ikke-gatede.
+- ~~CI har ikke kørt på dette.~~ **Lukket samme dag.** CI grøn på `e8865dcb`
+  (run `30313411120`), og `make verify-typecheck-gate` gav **9 gated / 3 not gated** —
+  forudsigelsen holdt præcist. Det operationelt værdifulde detalje: scriptet skelner
+  `notice=no` fra `notice=yes`, så det beviser at bankings mypy-step *kørte* frem for at blive
+  sprunget over. Det er netop den tvetydighed P3-40 kostede os, og grunden til at gaten bruger
+  en shell-conditional frem for et `if:` på steppet.
 - **`account-service` er nu ene tilbage** på `requirements.txt` uden lockfile og uden mypy. CI's
   `elif [ -f requirements.txt ]`-gren findes udelukkende for den; den kan dø sammen med P3-01.
   P3-39's effort er sænket til S, da kun account-halvdelen står.

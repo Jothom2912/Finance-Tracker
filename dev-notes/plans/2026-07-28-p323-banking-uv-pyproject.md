@@ -197,7 +197,7 @@ listen som planen ikke havde forudset (punkt 6 nedenfor).
 |---|---|
 | `pyproject.toml` + `uv.lock`, `requirements.txt` væk | ✅ `6e9c8bda` |
 | Image bygger + API og **fire** workers svarer | ✅ `6a998bc0`, verificeret to gange |
-| `banking-service` i `TYPECHECK_SERVICES`, mypy grøn | ✅ `0fd25d59` — men se **Open ends** |
+| `banking-service` i `TYPECHECK_SERVICES`, mypy grøn | ✅ `0fd25d59`, kontrol-verificeret i CI |
 | `make test` / `lint` virker lokalt | ✅ 68 passed, første gang nogensinde |
 | `python-jose` ude af runtime | ✅ dev-only på `>=3.4.0` |
 
@@ -245,10 +245,10 @@ en grøn `make check`.
 
 ### Open ends
 
-- **CI har ikke kørt på dette.** Kontrollen (bevidst typefejl → rød gate → fjernet) er kørt
-  *lokalt*; `make verify-typecheck-gate` afviste at køre, fordi den kræver en pushet CI-kørsel.
-  Næste skridt: push, `make ci-status`, så `make verify-typecheck-gate` → forvent 9 gatede /
-  3 ikke-gatede.
+- ~~CI har ikke kørt på dette.~~ **Lukket:** CI grøn på `e8865dcb` (run `30313411120`), og
+  `make verify-typecheck-gate` rapporterer **9 gated / 3 not gated** med banking på `notice=no`
+  — asymmetrien holder i begge retninger. Den lokale kontrol (bevidst typefejl → rød gate →
+  fjernet) står stadig som den der beviste at gaten *kan* fejle for denne service.
 - **`account` er nu ene tilbage** uden lockfile og uden mypy; CI's `elif [ -f requirements.txt ]`
   findes udelukkende for den (P3-01).
 - **Ny deprecation, ikke filed:** fastapi 0.140.7's testclient advarer om at `httpx` med
