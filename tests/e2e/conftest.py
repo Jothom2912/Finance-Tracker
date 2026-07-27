@@ -10,8 +10,15 @@ _HEALTH_ENDPOINTS = [
     "http://localhost:8002/health",
     "http://localhost:8003/health",
     "http://localhost:8004/health",
+    # categorization: month-close-fixturet henter sin udgiftskategori her.
+    # Har været en udeklareret afhængighed siden testen blev skrevet.
+    "http://localhost:8005/health",
     "http://localhost:8006/health",
     "http://localhost:8010/health",
+    # analytics: siden P1-13 er det HER close_month henter forbruget, så en
+    # nede analytics-service er ikke længere "kun" en manglende dashboard —
+    # den ændrer resultatet af månedslukningen. Tilføjet med P2-30.
+    "http://localhost:8012/health",
 ]
 
 
