@@ -78,7 +78,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P2-28 | Any authenticated user can mutate or delete the global taxonomy. [→ detail](#p2-28) | categorization | M | open | [sweep SEC-5](../findings/2026-07-26-product-surface-sweep.md) |
 | P2-29 | CSV upload has no size limit, no MIME check and buffers the whole file. [→ detail](#p2-29) | transaction | S | open | [sweep SEC-7](../findings/2026-07-26-product-surface-sweep.md) |
 | P2-32 | Outbox-porten erklærer domænets `OutboxEntry`, men adapteren tilskriver shared's klasse af samme navn — usand kontrakt i 7 services; fix er en mapping i adapteren, ikke en sletning af duplikatet (det er den hexagonale grænse) | cross, contracts | S | open | [findings/2026-07-27-outbox-port-declares-foreign-entity.md](../findings/2026-07-27-outbox-port-declares-foreign-entity.md) |
-| P2-37 | `requirements.txt` (det images `pip install`er) og `uv.lock` (det tests, mypy og `make check` kører) er to sandhedskilder for de samme afhængigheder; budget pinner `fastapi==0.115.0` mens locken løser 0.136.3, hvilket lod en grøn gate udstede en container der døde ved import. `make freeze` findes i hver service, men intet tjekker at den er kørt — banking er den næste kandidat | cross, CI, deps | S | open | [findings/2026-07-27-none-annotation-204-fastapi-split.md](../findings/2026-07-27-none-annotation-204-fastapi-split.md) |
+| P2-37 | **Én install-sti per service.** `requirements.txt` og `uv.lock` er to sandhedskilder i én service — budget — hvor det lod en grøn gate udstede en container der døde ved import. [→ detail](#p2-37) | cross, CI, deps | S | open | [findings/2026-07-27-none-annotation-204-fastapi-split.md](../findings/2026-07-27-none-annotation-204-fastapi-split.md) |
 | P2-36 | `x-retry-count` læses fem steder på fire forskellige måder; `shared/messaging`, analytics ×2 og banking mangler stadig hærdning, og bankings kopi kaster `TypeError` på en `str`-header inde i retry-handleren → uendelig redelivery. Overvej at flytte transactions `retry_headers.retry_count` til shared og lade alle fem kalde den | cross, messaging | S | open | [findings/2026-07-27-retry-header-read-five-ways.md](../findings/2026-07-27-retry-header-read-five-ways.md) |
 | P2-35 | `id: Optional[int]` på domain-entiteter gør persisteret og upersisteret entitet til samme type, så hver læse-sti får den svagere invariant (budget 3 entiteter, categorization 6, account 2, goal 1). Pydantic vagter de fleste kaldsteder; `mark_closed(budget.id)` gør ikke, og et `None` dér bliver `WHERE id IS NULL` → vildledende 409. Vælg mellem assert, split type (`Persisted*`) eller status quo | cross, domain | M | open | [findings/2026-07-27-optional-id-hides-unpersisted-entity.md](../findings/2026-07-27-optional-id-hides-unpersisted-entity.md) |
 | P2-34 | `goal-service`: `Goal` bygges med `float` af det ene repository og `Decimal` af det andet, `Mapped[float]` mod en `Numeric`-kolonne, og forskellen lækker ud i event-payloads via `str()`; desuden `Goal.status` som magic string hvor `GoalStatus` findes. Blokerer servicen for typecheck-gaten (23 fejl, 5 ægte) | goal, domain | M | open | [findings/2026-07-27-goal-entity-two-runtime-types.md](../findings/2026-07-27-goal-entity-two-runtime-types.md) |
@@ -329,6 +329,35 @@ Non-UUID `saga_id` retries to the DLQ instead of being rejected as poison: `saga
 **Ingen statisk typecheck kører nogen steder.** CLAUDE.md foreskriver "mypy for type checking (zero errors policy)"; målt 2026-07-27 kalder **0 af 13 services** mypy i deres Makefile eller i CI, kun `analytics-service` har overhovedet en mypy-config (som intet invokerer), og rodens `pyrightconfig.json` er en ren IDE-hjælpefil hvis `extraPaths` dækker 2 services. Typeannotationer er derfor dokumentation, ikke begrænsninger — hvilket er hvordan `service.py` kunne sende `str` til en port der erklærer `SyncTrigger` og bryde **alle** bank-syncs i to dage uden at nogen gate blinkede. Dette er den eneste af de tre tavsheder i fundet der er generel: den anden (uspecificerede mocks, P3-41) er en konsekvens, og den tredje (forældet image) er lukket af P3-40. Rækkefølge: start med ét service og `--strict` slået fra, ellers drukner det i eksisterende fejl; banking- og account-service kan ikke være først, fordi de mangler pyproject (P3-39). Bemærk at fixet her er billigere end det ser ud: annotationerne *findes* allerede overalt, de er bare ulæste
 
 **Outcome.** Landet 2026-07-27 over 7 trin og **8 af 12 services** (analytics som pilot, derefter user, notification, ai, budget, saga, transaction, categorization). Gaten er `uv run mypy` i hver services `Makefile` + ét CI-step gated af `TYPECHECK_SERVICES`; indrullering er ét servicenavn på en liste, rollback er at fjerne det. Niveauet er default-mypy plus `disallow_untyped_defs`, `warn_unused_ignores`, `warn_redundant_casts`, `no_implicit_optional` — identisk på alle 8. Forudsætningen var `py.typed` på alle fire `shared/*` (målt: 5 fejl uden, 16 med). Verificeret som **kontrol, ikke kun treatment** via `make verify-typecheck-gate` (8 gatede / 4 ikke-gatede, bevist i stand til at blive rød). Udbyttet var **usande kontrakter, ikke typefejl** → P2-32…P2-37. Udenfor: goal (P2-34), banking+account (P3-23), gateway (98 fejl); `tests/` er ikke dækket (→ P3-41). Fuld rapport: [planens Outcome](../plans/2026-07-27-p231-static-typecheck-gate.md#outcome) + [session-log](../sessions/2026-07-27-p231-typecheck-gate.md)
+
+### P2-37
+
+**Målt 2026-07-28** — og det korrigerer fundets oprindelige formulering, som påstod at
+`make freeze` fandtes i hver service og bare ikke blev checket. Begge led var usande.
+
+| Install-sti i imaget | Services |
+|---|---|
+| `uv sync --frozen --no-dev` | 9 — ai, analytics, categorization, gateway, goal, notification, saga, transaction, user |
+| `pip install -r requirements.txt` | 3 — account, banking, budget |
+
+For de 9 læser image og tests **samme** lockfile; drift er strukturelt umuligt og der er intet
+at checke. Drift-betingelsen er at *begge* filer findes, og det gælder **præcis én** service:
+**budget-service** (`fastapi==0.115.0` i requirements mod 0.136.3 i locken, `redis>=5` mod
+`>=8`, og `jinja2` kun i pyproject). account og banking har ingen lockfile — de kan ikke
+drifte, de har én usandt-låst kilde i stedet for to uenige (account pinner slet ikke `fastapi`,
+så dens image er ikke reproducerbart).
+
+`freeze:`-target findes i 3 af 15 services (transaction, categorization, user) — **alle tre
+bygger med `uv sync --frozen` og har ingen `requirements.txt` på disk**. Levn fra før
+Dockerfile-migrationen; ingen af de tre pip-services har et.
+
+**Fix:** giv budget samme Dockerfile-form som de 9 (`uv sync --frozen --no-dev`, shared som
+path-deps under `/shared/*` — mønsteret findes i `transaction-service`), slet dens
+`requirements.txt`, slet de 3 døde `freeze`-targets, og læg en vagt i
+`scripts/compose_check.py` mod at en service har både `uv.lock` og `requirements.txt`.
+Fejlklassen forsvinder frem for at blive overvåget. account og banking får deres lockfile via
+P3-23/P3-01; bankings `fastapi==0.115.0`-pin er en *særskilt* fælde (samme 204-død venter hvis
+den kommer på typecheck-gaten), ikke en drift.
 
 ### P3-41
 

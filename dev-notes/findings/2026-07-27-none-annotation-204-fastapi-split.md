@@ -98,7 +98,27 @@ allerede havde læst.
 ## Relateret
 
 - [P2-31-planen](../plans/2026-07-27-p231-static-typecheck-gate.md) — trin 6, budget-service.
-- **P2-37**: håndhæv `requirements.txt` ≡ `uv.lock` i CI. `make freeze` findes allerede i
-  hver service; intet tjekker at den er kørt.
+- **P2-37**: én install-sti per service. **Korrektion 2026-07-28** — denne linje sagde
+  oprindeligt "håndhæv `requirements.txt` ≡ `uv.lock` i CI; `make freeze` findes allerede i
+  hver service, intet tjekker at den er kørt". Begge led var usande, og målingen er nu gjort:
+  - `freeze:`-target findes i **3 af 15** services (transaction, categorization, user) — og
+    alle tre bygger med `uv sync --frozen` og har ingen `requirements.txt` på disk. Targettet
+    er levn fra før Dockerfile-migrationen og har intet at gøre. Ingen af de tre services der
+    faktisk `pip install`er har et.
+  - **9 services** bygger med `uv sync --frozen --no-dev` → image og tests læser samme
+    lockfile, og drift er strukturelt umuligt. **3** bygger med `pip install -r
+    requirements.txt`: account, banking, budget.
+  - Drift-betingelsen — *begge* filer til stede — findes derfor i **præcis én** service:
+    **budget**. account og banking har ingen lockfile, så de kan ikke drifte; de har én
+    usandt-låst kilde i stedet for to uenige (account pinner ikke `fastapi` overhovedet, så
+    dens image er ikke reproducerbart).
+
+  Fixet er dermed ikke en ækvivalens-check, men at give budget samme Dockerfile-form som de 9
+  (`uv sync --frozen`, shared som path-deps under `/shared/*` — mønsteret findes og virker),
+  slette dens `requirements.txt`, og lægge en vagt i `scripts/compose_check.py` mod at en
+  service har begge filer. Så forsvinder fejlklassen frem for at blive overvåget. De 3 døde
+  `freeze`-targets kan slettes samtidig. account og banking hører under P3-23/P3-01, hvor de
+  får en lockfile — og bemærk at bankings `fastapi==0.115.0`-pin er den fælde `## Omfang`
+  ovenfor beskriver, altså et *særskilt* problem fra drift'en.
 - [per-worker image staleness](2026-07-25-per-worker-image-staleness.md) — samme familie:
   det der køres er ikke det der blev testet.
