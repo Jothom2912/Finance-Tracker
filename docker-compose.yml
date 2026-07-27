@@ -138,9 +138,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://user_service:user_service_pass@postgres:5432/users
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       JWT_EXPIRE_MINUTES: "60"
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
     depends_on:
@@ -181,8 +181,8 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       USER_SERVICE_URL: http://user-service:8001
       ACCOUNT_SERVICE_URL: http://account-service:8003
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
-      JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       ENVIRONMENT: development
     depends_on:
@@ -205,8 +205,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       USER_SERVICE_URL: http://user-service:8001
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
-      JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       goal-service:
@@ -224,8 +224,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       USER_SERVICE_URL: http://user-service:8001
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
-      JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       goal-service:
@@ -242,7 +242,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://user_service:user_service_pass@postgres:5432/users
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       user-service:
@@ -287,12 +287,12 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       CATEGORIZATION_SERVICE_URL: http://categorization-service:8005
       CATEGORIZATION_TIMEOUT_S: "0.5"
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
     depends_on:
       postgres-transactions:
         condition: service_healthy
@@ -311,8 +311,8 @@ services:
       <<: *api-healthcheck-defaults
     environment:
       DATABASE_URL: postgresql+psycopg2://account_user:account_password@postgres-account:5432/account_db
-      JWT_SECRET: dev-secret-key-change-in-production
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       USER_SERVICE_URL: http://user-service:8001
       CORS_ORIGINS: http://localhost:3000,http://localhost:3001
     depends_on:
@@ -365,7 +365,7 @@ services:
       DATABASE_URL: postgresql+psycopg2://account_user:account_password@postgres-account:5432/account_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       USER_SERVICE_URL: http://user-service:8001
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
     depends_on:
       postgres-account:
         condition: service_healthy
@@ -383,7 +383,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       transaction-service:
@@ -400,7 +400,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       transaction-service:
@@ -419,7 +419,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       transaction-service:
@@ -438,7 +438,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       transaction-service:
@@ -476,10 +476,10 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
     depends_on:
       postgres-categorization:
         condition: service_healthy
@@ -495,7 +495,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       categorization-service:
@@ -512,7 +512,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       categorization-service:
@@ -529,7 +529,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       categorization-service:
@@ -555,7 +555,7 @@ services:
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
       BUDGET_SERVICE_URL: http://budget-service:8003
       RETRIEVAL_TOP_K: "10"
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
     depends_on:
@@ -599,7 +599,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       CATEGORY_SERVICE_URL: http://categorization-service:8005
@@ -623,7 +623,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CATEGORY_SERVICE_URL: http://categorization-service:8005
       ENVIRONMENT: development
     depends_on:
@@ -644,7 +644,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CATEGORY_SERVICE_URL: http://categorization-service:8005
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
       ENVIRONMENT: development
@@ -671,7 +671,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CATEGORY_SERVICE_URL: http://categorization-service:8005
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
       ENVIRONMENT: development
@@ -715,8 +715,8 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       ACCOUNT_SERVICE_URL: http://account-service:8003
@@ -742,7 +742,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       banking-service:
@@ -759,7 +759,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       banking-service:
@@ -778,7 +778,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       <<: *enable-banking-env
       ENVIRONMENT: development
     depends_on:
@@ -801,7 +801,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       <<: *enable-banking-env
       ENVIRONMENT: development
       ACCOUNT_SERVICE_URL: http://account-service:8003
@@ -831,7 +831,7 @@ services:
       BUDGET_SERVICE_URL: http://budget-service:8003
       SAGA_SERVICE_URL: http://saga-service:8011
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
-      SECRET_KEY: dev-secret-key-change-in-production
+      SECRET_KEY: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
     depends_on:
@@ -858,7 +858,7 @@ services:
       <<: *api-healthcheck-defaults
     environment:
       ELASTICSEARCH_URL: http://elasticsearch:9200
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       elasticsearch:
@@ -934,7 +934,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       ENVIRONMENT: development
       SAGA_TIMEOUT_SECONDS: 300
@@ -953,7 +953,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       saga-service:
@@ -970,7 +970,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       saga-service:
@@ -987,7 +987,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       saga-service:
@@ -1004,7 +1004,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
       SAGA_TIMEOUT_SECONDS: 300
       TIMEOUT_CHECK_INTERVAL_SECONDS: 30
@@ -1045,8 +1045,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://notification_service:notification_service_pass@postgres-notifications:5432/notifications
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       ACCOUNT_SERVICE_URL: http://account-service:8003
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
-      JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       ENVIRONMENT: development
     depends_on:
@@ -1065,8 +1065,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://notification_service:notification_service_pass@postgres-notifications:5432/notifications
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       ACCOUNT_SERVICE_URL: http://account-service:8003
-      INTERNAL_API_KEY: dev-internal-api-key-change-in-production
-      JWT_SECRET: dev-secret-key-change-in-production
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       notification-service:

@@ -17,11 +17,11 @@ import httpx
 import pytest
 from jose import jwt
 
+from ._env import JWT_ALGORITHM, jwt_secret
+
 USER_SERVICE = "http://localhost:8001/api/v1/users"
 ACCOUNT_SERVICE = "http://localhost:8004/api/v1"
 
-JWT_SECRET = "dev-secret-key-change-in-production"
-JWT_ALGORITHM = "HS256"
 
 pytestmark = pytest.mark.e2e
 
@@ -51,7 +51,7 @@ def _build_token(user_id: int, username: str, email: str) -> str:
         "email": email,
         "exp": datetime.now(timezone.utc) + timedelta(hours=1),
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
 async def _wait_for_default_account(

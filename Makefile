@@ -126,7 +126,12 @@ test: ## Run tests for all services
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir test; done
 	$(MAKE) -C $(FRONTEND_DIR) test
 
+# Loader .env så testene signerer med samme JWT_SECRET som compose
+# interpolerer ind i stakken (P2-26). Uden det fejler de med en besked om
+# den manglende variabel frem for et vildledende 401. CI sætter variablerne
+# som job-env og har ingen .env — deraf `[ -f .env ]`.
 test-e2e: ## Run E2E tests (requires Docker services running)
+	set -a; [ -f .env ] && . ./.env; set +a; \
 	uv run pytest tests/e2e/ -v -m e2e
 
 lint: ## Run ruff linter on all Python services

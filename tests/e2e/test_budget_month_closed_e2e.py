@@ -28,6 +28,8 @@ import pytest
 import pytest_asyncio
 from jose import jwt
 
+from ._env import JWT_ALGORITHM, jwt_secret
+
 USER_SERVICE = "http://localhost:8001/api/v1/users"
 ACCOUNT_SERVICE = "http://localhost:8004/api/v1/accounts/"
 GOAL_SERVICE = "http://localhost:8006/api/v1"
@@ -37,8 +39,6 @@ CATEGORIZATION_SERVICE = "http://localhost:8005/api/v1"
 ANALYTICS_SERVICE = "http://localhost:8012/api/v1/analytics"
 RABBITMQ_API = "http://localhost:15672/api"
 
-JWT_SECRET = "dev-secret-key-change-in-production"
-JWT_ALGORITHM = "HS256"
 POLL_TIMEOUT = 15.0
 # Forbruget skal hele vejen gennem outbox → RabbitMQ → ES-projektionen, og
 # projektions-consumeren kører med prefetch 1 (P2-19), så én ack-rundtur pr.
@@ -54,7 +54,7 @@ def _make_token(user_id: int) -> str:
         "user_id": user_id,
         "exp": datetime.now(timezone.utc) + timedelta(hours=1),
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
 def _auth(token: str) -> dict[str, str]:
