@@ -182,7 +182,17 @@ den fejlmode dette item findes for at rette.
    er re-locket. 42 tests kører nu i CI, run 19/19 grøn.
 5. [ ] **Kontrol — bevis at gaten fanger fejlklassen, ikke bare at den er grøn.** Se
    [Verification](#verification). Dette trin producerer ingen commit på master.
-6. [ ] **Udrulning, i målt rækkefølge, én commit per service**: user (4) → notification (5) →
+6. [ ] **Udrulning, i målt rækkefølge, én commit per service.**
+   - [x] **user-service** — `b63962ca`. Ærlig måling gennem `uv run`: 4 fejl, og *samme 4*
+     med og uden `disallow_untyped_defs`, så analytics' config kunne bruges uslækket.
+     Tre af de fire havde rigtige fix, ikke ignores: pydantics mypy-plugin løste de to
+     `Settings()`-`call-arg`, og `types-python-jose` løste stub-fejlen. Den fjerde er
+     [en usand outbox-port](../findings/2026-07-27-outbox-port-declares-foreign-entity.md)
+     → P2-32, behandlet med begrundet `# type: ignore[assignment]` + `warn_unused_ignores`,
+     så den selv fejler når fixet lander. Kontrolleret begge veje; 48 tests grønne.
+     **Pointe værd at bære videre:** gaten fandt en falsk portkontrakt på sin første nye
+     service, inden for en time. Det er items egen begrundelse, leveret igen.
+   - Resterende, i målt rækkefølge: notification (5) →
    goal (1 + path-config-fejlen) → ai (0, men mål igen med deps installeret først) →
    budget (11) → saga (11) → transaction (12) → categorization (17). Hver service:
    `mypy` i dev-group, `[tool.mypy]`-blok kopieret fra analytics, `typecheck`-target,
