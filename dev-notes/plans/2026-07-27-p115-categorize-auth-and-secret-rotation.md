@@ -162,14 +162,14 @@ Rækkefølgen er ikke kosmetisk. To steder er den bærende:
 
 ### Fase B — rotér nøglen ud af trackede filer
 
-5. [ ] **B1: compose til interpolation.** Erstat de 29 `JWT_SECRET`-literals, gateways
+5. [x] **B1: compose til interpolation.** Erstat de 29 `JWT_SECRET`-literals, gateways
    `SECRET_KEY` (:832) og de 9+2 `INTERNAL_API_KEY` med `${JWT_SECRET:?JWT_SECRET mangler}`
    osv. `:?` frem for `:-` med vilje: en tavs fallback til dev-strengen ville gøre hele
    øvelsen dekorativ. Nye værdier i lokal `.env` (allerede gitignored via `**/.env`) og
    placeholders i `example.env`. **Overvej en YAML-anchor** så næste tilføjede service ikke
    genindfører en literal. `x-enable-banking-env`-anchoren (:6-13) røres **ikke** — den er
    allerede interpolation med bevidst sandbox-default.
-6. [ ] **B2: tests og Makefile læser miljøet.** `tests/e2e/{test_budget_month_closed,
+6. [x] **B2: tests og Makefile læser miljøet.** `tests/e2e/{test_budget_month_closed,
    test_budget_threshold_alert,test_full_flow}_e2e.py` hardkoder i dag nøglen; de skal læse
    `os.environ` og fejle med en brugbar besked hvis den mangler. Makefile-målet `test-e2e`
    loader `.env` (`set -a; . ./.env; set +a`) så lokal kørsel er uændret i praksis.
@@ -178,7 +178,7 @@ Rækkefølgen er ikke kosmetisk. To steder er den bærende:
    latent uoverensstemmelse**: jobbet sætter `test-secret` mens testfilerne hardkoder
    `dev-secret-…`, og i dag "virker" det kun fordi compose hardkoder samme literal som
    testene. Efter B1/B2 skal de to stemme, ellers fejler e2e.
-7. [ ] **B3: untrack k8s-hemmeligheder.** `git rm --cached k8s/secrets.yaml`, tilføj til
+7. [x] **B3: untrack k8s-hemmeligheder.** `git rm --cached k8s/secrets.yaml`, tilføj til
    `.gitignore`, commit `k8s/secrets.yaml.example`. Kun `JWT_SECRET`, `SECRET_KEY` og
    `INTERNAL_API_KEY` bliver placeholders i templaten.
    **`ENABLE_BANKING_APP_ID` beholder sin nuværende værdi som fungerende default** — se
@@ -190,15 +190,15 @@ Rækkefølgen er ikke kosmetisk. To steder er den bærende:
 
 ### Fase C — håndhæv exp
 
-8. [ ] **C1: `require_exp=True` på de 11 shared-kaldsteder.** account (`auth.py:48-51`), ai
+8. [x] **C1: `require_exp=True` på de 11 shared-kaldsteder.** account (`auth.py:48-51`), ai
    (:17-20), banking (:17-20), budget (:31-34), categorization (:16-19), goal (:13-16),
    notification (:13-16), saga (:17-20), transaction (:14-17), user (:41-44) og gateway —
    sidstnævnte **to** steder (`:31` og `decode_token` i `:42`).
-9. [ ] **C2: analytics-service.** `app/auth.py:34` er hånd-rullet; tilføj
+9. [x] **C2: analytics-service.** `app/auth.py:34` er hånd-rullet; tilføj
    `options={"require_exp": True}` eller migrér til `make_current_user_dependency`.
    Migrering er pænere men er en større diff i den ene service der ikke er på shared-pakken
    — vælg ved kodning, noter valget.
-10. [ ] **C3: bekræft at intet minter uden `exp`** før C1/C2 slås til. Kendte mintere sætter
+10. [x] **C3: bekræft at intet minter uden `exp`** før C1/C2 slås til. Kendte mintere sætter
     det (user `:27,33`, account `:35,42`, budget `:25`, analytics `:21`), men grep bredt
     efter `jwt.encode` og verificér — en glemt minter bliver til 401 i produktion.
 

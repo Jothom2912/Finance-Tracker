@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     ACCOUNT_SERVICE_URL: str = "http://account-service:8003"
     ACCOUNT_SERVICE_TIMEOUT: float = 2.0
-    INTERNAL_API_KEY: str = "dev-internal-api-key-change-in-production"
+    INTERNAL_API_KEY: str | None = None
 
     ENABLE_BANKING_APP_ID: str = ""
     ENABLE_BANKING_KEY_PATH: str = ""
@@ -41,3 +41,12 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Fail fast at startup rather than authenticating with a known dev string
+# (P1-15/D1). banking-sync-scheduler was the concrete case: its compose block
+# never set INTERNAL_API_KEY, so it called account-service with the committed
+# dev default — and after the P2-26 rotation it sent a key account-service no
+# longer accepts. The bug was invisible because the scheduler only reaches
+# account-service once a real bank connection exists.
+if not settings.INTERNAL_API_KEY:
+    raise ValueError("INTERNAL_API_KEY must be set in environment variables.")

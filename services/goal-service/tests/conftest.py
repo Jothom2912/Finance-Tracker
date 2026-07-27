@@ -9,6 +9,8 @@ SERVICE_ROOT = Path(__file__).resolve().parents[1]
 SHARED_CONTRACTS = SERVICE_ROOT.parent / "shared" / "contracts"
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
+# Required since P1-15/D1 removed the dev-string default from config.py.
+os.environ.setdefault("INTERNAL_API_KEY", "test-internal-api-key")
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
 for path in (SERVICE_ROOT, SHARED_CONTRACTS):

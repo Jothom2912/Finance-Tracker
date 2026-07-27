@@ -29,6 +29,8 @@ SHARED = SERVICE_ROOT.parent / "shared"
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+# Required since P1-15/D1 removed the dev-string default from config.py.
+os.environ.setdefault("INTERNAL_API_KEY", "test-internal-api-key")
 
 for path in (SERVICE_ROOT, SHARED / "contracts", SHARED / "messaging", SHARED / "auth"):
     path_str = str(path)

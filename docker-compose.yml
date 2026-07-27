@@ -743,6 +743,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       banking-service:
@@ -760,6 +761,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
       banking-service:
@@ -779,6 +781,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       <<: *enable-banking-env
       ENVIRONMENT: development
     depends_on:
@@ -802,6 +805,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       <<: *enable-banking-env
       ENVIRONMENT: development
       ACCOUNT_SERVICE_URL: http://account-service:8003
