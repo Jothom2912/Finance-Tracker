@@ -31,4 +31,5 @@ def make_service_auth_header(user_id: int = 0) -> dict[str, str]:
 get_current_user_id = make_current_user_dependency(
     lambda: settings.JWT_SECRET,
     algorithms=(settings.JWT_ALGORITHM,),
+    require_exp=True,
 )

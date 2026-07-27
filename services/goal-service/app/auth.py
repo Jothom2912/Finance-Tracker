@@ -13,4 +13,5 @@ from auth.fastapi import make_current_user_dependency
 get_current_user_id = make_current_user_dependency(
     lambda: settings.JWT_SECRET,
     algorithms=(settings.JWT_ALGORITHM,),
+    require_exp=True,
 )

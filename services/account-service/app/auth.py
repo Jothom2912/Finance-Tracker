@@ -48,4 +48,5 @@ def create_access_token(user_id: int, username: str, email: str, expires_delta: 
 get_current_user_id = make_current_user_dependency(
     lambda: SECRET_KEY,
     algorithms=(ALGORITHM,),
+    require_exp=True,
 )

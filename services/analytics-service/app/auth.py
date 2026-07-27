@@ -31,7 +31,17 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        # NB: denne service bruger PyJWT, ikke python-jose som de øvrige 11.
+        # PyJWT staver kravet ``require=["exp"]`` og ignorerer ukendte
+        # options-nøgler *tavst* — jose's ``require_exp=True`` ville altså
+        # verificere fint og håndhæve intet. Rør ikke stavemåden uden at
+        # verificere mod et token uden exp (P1-15/C2).
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+            options={"require": ["exp"]},
+        )
         user_id_str = payload.get("sub") or str(payload.get("user_id", ""))
         if not user_id_str:
             raise credentials_exception

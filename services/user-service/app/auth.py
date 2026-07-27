@@ -41,4 +41,5 @@ def create_access_token(user_id: int, username: str, email: str) -> str:
 get_current_user_id = make_current_user_dependency(
     lambda: settings.JWT_SECRET,
     algorithms=(settings.JWT_ALGORITHM,),
+    require_exp=True,
 )
