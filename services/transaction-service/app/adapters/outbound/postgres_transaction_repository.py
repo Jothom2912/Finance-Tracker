@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import func, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -56,6 +56,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         stmt = select(TransactionModel).where(
             TransactionModel.id == transaction_id,
             TransactionModel.user_id == user_id,
+            TransactionModel.deleted_at.is_(None),
         )
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
@@ -82,8 +83,16 @@ class PostgresTransactionRepository(ITransactionRepository):
         Any filter added to the listing endpoint belongs **here**, not in one
         of the two callers: a predicate present in one path and absent in the
         other yields a total that the visible rows cannot add up to.
+
+        ``deleted_at IS NULL`` is unconditional and sits with the caller's
+        filters for exactly that reason (P2-25): a tombstone excluded from the
+        rows but counted in the total is the same divergence, arrived at from
+        the other side.
         """
-        clauses: list[ColumnElement[bool]] = [TransactionModel.user_id == user_id]
+        clauses: list[ColumnElement[bool]] = [
+            TransactionModel.user_id == user_id,
+            TransactionModel.deleted_at.is_(None),
+        ]
         if account_id is not None:
             clauses.append(TransactionModel.account_id == account_id)
         if category_id is not None:
@@ -151,6 +160,7 @@ class PostgresTransactionRepository(ITransactionRepository):
         stmt = select(TransactionModel).where(
             TransactionModel.id == transaction_id,
             TransactionModel.user_id == user_id,
+            TransactionModel.deleted_at.is_(None),
         )
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
@@ -169,17 +179,30 @@ class PostgresTransactionRepository(ITransactionRepository):
         return self._to_entity(model)
 
     async def delete(self, transaction_id: int, user_id: int) -> bool:
-        stmt = select(TransactionModel).where(
-            TransactionModel.id == transaction_id,
-            TransactionModel.user_id == user_id,
+        """Soft-delete (P2-25): stamp ``deleted_at`` instead of removing the row.
+
+        Scoped on ``deleted_at IS NULL`` so a second DELETE affects no rows and
+        the caller still gets ``False`` → 404 — same contract as before, and the
+        same shape as goal-service's ``delete`` (P3-16).  The row stays visible
+        to ``categorized_consumer._get_transaction``, which is what lets it tell
+        "deleted" from "not committed yet".
+
+        ``RETURNING id`` rather than ``rowcount``: the latter is untyped on
+        ``Result`` and would need a cast, and the returned id is the stronger
+        statement anyway — we affected *that* row, not merely one row.
+        """
+        result = await self._session.execute(
+            update(TransactionModel)
+            .where(
+                TransactionModel.id == transaction_id,
+                TransactionModel.user_id == user_id,
+                TransactionModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=func.now())
+            .returning(TransactionModel.id)
         )
-        result = await self._session.execute(stmt)
-        model = result.scalar_one_or_none()
-        if not model:
-            return False
-        await self._session.delete(model)
         await self._session.flush()
-        return True
+        return result.scalar_one_or_none() is not None
 
     # Rows per tuple_(...).in_() batch — 3 bind params per triple keeps
     # us far below asyncpg's 32767-parameter limit even for large files.
@@ -205,6 +228,11 @@ class PostgresTransactionRepository(ITransactionRepository):
         ``only_missing_external_id`` scopes the match to rows with no
         external_id (legacy/manual/CSV) — the transition fallback for
         id-bearing bank imports (see the port docstring).
+
+        Soft-deleted rows do not count as existing (P2-25, decision 1):
+        a delete the user can't undo must not become a permanent,
+        invisible import filter.  Re-import produces a new row; the
+        tombstone stays behind for the audit trail.
         """
         if not keys:
             return set()
@@ -221,6 +249,7 @@ class PostgresTransactionRepository(ITransactionRepository):
                 TransactionModel.description,
             ).where(
                 TransactionModel.user_id == user_id,
+                TransactionModel.deleted_at.is_(None),
                 tuple_(
                     TransactionModel.account_id,
                     TransactionModel.date,
@@ -243,6 +272,13 @@ class PostgresTransactionRepository(ITransactionRepository):
         the partial unique index from migration 012.  Keys never contain
         NULL external_ids (callers filter), so no Python-side matching
         is needed.
+
+        ``deleted_at IS NULL`` mirrors the index's own predicate after
+        migration 013 — the two must agree.  If this query counted
+        tombstones as existing while the index no longer reserved their
+        slot, re-import would be silently skipped instead of re-created;
+        if the index still reserved it, re-import would hit a unique
+        violation that reads like a saga failure.
         """
         if not keys:
             return set()
@@ -257,6 +293,7 @@ class PostgresTransactionRepository(ITransactionRepository):
                 TransactionModel.external_id,
             ).where(
                 TransactionModel.user_id == user_id,
+                TransactionModel.deleted_at.is_(None),
                 tuple_(
                     TransactionModel.account_id,
                     TransactionModel.external_id,

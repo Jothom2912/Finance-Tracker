@@ -91,7 +91,16 @@ class ITransactionRepository(ABC):
     async def update(self, transaction_id: int, user_id: int, **fields: object) -> Transaction: ...
 
     @abstractmethod
-    async def delete(self, transaction_id: int, user_id: int) -> bool: ...
+    async def delete(self, transaction_id: int, user_id: int) -> bool:
+        """Delete the transaction; ``False`` if it wasn't there to delete.
+
+        That the Postgres adapter does this as a soft-delete (P2-25) is
+        the adapter's business — the contract here is unchanged: once it
+        returns ``True`` the row is gone from every read path, dedup
+        included.  Deleting twice returns ``False``, which the service
+        maps to 404.
+        """
+        ...
 
     @abstractmethod
     async def bulk_create(self, transactions: list[dict]) -> list[Transaction]: ...
