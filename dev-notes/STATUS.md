@@ -12,10 +12,11 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 **Intet aktivt item.** P2-29 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
 
 Sidst shippet: **P2-29** (2026-07-28) — byte-, række- og transportgrænse på `/import-csv`.
-Fire commits: `555ffd5e` (`CSV_MAX_BYTES`/`CSV_MAX_ROWS`, handler-guard før `.read()`,
+Fem commits: `555ffd5e` (`CSV_MAX_BYTES`/`CSV_MAX_ROWS`, handler-guard før `.read()`,
 rækkegrænse i `ParsedCSVResult.add_row` så de tre parsere deler én implementation),
 `7f4c35ac` (`Content-Length`-middleware), `d0661ad1` (12 tests — endpointets **første**
-adapter-dækning, integration 69 → 81), `4621ac2a` (frontend pre-flight).
+adapter-dækning, integration 69 → 81), `4621ac2a` (frontend pre-flight),
+`880138f7` (alembics `fileConfig()` slukkede appens loggere).
 Ingen migration, intet schema rørt.
 
 **OOM'en var virkelig, og det blev målt som kontrol.** `mem_limit: 512m` (k8s' tal) plus
@@ -31,8 +32,12 @@ er dermed kvantificeret frem for kun navngivet.
 [Plan + Outcome](plans/2026-07-28-p229-csv-upload-guards.md#outcome) ·
 [session-log](sessions/2026-07-28-p229-csv-upload-guards.md).
 
-**CI er ikke kørt endnu** på de fire commits — alt ovenstående er lokalt plus live på
-compose-stakken. `make ci-status` før noget nyt startes.
+**CI grøn på `880138f7`** (run `30358915496`) — altså på alle fem commits. Den femte var
+nødvendig for at komme dertil: suiten var rød i CI på to push og grøn når testklassen kørte
+alene. `fileConfig()` defaulter til `disable_existing_loggers=True`, så hver logger der fandtes
+da migrationen kørte blev `.disabled = True` — og `categorized_consumer` importeres ved
+collection, altså før `_migrated_db`. Adfærden var korrekt hele tiden; **kun sporet forsvandt**,
+og testen asserterer på sporet. Import-rækkefølgen afgjorde det, ikke soft-delete-koden.
 
 Den før det: **P2-25 + P3-37** (2026-07-28) — soft-delete på `transactions`. Fem commits:
 `762e6c5b` (migration 013: `deleted_at` + det partielle external_id-index narrowet med
