@@ -283,6 +283,12 @@ jobs:
       - python-services
       - frontend
 
+    # P2-39: jobbet havde INTET timeout, og det er ikke teoretisk — P2-38 er fundet om et
+    # CI-job der hang i 6 timer uden signal. Browser-suiten tilføjer netop den slags
+    # risiko (en hængende chromium ser ud som ingenting), så bremsen hører her. 30 min er
+    # rigeligt: jobbet tager ~8-10 min med `compose up --build` som den dyre del.
+    timeout-minutes: 30
+
     env:
       PYTHONPATH: ${{ github.workspace }}/services/shared/contracts:${{ github.workspace }}/services/shared:${{ github.workspace }}
       TESTING: "1"
@@ -309,6 +315,34 @@ jobs:
             pip install -r requirements.txt
           fi
 
+      # --- browser-suiten (P2-39) -----------------------------------------------------
+      # Ligger i DETTE job, ikke i et nyt, fordi et nyt job ville koste en anden fuld
+      # `docker compose up --build` (~6 min) for at måle mod samme stak. Se
+      # dev-notes/decisions/2026-07-28-browser-automation-instrument.md.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: services/frontend/package-lock.json
+
+      - name: Install frontend dev dependencies
+        working-directory: services/frontend
+        run: npm ci
+
+      # Browser-binæren, ikke npm-pakken. Nøglen er lockfilen, fordi det er den der
+      # bestemmer @playwright/test-versionen — og en browser fra en anden version er
+      # præcis den slags stille mismatch der giver "virker lokalt, ikke i CI".
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('services/frontend/package-lock.json') }}
+
+      - name: Install Chromium
+        working-directory: services/frontend
+        run: npx playwright install --with-deps chromium
+
       - name: Start system
         run: docker compose up -d --build
 
@@ -330,10 +364,44 @@ jobs:
             echo "port ${port}: healthy"
           done
 
+          # Port 3000 er IKKE en af ovenstående, og det er ikke en detalje: loopet
+          # ventede kun på 8001-8012, så browser-suiten kunne starte mod en frontend der
+          # ikke var oppe endnu. Perimeteren har intet /health — nginx starter slet ikke
+          # hvis en upstream mangler ("host not found in upstream"), så at index.html
+          # svarer ER health-checket her.
+          until curl -fsS "http://127.0.0.1:3000/" > /dev/null 2>&1; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Perimeteren (port 3000) svarede ikke inden for tidsgrænsen"
+              docker compose ps
+              docker compose logs frontend
+              exit 1
+            fi
+            sleep 3
+          done
+          echo "port 3000 (perimeter): svarer"
+
       # conftest.py aborts (instead of skipping) when services are unreachable
       # and CI is set, so this step can never go green with zero tests run.
       - name: Run E2E tests
         run: pytest tests/e2e -v -ra
+
+      # Hård gate. Kører EFTER Python-suiten, fordi den er den billige at læse først —
+      # men de måler forskellige ting: den rammer porte direkte og går uden om
+      # perimeteren med vilje, denne kører klienten bag den.
+      - name: Run browser tests
+        working-directory: services/frontend
+        run: npm run test:browser
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            services/frontend/playwright-report/
+            services/frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Show Docker logs on failure
         if: failure()
