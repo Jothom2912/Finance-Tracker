@@ -3,9 +3,9 @@ title: Deleted transactions send the categorization write-back to the DLQ
 date: 2026-07-25
 severity: MEDIUM
 area: transaction
-status: open
-backlog: [P2-25]
-resolved-by: null
+status: resolved
+backlog: [P2-25, P3-37]
+resolved-by: ../decisions/2026-07-28-transaction-soft-delete.md
 ---
 
 # Deleted transactions send the categorization write-back to the DLQ
@@ -88,3 +88,31 @@ expected rather than exceptional for this specific case, so the DLQ keeps its si
 That is a papering-over, not a fix, and should be labelled as such.
 
 Tracked as P2-25.
+
+---
+
+## Resolved 2026-07-28 (P2-25 + P3-37)
+
+See [the decision](../decisions/2026-07-28-transaction-soft-delete.md) and
+[the plan](../plans/2026-07-28-p225-transaction-soft-delete.md). Migration 013 adds
+`transactions.deleted_at`, every read path and both dedup queries filter on it, and the consumer
+gained the third branch this finding said could not be written.
+
+**Three things above were wrong, and measurement is what corrected them.**
+
+1. **The blast radius in step 1 was overstated.** "It touches the ES projection and analytics'
+   aggregation rules" — neither was touched. `transaction.deleted` was *already* consumed into a
+   terminal `is_deleted: true`, and `_base_filters` *already* carried
+   `{"term": {"is_deleted": False}}`, which every list and aggregation goes through. The change is
+   transaction-service plus `scripts/cleanup_pg_duplicates.py`.
+2. **`PoisonMessageError` in step 2 was the wrong instrument.** It routes to the DLQ, and a
+   categorization for a deleted transaction is an expected race, not something needing human
+   attention — DLQ'ing it would preserve exactly the "a DLQ full of benign messages stops being a
+   signal" problem this finding names. The branch returns quietly with one INFO line instead.
+3. **The ordering claim held, but the credit was misassigned.** Step 2 does need step 1 — but step 1
+   is also what fixes the DLQ symptom on its own. With soft-delete in place and the branch removed,
+   the row *exists*, so `_get_transaction` returns it and nothing backs off; only one of the four
+   branch tests fails. The branch's own job is narrower: a tombstone must not have its
+   categorization fields rewritten, and the skip must leave a trace.
+
+The interim option at the end (treat exhausted retries as expected) was not needed.

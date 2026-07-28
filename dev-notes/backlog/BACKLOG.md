@@ -71,7 +71,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P2-21 | k8s manifest drift: 6 workloads + 1 DB live in compose but have no manifest or `kustomization.yaml` entry. [→ detail](#p2-21) | infra | M | open | [findings/2026-07-25-k8s-manifest-drift.md](../findings/2026-07-25-k8s-manifest-drift.md) |
 | P2-22 | Inbox guard on banking's saga-command consumer. [→ detail](#p2-22) | banking | S | **done 2026-07-25** | [plan](../plans/2026-07-25-p222-saga-inbox-and-loose-ends.md) |
 | P2-23 | Stored reply for transaction-service's `bulk_import` saga command. [→ detail](#p2-23) | transaction, banking | M | open | [plan](../plans/2026-07-25-p222-saga-inbox-and-loose-ends.md) (step 3) |
-| P2-25 | Transaction soft-delete decision + gone-vs-not-yet in the categorization write-back. [→ detail](#p2-25) | transaction | M | open | [findings/2026-07-25-transaction-hard-delete-categorized-dlq.md](../findings/2026-07-25-transaction-hard-delete-categorized-dlq.md) |
+| P2-25 | Transaction soft-delete decision + gone-vs-not-yet in the categorization write-back. [→ detail](#p2-25) | transaction | M | **done 2026-07-28** | [decision](../decisions/2026-07-28-transaction-soft-delete.md), [plan](../plans/2026-07-28-p225-transaction-soft-delete.md) |
 | P2-24 | Shared internal-API client in `services/shared`. [→ detail](#p2-24) | cross | M | open | [plan](../plans/2026-07-25-notification-service-hardening.md) (not-fixed list) |
 | P2-26 | Turn on `require_exp` in all 12 services. [→ detail](#p2-26) | cross | S | **done 2026-07-27** | [sweep SEC-2](../findings/2026-07-26-product-surface-sweep.md) |
 | P2-27 | No rate limiting anywhere. [→ detail](#p2-27) | user, cross | S | open | [sweep SEC-4](../findings/2026-07-26-product-surface-sweep.md) |
@@ -131,7 +131,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P3-34 | Accessibility gaps. [→ detail](#p3-34)                                                                                                                   | frontend               | M                                  | open            | [sweep UX-6](../findings/2026-07-26-product-surface-sweep.md)                                                                                                       |
 | P3-35 | The transactions page's two read paths have different scopes, and after P1-14 they share one pager. [→ detail](#p3-35)                                   | frontend, gateway      | S                                  | open            | [P1-14 non-goals](../plans/2026-07-26-p114-transaction-list-pagination.md), [decision](../decisions/2026-07-26-transaction-list-envelope.md)                        |
 | P3-36 | Remove the transaction list's shape-tolerant reader once the envelope is deployed. [→ detail](#p3-36)                                                    | frontend               | XS                                 | open            | [decision](../decisions/2026-07-26-transaction-list-envelope.md), [P1-14 step 6](../plans/2026-07-26-p114-transaction-list-pagination.md)                           |
-| P3-37 | `transactions` has no soft-delete column, against the repo's own convention. [→ detail](#p3-37)                                                          | transaction, analytics | M                                  | open            | [P1-14 verification](../plans/2026-07-26-p114-transaction-list-pagination.md)                                                                                       |
+| P3-37 | `transactions` has no soft-delete column, against the repo's own convention. [→ detail](#p3-37)                                                          | transaction, analytics | M                                  | **done 2026-07-28** via P2-25 | [decision](../decisions/2026-07-28-transaction-soft-delete.md), [plan](../plans/2026-07-28-p225-transaction-soft-delete.md)                                          |
 | P3-38 | Search paging hits Elasticsearch's `max_result_window` cliff at page 200; the REST list has no such cliff. [→ detail](#p3-38)                            | analytics, frontend    | M                                  | open            | [P1-14 review](../plans/2026-07-26-p114-transaction-list-pagination.md), [decision](../decisions/2026-07-26-transaction-list-envelope.md)                           |
 | P3-39 | `account-service` cannot run `make test` or `make lint` locally (banking's half closed by P3-23 on 2026-07-28). [→ detail](#p3-39)                 | infra, DX              | S                                  | open            | [P1-15 outcome](../plans/2026-07-27-p115-categorize-auth-and-secret-rotation.md), [P3-23 plan](../plans/2026-07-28-p323-banking-uv-pyproject.md)                                                                                    |
 | P3-40 | Workers share their API service's image instead of each declaring `build:`, so `compose build <svc>` cannot leave them on stale code. [→ detail](#p3-40) | infrastructure         | S                                  | done 2026-07-27 | [plan](../plans/2026-07-27-p340-worker-image-sharing.md), [findings/2026-07-25-per-worker-image-staleness.md](../findings/2026-07-25-per-worker-image-staleness.md) |
@@ -201,6 +201,20 @@ Stored reply for transaction-service's `bulk_import` saga command: data are alre
 ### P2-25
 
 **Transaction soft-delete decision + gone-vs-not-yet in the categorization write-back.** transaction-service hard-deletes (`postgres_transaction_repository.py:116-126`; no `deleted_at`/`is_deleted` column) against CLAUDE.md's own anti-pattern list — goal-service got soft-delete in P3-16, transactions did not. Consequence observed 2026-07-25: tx 1133 was created, categorized, then deleted mid-flight; `categorized_consumer.py:74-76` raises `_TransactionNotFoundYet`, which conflates "not committed yet" (retry correct) with "gone for good" (retry pointless) → 5 retries → DLQ. The handler already uses `PoisonMessageError` elsewhere, but with a hard delete the two states are indistinguishable, so the guard cannot be written. **Decide soft-delete first** (touches P2-09 dedup key, all read paths, ES projection, analytics aggregations — plan-first), *then* the consumer fix is trivial
+
+**Outcome.** Landed 2026-07-28 in five commits with P3-37 (migration 013 + the predicates), which
+was never a separate item — the migration alone has no value and the consumer branch alone cannot
+be written. See [the decision](../decisions/2026-07-28-transaction-soft-delete.md) for the three
+trade-offs (dedup excludes tombstones, saga `rollback_import` stays soft, the consumer acks rather
+than DLQ'ing). **Two claims in this row were corrected by measurement.** The blast radius was
+smaller than "all read paths, ES projection, analytics aggregations": ES already consumed
+`transaction.deleted` into a terminal `is_deleted` flag and `_base_filters` already excluded it, so
+neither was touched — the change is transaction-service plus `scripts/cleanup_pg_duplicates.py`.
+And "then the consumer fix is trivial" understates which half does the work: with the branch
+removed but soft-delete in place, only one of its four tests fails, because the row now *exists* and
+nothing backs off. Soft-delete alone closes the DLQ path; the branch keeps a tombstone from having
+its categorization overwritten. Verified on the running stack including the control (an id that
+never existed must still retry and DLQ — it did, depth 2 → 3)
 
 ### P2-24
 
@@ -309,6 +323,14 @@ Non-UUID `saga_id` retries to the DLQ instead of being rejected as poison: `saga
 ### P3-37
 
 **`transactions` has no soft-delete column, against the repo's own convention.** `information_schema` for `transaction_service.transactions` lists 18 columns and none of them is `is_deleted`/`deleted_at`, so `DELETE /api/v1/transactions/{id}` removes financial records irrecoverably — while CLAUDE.md states soft-delete + audit trail for domain entities, and sibling services follow it (`planned_transactions` in this same service soft-deletes). `scripts/cleanup_pg_duplicates.py` deletes rows outright too; P3-20 made it emit the event, but the row itself is still gone. Surfaced while verifying P1-14, where a departed June row (tx 864, 30,00) had to be traced through a *finding* rather than through the data. Needs a migration plus a `deleted_at IS NULL` predicate in `_filter_clauses` (shared by `find_filtered` and `count_filtered`, so rows and total stay consistent by construction) and a decision on whether the projection consumer deletes from ES or marks
+
+**Outcome.** Done 2026-07-28 as part of P2-25 — see that row and
+[the decision](../decisions/2026-07-28-transaction-soft-delete.md). The open question at the end
+of this paragraph turned out to be already answered in code: the projection consumer *marks*
+(`is_deleted: true`, scripted upsert, one-way), and had done so since before the row was written.
+`scripts/cleanup_pg_duplicates.py` now soft-deletes too, and its duplicate search excludes
+tombstones — without that a deleted row and its legitimate re-import form a "group" whose lowest
+id is the tombstone, so the script would keep the dead row and delete the live one
 
 ### P3-38
 

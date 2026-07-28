@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P3-23)
+# Status — 2026-07-28 (efter P2-25)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,9 +9,36 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P3-23 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
+**Intet aktivt item.** P2-25 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
 
-Sidst shippet: **P3-23** (2026-07-28) — banking-service på uv + pyproject, med lockfile,
+Sidst shippet: **P2-25 + P3-37** (2026-07-28) — soft-delete på `transactions`. Fem commits:
+`762e6c5b` (migration 013: `deleted_at` + det partielle external_id-index narrowet med
+`AND deleted_at IS NULL`), `4deb9dac` (prædikater på alle læse-stier og begge dedup-queries;
+`delete` stempler i stedet for at fjerne), `9a578fac` (ni integrationstests),
+`3df1d778` (consumerens tredje gren), `2b59e77f` (`cleanup_pg_duplicates.py`).
+P3-37 var aldrig et selvstændigt item — migrationen alene har ingen værdi, consumer-grenen alene
+er umulig at skrive.
+
+**Blast radius var mindre end frygtet, og det blev målt:** ES og analytics blev ikke rørt, fordi
+projektionen allerede satte `is_deleted: true` og `_base_filters` allerede filtrerede på det.
+Ændringen er transaction-service plus ét maintenance-script.
+
+**Kontrollen korrigerede planens præmis.** Planen tilskrev DLQ-fixet consumer-grenen; med grenen
+fjernet, men soft-delete på plads, fejler kun én af dens fire tests, fordi rækken nu *findes* og
+der aldrig backes off. Soft-delete alene lukker DLQ-stien; grenen forhindrer at en tombstone får
+sine kategoriseringsfelter overskrevet. Samme greb på repo-niveau: med prædikaterne fjernet fejler
+7 af de 9 soft-delete-integrationstests.
+
+Live-verificeret på fuld compose-stak: kolonnen og indexet aflæst i `\d transactions`
+(ikke kun exit-kode 0), `total_count` faldt med præcis 1, `/analytics/overview` med præcis
+rækkens beløb (500,00 → 0,00), ES-dokumentet `is_deleted: true`, re-import gav et nyt id, og
+DLQ-reproduktionen kørt **med kontrol**: den slettede tx acker stille (DLQ 2 → 2, én INFO-linje),
+mens et id der aldrig har eksisteret stadig backer off og lander i DLQ'en (2 → 3).
+`make test-e2e` 24 passed.
+[Plan](plans/2026-07-28-p225-transaction-soft-delete.md) ·
+[decision](decisions/2026-07-28-transaction-soft-delete.md).
+
+Den før det: **P3-23** (2026-07-28) — banking-service på uv + pyproject, med lockfile,
 dev/runtime-split og på typecheck-gaten (**9 af 12**; install-sti **11 af 12**). Fire commits:
 `6e9c8bda` (pyproject + `uv.lock`, `requirements.txt` slettet, `python-jose` ud af runtime),
 `6a998bc0` (Dockerfile på `uv sync --frozen --no-dev`), `0fd25d59` (mypy-gaten), + docs.
@@ -46,8 +73,6 @@ oprydning.
 
 ## Next up
 
-- **P2-25** — transaction soft-delete + gone-vs-not-yet i categorization-write-backen (den
-  eneste P2 der er en data-model-beslutning, så den gater P3-37).
 - **P2-21** — k8s manifest drift: 6 workloads + 1 DB i compose har ingen manifest, så
   `apply -k` taber notification-feeden og den automatiske ADR-0003-kæde i stilhed.
   CI-check-halvdelen er nu billigere: `scripts/compose_check.py` er stedet at lægge
@@ -71,7 +96,6 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
 |---|---|---|
 | [product-surface sweep](findings/2026-07-26-product-surface-sweep.md) | HIGH | P2-26..29, P3-24..34, F2-08..13 |
 | [k8s manifest drift](findings/2026-07-25-k8s-manifest-drift.md) | MEDIUM | P2-21 |
-| [transaction hard-delete → DLQ](findings/2026-07-25-transaction-hard-delete-categorized-dlq.md) | MEDIUM | P2-25 |
 | [outbox-port erklærer fremmed entitet](findings/2026-07-27-outbox-port-declares-foreign-entity.md) | MEDIUM | P2-32 (7 services) |
 | [Optional id skjuler upersisteret entitet](findings/2026-07-27-optional-id-hides-unpersisted-entity.md) | MEDIUM | P2-35 |
 | [goal: `Goal` har to runtime-typer](findings/2026-07-27-goal-entity-two-runtime-types.md) | MEDIUM | P2-34 (blokerer goal for gaten) |
