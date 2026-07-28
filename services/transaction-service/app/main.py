@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -34,6 +35,52 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def reject_oversized_body(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    """Reject an oversized POST before its body is spooled to disk (P2-29).
+
+    This is the *second* of two layers, and it buys something the handler
+    guard in ``rest_api.py`` cannot: by the time a handler runs, FastAPI has
+    already parsed the multipart body, so the payload is sitting in ``/tmp``.
+    Rejecting on the declared ``Content-Length`` happens before that write.
+    Browsers always set the header for ``FormData``, so this covers the real
+    client.
+
+    Deliberately NOT stream-counting the body. A hand-rolled client using
+    chunked transfer with no ``Content-Length`` still gets to fill ``/tmp`` —
+    accepted knowingly: that is bounded by the container's disk and survives a
+    restart, whereas the OOM the handler guard prevents kills the process for
+    every user. Closing it would mean consuming and re-emitting the body here,
+    and rejecting before the body is read makes some clients report
+    ECONNRESET instead of surfacing a readable 413.
+
+    Method-scoped rather than route-scoped on purpose: it must not become a
+    general body limit for the JSON endpoints, which have their own DTO bounds.
+    """
+    if request.method == "POST":
+        declared = request.headers.get("content-length")
+        if declared is not None:
+            try:
+                length = int(declared)
+            except ValueError:
+                # Malformed header — let the ASGI server and the handler guard
+                # deal with it rather than inventing a status code here.
+                length = 0
+            if length > settings.CSV_MAX_BYTES:
+                limit_mib = settings.CSV_MAX_BYTES // (1024 * 1024)
+                logger.warning(
+                    "Rejected oversized POST to %s: %d bytes declared, limit %d",
+                    request.url.path,
+                    length,
+                    settings.CSV_MAX_BYTES,
+                )
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Forespørgslen er for stor (grænsen er {limit_mib} MB)."},
+                )
+    return await call_next(request)
 
 
 @app.exception_handler(TransactionNotFoundException)
