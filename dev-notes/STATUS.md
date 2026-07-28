@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P3-24's datastore-halvdel)
+# Status — 2026-07-28 (efter P3-24)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,10 +9,27 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P3-24's datastore-halvdel lukkede 2026-07-28. Næste item er ikke valgt
-— se **Next up**.
+**Intet aktivt item.** P3-24 lukkede helt 2026-07-28 — begge halvdele. Næste item er ikke
+valgt — se **Next up**.
 
-Sidst shippet: **P3-24, datastore-halvdelen** (2026-07-28) — de 14 datastore-mappings i compose
+Sidst shippet: **P3-24's ADR-halvdel** (2026-07-28) —
+[ADR-0005](../docs/adr/0005-nginx-as-security-perimeter.md): **frontendens nginx er
+perimeteren, ikke gateway-service**, som forbliver CQRS-læsesiden. Ingen kode; beslutning +
+[decision-note](decisions/2026-07-28-nginx-as-perimeter.md) + P3-43 som implementeringsitem.
+
+**Fundet der omformede beslutningen:** spørgsmålet var ikke "hvordan sikrer vi produktion",
+for **der findes ikke en deployment hvor en perimeter ville være nåelig.** k8s har 30
+ClusterIP-Services og hverken Ingress, NodePort eller LoadBalancer; adgang sker via
+`kubectl port-forward`, som gendanner de samme localhost-origins. Og frontendens `VITE_*`-vars
+er ikke sat nogen steder, så de hardcodede `localhost:800X` er dem der bygges ind i imaget.
+ADR'en forpligter altså en *form* mens der intet er at bryde.
+
+**Gateway-alternativet blev afvist på arkitektur, ikke pris:** den ville få en Python-hop foran
+hver write og gøre CQRS-læsesiden til skrive-chokepunkt. Multi-origin blev afvist fordi det
+ikke er gratis — det koster allerede 11 `CORSMiddleware` i sync, og prisen er løbende mens
+besparelsen er engangs.
+
+Den før det: **P3-24, datastore-halvdelen** (2026-07-28) — de 14 datastore-mappings i compose
 binder `127.0.0.1` i stedet for `0.0.0.0`. Én commit, `5ea37f0d`, kun `docker-compose.yml`.
 Ingen kode, ingen migration.
 
@@ -33,8 +50,8 @@ i BACKLOG.md er rettet.
 valget: den forbruger der bruger mgmt-API'et på 15672 kører i CI og virker med
 loopback-binding.
 
-**ADR'en står stadig åben**, og credentials er urørte: angrebsfladen er flyttet fra "alle på
-LAN'et" til "alt på maskinen" — ikke lukket. P3-25/P2-27 er fortsat blokeret af ADR-halvdelen.
+Credentials er urørte: angrebsfladen er flyttet fra "alle på LAN'et" til "alt på maskinen" —
+ikke lukket. (ADR-halvdelen lukkede samme dag, se ovenfor.)
 [Plan + Outcome](plans/2026-07-28-p324-datastore-loopback-bind.md#outcome) ·
 [session-log](sessions/2026-07-28-p324-datastore-loopback.md).
 
@@ -134,14 +151,13 @@ oprydning.
   compose-vs-kustomization-diffen, og P2-37 har allerede udvidet den fil fra "compose-check" til
   build hygiene — så der er præcedens for en tredje regel, men også en optjent omdøbning til
   `build_hygiene_check.py` at gøre først.
-- **P3-24's ADR-halvdel** — den billige halvdel er væk nu, så det der er tilbage er selve
-  beslutningen: er gatewayen en sikkerhedsgrænse? Den blokerer **P3-25** (security headers,
-  HttpOnly-cookie) og **P2-27** (rate limitings placering), og kan ikke skæres mindre — kernen
-  er de ti browser-origins i `frontend/src/config/serviceUrls.js`. Det er nu det billigste træk
-  der oplåser to andre items.
-- **P2-27/28** — rate limiting og taxonomy write auth. Begge fra product-surface-sweepet, og
-  ingen af dem er så uafhængige som P2-29 var: P2-27's *placering* afhænger af ADR'en ovenfor,
-  og P2-28 kræver en beslutning om et rolle-begreb, som ikke findes nogen steder i kodebasen.
+- **P3-43** — implementér ADR-0005: nginx `proxy_pass` per path, frontenden på relative URLs,
+  de 11 `CORSMiddleware` ud. Ruter-tabellen er allerede verificeret entydig, og ADR'en bærer
+  fire målte fælder (SSE-buffering, positiv allowlist frem for catch-all, e2e's otte
+  health-polls, nginx-drift uden vagt). Oplåser P3-25 og P2-27 i praksis.
+- **P2-27/28** — rate limiting og taxonomy write auth. P2-27's *placering* er nu afgjort
+  (`limit_req`-zone i nginx), men den forudsætter P3-43. P2-28 kræver stadig en beslutning om
+  et rolle-begreb, som ikke findes nogen steder i kodebasen.
 
 Ikke akut, selvom titlen lyder sådan: **P2-36** (`x-retry-count` → uendelig redelivery) — hver
 writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne republishes. Hærdning.
@@ -155,7 +171,7 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
 
 | Finding | Severity | Scheduled as |
 |---|---|---|
-| [product-surface sweep](findings/2026-07-26-product-surface-sweep.md) | HIGH | P2-26..29 (**29 lukket**), P3-24..34, F2-08..13 |
+| [product-surface sweep](findings/2026-07-26-product-surface-sweep.md) | HIGH | P2-26..29 (**29 lukket**), P3-24..34 (**24 lukket** → P3-43), F2-08..13 |
 | [k8s manifest drift](findings/2026-07-25-k8s-manifest-drift.md) | MEDIUM | P2-21 |
 | [outbox-port erklærer fremmed entitet](findings/2026-07-27-outbox-port-declares-foreign-entity.md) | MEDIUM | P2-32 (7 services) |
 | [Optional id skjuler upersisteret entitet](findings/2026-07-27-optional-id-hides-unpersisted-entity.md) | MEDIUM | P2-35 |

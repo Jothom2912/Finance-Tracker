@@ -129,6 +129,15 @@ publishes on `0.0.0.0` by default, so this is LAN-reachable, not loopback-only.
 > og credentials er urørte — angrebsfladen er flyttet fra "alle på LAN'et" til "alt på
 > maskinen", ikke lukket.
 > [Plan + Outcome](../plans/2026-07-28-p324-datastore-loopback-bind.md#outcome).
+>
+> **ADR-halvdelen lukket samme dag:
+> [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md) — frontendens nginx bliver
+> perimeteren, ikke gateway-service.** Dette afsnits framing viste sig ufuldstændig: spørgsmålet
+> er ikke kun "browseren taler med ti origins", men at **ingen deployment i dag kan nås af en
+> perimeter overhovedet.** k8s har 30 ClusterIP-Services og hverken Ingress, NodePort eller
+> LoadBalancer, og frontendens `VITE_*`-vars er ikke sat nogen steder — de hardcodede
+> `localhost:800X` er dem der bygges ind i imaget, så k8s-frontenden kun virker under
+> `kubectl port-forward`. Implementeringen er **P3-43**.
 
 This is the root cause behind several separate symptoms and should be decided as one thing:
 
