@@ -106,7 +106,7 @@ kaldes, og det må ikke læses sådan.
 
 ## Steps
 
-### 1. [ ] nginx som proxy + frontenden i compose (ingen frontend-kodeændring endnu)
+### 1. [x] nginx som proxy + frontenden i compose (ingen frontend-kodeændring endnu)
 
 Rækkefølgen er bevidst: efter dette trin kan perimeteren måles isoleret, mens frontenden
 stadig kører på absolutte URL'er og alt virker som før. Ét trin, én variabel.
@@ -177,7 +177,7 @@ Sæt tilbage → svar igen. Det er beviset på at det er proxy-reglen der svarer
 SPA-fallbacken der pænt returnerer `index.html` med status 200 — den fælde er hele grunden
 til at `curl -i` og ikke `curl -s` står her.
 
-### 2. [ ] Frontenden på relative URLs
+### 2. [x] Frontenden på relative URLs
 
 - `services/frontend/src/utils/apiClient.jsx:3` — **først**. `API_BASE_URL` fjernes; præfiks-
   grenen på `:27` bliver overflødig. Dette er fundet 2 ovenfor og skal ligge i samme commit
@@ -201,7 +201,7 @@ mod `:3000` — login, transaktionsliste, CSV-import, budget-side, chat. Aflæs
 API-request skal stå i nginx' access-log. Det er målingen; DevTools' network-tab er
 bekræftelsen.
 
-### 3. [ ] De 11 `CORSMiddleware` + `CORS_ORIGINS` ud
+### 3. [x] De 11 `CORSMiddleware` + `CORS_ORIGINS` ud
 
 Egen commit, fordi den er triviel at rulle tilbage og fordi den er den eneste der rører
 backend-kode.
@@ -224,7 +224,7 @@ preflight giver 405. Det er kontrollen på at middlewaren faktisk er væk og ikk
 Derefter samme browser-flow som trin 2 — same-origin, så CORS er irrelevant, hvilket er
 pointen.
 
-### 4. [ ] Rule 5 i `scripts/compose_check.py` — nginx-drift
+### 4. [x] Rule 5 i `scripts/compose_check.py` — nginx-drift
 
 Filen hedder stadig `compose_check.py`, men dens docstring erklærer allerede scope som "build
 hygiene", og rule 4 læser `services/*/` frem for compose. Rule 5 læser

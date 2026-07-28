@@ -138,6 +138,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P3-41 | 131 bare `AsyncMock()`/`MagicMock()` står ind for ports uden `spec`, så portkontrakter er uhåndhævede i testene. [→ detail](#p3-41)                      | test, cross            | M                                  | open            | [findings/2026-07-27-sync-trigger-double-value.md](../findings/2026-07-27-sync-trigger-double-value.md)                                                             |
 | P3-42 | budget-service initialiserer `FastAPICache` med en Redis-backend i lifespan, men ingen rute er dekoreret med `@cache` — cachen er død infrastruktur, og redis er en dependency den ikke bruger. Afgør: dekorér de dyre read-ruter, eller fjern backend + redis-dep. | budget, deps | S | open | fundet under [P2-37](../plans/2026-07-28-p237-budget-single-install-path.md) |
 | P3-43 | Implementér ADR-0005: nginx `proxy_pass` per path, frontenden på relative URLs, de 11 `CORSMiddleware` ud. [→ detail](#p3-43) | infra, frontend, cross | M | open | [plan](../plans/2026-07-28-p343-nginx-perimeter.md), [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md), [decision](../decisions/2026-07-28-nginx-as-perimeter.md) |
+| P3-45 | nginx cacher upstream-IP'er ved config-load, så en genskabt service giver 502 gennem perimeteren indtil frontenden genstartes. [→ detail](#p3-45) | infrastructure | S | open | fundet under [P3-43 trin 3](../plans/2026-07-28-p343-nginx-perimeter.md) |
 
 ---
 
@@ -398,6 +399,45 @@ den kommer på typecheck-gaten), ikke en drift.
 ### P3-41
 
 **131 bare `AsyncMock()`/`MagicMock()` mod 9 spec'd, fordelt på 10 services** (transaction 24, banking 21 → nu 20, categorization 19, goal 15, analytics 14, ai 12, user 12, account 5, budget 5 med 7 spec'd, saga 4). Hvor mocken står ind for en **port**, betyder det at portens erklærede kontrakt ikke håndhæves nogen steder i testene: `banking-service`s ni `try_claim_sync`-tests sendte alle en `str` mod en `SyncTrigger`-port og var alle grønne. Vær præcis om hvad `spec=` køber: den fanger forkerte *metodenavne*, ikke forkerte *argumenttyper* — den ville ikke selv have fanget fejlen i fundet. Den er stadig værd at have (den fanger den tilstødende fejl, hvor et refactor omdøber en portmetode og mocken glad svarer på det gamle navn), men **P2-31 lukkede kun typehullet i `app/`** — og det ændrer regnestykket her. *Korrigeret 2026-07-27, da P2-31 landede:* alle 8 gatede services kører `packages = ["app"]`, så de 131 testfiler er nu det største usikrede areal i den kode gaten ellers dækker. Den oprindelige rækkefølge-begrundelse ("P2-31 først, ellers lukkes det forkerte hul") er dermed opfyldt og udtømt: `spec=` er ikke længere det svagere alternativ til en typecheck, den er den eneste kontrol der findes inde i `tests/`. Præcisionen holder stadig — den fanger navne, ikke argumenttyper — så alternativet "tag `tests/` med i mypy-scope" bør vejes mod dette item frem for at antages underlegent. Ikke alle 131 er ports — mocks der står ind for `httpx`-klienter eller clocks er uskyldige, så dette er en gennemgang, ikke en søg-og-erstat
+
+### P3-45
+
+**nginx slår upstream-navne op én gang, ved config-load — ikke per request.** Målt
+2026-07-28 under P3-43 trin 3: efter `docker compose up -d` havde genskabt de elleve
+services gav *hele* flowet gennem `:3000` **502**, med `connect() failed (111: Connection
+refused) ... upstream: "http://172.18.0.17:8001/..."` i nginx' error-log. user-services nye
+container lå på `.16`. `docker compose restart frontend` løste det.
+
+Det er bagsiden af den rettelse trin 1 allerede skrev ind i planens Risks-tabel: fordi
+opslaget sker ved load, er `depends_on` et krav og ikke en bekvemmelighed — men *samme*
+egenskab betyder at nginx bagefter holder en IP der kan blive forældet uden at noget
+signalerer det. Vigtigt: fejlmoden er ærlig (502, ikke tavs forkert routing), og den rammer
+alle ruter på én gang, så den er svær at overse. Det er derfor dette er S og ikke blocker.
+
+**Omkostningen i dag** er en fælde i arbejdsgangen, ikke i produktet: enhver
+`docker compose up -d --build <service>` efterlader perimeteren død for netop den service
+indtil frontenden genstartes, og symptomet (502 på alt) ligner "backenden er nede" frem for
+"nginx har en gammel adresse". Præcis den forveksling kostede tid da den blev fundet.
+
+**Formen på fixet:** `resolver 127.0.0.11 valid=10s;` (Dockers embedded DNS) plus at føre
+upstream gennem en variabel, da nginx kun re-resolver når `proxy_pass` indeholder en
+variabel:
+
+```
+set $upstream_user user-service:8001;
+proxy_pass http://$upstream_user;
+```
+
+**Vejes eksplicit, fordi det ikke er gratis:** en variabel i `proxy_pass` slår
+config-load-valideringen fra, og dermed mister vi netop den egenskab trin 1 målte —
+`nginx -t` fejler i dag med `host not found in upstream` og **exit 1**, så en tastefejl i et
+servicenavn opdages før start. Med variabler bliver samme tastefejl en 502 ved første
+request. Det er ikke en ren forbedring, det er et bytte: statisk validering for dynamisk
+genopslag. Rule 5's assertion 1 dækker en del af tabet (den verificerer navn *og*
+container-port mod compose), og det er argumentet for at byttet er acceptabelt — men
+afgørelsen hører i itemet, ikke i en commit hvis emne er noget andet. Alternativet er at
+lade den stå og skrive arbejdsgangen ned (`restart frontend` efter recreate), hvilket er
+gratis men afhænger af at man husker det.
 
 ### P3-43
 
