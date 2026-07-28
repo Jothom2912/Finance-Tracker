@@ -218,7 +218,14 @@ class TestMigration012ExternalIdCurrency:
         clean_db: Engine,
         alembic_cfg,  # type: ignore[no-untyped-def]
     ) -> None:
-        _upgrade_head(alembic_cfg)
+        """Pinned at revision 012, not head: 013 narrows the same index
+        with ``AND deleted_at IS NULL``.  Asserting 012's shape at head
+        would make this test a duplicate of 013's — and would have to be
+        edited by every later migration that touches the predicate.
+        """
+        from alembic import command
+
+        command.upgrade(alembic_cfg, "012")
 
         with clean_db.connect() as conn:
             indexdef = conn.execute(
@@ -303,6 +310,139 @@ class TestMigration012ExternalIdCurrency:
         assert indexdef is None
         assert "external_id" not in columns
         assert "currency" not in columns
+
+
+# ─────────────────────────────────────────────────────────────
+# Migration 013 — soft-delete (P2-25 / P3-37)
+# ─────────────────────────────────────────────────────────────
+
+
+_INSERT_EXTERNAL = sa.text(
+    "INSERT INTO transactions "
+    "(user_id, account_id, account_name, amount, transaction_type, date, description, external_id) "
+    "VALUES (1, 1, 'Test', :amt, 'expense', '2026-01-01', 'Bank', :ext)"
+)
+
+
+class TestMigration013SoftDelete:
+    def test_deleted_at_column_exists_and_defaults_null(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """A row that predates 013 must come out with deleted_at NULL —
+        i.e. the migration does not tombstone existing data."""
+        from alembic import command
+
+        command.upgrade(alembic_cfg, "012")
+
+        with clean_db.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO transactions "
+                    "(user_id, account_id, account_name, amount, transaction_type, date, description) "
+                    "VALUES (1, 1, 'Test', :amt, 'expense', '2026-01-01', 'Pre-013')"
+                ),
+                {"amt": Decimal("10.00")},
+            )
+
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.connect() as conn:
+            row = conn.execute(sa.text("SELECT deleted_at FROM transactions WHERE description = 'Pre-013'")).one()
+        assert row.deleted_at is None
+
+    def test_partial_unique_index_excludes_soft_deleted(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.connect() as conn:
+            indexdef = conn.execute(
+                sa.text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE tablename = 'transactions' "
+                    "AND indexname = 'uq_transactions_account_external_id'"
+                )
+            ).scalar()
+
+        assert indexdef is not None
+        assert "UNIQUE" in indexdef
+        assert "(account_id, external_id)" in indexdef
+        assert "deleted_at IS NULL" in indexdef
+
+    def test_reimport_after_soft_delete_is_allowed(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """Decision 1: a tombstone must not keep occupying its
+        ``(account_id, external_id)`` slot.  Without the narrowed index
+        this insert is a unique violation that surfaces as a saga
+        failure — the expensive regression named in the plan.
+        """
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.begin() as conn:
+            conn.execute(_INSERT_EXTERNAL, {"amt": Decimal("10.00"), "ext": "EB-1"})
+            conn.execute(sa.text("UPDATE transactions SET deleted_at = now() WHERE external_id = 'EB-1'"))
+            conn.execute(_INSERT_EXTERNAL, {"amt": Decimal("10.00"), "ext": "EB-1"})
+
+        with clean_db.connect() as conn:
+            live = conn.execute(
+                sa.text("SELECT COUNT(*) FROM transactions WHERE external_id = 'EB-1' AND deleted_at IS NULL")
+            ).scalar()
+            total = conn.execute(sa.text("SELECT COUNT(*) FROM transactions WHERE external_id = 'EB-1'")).scalar()
+
+        assert live == 1
+        assert total == 2
+
+    def test_two_live_rows_still_rejected(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """The control for the test above: narrowing the index must not
+        have disabled the concurrent-import backstop for live rows."""
+        from sqlalchemy.exc import IntegrityError
+
+        _upgrade_head(alembic_cfg)
+
+        with clean_db.begin() as conn:
+            conn.execute(_INSERT_EXTERNAL, {"amt": Decimal("10.00"), "ext": "EB-2"})
+
+        with pytest.raises(IntegrityError):
+            with clean_db.begin() as conn:
+                conn.execute(_INSERT_EXTERNAL, {"amt": Decimal("10.00"), "ext": "EB-2"})
+
+    def test_downgrade_drops_column_and_restores_wide_index(
+        self,
+        clean_db: Engine,
+        alembic_cfg,  # type: ignore[no-untyped-def]
+    ) -> None:
+        _upgrade_head(alembic_cfg)
+        _downgrade_to(alembic_cfg, "012")
+
+        with clean_db.connect() as conn:
+            columns = {
+                r.column_name
+                for r in conn.execute(
+                    sa.text("SELECT column_name FROM information_schema.columns WHERE table_name = 'transactions'")
+                )
+            }
+            indexdef = conn.execute(
+                sa.text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE tablename = 'transactions' "
+                    "AND indexname = 'uq_transactions_account_external_id'"
+                )
+            ).scalar()
+
+        assert "deleted_at" not in columns
+        assert indexdef is not None
+        assert "WHERE (external_id IS NOT NULL)" in indexdef
 
 
 # ─────────────────────────────────────────────────────────────

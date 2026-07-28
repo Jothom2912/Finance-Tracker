@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from messaging import OutboxEventMixin
-from sqlalchemy import Boolean, Date, Index, Integer, Numeric, String, func, text
+from sqlalchemy import Boolean, Date, DateTime, Index, Integer, Numeric, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -76,6 +76,12 @@ class TransactionModel(Base):
     subcategory_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     categorization_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
     categorization_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Soft-delete (P2-25/P3-37): en slettet transaktion bevares som tombstone
+    # for auditsporet; alle læse-stier og begge dedup-queries filtrerer på
+    # deleted_at IS NULL.  Consumerens _get_transaction er den bevidste
+    # undtagelse — den skal kunne se rækken for at skelne "slettet" fra
+    # "ikke committet endnu".
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now())
 
@@ -95,12 +101,14 @@ class TransactionModel(Base):
         # Idempotency key for bank imports — unique only where an
         # external_id exists, so manual/CSV duplicates stay legal.
         # Doubles as the concurrent-saga backstop (migration 012).
+        # Soft-deleted rows are excluded (migration 013) so a tombstone
+        # doesn't keep occupying its slot and block re-import.
         Index(
             "uq_transactions_account_external_id",
             "account_id",
             "external_id",
             unique=True,
-            postgresql_where=text("external_id IS NOT NULL"),
+            postgresql_where=text("external_id IS NOT NULL AND deleted_at IS NULL"),
         ),
     )
 
