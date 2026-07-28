@@ -118,6 +118,7 @@ To lektioner ud over selve bug'en:
 
 - **P2-40** (gateway `accounts[0]`) og **P2-41** (ingen sletningssti) er skrevet, ikke løst.
 - **Suiten kan ikke se konto-scoping.** Én konto pr. bruger; det kræver en flerkonto-fixture.
-- **CI er ikke verificeret endnu** — gaten er tilføjet, men først et push viser om
-  `npx playwright install --with-deps chromium` og port-3000-ventetiden opfører sig i CI.
+- **CI's egen mekanik virkede i første forsøg** (chromium-install ~28 s uden cache-hit,
+  port-3000-ventetiden, artifact-upload på 2 MB). Det var *appen* der var rød. Men gaten er
+  endnu ikke set **grøn** i CI — det kræver et push mere.
 - Bruger `csp_probe` (368) og konti 370/371 står stadig i dev-stakken.
