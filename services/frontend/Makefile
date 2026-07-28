@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps dev build test test-run lint lint-fix check clean
+.PHONY: help install-deps dev build test test-run test-browser lint lint-fix check clean
 
 help: ## Show available targets
 	@printf 'Available targets:\n'
@@ -8,6 +8,7 @@ help: ## Show available targets
 	@printf '  build               Build for production\n'
 	@printf '  test                Run all tests (watch mode)\n'
 	@printf '  test-run            Run tests once (CI mode)\n'
+	@printf '  test-browser        Run Playwright vs. the running stack (port 3000)\n'
 	@printf '  lint                Run ESLint\n'
 	@printf '  lint-fix            Auto-fix ESLint errors\n'
 	@printf '  check               Run all quality checks\n'
@@ -27,6 +28,12 @@ test: ## Run all tests
 
 test-run: ## Run tests once (non-watch)
 	npx vitest run
+
+# P2-39. Bevidst IKKE en del af `check`: den kræver en kørende stak, og `check` er statisk.
+# Et grønt `check` er derfor stadig ikke et løfte om at appen virker i en browser — det er
+# hele grunden til at dette mål findes.
+test-browser: ## Run browser tests (requires the docker stack to be up)
+	npx playwright test
 
 lint: ## Run ESLint
 	npx eslint src/

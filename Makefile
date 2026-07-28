@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps install-hooks ci-status verify-typecheck-gate notes-check compose-check dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e lint lint-repo format format-check check clean clean-test-containers
+.PHONY: help install-deps install-hooks ci-status verify-typecheck-gate notes-check compose-check dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e test-browser lint lint-repo format format-check check clean clean-test-containers
 
 INFRA_SERVICES = postgres postgres-transactions postgres-categorization postgres-account postgres-budget postgres-goals postgres-banking rabbitmq redis
 USER_SERVICE_DIR = services/user-service
@@ -46,13 +46,14 @@ help: ## Show available targets
 	@printf '    dev-account-service       Start account-service locally (port 8004)\n'
 	@printf '    dev-categorization-service Start categorization-service locally (port 8005)\n'
 	@printf '    dev-goal-service          Start goal-service locally (port 8006)\n'
-	@printf '    dev-frontend              Start frontend locally (port 5173)\n'
+	@printf '    dev-frontend              Start frontend locally (port 3000)\n'
 	@printf '    down                      Stop all Docker containers\n'
 	@printf '    logs                      Tail Docker container logs\n'
 	@printf '    build                     Build all Docker images\n\n'
 	@printf '  [Quality]\n'
 	@printf '    test                      Run all tests\n'
 	@printf '    test-e2e                  Run E2E tests (requires Docker)\n'
+	@printf '    test-browser              Run browser tests vs. the perimeter (requires Docker)\n'
 	@printf '    lint                      Run ruff linter on all Python services\n'
 	@printf '    lint-repo                 Lint+format-check whole repo (incl. scripts/, tests/)\n'
 	@printf '    ci-status                 Latest CI run for this branch (exit 1 if red)\n'
@@ -88,7 +89,7 @@ dev: ## Start infrastructure and print service start instructions
 	@printf '  make dev-account-service        (port 8004)\n'
 	@printf '  make dev-categorization-service (port 8005)\n'
 	@printf '  make dev-goal-service           (port 8006)\n'
-	@printf '  make dev-frontend               (port 5173)\n\n'
+	@printf '  make dev-frontend               (port 3000)\n\n'
 
 dev-docker: ## Start everything in Docker (infra + all services)
 	docker compose up -d --build
@@ -142,6 +143,13 @@ test-e2e: ## Run E2E tests (requires Docker services running)
 	uv run --with pytest --with pytest-asyncio --with httpx \
 	       --with python-jose --with requests \
 	       pytest tests/e2e/ -v -m e2e
+
+# P2-39. Måler det BYGGEDE image bag perimeteren på 127.0.0.1:3000 — ikke Vite-dev-serveren,
+# som lytter på samme port men uden nginx' CSP og rate limits. Kør `make dev-docker` først;
+# suiten fejler ærligt hvis stakken ikke er oppe (registreringen kan ikke nå user-service).
+# Ingen JWT_SECRET nødvendig: fixturen logger rigtigt ind gennem perimeteren.
+test-browser: ## Run browser tests against the built frontend behind the perimeter
+	$(MAKE) -C $(FRONTEND_DIR) test-browser
 
 lint: ## Run ruff linter on all Python services
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir lint; done
