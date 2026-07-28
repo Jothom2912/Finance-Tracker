@@ -4,6 +4,25 @@
 # `mit-repo-banking-service` og lade workerne pulle et image der ikke findes.
 name: finance-tracker
 
+# P3-24: datastores (9× Postgres, RabbitMQ + mgmt, ES, Redis, Ollama) publicerer på
+# `127.0.0.1:`, ikke `0.0.0.0`. Målt 2026-07-28 før fixet: alle syv testede porte svarede
+# fra LAN-IP'en, og ES gav `transactions_v2` 642 docs + `accounts_v1` 292 uden auth, mens
+# RabbitMQ-mgmt gav fuld admin på guest:guest.
+#
+# Loopback og ikke slettet `ports:` — med vilje. Syv host-side-forbrugere er legitime og
+# bruger disse porte, heraf én i CI (tests/e2e/test_budget_month_closed_e2e.py publicerer
+# via mgmt-API'et på 15672); resten er scripts/, ai-servicens eval og bankings alembic.ini.
+# Truslen fundet navngiver er LAN-rækkevidde, ikke host-rækkevidde, så loopback rammer
+# egenskaben uden at rive værktøjskæden over.
+#
+# Accepteret rest: credentials er uændrede (guest:guest, xpack.security off), så alt PÅ
+# maskinen kan stadig nå dem uden auth. Angrebsfladen er flyttet fra "alle på LAN'et" til
+# "alt på maskinen" — ikke lukket. Den lukning er credential-rotation, ikke port-fjernelse.
+#
+# Service-portene 8001-8012 er BEVIDST urørte: browseren taler direkte til dem
+# (frontend/src/config/serviceUrls.js), og e2e's health-gate poller dem. At lukke dem
+# kræver perimeter-ADR'en — P3-24's anden halvdel.
+
 # ACTIVE_-prefixed vars (deliberately NOT plain ENABLE_BANKING_*, which .env
 # defines for the legacy monolith) select which Enable Banking app compose
 # runs with. Unset → sandbox defaults below. Set ENABLE_BANKING_ACTIVE_APP_ID
@@ -43,7 +62,7 @@ services:
     image: redis:7
     container_name: redis
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -58,7 +77,7 @@ services:
       POSTGRES_PASSWORD: user_service_pass
       POSTGRES_DB: users
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -71,8 +90,8 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -92,7 +111,7 @@ services:
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
     mem_limit: 1g
     ports:
-      - "9200:9200"
+      - "127.0.0.1:9200:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
     healthcheck:
@@ -105,7 +124,7 @@ services:
   ollama:
     image: ollama/ollama
     ports:
-      - "11435:11434"
+      - "127.0.0.1:11435:11434"
     volumes:
       - ollama_models:/root/.ollama
     healthcheck:
@@ -163,7 +182,7 @@ services:
       POSTGRES_PASSWORD: goal_service_pass
       POSTGRES_DB: goals
     ports:
-      - "5438:5432"
+      - "127.0.0.1:5438:5432"
     volumes:
       - postgres_goals_data:/var/lib/postgresql/data
     healthcheck:
@@ -266,7 +285,7 @@ services:
       POSTGRES_PASSWORD: transaction_service_pass
       POSTGRES_DB: transactions
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_transactions_data:/var/lib/postgresql/data
     healthcheck:
@@ -332,7 +351,7 @@ services:
       POSTGRES_PASSWORD: account_password
       POSTGRES_DB: account_db
     ports:
-      - "5436:5432"
+      - "127.0.0.1:5436:5432"
     volumes:
       - postgres_account_data:/var/lib/postgresql/data
     healthcheck:
@@ -445,7 +464,7 @@ services:
       POSTGRES_PASSWORD: categorization_service_pass
       POSTGRES_DB: categorization
     ports:
-      - "5435:5432"
+      - "127.0.0.1:5435:5432"
     volumes:
       - postgres_categorization_data:/var/lib/postgresql/data
     healthcheck:
@@ -563,7 +582,7 @@ services:
       POSTGRES_PASSWORD: budget_service_pass
       POSTGRES_DB: budget_service
     ports:
-      - "5437:5432"
+      - "127.0.0.1:5437:5432"
     volumes:
       - postgres_budget_data:/var/lib/postgresql/data
     healthcheck:
@@ -675,7 +694,7 @@ services:
       POSTGRES_PASSWORD: banking_service_pass
       POSTGRES_DB: banking_db
     ports:
-      - "5439:5432"
+      - "127.0.0.1:5439:5432"
     volumes:
       - postgres_banking_data:/var/lib/postgresql/data
     healthcheck:
@@ -889,7 +908,7 @@ services:
       POSTGRES_PASSWORD: saga_service_pass
       POSTGRES_DB: saga
     ports:
-      - "5440:5432"
+      - "127.0.0.1:5440:5432"
     volumes:
       - postgres_saga_data:/var/lib/postgresql/data
     healthcheck:
@@ -992,7 +1011,7 @@ services:
       POSTGRES_PASSWORD: notification_service_pass
       POSTGRES_DB: notifications
     ports:
-      - "5441:5432"
+      - "127.0.0.1:5441:5432"
     volumes:
       - postgres_notifications_data:/var/lib/postgresql/data
     healthcheck:
