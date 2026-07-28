@@ -7,6 +7,7 @@ from decimal import InvalidOperation
 
 from app.application.csv_parsers.base import ParsedCSVResult
 from app.application.csv_parsers.utils import parse_danish_amount
+from app.domain.exceptions import CSVImportException
 
 _REQUIRED_COLUMNS = {"Dato", "Beløb", "Tekst"}
 
@@ -35,15 +36,11 @@ class DanskeBankCSVParser:
         reader = csv.DictReader(io.StringIO(text), delimiter=";")
 
         if reader.fieldnames is None:
-            from app.domain.exceptions import CSVImportException
-
             raise CSVImportException("CSV file is empty or has no headers")
 
         headers = {h.strip() for h in reader.fieldnames if h and h.strip()}
         missing = _REQUIRED_COLUMNS - headers
         if missing:
-            from app.domain.exceptions import CSVImportException
-
             raise CSVImportException(f"Danske Bank CSV missing required columns: {', '.join(sorted(missing))}")
 
         result = ParsedCSVResult()
@@ -66,7 +63,7 @@ class DanskeBankCSVParser:
                 if not description:
                     description = "(no description)"
 
-                result.rows.append(
+                result.add_row(
                     {
                         "user_id": user_id,
                         "account_id": account_id,

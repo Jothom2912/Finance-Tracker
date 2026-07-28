@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, status
 
 from app.application.dto import (
     BulkCreateResultDTO,
@@ -19,6 +19,7 @@ from app.application.dto import (
 )
 from app.application.ports.inbound import ITransactionService
 from app.auth import get_current_user_id
+from app.config import settings
 from app.dependencies import get_transaction_service
 from app.domain.entities import TransactionType
 
@@ -129,6 +130,53 @@ async def delete_transaction(
     await service.delete_transaction(transaction_id, user_id)
 
 
+# Deliberately permissive (P2-29). ``content_type`` is client-supplied and
+# varies by OS: Windows sends application/vnd.ms-excel for .csv when Excel is
+# the registered handler, and several browsers send application/octet-stream.
+# A strict text/csv-only list would reject genuine Danish bank exports, so this
+# is a typo filter ("I picked a PDF by mistake"), NOT a security boundary. The
+# real validation is the parser's required-columns check, which already returns
+# 400 for anything that is not the expected CSV.
+_ALLOWED_CSV_CONTENT_TYPES = frozenset(
+    {
+        "text/csv",
+        "application/csv",
+        "text/plain",
+        "application/vnd.ms-excel",
+        "application/octet-stream",
+    }
+)
+
+
+def _reject_unimportable_upload(file: UploadFile) -> None:
+    """Guard the CSV upload before its bytes are pulled into memory (P2-29).
+
+    Runs before ``file.read()`` on purpose. FastAPI has already parsed the
+    multipart body by the time this handler is entered, so the payload is
+    spooled to disk and ``file.size`` is known and trustworthy — it is counted
+    from received bytes, not read from a client header. The memory blow-up is
+    ``read()`` itself, which holds three live copies of the payload
+    (bytes → str → StringIO) against a 512Mi pod limit.
+    """
+    # Only a full-blown "wrong kind of file" is rejected; see the allowlist note.
+    media_type = (file.content_type or "").split(";")[0].strip().lower()
+    if media_type and media_type not in _ALLOWED_CSV_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Filtypen {media_type!r} kan ikke importeres. Upload en CSV-fil.",
+        )
+
+    # size is Optional: absent when the client sends no content-length for the
+    # part. Fall through in that case rather than treating unknown as zero —
+    # the row cap in ParsedCSVResult.add_row is the backstop.
+    if file.size is not None and file.size > settings.CSV_MAX_BYTES:
+        limit_mib = settings.CSV_MAX_BYTES // (1024 * 1024)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"CSV-filen er for stor (grænsen er {limit_mib} MB). Del den op i flere mindre importer.",
+        )
+
+
 @transaction_router.post("/import-csv", response_model=CSVImportResultDTO)
 async def import_csv(
     file: UploadFile,
@@ -138,6 +186,7 @@ async def import_csv(
     account_id: int | None = Form(None),
     account_name: str | None = Form(None),
 ) -> CSVImportResultDTO:
+    _reject_unimportable_upload(file)
     content = await file.read()
     return await service.import_csv(
         user_id,

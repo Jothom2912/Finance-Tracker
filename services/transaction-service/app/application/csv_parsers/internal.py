@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from app.application.csv_parsers.base import ParsedCSVResult
+from app.domain.exceptions import CSVImportException
 
 _REQUIRED_COLUMNS = {
     "date",
@@ -34,14 +35,10 @@ class InternalCSVParser:
         reader = csv.DictReader(io.StringIO(text))
 
         if reader.fieldnames is None:
-            from app.domain.exceptions import CSVImportException
-
             raise CSVImportException("CSV file is empty or has no headers")
 
         missing = _REQUIRED_COLUMNS - set(reader.fieldnames)
         if missing:
-            from app.domain.exceptions import CSVImportException
-
             raise CSVImportException(f"CSV missing required columns: {', '.join(sorted(missing))}")
 
         result = ParsedCSVResult()
@@ -56,7 +53,7 @@ class InternalCSVParser:
                 if tx_type not in ("income", "expense"):
                     raise ValueError(f"invalid transaction_type: {tx_type}")
 
-                result.rows.append(
+                result.add_row(
                     {
                         "user_id": user_id,
                         "account_id": int(row["account_id"]),
