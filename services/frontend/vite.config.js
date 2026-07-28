@@ -50,6 +50,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
     css: true,
+    // P2-39: EKSPLICIT include. Uden den bruger vitest sin default-glob
+    // (`**/*.{test,spec}.*`) og opsamler Playwright-specs fra `e2e/` — målt:
+    // det gjorde `npm test` RØD (36 filer, 1 failed), fordi `@playwright/test`s
+    // `test()` ikke kan køre i vitests runner. De to suiter skal ikke bare undgå
+    // at overlappe; de må ikke kunne se hinandens filer.
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
     // Pin pool explicitly; vitest 3 changes default from 'threads' to 'forks'
     // which alters test timing. Explicit choice = stable across future upgrades.
     pool: 'threads',

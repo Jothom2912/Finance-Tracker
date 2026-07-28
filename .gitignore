@@ -63,3 +63,8 @@ dev-notes/.obsidian/
 # Local ChromaDB sanity-check databases (contain personal transaction data)
 services/ai-service/test_chromadb_sanity*/
 k8s/secrets.yaml
+
+# P2-39: Playwright-output (traces, video, HTML-rapport) — artifacts, ikke kode.
+services/frontend/test-results/
+services/frontend/playwright-report/
+services/frontend/blob-report/
