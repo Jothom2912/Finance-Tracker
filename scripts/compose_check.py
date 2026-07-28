@@ -55,6 +55,19 @@ What it checks:
    contain both ``uv.lock`` and ``requirements.txt``. Whichever one the
    Dockerfile reads, the other is a second answer to "what versions does this
    service run", and nothing reconciles them.
+5. **The perimeter cannot drift** — ``services/frontend/nginx.conf`` is the
+   security perimeter (ADR-0005, P3-43), and it was the one file nothing read.
+   Four assertions: upstreams resolve to a compose service on its *container*
+   port; no proxying ``/api/`` catch-all but a denying one is required;
+   no ``INTERNAL_API_KEY``-guarded prefix is published; and every built
+   ``finance-tracker-*`` service either has a route or stands on
+   ``NOT_BROWSER_FACING`` with a reason.
+
+   Same shared symptom as rules 1-4, in a sharper form: three of the four
+   failure modes were *measured* answering 200 during P3-43. A missing proxy
+   rule falls into the SPA fallback and returns ``index.html`` with status 200,
+   so "route not exposed" and "route works" are indistinguishable from the
+   client. Rule 5 is where that distinction lives.
 
 Usage::
 
@@ -75,6 +88,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 COMPOSE = REPO_ROOT / "docker-compose.yml"
 SERVICES = REPO_ROOT / "services"
+NGINX_CONF = SERVICES / "frontend" / "nginx.conf"
 
 # Tags this repo builds itself, as opposed to `postgres:16` and friends.
 LOCAL_IMAGE_PREFIX = "finance-tracker-"
@@ -82,10 +96,11 @@ LOCAL_IMAGE_PREFIX = "finance-tracker-"
 TOP_LEVEL_NAME = re.compile(r"^name:\s*(\S+)\s*$")
 SERVICE_NAME = re.compile(r"^  ([A-Za-z0-9._-]+):\s*$")
 SERVICE_KEY = re.compile(r"^    ([A-Za-z0-9._-]+):\s*(.*)$")
+PORT_ENTRY = re.compile(r"^      - (\S+)\s*$")
 
 
 class Service:
-    """The three keys this check cares about, per compose service."""
+    """The keys these checks care about, per compose service."""
 
     def __init__(self, name: str, line: int) -> None:
         self.name = name
@@ -93,6 +108,10 @@ class Service:
         self.build = False
         self.command = False
         self.image: str | None = None
+        # Container-side ports only (the right-hand side of a `ports:` mapping).
+        # Rule 5 compares `proxy_pass` against these, and the distinction is the
+        # whole point: account-service publishes 8004 but *listens* on 8003.
+        self.container_ports: set[str] = set()
 
 
 def parse(text: str) -> tuple[str | None, list[Service]]:
@@ -107,6 +126,7 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
     services: list[Service] = []
     current: Service | None = None
     in_services = False
+    in_ports = False
 
     for number, raw in enumerate(text.splitlines(), start=1):
         line = raw.rstrip()
@@ -119,6 +139,7 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
                 project = match.group(1)
             in_services = line.startswith("services:")
             current = None
+            in_ports = False
             continue
 
         if not in_services:
@@ -128,6 +149,7 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
         if match:
             current = Service(match.group(1), number)
             services.append(current)
+            in_ports = False
             continue
 
         if current is None:
@@ -136,12 +158,21 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
         match = SERVICE_KEY.match(line)
         if match:
             key, value = match.group(1), match.group(2).strip()
+            in_ports = key == "ports"
             if key == "build":
                 current.build = True
             elif key == "command":
                 current.command = True
             elif key == "image":
                 current.image = value
+            continue
+
+        if in_ports:
+            match = PORT_ENTRY.match(line)
+            if match:
+                # "8004:8003" -> 8003; "127.0.0.1:9200:9200" -> 9200. The last
+                # segment is the container port in every Compose short form.
+                current.container_ports.add(match.group(1).strip('"').split(":")[-1])
 
     return project, services
 
@@ -206,6 +237,213 @@ def check_install_paths(problems: list[str]) -> int:
     return inspected
 
 
+# Rule 5's tables. Both are deliberately data, not code: the point of the rule is
+# that adding a service forces an explicit decision, and an explicit decision has
+# to be writable somewhere.
+
+# Service-to-service routes behind INTERNAL_API_KEY. Publishing one through the
+# perimeter would put an S2S surface on the internet with a shared static key as
+# its only guard. Each entry carries the guard's location so the claim is checkable.
+INTERNAL_PREFIXES = {
+    "/api/v1/internal/": "account-service/app/adapters/inbound/internal_api.py",
+    "/api/v1/categorize": "categorization-service/app/adapters/inbound/categorize_api.py",
+}
+
+# Built services the browser deliberately does not talk to. A service absent from
+# both nginx.conf and this list is the regression ADR-0005 point 4 names: added
+# without anyone deciding whether it is public.
+NOT_BROWSER_FACING = {
+    "frontend": "is the perimeter itself",
+    "saga-service": "browser reads sagas via gateway-service's /api/v1/sagas proxy",
+    "analytics-service": "internal CQRS read store; only ai-service and gateway query it",
+}
+
+LOCATION = re.compile(r"^\s*location\s+(\S+)(?:\s+(\S+))?\s*\{")
+PROXY_PASS = re.compile(r"^\s*proxy_pass\s+http://([A-Za-z0-9._-]+):(\d+)\s*;")
+RETURN_CODE = re.compile(r"^\s*return\s+(\d{3})\b")
+
+
+class Location:
+    """One ``location`` block, with what it does about forwarding."""
+
+    def __init__(self, path: str, line: int, modifier: str | None) -> None:
+        self.path = path
+        self.line = line
+        self.modifier = modifier
+        self.upstreams: list[tuple[str, str]] = []
+        self.returns: str | None = None
+
+    @property
+    def proxies(self) -> bool:
+        return bool(self.upstreams)
+
+
+def parse_nginx(text: str, problems: list[str]) -> list[Location]:
+    """Line-parse ``location`` blocks and their ``proxy_pass``/``return``.
+
+    Brace depth, not order, decides ownership. A location using a modifier
+    (``=``, ``~``, ``^~``) is reported rather than analysed: prefix reasoning
+    below would be wrong for it, and being wrong quietly is the failure this
+    whole file exists to prevent.
+    """
+    locations: list[Location] = []
+    stack: list[Location | None] = []
+
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.split("#", 1)[0].rstrip()
+        if not line:
+            continue
+
+        match = LOCATION.match(line)
+        if match:
+            first, second = match.group(1), match.group(2)
+            if second is None:
+                location = Location(first, number, None)
+            else:
+                location = Location(second, number, first)
+                problems.append(
+                    f"nginx.conf line {number}: `location {first} {second}` uses a modifier. "
+                    "Rule 5 reasons about prefix matches only, so it cannot judge this block — "
+                    "it would pass without having checked anything. Express the route as a "
+                    "prefix, or teach rule 5 the modifier's semantics."
+                )
+            locations.append(location)
+            stack.append(location)
+            continue
+
+        current = stack[-1] if stack else None
+        if current is not None:
+            match = PROXY_PASS.search(line)
+            if match:
+                current.upstreams.append((match.group(1), match.group(2)))
+            match = RETURN_CODE.search(line)
+            if match:
+                current.returns = match.group(1)
+
+        for char in line:
+            if char == "{":
+                stack.append(None)
+            elif char == "}" and stack:
+                stack.pop()
+
+    return locations
+
+
+def check_nginx_perimeter(services: list[Service], problems: list[str]) -> tuple[int, int]:
+    """Rule 5: ``services/frontend/nginx.conf`` is the security perimeter (P3-43, ADR-0005).
+
+    Four assertions, each with a failure mode it has been seen to fail on. Returns
+    (locations parsed, proxy_pass directives verified) for the summary line.
+    """
+    if not NGINX_CONF.is_file():
+        problems.append(
+            f"{NGINX_CONF.relative_to(REPO_ROOT)} not found — the perimeter's only definition is "
+            "missing, and rule 5 would otherwise report success having read nothing (P3-43)"
+        )
+        return 0, 0
+
+    locations = parse_nginx(NGINX_CONF.read_text(encoding="utf-8"), problems)
+    by_name = {service.name: service for service in services}
+    verified = 0
+
+    # 1. Every upstream resolves to a compose service listening on that exact
+    #    container port. account-service publishes 8004 and listens on 8003;
+    #    `proxy_pass http://account-service:8004` is a 502 nothing else catches.
+    for location in locations:
+        for host, port in location.upstreams:
+            service = by_name.get(host)
+            if service is None:
+                problems.append(
+                    f"nginx.conf line {location.line}: `location {location.path}` proxies to "
+                    f"`{host}`, which is not a service in docker-compose.yml — nginx resolves "
+                    "upstream names at config load, so this does not fail one route, it stops "
+                    "nginx from starting at all"
+                )
+                continue
+            if not service.container_ports:
+                problems.append(
+                    f"nginx.conf line {location.line}: `{host}` publishes no `ports:` in "
+                    f"docker-compose.yml, so port {port} cannot be verified. Rule 5 refuses to "
+                    "pass an unverifiable upstream — a skipped assertion reads like a checked one."
+                )
+                continue
+            if port not in service.container_ports:
+                published = ", ".join(sorted(service.container_ports))
+                problems.append(
+                    f"nginx.conf line {location.line}: `location {location.path}` proxies to "
+                    f"`{host}:{port}`, but {host} listens on {published} inside the container. "
+                    "Compose's left-hand port is the browser's, not the upstream's "
+                    "(account-service: 8004 published, 8003 internal)."
+                )
+                continue
+            verified += 1
+
+    # 2. No proxying catch-all, and a denying backstop is required. ADR-0005
+    #    point 2 as an executable rule. The `required` half was added after the
+    #    measurement in P3-43 step 1: without it, non-allowlisted /api/ paths
+    #    fall into the SPA fallback and answer 200 + index.html.
+    backstop = None
+    for location in locations:
+        if location.path not in ("/api/", "/api/v1/"):
+            continue
+        if location.proxies:
+            hosts = ", ".join(f"{host}:{port}" for host, port in location.upstreams)
+            problems.append(
+                f"nginx.conf line {location.line}: `location {location.path}` proxies to {hosts} — "
+                "a catch-all publishes every route the services happen to expose, including the "
+                "INTERNAL_API_KEY-guarded ones. The perimeter must be a positive allowlist "
+                "(ADR-0005 point 2)."
+            )
+        elif location.returns is not None:
+            backstop = location
+    if backstop is None:
+        problems.append(
+            "nginx.conf: no denying `location /api/ { return 404; }` backstop. Without it a "
+            "path with no allowlist entry falls through to the SPA fallback and answers "
+            "200 + index.html — measured 2026-07-28 on /api/v1/internal/accounts/1/exists. "
+            "A forgotten proxy rule then looks like a working one."
+        )
+
+    # 3. No location may publish an INTERNAL_API_KEY-guarded prefix — neither by
+    #    naming it, nor by being a prefix of it.
+    for prefix, guard in INTERNAL_PREFIXES.items():
+        for location in locations:
+            if not location.proxies:
+                continue
+            if location.path.startswith(prefix) or prefix.startswith(location.path):
+                problems.append(
+                    f"nginx.conf line {location.line}: `location {location.path}` publishes the "
+                    f"internal route `{prefix}` (guarded by INTERNAL_API_KEY in {guard}). "
+                    "A service-to-service surface behind a shared static key does not belong on "
+                    "the public perimeter."
+                )
+
+    # 4. A new browser-facing service must not be able to arrive silently. Every
+    #    built image either has a route or an explicit reason not to.
+    proxied_hosts = {host for location in locations for host, _ in location.upstreams}
+    for service in services:
+        if not (service.build and service.image and service.image.startswith(LOCAL_IMAGE_PREFIX)):
+            continue
+        if service.name in proxied_hosts:
+            if service.name in NOT_BROWSER_FACING:
+                problems.append(
+                    f"{service.name} is on NOT_BROWSER_FACING ('{NOT_BROWSER_FACING[service.name]}') "
+                    "but nginx.conf proxies to it. One of the two is out of date; the list is a "
+                    "claim about the perimeter, not a place to silence this rule."
+                )
+            continue
+        if service.name not in NOT_BROWSER_FACING:
+            problems.append(
+                f"{service.name} (docker-compose.yml line {service.line}) builds "
+                f"`{service.image}` but has no `location` in nginx.conf and is not on "
+                "NOT_BROWSER_FACING. Decide: add a proxy rule, or add the service to that list "
+                "with the reason the browser never calls it (ADR-0005 point 4). Left undecided, "
+                "this fails in the browser instead of here."
+            )
+
+    return len(locations), verified
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--quiet", action="store_true", help="only print problems")
@@ -223,6 +461,7 @@ def main() -> int:
     problems: list[str] = []
     check(project, services, problems)
     inspected = check_install_paths(problems)
+    locations, upstreams = check_nginx_perimeter(services, problems)
 
     if problems:
         print(f"compose-check: {len(problems)} problem(s)\n", file=sys.stderr)
@@ -231,7 +470,8 @@ def main() -> int:
         print(
             "\nWhy these rules exist: "
             "dev-notes/findings/2026-07-25-per-worker-image-staleness.md (rules 1-3), "
-            "dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md (rule 4).",
+            "dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md (rule 4), "
+            "docs/adr/0005-nginx-as-security-perimeter.md (rule 5).",
             file=sys.stderr,
         )
         return 1
@@ -242,7 +482,8 @@ def main() -> int:
         print(
             f"compose-check: {len(services)} services, {images} built images, "
             f"{workers} workers sharing them; {inspected} service dirs with one install "
-            f"path each. No problems."
+            f"path each; {locations} nginx locations, {upstreams} upstreams verified, "
+            f"{len(NOT_BROWSER_FACING)} services explicitly not browser-facing. No problems."
         )
     return 0
 
