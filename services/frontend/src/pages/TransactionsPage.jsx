@@ -15,7 +15,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useConfirm } from '../components/ConfirmDialog/ConfirmDialog';
 import { formatLocalISODate } from '../lib/formatters';
 import { pageCountOf } from '../lib/pagination';
-import { BANK_FORMAT_OPTIONS } from '../lib/bankFormats';
+import { BANK_FORMAT_OPTIONS, CSV_MAX_BYTES } from '../lib/bankFormats';
 
 import '../components/FilterComponent/FilterComponent.css';
 import './TransactionsPage.css';
@@ -204,6 +204,14 @@ function TransactionsPage() {
   const handleCsvUpload = useCallback(async (e) => {
     e.preventDefault();
     if (!csvFile) { showError('Vælg en CSV fil først.'); return; }
+    // Pre-flight (P2-29): serveren afviser også, men først når hele filen er
+    // sendt — og apiClient timer ud efter 30s. At fange det her sparer
+    // brugeren ventetiden; serveren er stadig den der håndhæver.
+    if (csvFile.size > CSV_MAX_BYTES) {
+      const limitMb = Math.round(CSV_MAX_BYTES / (1024 * 1024));
+      showError(`Filen er for stor (grænsen er ${limitMb} MB). Del den op i flere mindre importer.`);
+      return;
+    }
 
     setUploadingCsv(true);
     clearMessages();
