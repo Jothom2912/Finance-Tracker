@@ -135,7 +135,8 @@ Måling, ikke aflæsning. Alle tre led skal holde:
 
 **Shipped 2026-07-28 i `5ea37f0d`.** Én commit, kun `docker-compose.yml`: 14 port-mappings
 præfikset `127.0.0.1:` plus en kommentar-blok der bærer valget. Ingen kode, ingen migration,
-ingen adfærdsændring.
+ingen adfærdsændring. **CI grøn på `baeb663f`** (run `30360964811`) — alle 19 jobs, og
+E2E-jobbet gav 24 passed med de tre `test_budget_month_closed`-tests navngivet PASSED.
 
 ### Målingen
 

@@ -79,5 +79,8 @@ standing trap.
   passwords i klartekst i compose. Verificeret at enhver container stadig når hosten via
   `host.docker.internal:5434`. Angrebsfladen er flyttet fra "alle på LAN'et" til "alt på
   maskinen" — ikke lukket. Fortjener eget item hvis systemet forlader udviklingsmaskinen.
-- **CI er ikke kørt** på `5ea37f0d` + docs-commit. `make ci-status` før næste item — og
-  compose-ændringen rører netop den e2e-test der bruger 15672, så CI er den rigtige kontrol.
+- ~~CI ikke kørt~~ — **grøn på `baeb663f`** (run `30360964811`), alle 19 jobs. E2E-jobbet
+  kørte og gav **24 passed**, og de tre `test_budget_month_closed`-tests står navngivet som
+  PASSED i loggen. Det er den egentlige kvittering på valg A: den ene host-side-forbruger der
+  kører i CI, taler til RabbitMQ-mgmt på 15672 og gør det stadig med loopback-binding. Havde
+  planen fulgt backloggens "remove host publishing", var netop de tre blevet røde her.

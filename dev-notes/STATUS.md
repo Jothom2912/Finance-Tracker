@@ -28,9 +28,15 @@ ville rive syv legitime host-side-forbrugere over, heraf én i CI
 navngiver er LAN-rækkevidde, så loopback-bind rammer egenskaben uden den omkostning. Rubrikken
 i BACKLOG.md er rettet.
 
+**CI grøn på `baeb663f`** (run `30360964811`), alle 19 jobs. E2E gav 24 passed, og de tre
+`test_budget_month_closed`-tests er navngivet PASSED i loggen — det er kvitteringen på
+valget: den forbruger der bruger mgmt-API'et på 15672 kører i CI og virker med
+loopback-binding.
+
 **ADR'en står stadig åben**, og credentials er urørte: angrebsfladen er flyttet fra "alle på
 LAN'et" til "alt på maskinen" — ikke lukket. P3-25/P2-27 er fortsat blokeret af ADR-halvdelen.
-[Plan + Outcome](plans/2026-07-28-p324-datastore-loopback-bind.md#outcome).
+[Plan + Outcome](plans/2026-07-28-p324-datastore-loopback-bind.md#outcome) ·
+[session-log](sessions/2026-07-28-p324-datastore-loopback.md).
 
 Den før det: **P2-29** (2026-07-28) — byte-, række- og transportgrænse på `/import-csv`.
 Fem commits: `555ffd5e` (`CSV_MAX_BYTES`/`CSV_MAX_ROWS`, handler-guard før `.read()`,
