@@ -74,7 +74,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P2-25 | Transaction soft-delete decision + gone-vs-not-yet in the categorization write-back. [→ detail](#p2-25) | transaction | M | **done 2026-07-28** | [decision](../decisions/2026-07-28-transaction-soft-delete.md), [plan](../plans/2026-07-28-p225-transaction-soft-delete.md) |
 | P2-24 | Shared internal-API client in `services/shared`. [→ detail](#p2-24) | cross | M | open | [plan](../plans/2026-07-25-notification-service-hardening.md) (not-fixed list) |
 | P2-26 | Turn on `require_exp` in all 12 services. [→ detail](#p2-26) | cross | S | **done 2026-07-27** | [sweep SEC-2](../findings/2026-07-26-product-surface-sweep.md) |
-| P2-27 | No rate limiting anywhere. [→ detail](#p2-27) | user, cross | S | open | [sweep SEC-4](../findings/2026-07-26-product-surface-sweep.md) |
+| P2-27 | No rate limiting anywhere — **oplåst af P3-43**: `limit_req`-zone i nginx.conf frem for `slowapi` i N services. [→ detail](#p2-27) | user, cross | S | open | [sweep SEC-4](../findings/2026-07-26-product-surface-sweep.md), [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md) |
 | P2-28 | Any authenticated user can mutate or delete the global taxonomy. [→ detail](#p2-28) | categorization | M | open | [sweep SEC-5](../findings/2026-07-26-product-surface-sweep.md) |
 | P2-29 | CSV upload has no size limit, no MIME check and buffers the whole file. [→ detail](#p2-29) | transaction | S | done 2026-07-28 | [sweep SEC-7](../findings/2026-07-26-product-surface-sweep.md), [plan](../plans/2026-07-28-p229-csv-upload-guards.md) |
 | P2-32 | Outbox-porten erklærer domænets `OutboxEntry`, men adapteren tilskriver shared's klasse af samme navn — usand kontrakt i 7 services; fix er en mapping i adapteren, ikke en sletning af duplikatet (det er den hexagonale grænse) | cross, contracts | S | open | [findings/2026-07-27-outbox-port-declares-foreign-entity.md](../findings/2026-07-27-outbox-port-declares-foreign-entity.md) |
@@ -119,7 +119,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | ID    | Title                                                                                                                                                    | Area                   | Effort                             | Status          | Links                                                                                                                                                               |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P3-24 | Gateway-as-perimeter — begge halvdele lukket 2026-07-28: datastores på loopback, og ADR-0005 vælger nginx som perimeter. Implementeringen er P3-43. [→ detail](#p3-24)                         | infra, gateway         | M                                  | done 2026-07-28 | [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md), [decision](../decisions/2026-07-28-nginx-as-perimeter.md), [datastore-halvdel](../plans/2026-07-28-p324-datastore-loopback-bind.md#outcome)                                                                                                      |
-| P3-25 | No security headers. [→ detail](#p3-25)                                                                                                                  | frontend, infra        | S                                  | open            | [sweep SEC-6](../findings/2026-07-26-product-surface-sweep.md)                                                                                                      |
+| P3-25 | No security headers — **oplåst af P3-43**: CSP/HSTS hører nu ét sted, i perimeterens `server`-blok. [→ detail](#p3-25)                                                                                                                  | frontend, infra        | S                                  | open            | [sweep SEC-6](../findings/2026-07-26-product-surface-sweep.md)                                                                                                      |
 | P3-26 | No dependency scanning, and banking-service pins known-vulnerable versions. [→ detail](#p3-26)                                                           | infra, banking         | S                                  | open            | [sweep SEC-8/9](../findings/2026-07-26-product-surface-sweep.md)                                                                                                    |
 | P3-27 | Four containers run as root; k8s has no securityContext and no NetworkPolicy. [→ detail](#p3-27)                                                         | infra                  | M                                  | open            | [sweep SEC-10](../findings/2026-07-26-product-surface-sweep.md)                                                                                                     |
 | P3-28 | Build & image hygiene — the best effort-to-payoff item in the sweep, all figures measured 2026-07-26. [→ detail](#p3-28)                                 | infra, frontend        | S                                  | open            | [sweep OPS-1](../findings/2026-07-26-product-surface-sweep.md)                                                                                                      |
@@ -137,8 +137,10 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P3-40 | Workers share their API service's image instead of each declaring `build:`, so `compose build <svc>` cannot leave them on stale code. [→ detail](#p3-40) | infrastructure         | S                                  | done 2026-07-27 | [plan](../plans/2026-07-27-p340-worker-image-sharing.md), [findings/2026-07-25-per-worker-image-staleness.md](../findings/2026-07-25-per-worker-image-staleness.md) |
 | P3-41 | 131 bare `AsyncMock()`/`MagicMock()` står ind for ports uden `spec`, så portkontrakter er uhåndhævede i testene. [→ detail](#p3-41)                      | test, cross            | M                                  | open            | [findings/2026-07-27-sync-trigger-double-value.md](../findings/2026-07-27-sync-trigger-double-value.md)                                                             |
 | P3-42 | budget-service initialiserer `FastAPICache` med en Redis-backend i lifespan, men ingen rute er dekoreret med `@cache` — cachen er død infrastruktur, og redis er en dependency den ikke bruger. Afgør: dekorér de dyre read-ruter, eller fjern backend + redis-dep. | budget, deps | S | open | fundet under [P2-37](../plans/2026-07-28-p237-budget-single-install-path.md) |
-| P3-43 | Implementér ADR-0005: nginx `proxy_pass` per path, frontenden på relative URLs, de 11 `CORSMiddleware` ud. [→ detail](#p3-43) | infra, frontend, cross | M | open | [plan](../plans/2026-07-28-p343-nginx-perimeter.md), [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md), [decision](../decisions/2026-07-28-nginx-as-perimeter.md) |
+| P3-43 | Implementér ADR-0005: nginx `proxy_pass` per path, frontenden på relative URLs, de 11 `CORSMiddleware` ud. [→ detail](#p3-43) | infra, frontend, cross | M | done 2026-07-28 | [plan](../plans/2026-07-28-p343-nginx-perimeter.md), [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md), [decision](../decisions/2026-07-28-nginx-as-perimeter.md) |
+| P3-44 | `GET /api/v1/users/{id}` er `INTERNAL_API_KEY`-vogtet men ligger ikke under `/internal/`, så perimeterens præfiks-regel kan ikke lukke den. [→ detail](#p3-44) | user, infra | S | open | [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md), valg A i [P3-43-planen](../plans/2026-07-28-p343-nginx-perimeter.md) |
 | P3-45 | nginx cacher upstream-IP'er ved config-load, så en genskabt service giver 502 gennem perimeteren indtil frontenden genstartes. [→ detail](#p3-45) | infrastructure | S | open | fundet under [P3-43 trin 3](../plans/2026-07-28-p343-nginx-perimeter.md) |
+| P3-46 | `qwen3:8b` bliver OOM-dræbt når hele stakken kører, så chat-pipelinen kan ikke køres end-to-end på 7,8 GB Docker-hukommelse. [→ detail](#p3-46) | ai, infrastructure | S | open | målt under [P3-43 trin 5](../plans/2026-07-28-p343-nginx-perimeter.md) |
 
 ---
 
@@ -399,6 +401,58 @@ den kommer på typecheck-gaten), ikke en drift.
 ### P3-41
 
 **131 bare `AsyncMock()`/`MagicMock()` mod 9 spec'd, fordelt på 10 services** (transaction 24, banking 21 → nu 20, categorization 19, goal 15, analytics 14, ai 12, user 12, account 5, budget 5 med 7 spec'd, saga 4). Hvor mocken står ind for en **port**, betyder det at portens erklærede kontrakt ikke håndhæves nogen steder i testene: `banking-service`s ni `try_claim_sync`-tests sendte alle en `str` mod en `SyncTrigger`-port og var alle grønne. Vær præcis om hvad `spec=` køber: den fanger forkerte *metodenavne*, ikke forkerte *argumenttyper* — den ville ikke selv have fanget fejlen i fundet. Den er stadig værd at have (den fanger den tilstødende fejl, hvor et refactor omdøber en portmetode og mocken glad svarer på det gamle navn), men **P2-31 lukkede kun typehullet i `app/`** — og det ændrer regnestykket her. *Korrigeret 2026-07-27, da P2-31 landede:* alle 8 gatede services kører `packages = ["app"]`, så de 131 testfiler er nu det største usikrede areal i den kode gaten ellers dækker. Den oprindelige rækkefølge-begrundelse ("P2-31 først, ellers lukkes det forkerte hul") er dermed opfyldt og udtømt: `spec=` er ikke længere det svagere alternativ til en typecheck, den er den eneste kontrol der findes inde i `tests/`. Præcisionen holder stadig — den fanger navne, ikke argumenttyper — så alternativet "tag `tests/` med i mypy-scope" bør vejes mod dette item frem for at antages underlegent. Ikke alle 131 er ports — mocks der står ind for `httpx`-klienter eller clocks er uskyldige, så dette er en gennemgang, ikke en søg-og-erstat
+
+### P3-44
+
+**`GET /api/v1/users/{user_id}` er `INTERNAL_API_KEY`-vogtet
+(`user-service/app/adapters/inbound/rest_api.py:67`, guard `:74`) men ligger ikke under et
+`/internal/`-segment.** Perimeteren (ADR-0005) er en positiv allowlist af præfikser, og
+`location /api/v1/users` er nødt til at være der — `/register`, `/login` og `/me` bor under
+samme præfiks. Ruten er altså publiceret på den offentlige overflade.
+
+**Det er ikke en bypass.** Guarden afviser stadig requests uden nøglen, så konsekvensen er en
+S2S-overflade der er *synlig* udefra, ikke åben. Derfor S og ikke en sikkerhedshastesag.
+
+**Hvorfor det ikke blev lukket i P3-43 (valg A):** alternativet var
+`location = /api/v1/users/me` før en regex-`deny` på `^/api/v1/users/[^/]+$`. Det virker, men
+køber lukningen med en **ordningsafhængighed i nginx.conf som ingen test fanger når den
+brydes** — og rule 5 kan ikke udtrykke et præfiks-forbud mod noget der ikke er et præfiks
+(assertion 3 regner i præfikser; en `location` med modifier rapporteres netop *fordi* reglen
+ikke kan bedømme den). En tavs regression i en sikkerhedsregel er dyrere end en dokumenteret,
+vogtet rute.
+
+**Fixet:** flyt ruten til `/api/v1/internal/users/{id}`, så den falder ind under det præfiks
+rule 5 allerede forbyder, og deny-backstoppen dækker den uden en ny regel. Kaldere skal
+opdateres samtidig — find dem med `grep -rn "USER_SERVICE_URL" services/` før flytningen, og
+husk at `INTERNAL_PREFIXES` i `scripts/compose_check.py` derefter dækker den automatisk.
+Advarslen i `services/frontend/nginx.conf` over `location /api/v1/users` fjernes som sidste
+skridt — den er kvitteringen for at itemet er lukket.
+
+### P3-46
+
+**`qwen3:8b` (5,2 GB) bliver OOM-dræbt når hele compose-stakken kører.** Målt 2026-07-28 under
+P3-43 trin 5: to på hinanden følgende chat-requests endte begge i `event: error` /
+`{"code":"internal_error"}`, med `ollama._types.ResponseError: an error was encountered while
+running the model: unexpected EOF (status code: 500)` i ai-service og
+`llama_server.go:1035 msg="llama-server process no longer running" ... string="signal: killed"`
+i ollama. Docker Desktop har **7,8 GB** i alt; `qwen3:8b` 5,2 GB plus `bge-m3` 1,2 GB plus de
+~2,5 GB de 55 containere måler i forvejen går ikke op.
+
+**Kontrolleret at det ikke er perimeteren:** samme request direkte mod `127.0.0.1:8007`, uden
+nginx, fejler identisk. Fejlen ligger under HTTP-laget, i model-runneren.
+
+**Hvad det koster:** chat-featuren kan ikke verificeres end-to-end på denne maskine mens
+stakken kører, og det er derfor P3-43's "done when" ikke kunne opgøres for chat-SSE'ens
+*pipeline* — kun for dens transport (se planens Outcome). Enhver fremtidig verifikation af
+ai-service rammer samme mur.
+
+**Retninger, i stigende omkostning:** (a) hæv Docker Desktops memory-allokering — gratis hvis
+maskinen har RAM, og bør prøves først; (b) brug `qwen3:4b` (2,5 GB) også til prose i
+development og reservér `8b` til en profil, hvilket koster prosakvalitet og gør at det verificerede
+ikke er det konfigurerede; (c) `mem_limit` + `OLLAMA_MAX_LOADED_MODELS=1` så OOM'en bliver en
+ærlig afvisning frem for et dræbt subprocess. Bemærk at (c) ikke løser noget, den gør
+fejlmoden læsbar — hvilket stadig er værd at have, jf. at symptomet i dag er en generisk
+dansk fejlbesked i UI'et.
 
 ### P3-45
 

@@ -1,7 +1,7 @@
 ---
 title: P3-43 — nginx som perimeter, i drift
 date: 2026-07-28
-status: open
+status: done
 backlog-items: [P3-43]
 related:
   - ../../docs/adr/0005-nginx-as-security-perimeter.md
@@ -255,7 +255,7 @@ catch-all indsat, `location /api/v1/internal/` indsat, ny fake-service i compose
 fire grønne igen efter rollback. En vagt der aldrig er set fejle er ikke verificeret; det er
 den lektie P3-40 efterlod.
 
-### 5. [ ] Verifikation samlet + docs
+### 5. [x] Verifikation samlet + docs
 
 - `make compose-check`, `make check`, `make test-e2e` (24 forventet — e2e rammer portene
   direkte og skal være upåvirket; hvis den ikke er, har trin 3 rørt noget den ikke skulle).
@@ -292,3 +292,73 @@ den bare ikke endnu), trin 1+2 kan stå uden trin 3 (CORS er så bare overflødi
 Det er den egenskab der gør fem commits værd at have frem for én.
 
 ## Outcome (fill in when done)
+
+**Udført 2026-07-28 i fem commits, `4d73b527`..`cd9b94fb`.** Formen fra ADR-0005 holdt.
+ADR'en har fået en `## Implementeret`-note med de syv afvigelser; her står kun det
+verifikationen viste.
+
+### Hvad blev bevist, og hvordan
+
+| Påstand | Bevis |
+|---|---|
+| Browseren taler med én origin | 0 hardkodede `localhost:80XX` i det nye bundle (11 i det gamle) |
+| Hver API-request går gennem nginx | Hvert kald kvitteret i nginx' access-log, ikke aflæst i koden |
+| Ruterne rammer rette service | 16 `proxy_pass`, hver verificeret mod compose af rule 5 |
+| Interne ruter er ikke publiceret | `/api/v1/internal/…`, `/api/v1/categorize/`, `/api/v1/analytics/…` → **404 `text/html` fra nginx** |
+| CORS-middlewaren er væk | Preflight mod alle 11 porte: 200 + ACAO før, **405 uden headers** efter |
+| CSV-import virker gennem perimeteren | `import-csv` → 200, `{"imported":6}`, transaktionerne læsbare bagefter |
+| Servicen, ikke nginx, afviser store filer | 10,5 MiB-fil → **servicens danske 413**, ikke nginx' HTML-413 |
+| CQRS-læsesiden virker same-origin | GraphQL `financialOverview` → rigtig aggregeret data (700 / 5740,08) |
+| SSE buffres ikke | 9 chunks spredt over **145s**, ikke ét hug |
+| `proxy_read_timeout 300s` binder | Strømmen levede 162s — defaultens 60s ville have dræbt den |
+| E2E er upåvirket | `make test-e2e`: **24 passed**, fordi den rammer portene direkte |
+| Rule 5 kan fejle | 11 mutationer, alle røde med den forventede besked, grøn igen efter rollback |
+
+### Hvad IKKE blev bevist — og det er planens eneste åbne ende
+
+**Chat-SSE'ens *pipeline* kunne ikke køres end-to-end.** `qwen3:8b` bliver OOM-dræbt på denne
+maskines 7,8 GB Docker-hukommelse (`llama-server ... signal: killed`), så begge forsøg endte i
+`event: error`. **Kontrolleret at det ikke er perimeteren:** samme request direkte mod
+`:8007`, uden nginx, fejler identisk. → **P3-46**.
+
+Det betyder at Goal-sætningens "login → transaktioner → CSV-import → budget → chat-SSE" er
+opfyldt for de fire første og for chat-SSE'ens *transport*, men ikke for dens indhold. Den
+skelnen er værd at holde fast på: transporten var det perimeteren kunne brække, og den er
+målt på det der binder (buffering og timeout). Pipelinen er en anden fejl, i en anden
+komponent, som denne plan hverken forbedrede eller forværrede.
+
+**Browser-gennemgangen blev gjort på HTTP-niveau, ikke i en rigtig browser.** Der er ingen
+Playwright/Puppeteer i repoet, så DevTools' network-tab er stadig ubekræftet. Sammen med
+bundle-grep'et fra trin 2 (0 hits på `localhost:80XX`) og access-loggen fra hvert kald dækker
+det samme påstand fra to sider, men det er ikke det samme som at have set det.
+
+### Fire ting planen tog fejl i
+
+1. **"Før: preflight `OPTIONS` med 200" (trin 3).** Starlette svarer **400** på en ikke-tilladt
+   origin. Havde evil-rækken været diskriminatoren, ville 400→405 have set ud som et resultat
+   uden at være det. Diskriminatoren var rækken med den *tilladte* origin, fordi kun den bar
+   ACAO.
+2. **`services/frontend/build/` er ikke committet** — den er gitignored
+   (`services/frontend/.gitignore:12`). Trin 2's genbygningsopgave og det tilhørende
+   follow-up-item bortfaldt.
+3. **Trin 3's "9 settings-klasser + 2 modul-konstanter" var rigtigt, men ufuldstændigt:** syv
+   `main.py` stod tilbage med et nu ubrugt `from app.config import settings`. Fail-fast på
+   `JWT_SECRET` bevares, fordi `app.config` importeres transitivt af routere/dependencies i
+   alle syv — verificeret, ikke antaget.
+4. **Rule 5's fire assertions blev syv fejlmoder.** De tre ekstra kom af at skrive kontrollerne
+   *før* jeg troede reglen var færdig: en upstream uden `ports:` og en `location` med modifier
+   er **uafgørlige**, ikke bestående, og `NOT_BROWSER_FACING` skulle kunne modsiges af
+   nginx.conf. En regel der springer en assertion rapporterer succes for noget den ikke har
+   læst — samme fejlklasse som resten af filen vogter imod.
+
+### Oplåst
+
+**P3-25** (CSP/HSTS) og **P2-27** (`limit_req` frem for `slowapi` i N services) har nu et sted
+at bo: perimeterens `server`-blok. Begge rækker er noteret i BACKLOG.
+
+### Nye items
+
+- **P3-44** — flyt `/api/v1/users/{id}` under `/internal/` (valg A's gæld).
+- **P3-45** — nginx cacher upstream-IP'er ved config-load; byttet ved `resolver` er skrevet ned.
+- **P3-46** — `qwen3:8b` OOM-dræbes; blokerer end-to-end-verifikation af chat.
+

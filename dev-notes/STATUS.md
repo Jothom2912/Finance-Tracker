@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P3-24)
+# Status — 2026-07-28 (efter P3-43)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,10 +9,37 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P3-24 lukkede helt 2026-07-28 — begge halvdele. Næste item er ikke
-valgt — se **Next up**.
+**Intet aktivt item.** P3-43 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
 
-Sidst shippet: **P3-24's ADR-halvdel** (2026-07-28) —
+Sidst shippet: **P3-43 — nginx som perimeter, i drift** (2026-07-28), fem commits
+`4d73b527`..`cd9b94fb`. Browseren taler med én origin: 16 eksplicitte `proxy_pass`-locations
+plus en **denyende** `location /api/ { return 404; }`, frontenden på relative URLs, de 11
+`CORSMiddleware` + `CORS_ORIGINS` væk, og rule 5 i `scripts/compose_check.py` vogter nginx.conf
+mod drift. Oplåser **P3-25** (CSP/HSTS ét sted) og **P2-27** (`limit_req`-zone).
+
+**Det gennemgående fund, og grunden til at det står her og ikke kun i session-loggen:** hvert
+af de fem trin havde en måling der modsagde planen, og alle fem handlede om at noget *så ud*
+som om det virkede. Ikke-proxyede ruter svarede **200 + index.html** fra SPA-fallbacken (deraf
+deny-backstoppen). Den første rute-måling ramte en Vite dev-server på `[::1]:3000` frem for
+nginx, og gav plausible svar fra den forkerte komponent — **brug `127.0.0.1:3000`, og bekræft i
+access-loggen at nginx talte requesten.** Frontendens 344 tests bestod stadig med URL-fejlen
+genindført som kontrol, fordi de mocker `fetch`. Og planens forudsagte preflight-200 var i
+virkeligheden 400, så den forkerte række ville have været diskriminator.
+
+**Verifikationen der tæller:** preflight mod alle 11 porte gik fra 200 + `access-control-allow-origin`
+til **405 uden headers**; `/api/v1/internal/…` og `/api/v1/categorize/` giver nu **404 fra
+nginx**; en 10,5 MiB CSV får **servicens** danske 413, ikke nginx' HTML-413; GraphQL leverer
+rigtig aggregeret data same-origin; `make test-e2e` er **24 grønne**, fordi den rammer portene
+direkte og skulle være upåvirket. Rule 5 er kørt **rød på 11 mutationer** hver for sig.
+
+**Åben ende, med vilje ikke skjult:** chat-SSE'ens *pipeline* kunne ikke køres end-to-end —
+`qwen3:8b` OOM-dræbes på 7,8 GB Docker-hukommelse (→ **P3-46**). Kontrolleret at det ikke er
+perimeteren: samme request direkte mod `:8007` fejler identisk. SSE'ens *transport* er derimod
+målt, og på det der binder: 145s spredning mellem chunks (buffering ville give ~0) og en strøm
+der levede 162s, forbi defaultens 60s `proxy_read_timeout`. Browser-gennemgangen blev gjort på
+HTTP-niveau; der er ingen Playwright i repoet, så DevTools er ubekræftet.
+
+Den før det: **P3-24's ADR-halvdel** (2026-07-28) —
 [ADR-0005](../docs/adr/0005-nginx-as-security-perimeter.md): **frontendens nginx er
 perimeteren, ikke gateway-service**, som forbliver CQRS-læsesiden. Ingen kode; beslutning +
 [decision-note](decisions/2026-07-28-nginx-as-perimeter.md) + P3-43 som implementeringsitem.
@@ -148,16 +175,22 @@ oprydning.
 - **P2-21** — k8s manifest drift: 6 workloads + 1 DB i compose har ingen manifest, så
   `apply -k` taber notification-feeden og den automatiske ADR-0003-kæde i stilhed.
   CI-check-halvdelen er nu billigere: `scripts/compose_check.py` er stedet at lægge
-  compose-vs-kustomization-diffen, og P2-37 har allerede udvidet den fil fra "compose-check" til
-  build hygiene — så der er præcedens for en tredje regel, men også en optjent omdøbning til
-  `build_hygiene_check.py` at gøre først.
-- **P3-43** — implementér ADR-0005: nginx `proxy_pass` per path, frontenden på relative URLs,
-  de 11 `CORSMiddleware` ud. Ruter-tabellen er allerede verificeret entydig, og ADR'en bærer
-  fire målte fælder (SSE-buffering, positiv allowlist frem for catch-all, e2e's otte
-  health-polls, nginx-drift uden vagt). Oplåser P3-25 og P2-27 i praksis.
-- **P2-27/28** — rate limiting og taxonomy write auth. P2-27's *placering* er nu afgjort
-  (`limit_req`-zone i nginx), men den forudsætter P3-43. P2-28 kræver stadig en beslutning om
-  et rolle-begreb, som ikke findes nogen steder i kodebasen.
+  compose-vs-kustomization-diffen. Filen har efter P3-43 **fem** regler og læser compose,
+  `services/*/` og `services/frontend/nginx.conf` — så præcedensen for en sjette er solid, men
+  omdøbningen er også optjent for anden gang. Bemærk at "build hygiene" ikke længere dækker
+  scopet præcist: rule 5 er en sikkerhedsregel, ikke en build-regel, og de deler kun
+  fejlmoden *en grøn kørsel der intet beviste*. Vælg navnet efter fejlmoden, ikke emnet.
+- **P3-25 og P2-27 er nu de billigste items i backloggen**, fordi P3-43 byggede stedet de
+  skulle bo. CSP/HSTS er fem `add_header`-linjer i perimeterens `server`-blok frem for i N
+  services; `limit_req` er en zone dér frem for `slowapi` overalt. Begge er S. Bemærk hvad de
+  *ikke* dækker: perimeteren er en tilføjet vej, ikke en lukket dør — service-portene 8001–8012
+  er stadig på `0.0.0.0` (ADR-0005 punkt 3), så headers og rate limits gælder browser-trafik og
+  ikke nogen der rammer en port direkte.
+- **P2-28** — taxonomy write auth kræver stadig en beslutning om et rolle-begreb, som ikke
+  findes nogen steder i kodebasen.
+- **P3-46** — `qwen3:8b` OOM-dræbes når stakken kører, så ai-service kan ikke verificeres
+  end-to-end lokalt. Ikke et produktfejl, men det blokerer for *evidens* om chat, og det er
+  derfor det bør ligge tidligt: (a) hæv Docker-memory er gratis at prøve først.
 
 Ikke akut, selvom titlen lyder sådan: **P2-36** (`x-retry-count` → uendelig redelivery) — hver
 writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne republishes. Hærdning.

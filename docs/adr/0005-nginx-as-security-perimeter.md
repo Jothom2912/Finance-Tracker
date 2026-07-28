@@ -126,3 +126,50 @@ ingen frontend uanset. Vi flytter ikke risikoen, vi undlader at tilføje en ny.
 `xpack.security.enabled: "false"` på ES og Postgres-passwords i klartekst i compose er urørte,
 og alt der kører *på* maskinen når stadig datastores uden auth. Perimeteren handler om
 browser-trafik, ikke om at hærde datastores.
+
+---
+
+## Implementeret 2026-07-28 (P3-43)
+
+Fem commits, `4d73b527`..`cd9b94fb`. Formen holdt; syv ting måtte måles frem, og de fire
+første er afvigelser fra det ADR'en beskrev:
+
+1. **En denyende `location /api/ { return 404; }` blev tilføjet** — punkt 2 sagde "eksplicitte
+   location-blokke, ingen catch-all" og stoppede dér. Det var utilstrækkeligt: en
+   ikke-allowlistet `/api/`-sti faldt ned i SPA-fallbacken og svarede **200 + index.html**.
+   `/api/v1/internal/accounts/1/exists` og `/api/v1/categorize/` var altså ikke eksponeret,
+   men de *så* ud som om de virkede. Backstoppen er det modsatte af en catch-all: den
+   proxyer intet, den nægter. Efter: 404 `text/html` fra nginx.
+2. **`proxy_set_header Host $http_host`, ikke `$host`.** `$host` stripper porten, og FastAPI
+   bygger sin trailing-slash-redirect ud fra Host, så `/api/v1/accounts` svarede
+   `Location: http://127.0.0.1/api/v1/accounts/` — port 80, hvor intet lytter. Syv af seksten
+   ruter giver 307, og `crudFactory` kalder accounts/goals uden trailing slash.
+3. **`client_max_body_size` hævet til 11m på transactions-locationen.** nginx' default er 1 MB
+   mod `CSV_MAX_BYTES` på 10 MiB. Målt efter: en 10,5 MiB-fil får **servicens** danske besked
+   (`Forespørgslen er for stor (grænsen er 10 MB).`), ikke nginx' HTML-413. Det var hensigten
+   med at vælge 11 og ikke 10.
+4. **Punkt 2's ordlyd om `/api/v1/users/{id}`.** ADR'en nævnte kun account og
+   categorization som `INTERNAL_API_KEY`-vogtede. `GET /api/v1/users/{user_id}` er det også,
+   men ligger ikke under et `/internal/`-segment, og søskenden `/api/v1/users/me` gør et
+   præfiks-`deny` umuligt. Accepteret på den offentlige overflade, dokumenteret i nginx.conf,
+   og flytningen er **P3-44**. En regex-`deny` blev fravalgt fordi den ville skabe en
+   ordningsafhængighed i nginx.conf som ingen test fanger når den brydes.
+
+Tre ting der ikke ændrer formen, men er værd at kende:
+
+5. **Punkt 4's rule 5 findes** (`scripts/compose_check.py`), med fire assertions verificeret
+   røde hver for sig — elleve kontroller i alt. Reglen fejler også når en assertion er
+   *uafgørlig* (upstream uden `ports:`, `location` med modifier), fordi en sprunget assertion
+   læses som en bestået.
+6. **nginx cacher upstream-IP'er ved config-load.** Samme egenskab der gør `depends_on` til et
+   krav gør en genskabt container til 502 på alle ruter indtil `restart frontend`. → **P3-45**,
+   hvor byttet (dynamisk genopslag mod tab af `nginx -t`-validering) er skrevet ned.
+7. **De 11 `CORSMiddleware` er væk, målt frem for aflæst.** Ingen test asserterer på
+   CORS-headers, så suiten kunne ikke bevise det. Preflight direkte mod alle 11 porte:
+   før 200 + `access-control-allow-origin` på en tilladt origin, efter 405 uden headers.
+   Sidefund: `pydantic-settings` kører `extra='forbid'`, så en forældet `CORS_ORIGINS`-linje
+   i en `.env`-*fil* nu dræber servicen ved import (env-vars ignoreres derimod).
+
+**Punkt 3 står uændret:** service-portene 8001–8012 er stadig på `0.0.0.0`. `make test-e2e`
+giver 24 grønne netop fordi den rammer dem direkte. Perimeteren er en tilføjet vej, ikke en
+lukket dør.
