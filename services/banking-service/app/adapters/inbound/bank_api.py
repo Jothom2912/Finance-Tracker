@@ -90,9 +90,9 @@ async def list_available_banks(
 ) -> list[dict]:
     try:
         return await service.list_banks(country)
-    except BankConfigError as exc:
-        logger.exception("Enable Banking misconfigured while listing banks")
-        raise HTTPException(status_code=500, detail=f"Bank adapter misconfigured: {exc}")
+    # BankConfigError deliberately not caught here — P2-42a maps it to 503 in
+    # main.py.  It has to live there regardless: for a missing or unreadable PEM it
+    # is raised during dependency resolution, so this block never saw that case.
     except BankApiUnavailable as exc:
         logger.exception("Enable Banking upstream error while listing banks")
         raise HTTPException(status_code=502, detail=f"Enable Banking API unavailable: {exc}")
@@ -113,9 +113,7 @@ async def start_bank_connection(
         )
     except BankAccountNotOwned as exc:
         raise HTTPException(status_code=403, detail=str(exc))
-    except BankConfigError as exc:
-        logger.exception("Enable Banking misconfigured while starting connect")
-        raise HTTPException(status_code=500, detail=f"Bank adapter misconfigured: {exc}")
+    # Same as /available-banks: BankConfigError -> 503 via the handler in main.py.
     except BankApiUnavailable as exc:
         logger.exception("Enable Banking upstream error while starting connect")
         raise HTTPException(status_code=502, detail=f"Enable Banking API unavailable: {exc}")

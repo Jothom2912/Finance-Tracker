@@ -224,24 +224,49 @@ Commit per trin — rent rollback, jf. konventionen.
 
    Ingen pipe gennem `tail`/`head` nogen steder; `rc` aflæst eksplicit i hver kontrol.
 
-6. [ ] **P2-42a: `BankConfigError` → 503 + WARNING.** Filer:
-   `services/banking-service/app/main.py` (nyt `@app.exception_handler(BankConfigError)` ved
-   siden af de seks der allerede findes, `main.py:34-62`) og
-   `services/banking-service/app/adapters/inbound/bank_api.py` (fjern de to per-rute
-   `status_code=500` på `:95` og `:118`, som handleren nu dækker).
-   **Hvorfor handleren og ikke en try/except:** `GET /connections` (`bank_api.py:205-212`) har
-   **ingen** try/except og kan ikke få en der virker — `BankConfigError` kastes i
-   `Depends(get_banking_service)` → `_get_banking_client()` → `EnableBankingClient.__init__`
-   (`dependencies.py:33`, `enable_banking_client.py:73`), altså **før** rutens krop.
-   Det er derfor dashboardets kald giver 500. Trin 1 i dette trin er at bekræfte den kæde ved
-   at reproducere 500'eren lokalt.
-   Bemærk at `_banking_client`-singletonen forbliver `None` når konstruktionen kaster, så hver
-   request forsøger igen — hvilket er den rigtige semantik for en 503 (retryable).
-   **Tests:** banking-service har ingen dækning af denne sti. Tilføj mindst to:
-   `/bank/connections` med ulæselig PEM → 503, og `/available-banks` → 503 (den der før gav
-   500). **Verificér dem røde** uden handleren.
-   `make -C services/banking-service test` (68 passed i dag, kun i CI iflg. P3-39 — kør det
-   der arbejder).
+6. [x] **P2-42a: `BankConfigError` → 503 + WARNING.** Ny
+   `@app.exception_handler(BankConfigError)` i `main.py`, og de to per-rute `status_code=500`
+   fjernet fra `/available-banks` og `/connect` i `bank_api.py`. `/callback`s
+   `except BankConfigError` (`:175`) er **urørt** — den returnerer et browser-redirect med
+   `code=config_error`, ikke en statuskode, og er en anden ting.
+
+   **Kæden bekræftet ved reproduktion, og den var værre end planen beskrev.** De to nye tests
+   var først røde med `BankConfigError: PEM key not found at /nonexistent/enablebanking.pem`
+   som en **uhåndteret exception** — altså undslap den dependency-resolutionen helt.
+   Konsekvens planen ikke nævnte: rutens *eget* `except BankConfigError` på `/available-banks`
+   har **aldrig** fanget den manglende PEM. Det blokerede kun config-fejl der opstår *inde i*
+   servicekaldet, fx JWT-signering (`enable_banking_client.py:102`). Så begge ruter gav 500 ad
+   samme vej, og de to `status_code=500` var døde for netop denne fejlklasse.
+
+   **Tests (2 nye, 68 → 70):** de overrider bevidst **ikke** `get_banking_service`, for det er
+   hele pointen — fejlen skal kastes af den *rigtige* dependency. Kun `get_db` overrides, da
+   den resolves først og ikke er hvad testen handler om. Begge verificeret røde før handleren,
+   grønne efter. `make -C services/banking-service check`: **rc=0**, 59 unit + 11 integration.
+   (Testene kører fint lokalt; note til P3-39's antagelse.)
+
+   **Live-verificeret gennem containeren, ikke kun i pytest.** `make check` er statisk og
+   importerer ikke `app.main` under imagets versioner — og dette trin tilføjer netop et nyt
+   top-level-import i `main.py`, hvor en cykel først ville vise sig ved opstart.
+   `docker compose up -d --build banking-service` → `running healthy`, ren opstartslog.
+   Derefter med `ENABLE_BANKING_KEY_PATH` peget på en ikke-eksisterende PEM via
+   compose-override:
+   - `GET /api/v1/bank/available-banks?country=DK` → **HTTP 503**
+   - `GET /api/v1/bank/connections?account_id=1` → **HTTP 503** (den der gav 500)
+   - begge med `{"detail":"Bank-integrationen er ikke tilgængelig lige nu. Prøv igen senere."}`
+   - logget som `Enable Banking not configured — returning 503: PEM key not found at …`,
+     altså WARNING med den konkrete config-fejl navngivet
+
+   **Retryable bekræftet frem for antaget:** to requests gav **to** log-linjer, så
+   `_banking_client` latcher ikke — hver request forsøger konstruktionen igen. Det er den
+   semantik 503 lover og 500 ikke gør. Banking genoprettet bagefter: `/connections` → 200.
+
+   **Det åbne valg er afgjort til (b), målt.** `Run browser tests` er **success** i alle tre
+   seneste kørsler, og `Generate throwaway Enable Banking key` ligeså — så banking *er*
+   korrekt konfigureret i CI, der er ingen 5xx at undtage, og (a) ville være unødig
+   kompleksitet. P2-39's 5xx-vagt røres ikke.
+   Konsekvensen der skal siges højt: **503-stien er dermed ikke dækket i CI.** Den er dækket
+   af de to nye tests. Hvis PEM-steppet en dag fjernes, vil browser-suiten rapportere 503 som
+   5xx — og det er den rigtige adfærd, ikke en fejl at undtage.
 
 7. [ ] **Verifikation samlet.** `make compose-check` (rører vi compose eller
    dependency-filer), `make -C services/banking-service check`, `make test-e2e` (24 forventet),

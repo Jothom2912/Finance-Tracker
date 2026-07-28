@@ -21,10 +21,13 @@ os.environ.setdefault("ENABLE_BANKING_KEY_PATH", "dummy.pem")
 os.environ.setdefault("ENABLE_BANKING_REDIRECT_URI", "http://localhost/callback")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/test")
 
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from typing import Iterator
 from uuid import UUID
 
 from app.config import settings
+from app.database import get_db
 from app.dependencies import get_banking_service
 from app.domain.exceptions import BankAccountNotOwned, BankConsentExpired
 from app.main import app
@@ -202,3 +205,57 @@ def test_disconnect_denied_for_foreign_connection() -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 403
+
+
+# ── P2-42a: BankConfigError -> 503, not 500 ────────────────────────
+#
+# These two deliberately do NOT override `get_banking_service`.  That is the whole
+# point: `BankConfigError` is raised while FastAPI *resolves* the dependency —
+# `get_banking_service` -> `_get_banking_client()` -> `EnableBankingConfig`
+# (missing PEM) or `EnableBankingClient.__init__` (unreadable PEM) — so it happens
+# before any route body runs.  A per-route try/except therefore cannot catch it,
+# which is why `GET /connections` has none and returned a bare 500 to the
+# dashboard.  Only an app-level exception handler covers this path.
+#
+# `get_db` IS overridden, because `get_banking_service` takes it as a dependency
+# and it resolves first; the DB is not what these tests are about.
+
+
+@contextmanager
+def unconfigured_banking(monkeypatch_path: str = "/nonexistent/enablebanking.pem") -> Iterator[None]:
+    """Force the Enable Banking client to be unconstructable, as in an unconfigured deploy."""
+    import app.dependencies as deps
+
+    original_path = settings.ENABLE_BANKING_KEY_PATH
+    original_client = deps._banking_client
+    settings.ENABLE_BANKING_KEY_PATH = monkeypatch_path
+    # The client is a process-wide singleton; a cached one from another test would
+    # hide the failure entirely.
+    deps._banking_client = None
+    app.dependency_overrides[get_db] = lambda: None
+    try:
+        yield
+    finally:
+        settings.ENABLE_BANKING_KEY_PATH = original_path
+        deps._banking_client = original_client
+        app.dependency_overrides.clear()
+
+
+def test_available_banks_returns_503_when_integration_unconfigured() -> None:
+    with unconfigured_banking(), TestClient(app) as client:
+        response = client.get("/api/v1/bank/available-banks?country=DK", headers=make_auth_header())
+
+    # 503, not 500: an unconfigured optional integration is unavailable, not a bug
+    # in banking-service — and it is retryable, which 500 does not communicate.
+    assert response.status_code == 503
+    assert "detail" in response.json()
+
+
+def test_list_connections_returns_503_when_integration_unconfigured() -> None:
+    # This is the call the dashboard makes, and the one that had no try/except at
+    # all — the 500 in finding 2026-07-28-banking-service-dead-in-ci.md.
+    with unconfigured_banking(), TestClient(app) as client:
+        response = client.get("/api/v1/bank/connections?account_id=123", headers=make_auth_header())
+
+    assert response.status_code == 503
+    assert "detail" in response.json()
