@@ -167,30 +167,62 @@ Commit per trin — rent rollback, jf. konventionen.
    venter så på ES' readiness uden en øvre grænse"* (finding, punkt 1) er **forkert** og skal
    rettes. Det er det tredje forkerte tal i dette item.
 
-4. [ ] **De tre ugatede HTTP-services ind i `Wait for system` — hvis de kan bære det.**
-   Fil: `.github/workflows/ci.yml` (`Wait for system`-loopet, `ci.yml:369`). Tilføj 8007
-   (ai), 8008 (notification), 8011 (saga).
-   **Måles før den bliver hård:** `ai-service` afhænger af `ollama-pull`, som puller `qwen3:4b`
-   + `bge-m3`. Kan `/health` på 8007 ikke nås inden for de 180 s i CI, så **udelad 8007 med en
-   navngivet grund i kommentaren** frem for at hæve deadlinen blindt — en hævet deadline gør
-   trin 2's grænse til den der rammer, og det er en dårligere fejlbesked. Notification og saga
-   har ingen tunge afhængigheder og forventes gratis.
-   **Kontrol:** `docker compose stop saga-service` lokalt → loopet skal fejle på 8011 med
-   `docker compose ps` i outputtet.
+4. [x] **De tre ugatede HTTP-services ind i `Wait for system`.** Alle tre tilføjet — 8007
+   (ai), 8008 (notification), 8011 (saga). Loopet dækker nu 8001-8012 uden huller.
+   Alle tre har en `/health`-rute, verificeret; alle tre svarede 200 lokalt.
 
-5. [ ] **Worker-gaten: ingen container må være exited nonzero eller i restart-loop.**
-   Nyt step i `e2e-tests` efter `Wait for system`, plus muligvis en lille parser i
-   `scripts/` hvis inline-`jq` bliver ulæselig. `docker compose ps --all --format json` →
-   fejl hvis nogen container har `State: exited` med nonzero exit code, eller `restarting`.
-   **Fælden der skal håndteres eksplicit:** `ollama-pull` er `restart: "no"` og **exit 0** når
-   den er færdig (`docker-compose.yml:137-145`), så prædikatet skal være *nonzero exit*, ikke
-   *not running*. Ellers er gaten rød på en korrekt stak fra første kørsel.
-   Læs `rc=$?` eksplicit; **ingen pipe gennem `tail`/`head`** — den fælde har ramt 6×, senest
-   på selve kontrol-aflæsningen.
-   **Kontrol (den vigtigste i planen, fordi gaten ellers er grøn-på-ingenting):** knæk én
-   worker med vilje — fx en ugyldig `DATABASE_URL` på `saga-timeout-worker` — og bekræft at
-   steppet bliver **rødt og navngiver containeren**. Bekræft derefter at en uændret stak er
-   grøn, altså at `ollama-pull` ikke udløser den.
+   **8007 blev inkluderet, og planens bekymring var inverteret — målt, ikke antaget.**
+   Bekymringen var at `ai-service` ikke kunne nå de 180 s, fordi den har
+   `depends_on: ollama-pull: condition: service_completed_successfully` (verificeret i
+   `docker-compose.yml:560-566`), altså venter på en cold pull af qwen3:4b + bge-m3 = 3,7 GB,
+   og CI cacher ikke ollama (`grep -i ollama .github/workflows/ci.yml` = 0 hits).
+
+   Men `docker compose up -d` **blokerer selv** på den betingelse, så pullet betales i
+   `Start system` — **målt 173 s / 181 s / 183 s** over tre kørsler (30405098099,
+   30404527271, 30401900305) — og er færdigt *før* de 180 s i `Wait for system` begynder at
+   tælle. Det er også derfor `Wait for system` kun er **3-7 s** i dag. 8007 er altså gratis.
+   Hvis pullet en dag ikke lykkes, rammer fejlen `Start system`, som allerede er rød ved en
+   fejlet `depends_on`-betingelse — ikke denne deadline.
+
+   **Et blindspor undervejs, værd at have skrevet ned:** `ollama list` lokalt viste `qwen3:4b`
+   og `bge-m3` med mtime "34 sekunder siden", hvilket lignede en cold pull under mit `up`.
+   Det var det ikke — `ollama-pull`-containeren kørte start→finish i **2 s**, så modellerne
+   var allerede i volumet, og `ollama pull` opdaterer manifestets mtime på et no-op. En lokal
+   måling kan derfor **ikke** besvare 8007-spørgsmålet; det var CI's `Start system`-varighed
+   der gjorde det.
+
+   **Kontrol:** `docker compose stop saga-service` → loopet fejlede på 8011 med
+   `::error::Service on port 8011 did not become healthy` mens 8007 og 8008 passerede.
+   Saga genstartet, 200 igen.
+
+5. [x] **Worker-gaten: ingen container må være exited nonzero eller i restart-loop.**
+   Ny fil `scripts/compose_state_check.py` (Python frem for inline-`jq`, samme konvention som
+   `scripts/compose_check.py`, som `repo-lint` allerede linter) + nyt step
+   `Check no container is dead or restarting` i `e2e-tests`, placeret **efter
+   `Wait for system` men før testene** — en død worker skal rapporteres som en død worker,
+   ikke som den downstream-assertion der tilfældigvis fejler af den. Plus
+   `make compose-state-check` så gaten kan køres lokalt.
+
+   **Fælden var reel:** `ollama-pull` står `exited` med `exit=0` på en korrekt stak — målt som
+   den eneste ikke-`running` af 53 containere. Prædikatet er derfor nonzero-exit, ikke
+   not-running, og gatens grønne output navngiver den eksplicit som forventet ren exit.
+
+   **Kontrollen afdækkede at planens overskrifts-prædikat alene ville have været blindt.**
+   `saga-timeout-worker` med en uopnåelig `DATABASE_URL` rapporteres af compose som
+   `State: restarting` med **`ExitCode: 0`** — fordi 25 af de 53 services er
+   `restart: on-failure` og derfor cykler frem for at sætte sig i `exited`. En
+   "exited nonzero"-only gate havde altså været grøn på præcis den fejl den findes for.
+   Det er `restarting`-klausulen der fanger den, og begrundelsen står nu i scriptet.
+
+   Begge grene verificeret rødt, hver for sig:
+   - `restarting`: uopnåelig `DATABASE_URL` → rc=1, `saga-timeout-worker (…): state=restarting`
+   - `exited nonzero`: `restart: "no"` + `sys.exit(3)` → rc=1, `… : exited with code 3`
+   - uændret stak: **rc=0**, 53 containere, `ollama-pull` navngivet som forventet ren exit
+
+   Begge kontroller kørt via throwaway compose-override-filer i scratchpad, så
+   `docker-compose.yml` aldrig blev rørt. Workeren er genoprettet og gaten er grøn.
+
+   Ingen pipe gennem `tail`/`head` nogen steder; `rc` aflæst eksplicit i hver kontrol.
 
 6. [ ] **P2-42a: `BankConfigError` → 503 + WARNING.** Filer:
    `services/banking-service/app/main.py` (nyt `@app.exception_handler(BankConfigError)` ved

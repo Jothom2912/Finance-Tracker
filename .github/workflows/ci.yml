@@ -399,7 +399,23 @@ jobs:
           # `/bank/connections` gav 500, fordi PEM'en først læses per request. Et
           # health-probe kan altså ikke se en brudt afhængighed — det ser kun at processen
           # lever. Porten er med fordi en reelt død service ellers passerer lydløst.
-          for port in 8001 8002 8003 8004 8005 8006 8009 8010 8012; do
+          #
+          # P2-38: 8007 (ai), 8008 (notification), 8011 (saga) tilføjet. Det var de tre
+          # sidste af de 12 HTTP-services uden en opstarts-gate — de øvrige 41
+          # compose-services er 14 datastores (som har compose-healthcheck +
+          # `depends_on: service_healthy`), frontend/nginx (port 3000 nedenfor) og 26
+          # workers uden HTTP-overflade, hvor et portprobe ikke er *manglende* men
+          # strukturelt umuligt. Workernes gate er container-tilstand, ikke en port.
+          #
+          # 8007 ser dyr ud og er gratis, målt: `ai-service` har
+          # `depends_on: ollama-pull: service_completed_successfully`, så den starter
+          # først når qwen3:4b + bge-m3 (3,7 GB, og CI cacher dem ikke) er pullet. MEN
+          # `docker compose up -d` blokerer selv på den betingelse, så pullet betales i
+          # `Start system` — målt 173-183 s over tre kørsler — og er færdigt før
+          # deadlinen herunder begynder at tælle. Derfor er dette step kun 3-7 s i dag.
+          # Konsekvensen hvis det ændrer sig: fejlen rammer `Start system`, ikke denne
+          # deadline, og den er allerede rød ved en fejlet depends_on-betingelse.
+          for port in 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010 8011 8012; do
             until curl -fsS "http://localhost:${port}/health" > /dev/null 2>&1; do
               if [ "$(date +%s)" -ge "$deadline" ]; then
                 echo "::error::Service on port ${port} did not become healthy within 180s"
@@ -426,6 +442,20 @@ jobs:
             sleep 3
           done
           echo "port 3000 (perimeter): svarer"
+
+      # P2-38/P2-42. Hard gate, and it covers a class `Wait for system` structurally
+      # cannot: 26 of the 53 compose services are workers with no HTTP surface, so a
+      # port probe is not "missing" for them — it is impossible. A worker crashing on
+      # import kept this job green because the E2E tests do not touch its queue.
+      #
+      # Belongs here rather than in its own job: this is the only job with a compose
+      # stack up, and a new one would cost a second `up --build` (~3 min) — the same
+      # argument P2-39's decision note makes about the browser suite.
+      #
+      # Runs BEFORE the test steps: a dead worker should be reported as a dead worker,
+      # not as whatever downstream assertion happens to fail because of it.
+      - name: Check no container is dead or restarting
+        run: python3 scripts/compose_state_check.py
 
       # conftest.py aborts (instead of skipping) when services are unreachable
       # and CI is set, so this step can never go green with zero tests run.
