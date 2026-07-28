@@ -765,6 +765,42 @@ class TestDeleteTransaction:
         with pytest.raises(TransactionNotFoundException):
             await service.delete_transaction(transaction_id=99, user_id=10)
 
+    @pytest.mark.asyncio()
+    async def test_event_is_emitted_before_the_commit(self) -> None:
+        """Soft-delete (P2-25) changes what ``delete`` does to the row but
+        not when the event is written: the outbox row must go in the same
+        unit of work, or a tombstone can exist that nobody was told about.
+        """
+        service, uow = _build_service()
+        uow.transactions.find_by_id.return_value = _make_transaction()
+        uow.transactions.delete.return_value = True
+
+        order: list[str] = []
+        uow.transactions.delete.side_effect = lambda *a, **k: order.append("delete") or True
+        uow.outbox.add.side_effect = lambda *a, **k: order.append("outbox")
+        uow.commit.side_effect = lambda *a, **k: order.append("commit")
+
+        await service.delete_transaction(transaction_id=1, user_id=10)
+
+        assert order == ["delete", "outbox", "commit"]
+
+    @pytest.mark.asyncio()
+    async def test_lost_race_on_delete_is_a_404(self) -> None:
+        """``find_by_id`` saw the row, ``delete`` didn't — someone deleted
+        it in between.  With soft-delete that is now a rowcount-0 update
+        rather than a vanished row, and it must still be a 404, not a
+        silent success that emits a deletion event for nothing.
+        """
+        service, uow = _build_service()
+        uow.transactions.find_by_id.return_value = _make_transaction()
+        uow.transactions.delete.return_value = False
+
+        with pytest.raises(TransactionNotFoundException):
+            await service.delete_transaction(transaction_id=1, user_id=10)
+
+        uow.outbox.add.assert_not_awaited()
+        uow.commit.assert_not_awaited()
+
 
 class TestImportCSV:
     @pytest.mark.asyncio()
