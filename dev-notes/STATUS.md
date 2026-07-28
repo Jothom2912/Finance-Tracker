@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P2-39: repoet har et browser-lag)
+# Status — 2026-07-29 (efter P2-40: gateway'en gætter ikke længere en konto)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,10 +9,61 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-39 er shippet; næste er et valg mellem de items den afdækkede
-(P2-40, P2-41) og de allerede kendte (P2-38, P3-41, P3-44, P3-46).
+**Intet aktivt item.** P2-40 er shippet; næste er et valg mellem de items den efterlod
+(frontend-vagten, `make security` vs. CI's bandit) og de allerede kendte (P2-38, P2-41, P2-42,
+P3-41, P3-44, P3-46).
 
-Sidst shippet: **P2-39 — browser-automatisering som ejet instrument** (2026-07-28), syv commits
+Sidst shippet: **P2-40 — gateway'ens `accounts[0]`-fallback** (2026-07-29), tre commits
+`ad0b8d54`..(docs). `get_account_id_from_headers` opløser nu `name = 'Default Account'`
+**eksplicit** når `X-Account-ID` mangler, og returnerer `None` frem for at gætte — hvorefter
+`_require_account_id`, som allerede fandtes, giver en ærlig fejl.
+[Plan + Outcome](plans/2026-07-28-p240-gateway-explicit-account-resolution.md#outcome) ·
+[finding](findings/2026-07-28-gateway-falls-back-to-first-account.md).
+
+**Diskriminatoren, målt live:** en bruger hvis defaultkonto ikke stod først i account-services
+usorterede listesvar fik uden header **1554,0 kr. fra den forkerte konto, uden en fejl** — efter
+fixet 0,0, altså defaultkontoens egne tal. En bruger *uden* defaultkonto får nu
+`"Account ID required..."` plus en WARNING med `user_id`. For den normale sti (header sendt, eller
+`accounts[0]` er tilfældigvis defaultkontoen) er intet ændret, og det er også målt.
+
+**Opstillingen er værd at kende, fordi den naive version ikke viser fejlen.** Opretter man blot en
+anden konto, er defaultkontoen stadig `accounts[0]` — sagaen skabte den først — og fallbacken
+svarer rigtigt ved et tilfælde. Fejlen kræver at defaultkontoen er en *senere* række, og det kan
+appen selv: omdøb saga-kontoen (det frigør `one_default_per_user`-pladsen), opret så en ny
+`Default Account`.
+
+**Instrument-hullet fra P2-39 er lukket, og kontrollen blev rød.** `twoAccountSession` +
+`e2e/dashboard-scopes-to-selected-account.spec.js` seeder to konti og vælger den **anden** — det
+valg er bærende, for havde standardkontoen været den valgte, ville en server der ignorerer
+headeren og falder tilbage til standardkontoen svare rigtigt ved et tilfælde. Med samme mutation
+som P2-39 brugte (`X-Account-ID` fjernet fra `graphqlClient.jsx`, image genbygget), hvor **alle**
+suiter dengang blev grønne: nu **1 failed** — kortet viste standardkontoens `10.449,74 kr.` hvor
+den valgtes `2.718,28` skulle stå — mens de tre øvrige browser-specs og alle 346 jsdom-tests
+forblev grønne. Gateway havde i øvrigt **ingen** test af `auth.py` før nu; der er fem, og to af
+dem er bevist røde med `accounts[0]` genindført.
+
+**En påstand fra planen holdt ikke, og det er noteret som et negativt resultat:** at appens egen
+`budget_start_day`-`PUT` kan flytte hvilken konto der er `accounts[0]`. Tre listekald med en `PUT`
+imellem gav samme rækkefølge hver gang. Fejlen behøvede ikke *ustabil* rækkefølge for at være
+reel — det var nok at den var **uspecificeret**.
+
+**To fælder ramte undervejs, begge i instrumenteringen og ikke i produktet.** (1) Browser-suitens
+registrering fejlede med **502**, men fixturens fejltekst nævnte 429 og rate-limit-zonen
+*ubetinget*, så diagnosen gik efter nginx.conf i stedet for efter årsagen — som var **P3-45**, et
+allerede kendt åbent item: et `compose up --build` genskabte user-service med en ny IP, og nginx
+cacher upstream-IP'er fra config-load. Fælden er ikke ny; det nye er at fejlbeskeden pegede væk
+fra den. Hintet er nu betinget af statuskoden og navngiver P3-45. (2) Den nye specs første prædikat var en eksakt total på standardkontoen, som en
+anden spec også skriver til; den fejlede på `9111.99 vs 10449.74`, altså på prædikatet, ikke på
+produktet. Nu måles en delta.
+
+**En rød gate der ikke er en regression:** `make -C services/gateway-service check` fejler på
+`bandit`s `B105` (`token = ""`, `auth.py:55`) — og gjorde det også *før* fixet, verificeret ved at
+køre bandit på den gamle fil. Det lokale `make security` mangler CI's `-ll -ii`, så lokalt og CI
+er ikke samme kommando. Foreslået som eget item.
+
+### Forrige: P2-39 — browser-automatisering som ejet instrument
+
+Shippet 2026-07-28, syv commits
 `35f2e047`..`9ea54d38`. Repoet har nu et **tredje instrument**: 3 Playwright-tests i
 `services/frontend/e2e/` der driver det byggede image bag perimeteren på `127.0.0.1:3000`, som
 hård gate i `e2e-tests`. `make test-browser` lokalt, ~16 s.

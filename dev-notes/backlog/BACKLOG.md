@@ -81,7 +81,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P2-32 | Outbox-porten erklærer domænets `OutboxEntry`, men adapteren tilskriver shared's klasse af samme navn — usand kontrakt i 7 services; fix er en mapping i adapteren, ikke en sletning af duplikatet (det er den hexagonale grænse) | cross, contracts | S | open | [findings/2026-07-27-outbox-port-declares-foreign-entity.md](../findings/2026-07-27-outbox-port-declares-foreign-entity.md) |
 | P2-37 | **Én install-sti per service.** `requirements.txt` og `uv.lock` er to sandhedskilder i én service — budget — hvor det lod en grøn gate udstede en container der døde ved import. [→ detail](#p2-37) | cross, CI, deps | S | done 2026-07-28 | [plan + Outcome](../plans/2026-07-28-p237-budget-single-install-path.md#outcome) · [finding](../findings/2026-07-27-none-annotation-204-fastapi-split.md) |
 | P2-39 | **Browser-automatisering som ejet instrument.** Nul browser-lag i repoet, og begge eksisterende suiter var grønne gennem hele P1-16. [→ detail](#p2-39) | frontend, test, CI | M | **done 2026-07-28** | [plan + Outcome](../plans/2026-07-28-p239-browser-automation.md#outcome) · [decision](../decisions/2026-07-28-browser-automation-instrument.md) |
-| P2-40 | Gateway'en falder tilbage til `accounts[0]` uden `X-Account-ID`, så en flerkonto-bruger får en anden kontos data uden en fejl. Vælg eksplicit (`name = 'Default Account'`, der har et unique index) eller fejl ærligt. Browser-suiten kan ikke se det: den seeder én konto pr. bruger | gateway, account | S | open | [findings/2026-07-28-gateway-falls-back-to-first-account.md](../findings/2026-07-28-gateway-falls-back-to-first-account.md) |
+| P2-40 | **Gateway'ens `accounts[0]`-fallback: vælg eksplicit eller fejl ærligt.** Uden `X-Account-ID` fik en flerkonto-bruger en anden kontos data uden en fejl. [→ detail](#p2-40) | gateway, account, test | S | **done 2026-07-29** | [plan + Outcome](../plans/2026-07-28-p240-gateway-explicit-account-resolution.md#outcome) · [finding](../findings/2026-07-28-gateway-falls-back-to-first-account.md) |
 | P2-41 | Hverken account- eller user-service eksponerer DELETE, og `Account` har ingen `is_deleted`-kolonne — soft-delete-konventionen er fraværende for de to entiteter der ejer alt andet. Ingen GDPR-sti, og dev-stakken kan kun ryddes med `down -v`. DB-sletning er udelukket: `Account` er projiceret i tre services | account, user, domain | M | open | [findings/2026-07-28-no-delete-path-for-account-or-user.md](../findings/2026-07-28-no-delete-path-for-account-or-user.md) |
 | P2-42 | banking-service svarer **500** når integrationen ikke er konfigureret, hvor konventionen for utilgængelig bank er **503** (`BankConnectionInactive` → 503 + WARNING) — dashboardet larmer altså en serverfejl for en valgfri integration. Beslægtet: kun 9 af 53 compose-services har en opstarts-gate i CI, så resten kan være døde uden signal | banking, CI | S | open | [findings/2026-07-28-banking-service-dead-in-ci.md](../findings/2026-07-28-banking-service-dead-in-ci.md) |
 | P2-38 | Intet `timeout-minutes` i `ci.yml` og ingen wait-timeout på ES-fixturen, så et CI-job kan hænge i 6 timer uden signal. [→ detail](#p2-38) | ci, analytics | S | open | [findings/2026-07-28-ci-job-can-hang-undetected.md](../findings/2026-07-28-ci-job-can-hang-undetected.md) |
@@ -148,6 +148,8 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P3-45 | nginx cacher upstream-IP'er ved config-load, så en genskabt service giver 502 gennem perimeteren indtil frontenden genstartes. [→ detail](#p3-45) | infrastructure | S | open | fundet under [P3-43 trin 3](../plans/2026-07-28-p343-nginx-perimeter.md) |
 | P3-46 | `qwen3:8b` bliver OOM-dræbt når hele stakken kører, så chat-pipelinen kan ikke køres end-to-end på 7,8 GB Docker-hukommelse. [→ detail](#p3-46) | ai, infrastructure | S | open | målt under [P3-43 trin 5](../plans/2026-07-28-p343-nginx-perimeter.md) |
 | P3-47 | En `location` med eget `add_header` fjerner tavst perimeterens fire security headers i den blok. [→ detail](#p3-47) | infra, frontend | S | open | [plan](../plans/2026-07-28-p325-p227-perimeter-headers-ratelimit.md#åbne-valg) |
+| P3-48 | Ingen af de otte inderside-ruter har en account-guard: `AuthContext` anser en bruger for logget ind på tre af fem localStorage-nøgler, så `/dashboard` er nåelig med gyldig token og ingen valgt konto. Efter P2-40 giver det en GraphQL-fejl frem for forkerte tal — rigtigere, men stadig en dårlig skærm. `CategoriesPage.jsx:29` har allerede en ad-hoc variant at konsolidere | frontend, UX | S | open | [P2-40s Non-goals + Follow-ups](../plans/2026-07-28-p240-gateway-explicit-account-resolution.md) |
+| P3-49 | `make security` kører `bandit -r app -x tests`, CI kører `bandit -ll -ii` — så gateways `make check` er **rød lokalt og grøn i CI** på et Low-fund (`B105` på `token = ""`, `auth.py:55`). En rød `make check` uden at noget er i vejen er grunden til at ingen kører den. Fix: samme flag i targettet, eller `# nosec` med item-reference | CI, cross, deps | S | open | målt under [P2-40](../plans/2026-07-28-p240-gateway-explicit-account-resolution.md#outcome) |
 
 ---
 
@@ -494,6 +496,30 @@ porten reelt er 3000.
 **C2 er afgjort med et tal:** `style-src` uden `'unsafe-inline'` → **1 violation**
 (`style-src-elem`/inline) ved dialog-åbningen, **0** på `/dashboard`. Direktivet er nødvendigt, og
 præcis kun af den grund `nginx.conf` angiver.
+
+### P2-40
+
+**Gateway'ens `accounts[0]`-fallback: vælg eksplicit eller fejl ærligt.** Manglede
+`X-Account-ID` på en GraphQL-læsning, returnerede `get_account_id_from_headers` ikke en fejl men
+`int(accounts[0]...)` — den første række account-service tilfældigvis svarede med.
+`postgresql_account_repository.get_all` har ingen `ORDER BY`, så "første konto" er uspecificeret.
+For en enkeltkonto-bruger usynligt; for en flerkonto-bruger et **plausibelt tal fra den forkerte
+konto, præsenteret som den valgte**. Værre end en tom skærm, fordi en tom skærm bliver rapporteret.
+
+Fixet er eksplicit `name = 'Default Account'` — en regel repoet allerede havde
+(`account_creation_consumer` + det partielle unique index `one_default_per_user` fra migration
+`002`) — eller `None`, hvorefter `_require_account_id` giver den fejl der allerede fandtes. Der
+skulle altså ikke bygges en fejlsti, kun holdes op med at forhindre den.
+
+**Itemet bar også et instrument-hul:** browser-suiten seedede én konto pr. bruger, og med én konto
+er enhver fallback det rigtige svar — derfor blev P2-39's `X-Account-ID`-mutation grøn i *alle*
+suiter. `twoAccountSession` + `dashboard-scopes-to-selected-account.spec.js` lukker det, og samme
+mutation er nu rød i præcis den spec.
+
+Se [Outcome](../plans/2026-07-28-p240-gateway-explicit-account-resolution.md#outcome) for de målte
+tal, for hvorfor den *naive* tokonto-opstilling ikke viser fejlen (defaultkontoen oprettes først og
+er derfor `accounts[0]`), og for det negative resultat om rækkefølge-stabilitet. Afledte items:
+**P3-48** (frontend-vagt), **P3-49** (`make security` vs. CI's bandit).
 
 ### P2-38
 

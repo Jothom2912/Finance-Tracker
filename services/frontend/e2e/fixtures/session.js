@@ -43,11 +43,12 @@ function diagnoseRegisterFailure(status) {
   }
   if (status === 502) {
     return (
-      'nginx nåede ikke user-service. nginx opløser upstream-navne ved START og cacher ' +
-      "IP'en, så et `docker compose up --build <service>` der genskaber user-service med " +
-      'en ny IP giver 502 indtil `docker compose restart frontend`. Målt i P2-40 — og ' +
-      'dengang stod rate-limit-hintet ubetinget, så en 502 blev læst som en 429. ' +
-      'Tjek `docker logs finance-tracker-frontend-1` for "connect() failed".'
+      'nginx nåede ikke user-service — næsten helt sikkert **P3-45**: nginx opløser ' +
+      "upstream-navne ved config-load og cacher IP'en, så et `docker compose up --build " +
+      '<service>` der genskaber user-service med en ny IP giver 502 indtil ' +
+      '`docker compose restart frontend`. Ramte P2-40, hvor rate-limit-hintet dengang stod ' +
+      'ubetinget og fik en 502 til at læse som en 429. ' +
+      'Bekræft med `docker logs finance-tracker-frontend-1` → "connect() failed".'
     );
   }
   return 'ikke en kendt perimeter-fejl — læs svaret ovenfor og user-services logs.';

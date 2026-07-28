@@ -2,9 +2,11 @@
 title: Gateway'en falder tilbage til accounts[0] uden X-Account-ID — en flerkonto-bruger får en anden kontos data, uden en fejl
 date: 2026-07-28
 severity: MEDIUM
-status: open
+status: resolved
 scheduled-as: P2-40
+resolved-by: commits ad0b8d54 (fix + 5 unit-tests), 6050aeb8 (tokonto-fixture i browser-laget) — [plan + Outcome](../plans/2026-07-28-p240-gateway-explicit-account-resolution.md#outcome)
 related:
+  - ../plans/2026-07-28-p240-gateway-explicit-account-resolution.md
   - ../plans/2026-07-28-p239-browser-automation.md
   - ../sessions/2026-07-28-p325-p227-perimeter-hardening.md
   - ../findings/2026-07-27-gateway-default-account-307.md
@@ -63,15 +65,31 @@ Bemærk asymmetrien i `auth.py`: sendes headeren, ejerskabs-checkes den mod acco
 et fremmed `account_id` giver `None` → GraphQL-fejl. Udelades den, springes hele det check
 over, fordi der ikke er noget at checke. Den strenge sti er den man kan komme til at undgå.
 
-## Hvad der IKKE er afgjort
+## Hvad der IKKE var afgjort — afklaret 2026-07-28 under planlægningen af P2-40
 
-- **Om frontenden i praksis kan komme i den tilstand.** `authStorage.js` erklærer
-  `account_id`, og `AccountSelector.jsx:20-25` sætter den — men `AuthContext.jsx:17-35`
-  kræver kun tre af de fem nøgler for at anse brugeren for logget ind. En session hvor
-  `account_id` mangler, men token findes, er altså mulig efter appens egne regler. Om der
-  findes en rute dertil, er ikke målt.
-- **Om `accounts[0]` er stabil.** Account-service sorterer ikke eksplicit; rækkefølgen er
-  DB'ens. To kald kan i princippet svare forskelligt.
+Begge punkter er afgjort **ved læsning af koden**, ikke ved en kørsel. Det er nok til at
+vælge fix, men målingerne står stadig som trin 1 i [planen](../plans/2026-07-28-p240-gateway-explicit-account-resolution.md).
+
+- **Om frontenden i praksis kan komme i den tilstand: ja, og der er ikke en vagt.**
+  `AuthContext.jsx:22` anser brugeren for logget ind på tre nøgler (`access_token`,
+  `user_id`, `username`); `account_id` er ikke blandt dem. `App.jsx:32-33` ruter `/` →
+  `/dashboard`, og **ingen** af de otte inderside-ruter har en account-guard.
+  `LoginPage.jsx:35` sender brugeren til `/account-selector`, men intet holder hende der.
+  `CategoriesPage.jsx:29` tjekker selv `Boolean(localStorage.getItem('account_id'))` — et spor
+  af at tilstanden er kendt reachable ét sted og uhåndteret på de syv andre. Vagten er
+  bevidst *ikke* en del af P2-40 (otte ruter i blast radius, og det er en UX-beslutning).
+- **Om `accounts[0]` er stabil: der findes ingen `ORDER BY`.**
+  `postgresql_account_repository.py:23` er `query(AccountModel).filter(...).all()`, så
+  rækkefølgen er heap-orden. Det konkrete: `AccountSelector.jsx:27-44` sender en `UPDATE`
+  (`budget_start_day`), og en opdateret række i Postgres skrives som en ny version — **appens
+  egen indstilling kan altså flytte hvilken konto der er `accounts[0]`.** Om det faktisk sker
+  på vores datamængde er ikke målt endnu.
+  **Målt 2026-07-29 (P2-40 trin 1): kunne ikke fremprovokeres.** Tre `GET /accounts/` med en
+  `PUT budget_start_day` (1→5→1) imellem gav samme rækkefølge hver gang. Instrumentets grænse
+  hører med — to rækker i tabellen, og en small-field-update som Postgres sandsynligvis kan
+  lave HOT/in-page. Påstanden ovenfor er altså **ikke** demonstreret. Det ændrer ikke fundet:
+  fejlen krævede ikke ustabil rækkefølge, kun *uspecificeret* rækkefølge, og den kunne
+  fremkaldes deterministisk (se næste afsnit).
 
 ## Hvad der bør gøres
 
@@ -79,17 +97,37 @@ Fallbacken skal vælge **eksplicit**: kontoen med `name = 'Default Account'` (de
 unique index `one_default_per_user` netop på den), eller ingen konto og en ærlig fejl. Ikke
 `accounts[0]`.
 
-## Reproduktion
+## Reproduktion — den opstilling der gør fejlen deterministisk synlig
 
-P3-25's fem transaktioner er soft-deletet (P2-39 trin 8), så opstillingen skal genskabes:
-opret en bruger, opret en **anden** konto via `POST /api/v1/accounts/`, læg transaktioner på
-den anden konto, og læs `periodOverview` med og uden `X-Account-ID`. Konti 370 og 371 på
-bruger 368 står stadig i dev-stakken, fordi der ikke findes en sletningssti — se
+Den naive opstilling (opret en anden konto, læg data på den) viser den **ikke**: saga-kontoen
+oprettes først, så `accounts[0]` *er* defaultkontoen, og fallbacken svarer rigtigt ved et
+tilfælde. Målt: 0,0 både med og uden header.
+
+Trickét er at få defaultkontoen til at være en *senere* række, og det kan appen selv:
+
+1. Registrér en bruger; vent på at sagaen skaber `Default Account`.
+2. `PUT /api/v1/accounts/<id>` med et andet `name` — det frigør `one_default_per_user`-pladsen.
+3. `POST /api/v1/accounts/` med `name = "Default Account"` → nu er defaultkontoen den sidste.
+4. Læg transaktioner på den **første** konto, og læs `periodOverview` uden `X-Account-ID`.
+
+Målt 2026-07-29 på bruger 428 (konti 432 'Gammel Konto' + 433 'Default Account'):
+`totalExpenses` = **1554,0 uden header** — den forkerte kontos tal, uden en fejl — mod 0,0 med
+`X-Account-ID: 433`. Efter fixet: 0,0 uden header. Det er diskriminatoren.
+
+P3-25's fem transaktioner er soft-deletet (P2-39 trin 8). Konti 370 og 371 på bruger 368 står
+stadig i dev-stakken, fordi der ikke findes en sletningssti — se
 [../findings/2026-07-28-no-delete-path-for-account-or-user.md].
 
 ## Lektien om instrumentet
 
-Browser-suiten kan **ikke** se dette. Den seeder én konto pr. bruger
-(`e2e/fixtures/session.js`), og med én konto er `accounts[0]` altid det rigtige svar. En
-grøn browser-suite er ikke et løfte om konto-scoping — det kræver en fixture med to konti,
-og den er ikke skrevet.
+Browser-suiten kunne **ikke** se dette. Den seedede én konto pr. bruger
+(`e2e/fixtures/session.js`), og med én konto er `accounts[0]` altid det rigtige svar. En grøn
+browser-suite var altså ikke et løfte om konto-scoping.
+
+**Lukket i P2-40** med `twoAccountSession` + `accountScopedPage` og
+`e2e/dashboard-scopes-to-selected-account.spec.js`. Det bærende designvalg: den **valgte** konto
+er den *anden*, ikke standardkontoen — ellers ville en server der ignorerer `X-Account-ID` og
+falder tilbage til standardkontoen svare rigtigt ved et tilfælde, og kontrollen ville være grøn
+igen. Med samme mutation som i P2-39 (`X-Account-ID` fjernet fra `graphqlClient.jsx`) er den nye
+spec nu **rød** — kortet viste standardkontoens `10.449,74 kr.` hvor den valgtes `2.718,28`
+skulle stå — mens de tre øvrige browser-specs og alle 346 jsdom-tests forblev grønne.
