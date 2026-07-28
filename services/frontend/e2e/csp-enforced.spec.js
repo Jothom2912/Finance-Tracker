@@ -7,7 +7,21 @@
 // Testen er samtidig P3-25's C2-kontrol i checket-ind form. Den ad hoc headless-probe
 // dér fandt at `style-src 'unsafe-inline'` er tvunget af `react-remove-scroll`, men
 // proben KUNNE IKKE KLIKKE — og scroll-locken opstår først når en dialog åbnes. Det
-// klik er linje ~50 i denne fil.
+// klik er linje ~65 i denne fil.
+//
+// VERIFICERET RØD (2026-07-28), to mutationer i den KØRENDE container (`sed` i
+// /etc/nginx/conf.d/default.conf + `nginx -s reload`; bemærk at `docker compose restart`
+// IKKE gendanner filen — mutationen ligger i containerens writable layer, så det kræver
+// `up -d --force-recreate`):
+//   `style-src` uden 'unsafe-inline'  → 1 violation, `style-src-elem`/inline, ved
+//     dialog-åbningen. 0 på /dashboard. Det er P3-25's C2 afgjort med et tal: direktivet
+//     er nødvendigt, og præcis kun af den grund nginx.conf angiver.
+//   `script-src 'none'`               → appen mounter ikke; testen rød på at kortet/dialogen
+//     ikke findes, ikke på violations. Samme kontrol-udfald som P3-25 målte.
+//
+// Bemærk koblingen: assertionerne nedenfor kræver at læsestien virker, så en fejl i
+// GraphQL-stien gør OGSÅ denne test rød. Det er bevidst — CSP målt på en tom side er
+// trivielt nul violations — men læs test 1 først når begge er røde.
 import { test, expect } from './fixtures/session.js';
 
 // Lytteren skal hænge på før appens egne scripts kører, ellers går de violations vi

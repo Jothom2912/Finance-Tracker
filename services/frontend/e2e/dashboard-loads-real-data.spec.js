@@ -8,6 +8,20 @@
 //
 // Derfor asserterer denne test på ET BELØB, ikke på at siden mounter. P1-16 gav et MOUNTET
 // DOM — med en fejltekst i. `toBeVisible()` på en container ville have været grøn.
+//
+// VERIFICERET RØD (2026-07-28), og mutationen er valgt efter en fejlslagen kandidat:
+//   Kandidat 1 — P1-16 selv genindført (relativ URL i graphqlClient.jsx): rød her, MEN
+//     `npm test` blev også rød (2 af 346). P1-16 fik sin egen jsdom-regressionstest da den
+//     blev rettet (`graphqlClient.url.test.jsx`), så den linje er dobbeltdækket i dag og
+//     kan ikke længere vise at dette instrument er nyt. Planens forventede
+//     "346 passed / 1 failed" var skrevet uden det.
+//   Kandidat 2 — `X-Account-ID` fjernet fra graphqlClient: GRØN i begge suiter. Gateway'en
+//     falder tilbage til brugerens standardkonto ud fra tokenet (gateway auth.py:82-95),
+//     så headeren er ikke bærende for en bruger med én konto. Ikke en mutation.
+//   Den brugte — `totalIncome` → `totalIncomeTYPO` i `DASHBOARD_QUERY`:
+//     **`npm test` 346 passed, denne suite 2 failed.** Det er beviset. GraphQL-dokumentet
+//     valideres mod det rigtige schema af INTET andet i repoet, fordi
+//     `useDashboardData.test.jsx:6` mocker `../../api/graphqlClient` væk.
 import { test, expect } from './fixtures/session.js';
 
 // Tre beløb, valgt så de er utvetydige i sidens tekst og så nettoen er et FJERDE tal

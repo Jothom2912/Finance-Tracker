@@ -3,8 +3,15 @@
 // Den findes fordi seedingen har en fælde der ikke fejler. `authStorage.js:1` erklærer FEM
 // nøgler, men `AuthContext.jsx:17-35` kræver kun tre af dem for at anse brugeren for logget
 // ind. Uden `account_id` sender `apiClient` ingen `X-Account-ID` (apiClient.jsx:13-14), og
-// `periodOverview` svarer med **tavse nuller i stedet for en fejl** — altså en test der ser
+// REST-læsningerne svarer med **tavse nuller i stedet for en fejl** — altså en test der ser
 // grøn ud på en tom app. Målt under P3-25. Den slags må ikke ligge i hver spec.
+//
+// PRÆCISERING (målt i P2-39's kontrol-kørsel): på GRAPHQL-stien er headeren ikke bærende
+// for denne suite. Gateway'en falder tilbage til brugerens standardkonto ud fra tokenet
+// (gateway auth.py:82-95), så fjerner man `X-Account-ID` fra graphqlClient, bliver ALLE
+// suiter grønne. Konsekvensen for hvad instrumentet kan måle: suiten har én konto pr.
+// bruger og kan derfor IKKE se konto-scoping-fejl på læsesiden. Det kræver en anden
+// fixture med to konti, og det er ikke skrevet endnu.
 //
 // Fixturen er worker-scoped: hele suiten deler én bruger og én session. Det er ikke en
 // optimering, det er perimeteren — nginx rate-limiter /users/login og /users/register til
