@@ -95,8 +95,27 @@ def get_account_id_from_headers(
             )
             if resp.status_code == 200:
                 accounts = resp.json()
-                if accounts:
-                    return int(accounts[0].get("idAccount") or accounts[0].get("id"))
+                # EKSPLICIT valg, ikke ``accounts[0]`` (P2-40). Listesvaret har
+                # ingen ``ORDER BY`` (account-service
+                # postgresql_account_repository.py:23), så "første konto" er
+                # heap-orden — for en flerkonto-bruger uden ``X-Account-ID`` var
+                # svaret dermed en anden kontos tal, præsenteret som den valgte,
+                # og uden en fejl. Målt: 1554,00 kr. fra den forkerte konto.
+                # Standardkontoen er derimod en regel repoet allerede har:
+                # account_creation_consumer opretter ``name="Default Account"``,
+                # og migration 002 har det partielle unique index
+                # ``one_default_per_user`` netop på det navn. Findes den ikke,
+                # returneres None, og ``_require_account_id`` giver den ærlige
+                # fejl frem for et gæt.
+                default = next((a for a in accounts if a.get("name") == "Default Account"), None)
+                if default is not None:
+                    return int(default.get("idAccount") or default.get("id"))
+                logger.warning(
+                    "No 'Default Account' for user %s and no X-Account-ID sent; "
+                    "resolving to None (P2-40). Accounts found: %d",
+                    user_id,
+                    len(accounts),
+                )
         except Exception:
             logger.exception("Account lookup for user failed")
         return None
