@@ -100,13 +100,31 @@ Commit per trin — rent rollback, jf. konventionen.
    grænse der sættes her. Grænsen på 8 min ville have fanget det efter ~8 min i stedet for
    at lade det sidde til 360 min-loftet.
 
-2. [ ] **`timeout-minutes` på de fire jobs uden.** Fil: `.github/workflows/ci.yml` — fire
-   linjer i `repo-lint`, `python-services`, `shared-packages`, `frontend`, hver med en
-   kommentar der navngiver den målte baseline. Sæt grænsen ~3× målt max, ikke stramt: formålet
-   er at konvertere 360 min til minutter, ikke at fange langsomhed.
-   **Kontrol:** en throwaway-branch hvor `repo-lint` får `timeout-minutes: 1` og et `sleep 120`
-   → jobbet skal afbrydes med *timed out*, og det skal kunne læses i loggen. Rul kontrollen
-   tilbage; den commit'es ikke.
+2. [x] **`timeout-minutes` på de fire jobs uden.** Fil: `.github/workflows/ci.yml` — fire
+   linjer i `repo-lint` (`:32`), `python-services` (`:70`), `shared-packages` (`:216`),
+   `frontend` (`:271`), hver med den målte baseline i kommentaren. Alle 5 job-definitioner
+   har nu en grænse.
+
+   **Kontrol kørt (run 30405860162, `workflow_dispatch` på en throwaway-branch):** `repo-lint`
+   fik `timeout-minutes: 1` + et `sleep 120` som første step. Jobbet blev afbrudt efter
+   **72 s** (22:48:07 → 22:49:21), `sleep`-steppet er det der stoppes og de øvrige seks steps
+   `skipped`. Kontrollen og branchen er rullet tilbage og slettet lokalt + remote.
+
+   Bemærk at et push til en ikke-master-branch **ikke** trigger `ci.yml` (`on.push.branches:
+   [master, main]`) — kontrollen krævede `gh workflow run --ref`. Værd at vide for enhver
+   fremtidig CI-kontrol i dette repo.
+
+   **Aflæsningen afdækkede en begrænsning der skal stå her, ikke opdages næste gang:** en
+   `timeout-minutes`-afbrydelse rapporteres af GitHub som **`cancelled`, ikke `failure`**, og
+   joblogens eneste spor er `##[error]The operation was canceled.` — ordet *timeout* optræder
+   ikke, og grænsen navngives ikke. Konsekvens: `gh run view --log-failed` returnerer **tomt
+   med rc=1**, fordi der ikke er noget fejlet job at vise. Signalet er altså "job `cancelled`
+   + varighed ≈ grænsen", ikke en selvforklarende besked.
+
+   Det er stadig fixet itemet beder om — 360 min bliver 5-8 min, og en ikke-grøn kørsel
+   blokerer — men diagnosen kræver at man sammenholder varighed med grænsen. Derfor er den
+   målte baseline i kommentaren ved hver grænse ikke pynt: den er det der gør et `cancelled`
+   job læseligt som *timeout* frem for som *nogen trykkede annuller*.
 
 3. [ ] **Wait-timeout på `es_container`.** Fil:
    `services/analytics-service/tests/integration/conftest.py:19-24`.

@@ -25,6 +25,12 @@ jobs:
     name: Repo-wide lint (incl. scripts/, tests/)
     runs-on: ubuntu-latest
 
+    # P2-38. Målt baseline over 10 grønne master-kørsler: p50 10 s, max 13 s.
+    # 3x max ville være 40 s — for stramt til at en langsom setup-python ikke
+    # gør jobbet rødt. Gulvet er 5 min; formålet er at konvertere GitHubs
+    # 360 min-default til minutter, ikke at fange langsomhed.
+    timeout-minutes: 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -55,6 +61,13 @@ jobs:
   python-services:
     name: ${{ matrix.service }} - Python 3.11
     runs-on: ubuntu-latest
+
+    # P2-38. Dette er jobbet fundet handler om: analytics' `Run tests` sad 836 s
+    # (13,9 min) mod en baseline på 36 s, og ville have siddet til 360 min.
+    # Målt over 120 job-instanser: p50 26 s, max 120 s (analytics, p50 83 s).
+    # 8 min = 3x max plus luft til at analytics' ES-image-pull varierer — og
+    # stadig under de 13,9 min hængningen kostede, så den ville være fanget.
+    timeout-minutes: 8
 
     strategy:
       fail-fast: false
@@ -198,6 +211,10 @@ jobs:
     name: shared/${{ matrix.package }} - Python 3.11
     runs-on: ubuntu-latest
 
+    # P2-38. Målt over 40 job-instanser: p50 14 s, max 20 s. Samme gulv på
+    # 5 min som repo-lint, af samme grund.
+    timeout-minutes: 5
+
     strategy:
       fail-fast: false
       matrix:
@@ -248,6 +265,10 @@ jobs:
   frontend:
     name: Frontend CI
     runs-on: ubuntu-latest
+
+    # P2-38. Målt over 10 kørsler: p50 48 s, max 56 s. 3x max = 2,8 min, hævet
+    # til gulvet på 5 min så en npm-cache-miss ikke er det der rammer grænsen.
+    timeout-minutes: 5
 
     defaults:
       run:
