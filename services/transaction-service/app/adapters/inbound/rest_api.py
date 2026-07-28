@@ -172,7 +172,7 @@ def _reject_unimportable_upload(file: UploadFile) -> None:
     if file.size is not None and file.size > settings.CSV_MAX_BYTES:
         limit_mib = settings.CSV_MAX_BYTES // (1024 * 1024)
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"CSV-filen er for stor (grænsen er {limit_mib} MB). Del den op i flere mindre importer.",
         )
 
