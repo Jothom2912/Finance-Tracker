@@ -167,9 +167,27 @@ export const test = base.extend({
   pageErrors: async ({ page }, use) => {
     const errors = [];
     page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') errors.push(`console.error: ${msg.text()}`);
+
+    // 5xx fanges på RESPONSE-grænsen, ikke kun i konsollen. Browseren logger selv
+    // "Failed to load resource: the server responded with a status of 500" — men UDEN
+    // URL'en, og præcis den besked var alt CI gav ved første røde kørsel. Det kostede en
+    // lokal reproduktion at finde ud af hvilken service det var. Nu står endpointet i
+    // fejlbeskeden.
+    page.on('response', (resp) => {
+      if (resp.status() >= 500) {
+        errors.push(`http ${resp.status()}: ${resp.request().method()} ${resp.url()}`);
+      }
     });
+
+    page.on('console', (msg) => {
+      if (msg.type() !== 'error') return;
+      // Drop browserens egen URL-løse variant af det response-lytteren ovenfor allerede
+      // har fanget med adresse på. Ellers rapporteres hver 5xx to gange, og den ene
+      // halvdel er den ubrugelige.
+      if (/Failed to load resource/.test(msg.text())) return;
+      errors.push(`console.error: ${msg.text()}`);
+    });
+
     await use(errors);
   },
 

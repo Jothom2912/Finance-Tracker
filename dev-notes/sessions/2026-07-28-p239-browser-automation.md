@@ -93,6 +93,27 @@ fem i `transactions_v2` (doc-count falder *ikke*) → `periodOverview` fra 25.00
 | Instrumentet er nyt | `npm test` **346**, browser **2 failed** på samme kode |
 | Efter oprydning | browser **3 passed**, e2e **24 passed**, `notes-check` 134 notes clean |
 
+## Efterspil: første CI-kørsel var rød, og fundet var ægte
+
+Suiten fandt noget på sin **første kørsel i CI** som ingen gate havde set før:
+banking-service har aldrig kunnet starte dér. Den manglende PEM får Docker til at oprette en
+*mappe* på mount-punktet (deraf `IsADirectoryError`, ikke "file not found"), og dashboardet
+svarede 500 ved hver load. Beløbs-assertionerne var grønne — appen *virkede*, den larmede bare
+en serverfejl imens. Kun `pageErrors`-assertionen fangede det.
+[Finding](../findings/2026-07-28-banking-service-dead-in-ci.md), åben del → **P2-42**.
+
+To lektioner ud over selve bug'en:
+
+- **Fejlbeskeden var utilstrækkelig, og det kostede en reproduktion.** Browserens egen
+  konsolbesked (`Failed to load resource: … 500`) indeholder **ikke** URL'en, så CI-outputtet
+  sagde ikke hvilken service det var. Fixturen fanger nu 5xx på response-grænsen *med* adresse,
+  og filtrerer browserens URL-løse variant væk. Et instrument der kan se en fejl, men ikke sige
+  hvor den er, er halvt færdigt.
+- **Kontrollen der manglede var en opstarts-gate, ikke en test.** Port 8009 var ikke i
+  `Wait for system`, så en død service passerede lydløst. Den fejler nu dér, med servicens egne
+  logs, frem for som en konsol-500 tre steps senere. Bemærk grænsen: compose kører **53
+  services**, og ni af dem har nu en gate.
+
 ## Åbne ender
 
 - **P2-40** (gateway `accounts[0]`) og **P2-41** (ingen sletningssti) er skrevet, ikke løst.

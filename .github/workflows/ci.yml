@@ -343,6 +343,20 @@ jobs:
         working-directory: services/frontend
         run: npx playwright install --with-deps chromium
 
+      # banking-service læser sin PEM ved konstruktion og signerer et RS256-JWT som
+      # smoke-test (enable_banking_client.py:71-81), så uden en nøgle STARTER servicen
+      # ikke. Compose bind-mounter `./enablebanking-sandbox.pem`, og findes filen ikke,
+      # laver Docker en MAPPE på mount-punktet — deraf `IsADirectoryError`, ikke en
+      # "file not found".
+      #
+      # Målt af P2-39's første CI-kørsel: banking-service var død i CI, og dashboardets
+      # BankConnectionWidget fik 500 ved hver load. Ingen af de to eksisterende suiter så
+      # det — `tests/e2e/` rører ikke banking, og port 8009 var ikke i ventetiden nedenfor.
+      # En throwaway-nøgle er nok, fordi CI ikke kalder Enable Banking: den skal kunne
+      # læses og kunne signere.
+      - name: Generate throwaway Enable Banking key
+        run: openssl genrsa -out enablebanking-sandbox.pem 2048
+
       - name: Start system
         run: docker compose up -d --build
 
@@ -352,7 +366,10 @@ jobs:
       - name: Wait for system
         run: |
           deadline=$(( $(date +%s) + 180 ))
-          for port in 8001 8002 8003 8004 8005 8006 8010 8012; do
+          # 8009 (banking) tilføjet af P2-39: den var udenfor, og derfor kunne en død
+          # banking-service passere hele jobbet lydløst. Nu fejler DETTE step med
+          # servicens egne logs frem for at dukke op som en 500 i en browser-konsol.
+          for port in 8001 8002 8003 8004 8005 8006 8009 8010 8012; do
             until curl -fsS "http://localhost:${port}/health" > /dev/null 2>&1; do
               if [ "$(date +%s)" -ge "$deadline" ]; then
                 echo "::error::Service on port ${port} did not become healthy within 180s"

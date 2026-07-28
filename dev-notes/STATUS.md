@@ -45,6 +45,13 @@ CSP, så en fejl i læsestien gør *begge* tests røde — læs test 1 først. O
 inde i instrumentet selv: fixturens egen vagt var grøn under `script-src 'none'`, altså på en app
 uden en linje kørende JS, indtil den fik en assertion om at appen mountede.
 
+**Første CI-kørsel var rød, og fundet var ægte: banking-service har aldrig kunnet starte i CI.**
+Den manglende PEM får Docker til at lave en *mappe* på mount-punktet, servicen dør ved boot, og
+dashboardet svarede 500 ved hver load. Tre gates var blinde — `tests/e2e/` rører ikke banking,
+ventetiden pollede ikke 8009, og jsdom mocker `api/bank.jsx`. Lukket med en throwaway-`genrsa`-nøgle
++ 8009 i ventetiden; den åbne del (500 hvor konventionen er 503) er **P2-42**.
+[Finding](findings/2026-07-28-banking-service-dead-in-ci.md).
+
 **Sideprodukt:** `e2e-tests` fik `timeout-minutes: 30` og **port 3000 i `Wait for system`**
 (loopet ventede kun på 8001-8012, så suiten kunne starte mod en frontend der ikke var oppe).
 `Makefile` sagde 5173 hvor porten er 3000.
