@@ -15,8 +15,11 @@ liveness-probe kan ikke se en brudt afhængighed — bankings faktiske fejlmode,
 worker-gate udtrykkeligt *ikke* dækker) og de kendte (P2-41, P3-41, P3-44, P3-46).
 
 Sidst shippet: **P2-38 + P2-42a — CI's manglende signal** (2026-07-29), seks commits
-`a1bf5855`..`8d4cd472`.
+`a1bf5855`..`8d4cd472` + docs. **CI grøn: run 30407613111, alle 19 jobs success.**
 [Plan + Outcome](plans/2026-07-29-p238-p242-ci-missing-signal.md#outcome).
+De nye gates er aflæst *navngivet* i loggen, ikke bare som "success": worker-gaten skrev
+`compose-state-check: 53 containers, none dead, exited nonzero, or restarting. Exited cleanly
+(expected): ollama-pull.`, og alle 12 porte + 3000 står `healthy` inkl. de tre nye.
 Fire ting: `timeout-minutes` på alle 5 job-definitioner efter målt baseline; de sidste tre
 HTTP-services (8007/8008/8011) ind i `Wait for system`; `scripts/compose_state_check.py` som
 gate mod døde/restartende containere; og bankings `BankConfigError` → **503 + WARNING**.

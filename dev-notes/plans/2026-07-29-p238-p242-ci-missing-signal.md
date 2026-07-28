@@ -268,7 +268,7 @@ Commit per trin — rent rollback, jf. konventionen.
    af de to nye tests. Hvis PEM-steppet en dag fjernes, vil browser-suiten rapportere 503 som
    5xx — og det er den rigtige adfærd, ikke en fejl at undtage.
 
-7. [~] **Verifikation samlet.** `make compose-check` (rører vi compose eller
+7. [x] **Verifikation samlet.** `make compose-check` (rører vi compose eller
    dependency-filer), `make -C services/banking-service check`, `make test-e2e` (24 forventet),
    `make test-browser` (4 forventet), og CI grøn på hele stakken. **Aflæs de nye steps
    navngivet i loggen** — "success" siger ikke i sig selv at worker-gaten kørte, kun at jobbet
@@ -393,8 +393,38 @@ det samme som [[project_measurement_instrument_validity]]:
   >=3.11`). Faldt over det under trin 3; ikke undersøgt, ikke rørt. Kandidat til et item, da
   "virker lokalt, ikke i deploy" er en navngivet tema i CLAUDE.md.
 
-### CI
+### CI grøn, og de nye steps aflæst navngivet — ikke kun "success"
 
-Se noten nedenfor — de seks commits ligger på lokal `master` og er **ikke pushet**, så
-kriteriet "CI grøn på hele stakken" med de nye steps aflæst navngivet i loggen er **ikke
-opfyldt endnu**. Det er den sidste udestående del af trin 7.
+**Run 30407613111 på `8d4cd472`: alle 19 jobs success.** Aflæsningen planen krævede, fordi
+"success" i sig selv ikke siger at en ny gate *kørte*:
+
+- **Worker-gaten kørte med sit rigtige output:** `compose-state-check: 53 containers, none dead,
+  exited nonzero, or restarting. Exited cleanly (expected): ollama-pull.` Altså 53 containere
+  faktisk inspiceret i CI, og `ollama-pull`-fælden håndteret i det rigtige miljø — ikke kun
+  lokalt, hvor den blev designet.
+- **Alle 12 porte + 3000 aflæst `healthy`**, inkl. de tre nye: `port 8007: healthy`,
+  `port 8008: healthy`, `port 8011: healthy`. Ingen huller i 8001-8012.
+- **Steppet er navngivet i job-listen:** `Check no container is dead or restarting: success`,
+  placeret mellem `Wait for system` og `Run E2E tests` som planlagt.
+- `Run E2E tests` 24 passed, `Run browser tests` 4 passed.
+
+**Varigheder mod de nye grænser** — rigelig luft, ingen grænse i nærheden af at ramme:
+
+| job | målt i denne kørsel | grænse |
+|---|---|---|
+| `repo-lint` | 17 s | 5 min |
+| `shared-packages` | max 23 s | 5 min |
+| `python-services` | max 82 s (analytics) | 8 min |
+| `frontend` | 50 s | 5 min |
+| `e2e-tests` | 314 s | 30 min |
+
+**Det åbne valg endeligt afgjort til (b), målt i CI:** `grep -cE "http 5[0-9][0-9]: (GET|POST|…)"`
+på browser-jobbets log giver **0**, og `console.error` giver **0**. Browser-fixturens 5xx-vagt
+har altså intet at rapportere — banking *er* korrekt konfigureret i CI, så der er ingen 503 at
+undtage, og (a) ville have været unødig kompleksitet. P2-39's fixtur er urørt.
+
+**En fjerde blind måling, undervejs i netop denne aflæsning:** mit første forsøg,
+`grep -icE "5xx|503"`, gav **41 hits** og lignede et problem. De var alle falske — `503`
+optræder inde i GitHubs tidsstempler (`23:20:57.5031628Z`). Det rigtige instrument er fixturens
+egen ordlyd, `http <status>: <method> <url>`. Samme lektie som de tre andre i afsnittet ovenfor,
+og denne gang på selve *kontrol*-aflæsningen — jf. [[feedback_baseline_can_be_accidentally_right]].
