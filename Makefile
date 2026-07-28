@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help install-deps install-hooks ci-status verify-typecheck-gate notes-check compose-check dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e test-browser lint lint-repo format format-check check clean clean-test-containers
+.PHONY: help install-deps install-hooks ci-status verify-typecheck-gate notes-check compose-check compose-state-check dev dev-docker dev-user-service dev-transaction-service dev-account-service dev-categorization-service dev-budget-service dev-goal-service dev-frontend down logs build test test-e2e test-browser lint lint-repo format format-check check clean clean-test-containers
 
 INFRA_SERVICES = postgres postgres-transactions postgres-categorization postgres-account postgres-budget postgres-goals postgres-banking rabbitmq redis
 USER_SERVICE_DIR = services/user-service
@@ -60,6 +60,7 @@ help: ## Show available targets
 	@printf '    verify-typecheck-gate     Prove the mypy gate covers exactly its allowlist\n'
 	@printf '    notes-check               dev-notes index drift, dead links, frontmatter\n'
 	@printf '    compose-check             build hygiene: worker image drift + install paths\n'
+	@printf '    compose-state-check       runtime: no container dead/restarting (stack must be up)\n'
 	@printf '    format                    Auto-format all Python services\n'
 	@printf '    format-check              Check formatting without changes\n'
 	@printf '    check                     Run all quality checks\n'
@@ -196,6 +197,13 @@ notes-check: ## Check dev-notes/ for index drift, dead links and bad frontmatter
 # so neither can be left to review. Stdlib-only, sub-second.
 compose-check: ## Build hygiene: worker image drift (P3-40) + one install path per service (P2-37)
 	@python3 scripts/compose_check.py
+
+# P2-38. Note the difference from compose-check above: that one is static and reads
+# files, this one needs the stack UP and reads container state. It is the only gate
+# that can see the 26 workers, which have no HTTP surface for `Wait for system` to
+# probe — their liveness signal is container state or nothing.
+compose-state-check: ## Runtime: no container dead, exited nonzero, or restarting (needs stack up)
+	@python3 scripts/compose_state_check.py
 
 check: ## Run all quality checks (lint + format + tests)
 	@set -e; for dir in $(PY_SERVICE_DIRS); do $(MAKE) -C $$dir check; done
