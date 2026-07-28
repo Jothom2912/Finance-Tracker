@@ -15,4 +15,12 @@ test('fixturen seeder en session appen anser for logget ind', async ({ appPage, 
 
   // Havde bootstrap-kravene ændret sig, ville vi være redirected til /login.
   await expect(appPage).toHaveURL(/\/dashboard/);
+
+  // Og appen skal FAKTISK have mountet. Uden denne linje var testen grøn under
+  // `script-src 'none'`, hvor der ikke kørte en linje JavaScript i browseren: de tre
+  // assertions ovenfor kan alle bestå på en tom HTML-side, fordi localStorage seedes af
+  // fixturen og URL'en kun ændrer sig hvis React redirecter. Målt som bivirkning af
+  // P2-39's kontrol-kørsel — og det er præcis den grøn-på-ingenting-fælde itemet handler om.
+  await expect(appPage.getByText('Logget ind som:')).toBeVisible();
+  await expect(appPage.getByText(session.username, { exact: true })).toBeVisible();
 });
