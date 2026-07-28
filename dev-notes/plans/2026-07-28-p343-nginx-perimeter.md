@@ -313,6 +313,12 @@ verifikationen viste.
 | `proxy_read_timeout 300s` binder | Strømmen levede 162s — defaultens 60s ville have dræbt den |
 | E2E er upåvirket | `make test-e2e`: **24 passed**, fordi den rammer portene direkte |
 | Rule 5 kan fejle | 11 mutationer, alle røde med den forventede besked, grøn igen efter rollback |
+| Det målte er det shippede | CI **SUCCESS på `ee1a968b`** ([run 30372244517](https://github.com/Jothom2912/Finance-Tracker/actions/runs/30372244517)) — rule 5 kører også dér, via `ci.yml:53` |
+
+Sidste række er ikke pynt. Før push rapporterede `make ci-status` **SUCCESS** — på
+`abbc43f6`, ADR-commit'en fra *før* al kode i denne plan. Det er bogstaveligt den fejlklasse
+rule 5 findes for: en grøn kørsel der intet siger om det der shippede. Aflæs altid hvilken
+SHA tallet gælder.
 
 ### Hvad IKKE blev bevist — og det er planens eneste åbne ende
 
