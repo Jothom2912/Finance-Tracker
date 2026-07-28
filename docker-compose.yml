@@ -1065,6 +1065,36 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # P3-43 / ADR-0005: frontenden ER perimeteren. Indtil nu fandtes den kun som
+  # Dockerfile, k8s-manifest og `make dev-frontend` — altså ikke i den stak vi
+  # verificerer imod, hvilket gjorde perimeteren umulig at bevise lokalt.
+  #
+  # Port 3000 er ikke vilkårlig: banking-services FRONTEND_URL defaulter dertil, så
+  # bank-callbackets browser-hop rammer den rigtige origin uden at røre en env.
+  #
+  # depends_on er service_started, ikke service_healthy: nginx slår upstream-navnene op
+  # ÉN gang ved opstart, så containerne skal blot eksistere — ikke være klar. Kravet er
+  # DNS, ikke readiness, og service_healthy ville koste hele stakkens opstartstid.
+  frontend:
+    build:
+      context: .
+      dockerfile: services/frontend/Dockerfile
+    image: finance-tracker-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - user-service
+      - transaction-service
+      - budget-service
+      - account-service
+      - categorization-service
+      - goal-service
+      - ai-service
+      - notification-service
+      - banking-service
+      - gateway-service
+
 volumes:
   # mysql_data: preserved but unused — delete with: docker volume rm finance-tracker_mysql_data
   postgres_data:
