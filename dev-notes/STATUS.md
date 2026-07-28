@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P3-43)
+# Status — 2026-07-28 (efter P3-25 + P2-27 + P1-16)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,13 +9,58 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P3-43 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
+**Intet aktivt item.** P3-25 + P2-27 + P1-16 lukkede 2026-07-28. Næste item er ikke valgt — se
+**Next up**.
 
-Sidst shippet: **P3-43 — nginx som perimeter, i drift** (2026-07-28), fem commits
+Sidst shippet: **P3-25 + P2-27, plus P1-16 som utilsigtet udbytte** (2026-07-28), fire commits
+`38634dca`..`474b9643`. Perimeteren har nu fire security headers (med `always`, så også på
+deny-backstoppens 404) og to `limit_req`-zoner på login og register.
+[Plan + Outcome](plans/2026-07-28-p325-p227-perimeter-headers-ratelimit.md#outcome) ·
+[session-log](sessions/2026-07-28-p325-p227-perimeter-hardening.md).
+
+**Læs dette før noget andet, fordi det ændrer hvad vi tror en verifikation er værd: P3-43
+brækkede hele GraphQL-læsestien i browseren, og det stod på master i nogle timer.**
+`graphql-request` kalder `new URL(url)` uden base, så den relative sti fra `c0418646` kastede
+`TypeError: Invalid URL` — dashboard, transaktioner og kategorier viste
+`Fejl: Failed to construct 'URL': Invalid URL` i stedet for data. Lukket af **P1-16**
+(`68dc3db0`) med en absolut URL bygget fra `window.location.origin` i `graphqlClient.jsx`;
+`serviceUrls.js` er stadig relativ, så ADR-0005 er uændret.
+[Finding](findings/2026-07-28-graphql-client-rejects-relative-url.md).
+
+**Kæden af tavsheder er lektien, ikke bug'en.** P3-43 verificerede GraphQL med `curl`, og STATUS
+sagde *"GraphQL leverer rigtig aggregeret data same-origin"* — sandt **om transporten**. nginx
+proxyer korrekt; `curl` kører bare ikke klienten. Og de 344 frontend-tests er blinde ved
+konstruktion, fordi `graphqlClient.test.jsx:12` mocker `GraphQLClient` væk — målt, ikke påstået:
+med regressionen genindført fejler **kun de to nye tests**, mens de fire mockede bliver grønne.
+**Fundet kom fra en kontrol i et urelateret item:** CSP'en kunne kun verificeres ved at *drive*
+appen i en rigtig browser-engine, og det krævede en autentificeret session. Ingen leden fandt
+den.
+
+**Verifikationen der tæller for de to items:** headerne sidder på 200, **404 og et proxyet 422**
+(de to sidste er `always`-beviset, da ingen af dem er på nginx' default-hvidliste). CSP'en er
+bevist *håndhævet* og ikke kun leveret — kontrol med `script-src 'none'` gav violation **og** en
+app der ikke mountede. Rate limiten: 6 igennem på frisk zone, verificeret rød uden `limit_req`
+(20/20), og `/users/me` + `/transactions/` urørte (20/20 × 200).
+
+**To ting der ikke er som planen sagde.** (1) `'unsafe-inline'` på `style-src` er nødvendig, men
+**ikke** på grund af de 35 `style={{}}` — React bruger CSSOM, og CSP rører ikke CSSOM (målt: 24
+style-attributter under `style-src 'self'`, nul violations). Det er radix' scroll-lock der tvinger
+den. Rettet i `e377a420`. (2) Planen foreskrev **én** rate-limit-zone; målingen viste at fælles
+zone lod register-spam spærre alles login, så der er **to**.
+
+**Åbne ender, med vilje ikke skjult:** `limit_req` er **omgåelig** — 20 requests direkte mod
+`:8001` gav nul 429, fordi portene stadig er på `0.0.0.0` (ADR-0005 punkt 3), og vores egen
+`tests/e2e/` er beviset, da den er upåvirket. Zonen er desuden per-IP i *form* og **én global
+bucket i praksis**, fordi `$remote_addr` er Docker-gatewayen for al host-trafik (per-IP bevist
+via en sibling-container). Og C2-kontrollen mangler sin app-nære form: at bevise
+`'unsafe-inline'` *i appen* kræver at en dialog åbnes, altså et klik — som repoet ikke kan
+automatisere.
+
+Den før det: **P3-43 — nginx som perimeter, i drift** (2026-07-28), fem commits
 `4d73b527`..`cd9b94fb`. Browseren taler med én origin: 16 eksplicitte `proxy_pass`-locations
 plus en **denyende** `location /api/ { return 404; }`, frontenden på relative URLs, de 11
 `CORSMiddleware` + `CORS_ORIGINS` væk, og rule 5 i `scripts/compose_check.py` vogter nginx.conf
-mod drift. Oplåser **P3-25** (CSP/HSTS ét sted) og **P2-27** (`limit_req`-zone).
+mod drift. Oplåste **P3-25** og **P2-27**, som begge lukkede 2026-07-28 (se ovenfor).
 
 **Det gennemgående fund, og grunden til at det står her og ikke kun i session-loggen:** hvert
 af de fem trin havde en måling der modsagde planen, og alle fem handlede om at noget *så ud*
@@ -28,8 +73,9 @@ virkeligheden 400, så den forkerte række ville have været diskriminator.
 
 **Verifikationen der tæller:** preflight mod alle 11 porte gik fra 200 + `access-control-allow-origin`
 til **405 uden headers**; `/api/v1/internal/…` og `/api/v1/categorize/` giver nu **404 fra
-nginx**; en 10,5 MiB CSV får **servicens** danske 413, ikke nginx' HTML-413; GraphQL leverer
-rigtig aggregeret data same-origin; `make test-e2e` er **24 grønne**, fordi den rammer portene
+nginx**; en 10,5 MiB CSV får **servicens** danske 413, ikke nginx' HTML-413; ~~GraphQL leverer
+rigtig aggregeret data same-origin~~ (**dette var kun sandt om transporten** — klienten var
+brækket, se P1-16 ovenfor); `make test-e2e` er **24 grønne**, fordi den rammer portene
 direkte og skulle være upåvirket. Rule 5 er kørt **rød på 11 mutationer** hver for sig.
 
 **Åben ende, med vilje ikke skjult:** chat-SSE'ens *pipeline* kunne ikke køres end-to-end —
@@ -180,12 +226,15 @@ oprydning.
   omdøbningen er også optjent for anden gang. Bemærk at "build hygiene" ikke længere dækker
   scopet præcist: rule 5 er en sikkerhedsregel, ikke en build-regel, og de deler kun
   fejlmoden *en grøn kørsel der intet beviste*. Vælg navnet efter fejlmoden, ikke emnet.
-- **P3-25 og P2-27 er nu de billigste items i backloggen**, fordi P3-43 byggede stedet de
-  skulle bo. CSP/HSTS er fem `add_header`-linjer i perimeterens `server`-blok frem for i N
-  services; `limit_req` er en zone dér frem for `slowapi` overalt. Begge er S. Bemærk hvad de
-  *ikke* dækker: perimeteren er en tilføjet vej, ikke en lukket dør — service-portene 8001–8012
-  er stadig på `0.0.0.0` (ADR-0005 punkt 3), så headers og rate limits gælder browser-trafik og
-  ikke nogen der rammer en port direkte.
+- **Browser-automatisering fortjener nu en beslutning, ikke en henvisning.** Argumentet er ikke
+  længere teoretisk: P3-25's ene ægte fund (P1-16) kom fra at drive appen i en browser, og den
+  næste måling der mangler — at `'unsafe-inline'` er nødvendig *i appen* — kræver et klik på en
+  dialog. Der er intet Playwright i repoet. Bemærk at det ikke er "flere tests": de 346 er
+  grønne og var grønne gennem hele regressionen. Det er et **andet instrument**, ikke mere af
+  det samme. Har intet ID endnu.
+- **P3-47** — en `location` med eget `add_header` fjerner tavst perimeterens fire security
+  headers i den blok. Ikke akut i dag (filen har ingen andre `add_header`), men **P3-28 er det
+  item der udløser det**, så de to hører sammen i rækkefølge.
 - **P2-28** — taxonomy write auth kræver stadig en beslutning om et rolle-begreb, som ikke
   findes nogen steder i kodebasen.
 - **P3-46** — `qwen3:8b` OOM-dræbes når stakken kører, så ai-service kan ikke verificeres
@@ -211,7 +260,8 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
 | [goal: `Goal` har to runtime-typer](findings/2026-07-27-goal-entity-two-runtime-types.md) | MEDIUM | P2-34 (blokerer goal for gaten) |
 | [x-retry-count læst fem måder](findings/2026-07-27-retry-header-read-five-ways.md) | MEDIUM | P2-36 (ikke live i dag) |
 | [INTERNAL_API_KEY optional-men-obligatorisk](findings/2026-07-27-internal-api-key-optional-but-mandatory.md) | LOW | P2-33 (6 services) |
-| [131 bare mocks uden `spec`](findings/2026-07-27-sync-trigger-double-value.md) | MEDIUM | P3-41 — nu det største usikrede areal, da `tests/` er uden for mypy-scope |
+| [graphql-request afviser relativ URL](findings/2026-07-28-graphql-client-rejects-relative-url.md) | HIGH | P1-16 (**lukket 2026-07-28**) — men lektien om `curl`-verifikation står stadig |
+| [131 bare mocks uden `spec`](findings/2026-07-27-sync-trigger-double-value.md) | MEDIUM | P3-41 — nu det største usikrede areal, da `tests/` er uden for mypy-scope. **P1-16 viste at mocks også skjuler regressioner i frontenden**, ikke kun kontraktbrud i services |
 | [worker migration ordering](findings/2026-07-25-worker-migration-ordering.md) | LOW | P3-17 |
 | [eval seed writes to prod index](findings/2026-07-26-eval-seed-writes-to-prod-index.md) | LOW | P3-21 |
 | [non-UUID saga_id poison](findings/2026-07-25-saga-reply-non-uuid-poison.md) | LOW | P3-19 |
@@ -236,6 +286,18 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
   `xpack.security.enabled: "false"` og Postgres-passwords i klartekst i compose er uændrede,
   og enhver container når stadig hosten via `host.docker.internal` — verificeret. Antag ikke
   at porten er lukningen.
+- **En `curl`-verifikation beviser transporten, ikke klienten.** P3-43 verificerede GraphQL
+  same-origin med `curl` og fik et sandt svar; klienten var alligevel brækket for hver bruger
+  (P1-16). Rammer alt hvor et bibliotek står mellem appen og HTTP — `graphql-request` konstruerer
+  selv en `URL`, `fetch` gør ikke. **Spørg hvad der kører i browseren, som `curl` ikke kører.**
+- **En mocket afhængighed kan være selve blindheden.** `graphqlClient.test.jsx` mocker
+  `GraphQLClient` for at teste 401-interceptoren — legitimt — men det var derfor 344 grønne tests
+  ikke kunne se P1-16. Målt: med regressionen genindført fejler kun de to tests der *ikke* mocker.
+  Når en test mocker det den skal bevise noget om, hører der en søskende-test uden mocket til.
+- **En fejlet kommando kan have haft bivirkninger inden den fejlede.** P2-27's første
+  rate-limit-måling viste 2 igennem i stedet for 6, fordi et `declare -A`-forsøg (virker ikke i
+  zsh) havde afsendt requests før det fejlede og drænet bucket'en. Beslægtet med pipe-fælden:
+  **etablér tilstanden på ny før en måling tolkes.**
 - **Workers are still second-class in compose**: P3-40 fixed the *image* half, but P3-17 is
   open — workers override `command:` and so skip the migrations that run in the API's `CMD`.
 - **En grøn `make check` er stadig ikke et løfte om at containeren starter** — men grunden er

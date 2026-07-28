@@ -34,6 +34,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P1-13 | budget-service computes spend from at most 50 transactions. [→ detail](#p1-13) | budget, transaction | M | **done 2026-07-25** | [findings/2026-07-25-budget-spend-truncated-at-50.md](../findings/2026-07-25-budget-spend-truncated-at-50.md), [plan](../plans/2026-07-25-p113-budget-spend-from-analytics.md), [decision](../decisions/2026-07-25-budget-spend-from-analytics.md) |
 | P1-14 | The transactions page silently shows only the 50 newest rows in the selected period. [→ detail](#p1-14) | frontend, transaction | M | **done 2026-07-26** | [findings/2026-07-26-transaction-list-truncated-at-50.md](../findings/2026-07-26-transaction-list-truncated-at-50.md), [plan](../plans/2026-07-26-p114-transaction-list-pagination.md), [decision](../decisions/2026-07-26-transaction-list-envelope.md) |
 | P1-15 | `/api/v1/categorize` is unauthenticated and reads `user_id` from the request body. [→ detail](#p1-15) | categorization, repo | S | **done 2026-07-27** | [findings/2026-07-26-categorize-endpoint-unauthenticated.md](../findings/2026-07-26-categorize-endpoint-unauthenticated.md), [sweep SEC-1](../findings/2026-07-26-product-surface-sweep.md) |
+| P1-16 | `graphql-request` afviser den relative URL P3-43 gav den, så hele GraphQL-læsestien er død i browseren. [→ detail](#p1-16) | frontend | S | **done 2026-07-28** | [finding](../findings/2026-07-28-graphql-client-rejects-relative-url.md), [plan](../plans/2026-07-28-p325-p227-perimeter-headers-ratelimit.md#outcome) |
 
 > **P1-14 and P1-15 added 2026-07-26** from the [product-surface sweep](../findings/2026-07-26-product-surface-sweep.md), under the same admission rule P1-13 invoked: the class of the defect decides the tier, not the date it was found. P1-14 is money-presentation (an incomplete set of financial records shown as complete); P1-15 is a security hole (unauthenticated cross-user data disclosure, verified live).
 
@@ -74,7 +75,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P2-25 | Transaction soft-delete decision + gone-vs-not-yet in the categorization write-back. [→ detail](#p2-25) | transaction | M | **done 2026-07-28** | [decision](../decisions/2026-07-28-transaction-soft-delete.md), [plan](../plans/2026-07-28-p225-transaction-soft-delete.md) |
 | P2-24 | Shared internal-API client in `services/shared`. [→ detail](#p2-24) | cross | M | open | [plan](../plans/2026-07-25-notification-service-hardening.md) (not-fixed list) |
 | P2-26 | Turn on `require_exp` in all 12 services. [→ detail](#p2-26) | cross | S | **done 2026-07-27** | [sweep SEC-2](../findings/2026-07-26-product-surface-sweep.md) |
-| P2-27 | No rate limiting anywhere — **oplåst af P3-43**: `limit_req`-zone i nginx.conf frem for `slowapi` i N services. [→ detail](#p2-27) | user, cross | S | open | [sweep SEC-4](../findings/2026-07-26-product-surface-sweep.md), [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md) |
+| P2-27 | No rate limiting anywhere — **oplåst af P3-43**: `limit_req`-zone i nginx.conf frem for `slowapi` i N services. [→ detail](#p2-27) | user, cross | S | **done 2026-07-28** | [plan](../plans/2026-07-28-p325-p227-perimeter-headers-ratelimit.md), [sweep SEC-4](../findings/2026-07-26-product-surface-sweep.md), [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md) |
 | P2-28 | Any authenticated user can mutate or delete the global taxonomy. [→ detail](#p2-28) | categorization | M | open | [sweep SEC-5](../findings/2026-07-26-product-surface-sweep.md) |
 | P2-29 | CSV upload has no size limit, no MIME check and buffers the whole file. [→ detail](#p2-29) | transaction | S | done 2026-07-28 | [sweep SEC-7](../findings/2026-07-26-product-surface-sweep.md), [plan](../plans/2026-07-28-p229-csv-upload-guards.md) |
 | P2-32 | Outbox-porten erklærer domænets `OutboxEntry`, men adapteren tilskriver shared's klasse af samme navn — usand kontrakt i 7 services; fix er en mapping i adapteren, ikke en sletning af duplikatet (det er den hexagonale grænse) | cross, contracts | S | open | [findings/2026-07-27-outbox-port-declares-foreign-entity.md](../findings/2026-07-27-outbox-port-declares-foreign-entity.md) |
@@ -119,7 +120,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | ID    | Title                                                                                                                                                    | Area                   | Effort                             | Status          | Links                                                                                                                                                               |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P3-24 | Gateway-as-perimeter — begge halvdele lukket 2026-07-28: datastores på loopback, og ADR-0005 vælger nginx som perimeter. Implementeringen er P3-43. [→ detail](#p3-24)                         | infra, gateway         | M                                  | done 2026-07-28 | [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md), [decision](../decisions/2026-07-28-nginx-as-perimeter.md), [datastore-halvdel](../plans/2026-07-28-p324-datastore-loopback-bind.md#outcome)                                                                                                      |
-| P3-25 | No security headers — **oplåst af P3-43**: CSP/HSTS hører nu ét sted, i perimeterens `server`-blok. [→ detail](#p3-25)                                                                                                                  | frontend, infra        | S                                  | open            | [sweep SEC-6](../findings/2026-07-26-product-surface-sweep.md)                                                                                                      |
+| P3-25 | No security headers — **oplåst af P3-43**: CSP hører nu ét sted, i perimeterens `server`-blok (HSTS udeladt: ingen TLS). [→ detail](#p3-25)                                                                                            | frontend, infra        | S                                  | **done 2026-07-28** | [plan](../plans/2026-07-28-p325-p227-perimeter-headers-ratelimit.md), [sweep SEC-6](../findings/2026-07-26-product-surface-sweep.md)                                                                                                      |
 | P3-26 | No dependency scanning, and banking-service pins known-vulnerable versions. [→ detail](#p3-26)                                                           | infra, banking         | S                                  | open            | [sweep SEC-8/9](../findings/2026-07-26-product-surface-sweep.md)                                                                                                    |
 | P3-27 | Four containers run as root; k8s has no securityContext and no NetworkPolicy. [→ detail](#p3-27)                                                         | infra                  | M                                  | open            | [sweep SEC-10](../findings/2026-07-26-product-surface-sweep.md)                                                                                                     |
 | P3-28 | Build & image hygiene — the best effort-to-payoff item in the sweep, all figures measured 2026-07-26. [→ detail](#p3-28)                                 | infra, frontend        | S                                  | open            | [sweep OPS-1](../findings/2026-07-26-product-surface-sweep.md)                                                                                                      |
@@ -141,6 +142,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P3-44 | `GET /api/v1/users/{id}` er `INTERNAL_API_KEY`-vogtet men ligger ikke under `/internal/`, så perimeterens præfiks-regel kan ikke lukke den. [→ detail](#p3-44) | user, infra | S | open | [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md), valg A i [P3-43-planen](../plans/2026-07-28-p343-nginx-perimeter.md) |
 | P3-45 | nginx cacher upstream-IP'er ved config-load, så en genskabt service giver 502 gennem perimeteren indtil frontenden genstartes. [→ detail](#p3-45) | infrastructure | S | open | fundet under [P3-43 trin 3](../plans/2026-07-28-p343-nginx-perimeter.md) |
 | P3-46 | `qwen3:8b` bliver OOM-dræbt når hele stakken kører, så chat-pipelinen kan ikke køres end-to-end på 7,8 GB Docker-hukommelse. [→ detail](#p3-46) | ai, infrastructure | S | open | målt under [P3-43 trin 5](../plans/2026-07-28-p343-nginx-perimeter.md) |
+| P3-47 | En `location` med eget `add_header` fjerner tavst perimeterens fire security headers i den blok. [→ detail](#p3-47) | infra, frontend | S | open | [plan](../plans/2026-07-28-p325-p227-perimeter-headers-ratelimit.md#åbne-valg) |
 
 ---
 
@@ -163,6 +165,22 @@ Rows whose description outgrew a table cell. Nothing here is a summary — this 
 ### P1-15
 
 **`/api/v1/categorize` is unauthenticated and reads `user_id` from the request body.** `categorization-service/app/adapters/inbound/categorize_api.py:29-46` — no auth dependency, no `require_internal_api_key`, app built with no global dependency (`main.py:28-35`), published on the host at `8005:8005`. `build_categorization_service(user_id=body.user_id)` layers that user's private F1-02 rules onto the engine, so the differing `tier` field is an oracle over other users' rule sets. **Demonstrated live 2026-07-26 with no credentials**: `"SHOP N PLAY"` → `tier:"fallback"` for `user_id` null and 2, but `tier:"rule", subcategory_id:5, confidence:"high"` for `user_id:1`; HTTP 200 throughout, `/docs` open on the same port. Under F1-03 those rules are auto-generated from real manual corrections, so this reconstructs a stranger's spending habits without touching a transaction endpoint, and `user_id` is a small int so enumeration is trivial. `/batch` additionally accepts an unbounded list. Fix = `require_internal_api_key` on the router (transaction-service is the only real caller — **correction 2026-07-27: it did *not* already have S2S config**; neither `transaction-service/app/config.py` nor `categorization-service/app/config.py` had `INTERNAL_API_KEY`, repo-wide grep for `INTERNAL_API_KEY|X-Internal` in categorization-service returned 0 hits, so the key had to be added on both sides rather than just a `dependencies=` parameter) + a `max_items` bound; copy user-service's `compare_digest` check (`rest_api.py:24`), not account-service's `!=` (`internal_api.py:20`). **Rotate the shared secret in the same change**: `k8s/secrets.yaml:8-10` is git-tracked in a public repo with `dev-secret-key-change-in-production` as the HS256 key shared by all 12 services — distinct from P2-15 (*how* to manage k8s secrets) and P3-02 (RS256 *later*); the value is disclosed **now**, and three services also default `INTERNAL_API_KEY` to the well-known dev string (`goal/config.py:13`, `banking/config.py:17`, `notification/config.py:11`) where user- and account-service correctly fail closed
+
+### P1-16
+
+**`graphql-request` kalder `new URL(url)` uden base, så den relative sti P3-43 gav den kastede
+`TypeError: Invalid URL` — og hele GraphQL-læsestien var død i browseren.** Dashboard,
+transaktioner og kategorier viste `Fejl: Failed to construct 'URL': Invalid URL` i stedet for
+data. Introduceret 2026-07-28 af `c0418646` (P3-43 trin 2) og fundet samme dag, af P3-25's
+CSP-kontrol — ikke af nogen gate. Bevist i tre uafhængige lag (browser, node uden browser,
+git-arkæologi), se [finding](../findings/2026-07-28-graphql-client-rejects-relative-url.md).
+**Ingen gate kunne have fanget det som repoet stod:** P3-43 verificerede GraphQL med `curl`,
+hvad der er sandt om transporten men ikke kan sige noget om klienten, og de 344 frontend-tests
+mocker `GraphQLClient` væk i `graphqlClient.test.jsx:12` — mocket *er* blindheden. Fixet gør
+URL'en absolut i `graphqlClient.jsx` (klientens krav, ikke en konfiguration; `serviceUrls.js`
+bliver relativ, så ADR-0005 er uændret) med en regressionstest i egen fil der kun stubber
+netværket. **done 2026-07-28** i `68dc3db0`, verificeret i browseren og bevist rød med
+regressionen genindført
 
 ### P2-01
 
@@ -232,6 +250,16 @@ Shared internal-API client in `services/shared`: the internal owner-lookup is ha
 
 **No rate limiting anywhere.** Zero hits for `slowapi\|limiter\|rate_limit\|limit_req` across `services/`, `nginx.conf` and CI. `POST /api/v1/users/login` (`user-service/.../rest_api.py:43-52`) has no throttling, lockout, backoff or CAPTCHA, and the password policy is length-only (min 8, `dto.py:10-11`) with no complexity rule and no breach check. Note the interaction with P2-11: moving bcrypt off the event loop was right, but it removed the accidental CPU brake that was the only thing slowing an attacker down — and at ~250 ms per bcrypt(12) verify, unauthenticated login is now also a cheap DoS vector. Login itself does not leak existence (same error for both branches, `service.py:109,115`); `register` does via 409 — decide that one deliberately. Where the limiter lives depends on P3-24 (there is no perimeter today), so a per-service `slowapi` on the auth routes is the pragmatic v1
 
+
+**Outcome.** Landet 2026-07-28 i `474b9643`. **To** zoner à `10r/m burst=5 nodelay` på login og
+register — planen foreskrev én, men målingen viste at fælles zone lod register-spam spærre alles
+login. Målt: 6 igennem på frisk zone, verificeret rød uden `limit_req` (20/20), afgrænsning
+bekræftet (`/users/me` og `/transactions/` urørte). **Zonen er per-IP i form og én global bucket
+i praksis**, fordi `$remote_addr` er Docker-gatewayen for al host-trafik; per-IP bevist via en
+sibling-container med egen bucket. **Omgåelsen er målt frem for underforstået:** 20 requests
+direkte mod `:8001` gav nul 429, fordi portene stadig er på `0.0.0.0` (ADR-0005 punkt 3) — vores
+egen `tests/e2e/` er beviset. Password-politik, lockout og 409-eksistensleaket er urørte.
+Se [planens Outcome](../plans/2026-07-28-p325-p227-perimeter-headers-ratelimit.md#outcome)
 ### P2-28
 
 **Any authenticated user can mutate or delete the global taxonomy.** `categorization-service/app/adapters/inbound/category_api.py:73-76` (`DELETE /categories/{id}`), `:132-135` (subcategories) and create/update at `:45,63,97,122` all take `_user_id: int = Depends(get_current_user_id)` — the underscore is the finding: identity is resolved and thrown away. The taxonomy is global and shared under ADR-003, so one user's delete lands in every other user's categorizations, budget lines and analytics. Needs a **decision, not just a dependency**: there is no role or admin concept anywhere in the codebase (`grep -E 'admin\|role\|is_admin'` → nothing), so either add a minimal role to the user model (couples to F2-08's user-model work) or make taxonomy mutations internal-only and expose a curated subset. ADR-003 settled ownership of the taxonomy, not authorisation over it
@@ -280,6 +308,17 @@ Non-UUID `saga_id` retries to the DLQ instead of being rejected as poison: `saga
 
 **No security headers.** `services/frontend/nginx.conf` is twelve lines and sets no CSP, HSTS, `X-Frame-Options`, `X-Content-Type-Options` or `Referrer-Policy`. The JWT lives in `localStorage` (`AuthContext.jsx:41-43`, read by `apiClient.jsx:8` and `chat/api/streamChat.js:23`). Mitigating and worth recording so it is not re-audited: there is **no XSS sink today** — no `dangerouslySetInnerHTML`, no `innerHTML`, no `eval()` anywhere in `src/`. This is missing defence in depth, not an exploitable path. HttpOnly cookies are blocked by P3-24. CSRF is genuinely a non-issue (header auth, not cookies) and CORS is an explicit origin list everywhere, never a wildcard. Minor extra: the JWT carries `username` and `email` claims (`user-service/app/auth.py:28-34`), so PII sits in `localStorage` in cleartext when `sub`/`user_id` would do
 
+
+**Outcome.** Landet 2026-07-28 i `38634dca` + `e377a420`. Fire headers med `always` (målt på
+200, 404 **og** et proxyet 422 — de to sidste er `always`-beviset). CSP'en er bevist *håndhævet*
+og ikke kun leveret: kontrol med `script-src 'none'` gav violation **og** en app der ikke
+mountede. **HSTS bevidst udeladt** — 0 hits på `listen 443`/`ssl_certificate` i repoet, og
+browsere ignorerer headeren over HTTP, så den ville være inert og læses som dækning ved næste
+audit; hører til den dag der findes en TLS-terminering. Direktiverne er målt på bundlet
+(0 × `eval(`, 0 × `data:`, 0 × `url()`), og **én af planens begrundelser var forkert**: de 35
+`style={{}}` kræver ikke `'unsafe-inline'`, fordi React bruger CSSOM — kun radix' scroll-lock
+gør. Se [planens Outcome](../plans/2026-07-28-p325-p227-perimeter-headers-ratelimit.md#outcome).
+**Itemets største udbytte var P1-16**, som kontrollen afdækkede
 ### P3-26
 
 **No dependency scanning, and banking-service pins known-vulnerable versions.** `.github/workflows/` has only `ci.yml` — no dependabot, no `pip-audit`, no `npm audit`, no CodeQL. Bandit runs (`ci.yml:122-128`) but is SAST, not SCA, so it cannot see vulnerable dependencies. ~~`banking-service/requirements.txt:10` pins `python-jose[cryptography]==3.3.0`~~ **— closed 2026-07-28 by P3-23**, and the reason is worth keeping: `python-jose` was used in exactly one place in the whole service, `tests/integration/test_bank_api.py:32`. The app signs with PyJWT (`adapters/outbound/enable_banking_client.py:12`). It sat in the *runtime* list — and therefore in the image — only because there was no dev/runtime split to put it in. It is now a dev dependency at `>=3.4.0`. Likewise `fastapi==0.115.0` → resolved to 0.140.7 via `uv.lock`, so the starlette 0.38.x multipart DoS (CVE-2024-47874) is gone too. **What remains of this item is the actual scanning**: no dependabot, no `pip-audit`, no `npm audit`, no CodeQL — banking's pins are no longer the example, but nothing would have told us about them either. *CVE mapping was from memory; still confirm with `pip-audit` when the scanner lands.* Separately, `docs/security-audit-notes.md` deferred nine npm advisories to "after Phase 2" and `package-lock.json:5562-5587` still has `react-router-dom` 7.6.3 where that note's own fix range is `> 7.11.0` — Phase 2 has been code-complete since 2026-07-16, so the deferral has expired
@@ -496,3 +535,19 @@ gratis men afhænger af at man husker det.
 ### P3-43
 
 **Implementér [ADR-0005](../../docs/adr/0005-nginx-as-security-perimeter.md): nginx som perimeter.** `proxy_pass` per path fra frontendens nginx til de ti services, `serviceUrls.js` på relative URLs, og de 11 `CORSMiddleware` + `CORS_ORIGINS`-envs ud, fordi kaldene bliver same-origin. Ruter-tabellen er allerede verificeret entydig i ADR'en — alle ti adskiller sig på andet path-segment efter `/api/v1`, så der er ingen kollision at løse. Fire ting ADR'en har målt frem, som ellers først dukker op undervejs: (1) **SSE brækker på default-config** — `ai-service`s `/api/v1/chat/stream` returnerer `EventSourceResponse`, og nginx buffrer som default, så den location kræver `proxy_buffering off` plus hævet `proxy_read_timeout`; (2) **positiv allowlist, ikke catch-all** — `/api/v1/internal/*` (account) og `/api/v1/categorize` (categorization) er `INTERNAL_API_KEY`-vogtede, og en `location /api/ { proxy_pass … }` ville publicere dem; (3) **perimeteren lukker ikke service-portene** — 8001–8012 bliver på `0.0.0.0`, og at lukke dem kræver først at `tests/e2e/conftest.py`s otte direkte health-polls (8001–8006, 8010, 8012 — ikke identisk med browserens ti origins) får en vej ind; (4) **intet bevogter nginx.conf mod drift** — `scripts/compose_check.py` kender den ikke, så en ny service kan tilføjes uden proxy-regel og fejle først i browseren; en femte regel dér er den naturlige plads. Oplåser P3-25 og P2-27
+
+### P3-47
+
+**En `location` med sit eget `add_header` fjerner tavst alle fire security headers i den blok.**
+nginx' `add_header` nedarves kun til en `location` der ikke selv sætter én. `nginx.conf` har i
+dag bevidst ingen andre `add_header`, så P3-25's fire headers gælder alle 20 locations — men
+**P3-28 vil tilføje `Cache-Control: immutable` på assets**, og i samme øjeblik står den location
+uden CSP, `nosniff`, `X-Frame-Options` og `Referrer-Policy`, uden at noget fejler. Det er samme
+fejlmode rule 5 findes for: en konfiguration der ser rigtig ud og ikke er det. Fixet er en regel
+i `scripts/compose_check.py` der kræver at enhver `location` med `add_header` gentager de fire
+— ~15 linjer, og filen har allerede parseren fra rule 5. **Holdt ude af P3-25 med vilje:**
+STATUS.md skylder allerede en omdøbning af "build hygiene" (rule 5 er en sikkerhedsregel, ikke
+en build-regel), og P2-21 vil også have en ny regel til compose-vs-kustomization-diffen. At
+afgøre regel-nummerering og filnavn som bivirkning af et S-item er hvordan man ender med et
+navn der ikke passer. Risikoen står i `nginx.conf` med reference hertil, så den ikke kun findes
+i en plan
