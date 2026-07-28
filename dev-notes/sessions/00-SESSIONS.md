@@ -5,6 +5,7 @@ surprised us, what turned out wrong — not a source of architecture facts. Read
 specific one when you need the story behind a change; do not load this file as
 context by default. Add a line here (not to `00-INDEX.md`) for every new log.
 
+- [sessions/2026-07-28-p229-csv-upload-guards.md](2026-07-28-p229-csv-upload-guards.md) — P2-29 shipped: byte-/række-/transportgrænse på `/import-csv`, OOM'en bevist virkelig (`OOMKilled=137` med guarden slået fra via env); planens `du`-måling var et forkert instrument, fordi `tempfile` bruger `O_TMPFILE` — `df` viste de 137 MB `du` ikke kunne se.
 - [sessions/2026-07-28-p323-banking-uv-pyproject.md](2026-07-28-p323-banking-uv-pyproject.md) — P3-23 shipped: banking på uv + pyproject + typecheck-gaten (11/12 install-sti, 9/12 gate); `python-jose`'s to CVE'er sad i imaget for én tests skyld, og gaten genopdagede fire kendte kontrakt-items frem for at finde nye bugs.
 - [sessions/2026-07-28-p237-single-install-path.md](2026-07-28-p237-single-install-path.md) — P2-37 shipped: budgets image læser `uv.lock` (10/12 services nu); den httpx-bump ingen test kunne dække blev verificeret gratis af en workers egne logs, og redis-risikoen skrumpede fordi cachen viste sig ubrugt (→ P3-42).
 - [sessions/2026-07-27-p231-typecheck-gate.md](2026-07-27-p231-typecheck-gate.md) — P2-31 shipped: mypy hård gate på 8/12 services; udbyttet var fem usande kontrakter, ikke typefejl (→ P2-32…P2-37).

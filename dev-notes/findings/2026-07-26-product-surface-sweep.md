@@ -185,14 +185,25 @@ so PII sits in `localStorage` in cleartext. `sub`/`user_id` would do — `/users
 
 ### SEC-7 — CSV upload: no size limit, no MIME check, whole file in memory · MEDIUM
 
-`transaction-service/app/adapters/inbound/rest_api.py:107-116` does `content = await file.read()`
-with no `content_type` validation, no size guard and no streaming; the parsers then load it
-again into `io.StringIO` (`app/application/csv_parsers/nordea.py:33`,
-`danske_bank.py:35`) for a doubled footprint. There is no ASGI-level max request size and no
-row-count cap. P3-15 chunked the *internal saga* path only — the CSV path is untouched.
+**Closed by [P2-29](../plans/2026-07-28-p229-csv-upload-guards.md) on 2026-07-28.** Three of the
+references below were stale when the plan was written and are corrected in place; the
+severity claim was **confirmed by measurement**, see the plan's Outcome.
+
+`transaction-service/app/adapters/inbound/rest_api.py:141` (was cited as `:107-116`) does
+`content = await file.read()` with no `content_type` validation, no size guard and no streaming;
+the parsers then load it again into `io.StringIO`
+(`app/application/csv_parsers/nordea.py:34`, `danske_bank.py:35`, `internal.py:34` — the sweep
+placed these under `adapters/inbound/`, they live under `app/application/`). There is no
+ASGI-level max request size and no row-count cap. P3-15 chunked the *internal saga* path only —
+the CSV path is untouched.
+
+"Doubled footprint" **understated it: there are three live copies at peak**
+(`bytes` → `str` → `StringIO`), against the pod's `limits.memory: 512Mi`
+(`k8s/apps/transaction-service.yaml:42`).
 
 Authenticated-only, so it is an availability issue rather than a breach: one user can OOM
-transaction-service for everyone.
+transaction-service for everyone. **Measured, not presumed:** with the guard disabled via env on
+a 512 MiB container, a 150 MB upload gives `OOMKilled=true, ExitCode=137`.
 
 ### SEC-8 — banking-service pins known-vulnerable versions · MEDIUM
 

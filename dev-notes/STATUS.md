@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P2-25)
+# Status — 2026-07-28 (efter P2-29)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,9 +9,32 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-25 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
+**Intet aktivt item.** P2-29 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
 
-Sidst shippet: **P2-25 + P3-37** (2026-07-28) — soft-delete på `transactions`. Fem commits:
+Sidst shippet: **P2-29** (2026-07-28) — byte-, række- og transportgrænse på `/import-csv`.
+Fire commits: `555ffd5e` (`CSV_MAX_BYTES`/`CSV_MAX_ROWS`, handler-guard før `.read()`,
+rækkegrænse i `ParsedCSVResult.add_row` så de tre parsere deler én implementation),
+`7f4c35ac` (`Content-Length`-middleware), `d0661ad1` (12 tests — endpointets **første**
+adapter-dækning, integration 69 → 81), `4621ac2a` (frontend pre-flight).
+Ingen migration, intet schema rørt.
+
+**OOM'en var virkelig, og det blev målt som kontrol.** `mem_limit: 512m` (k8s' tal) plus
+`CSV_MAX_BYTES` hævet via env — samme image, én variabel ændret — gav
+`OOMKilled=true, ExitCode=137` på en 150 MB upload. Med guarden på: 413 på 3 ms, RSS uændret
+(82,26 → 82,41 MiB), container oppe. Hver guard er bevist i stand til at blive rød:
+handler-guard fjernet → 2 røde, middleware → 1, rækkegrænse → 1.
+
+**Planens egen disk-måling var et forkert instrument.** `du -sh /tmp` viste 4 KB mens 150 MB var
+i luften, fordi `tempfile` bruger `O_TMPFILE` (unlinked, ingen directory-entry). `df -k` pollet
+under uploaden: Content-Length-stien 0 MB, chunked-stien **137 MB**. Det accepterede chunked-hul
+er dermed kvantificeret frem for kun navngivet.
+[Plan + Outcome](plans/2026-07-28-p229-csv-upload-guards.md#outcome) ·
+[session-log](sessions/2026-07-28-p229-csv-upload-guards.md).
+
+**CI er ikke kørt endnu** på de fire commits — alt ovenstående er lokalt plus live på
+compose-stakken. `make ci-status` før noget nyt startes.
+
+Den før det: **P2-25 + P3-37** (2026-07-28) — soft-delete på `transactions`. Fem commits:
 `762e6c5b` (migration 013: `deleted_at` + det partielle external_id-index narrowet med
 `AND deleted_at IS NULL`), `4deb9dac` (prædikater på alle læse-stier og begge dedup-queries;
 `delete` stempler i stedet for at fjerne), `9a578fac` (ni integrationstests),
@@ -79,8 +102,11 @@ oprydning.
   compose-vs-kustomization-diffen, og P2-37 har allerede udvidet den fil fra "compose-check" til
   build hygiene — så der er præcedens for en tredje regel, men også en optjent omdøbning til
   `build_hygiene_check.py` at gøre først.
-- **P2-27/28/29** — rate limiting, taxonomy write auth, CSV upload bounds. Alle fra
-  product-surface-sweepet; hver er lille og uafhængig.
+- **P2-27/28** — rate limiting og taxonomy write auth. Begge fra product-surface-sweepet.
+  Bemærk at ingen af dem er så uafhængige som P2-29 var: P2-27's *placering* afhænger af P3-24
+  (der er ingen perimeter i dag), og P2-28 kræver en beslutning om et rolle-begreb, som ikke
+  findes nogen steder i kodebasen. P3-24's billige halvdel — fjern host-publishing for de ni
+  Postgres-instanser, RabbitMQ, ES, Redis og Ollama — har ingen downside og oplåser P2-27.
 
 Ikke akut, selvom titlen lyder sådan: **P2-36** (`x-retry-count` → uendelig redelivery) — hver
 writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne republishes. Hærdning.
@@ -94,7 +120,7 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
 
 | Finding | Severity | Scheduled as |
 |---|---|---|
-| [product-surface sweep](findings/2026-07-26-product-surface-sweep.md) | HIGH | P2-26..29, P3-24..34, F2-08..13 |
+| [product-surface sweep](findings/2026-07-26-product-surface-sweep.md) | HIGH | P2-26..29 (**29 lukket**), P3-24..34, F2-08..13 |
 | [k8s manifest drift](findings/2026-07-25-k8s-manifest-drift.md) | MEDIUM | P2-21 |
 | [outbox-port erklærer fremmed entitet](findings/2026-07-27-outbox-port-declares-foreign-entity.md) | MEDIUM | P2-32 (7 services) |
 | [Optional id skjuler upersisteret entitet](findings/2026-07-27-optional-id-hides-unpersisted-entity.md) | MEDIUM | P2-35 |
