@@ -44,7 +44,7 @@ describe('apiClient 401 interceptor', () => {
   it('does NOT call handleUnauthorized on 401 from /login', async () => {
     mockFetch(401, { detail: 'Invalid email or password.' });
 
-    const response = await apiClient.post('http://localhost:8001/api/v1/users/login', {
+    const response = await apiClient.post('/api/v1/users/login', {
       username_or_email: 'alice',
       password: 'wrong',
     });
@@ -56,7 +56,7 @@ describe('apiClient 401 interceptor', () => {
   it('does NOT call handleUnauthorized on 401 from /register', async () => {
     mockFetch(401, { detail: 'Registration error' });
 
-    const response = await apiClient.post('http://localhost:8001/api/v1/users/register', {
+    const response = await apiClient.post('/api/v1/users/register', {
       email: 'a@b.com',
     });
 

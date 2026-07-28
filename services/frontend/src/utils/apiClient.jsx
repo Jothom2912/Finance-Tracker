@@ -1,6 +1,11 @@
 import { handleUnauthorized } from './handleUnauthorized';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// P3-43: her stod `API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
+// 'http://localhost:8000'`, præfikset på enhver URL der ikke startede med `http`. Grenen
+// var død, fordi hvert kaldsted sendte en absolut URL — men i samme øjeblik serviceUrls.js
+// blev relativ, ville HVER request være gået til port 8000, hvor ingen service lytter.
+// Den ville have fejlet som "backend nede", ikke som en URL-fejl. URL'er er nu relative
+// hele vejen igennem og sendes uændret videre.
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export const apiClient = {
@@ -24,7 +29,6 @@ export const apiClient = {
 
   async fetch(url, options = {}) {
     const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
-    const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
     const isFormData = fetchOptions.body instanceof FormData;
     const authHeaders = this.getAuthHeader(isFormData);
 
@@ -37,7 +41,7 @@ export const apiClient = {
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(fullUrl, {
+      const response = await fetch(url, {
         ...fetchOptions,
         headers,
         signal: controller.signal,
@@ -46,7 +50,7 @@ export const apiClient = {
 
       if (response.status === 401) {
         const isAuthEndpoint =
-          fullUrl.includes('/login') || fullUrl.includes('/register');
+          url.includes('/login') || url.includes('/register');
         if (!isAuthEndpoint) {
           handleUnauthorized();
           // Navigation is in progress. Return a Promise that never resolves
