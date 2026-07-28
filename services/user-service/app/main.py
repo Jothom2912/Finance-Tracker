@@ -3,11 +3,9 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound.rest_api import router as users_router
-from app.config import settings
 from app.domain.exceptions import (
     InvalidCredentialsException,
     UserAlreadyExistsException,
@@ -22,14 +20,6 @@ app = FastAPI(
     description="Handles user registration and authentication. "
     "Domain events are persisted via transactional outbox and "
     "published by a separate worker process.",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 

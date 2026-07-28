@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
     INTERNAL_API_KEY: str | None = None
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
 

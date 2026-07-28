@@ -3,20 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import get_current_user_id
-from app.config import settings
 
 app = FastAPI(title="Saga Service")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Context keys stripped from API responses: bulky and/or sensitive payload data
 # (e.g. every synced bank transaction after the fetch step).

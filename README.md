@@ -459,7 +459,6 @@ See `example.env` for all available options.
 | `SECRET_KEY` / `JWT_SECRET` | Yes | — | JWT secret for token signing (shared across services) |
 | `INTERNAL_API_KEY` | Yes (inter-service) | — | Service-to-service authentication |
 | `ENVIRONMENT` | No | development | development/staging/production |
-| `CORS_ORIGINS` | No | localhost:3000 | Allowed CORS origins |
 | `ENABLE_BANKING_APP_ID` | For banking | — | Enable Banking app ID |
 | `ENABLE_BANKING_KEY_PATH` | For banking | — | Path to PEM private key |
 | `SAGA_SERVICE_URL` | Gateway | `http://saga-service:8011` | Saga service URL |

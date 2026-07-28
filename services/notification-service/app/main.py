@@ -3,7 +3,6 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.application.dto import (
     MarkAllReadResponse,
@@ -12,18 +11,9 @@ from app.application.dto import (
 )
 from app.application.ports.outbound import IUnitOfWork
 from app.auth import get_current_user_id
-from app.config import settings
 from app.dependencies import get_uow
 
 app = FastAPI(title="Notification Service", version="0.1.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.get("/health")

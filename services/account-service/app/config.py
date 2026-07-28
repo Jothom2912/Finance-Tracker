@@ -88,12 +88,3 @@ INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-
-
-# =============================================================================
-# CORS Configuration
-# =============================================================================
-
-CORS_ORIGINS = [
-    origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
-]

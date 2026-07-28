@@ -27,10 +27,6 @@ if not SECRET_KEY:
     )
 JWT_ALGORITHM = "HS256"
 
-CORS_ORIGINS = [
-    origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
-]
-
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 

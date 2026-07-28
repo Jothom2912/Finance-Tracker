@@ -37,7 +37,7 @@ curl http://localhost:8002/health
 
 ```text
 app/
-├── main.py              # FastAPI app, lifespan, CORS, exception handlers
+├── main.py              # FastAPI app, lifespan, exception handlers
 ├── config.py            # Pydantic BaseSettings (env vars)
 ├── auth.py              # JWT validation only (no token creation)
 ├── database.py          # Async SQLAlchemy engine + session factory
@@ -182,7 +182,6 @@ The `amount` field in transaction events is serialized as a string to preserve d
 | `RABBITMQ_URL` | No | `amqp://guest:guest@localhost:5672/` | RabbitMQ connection |
 | `JWT_SECRET` | Yes | — | JWT signing key (must match user-service) |
 | `JWT_ALGORITHM` | No | `HS256` | JWT algorithm |
-| `CORS_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | Allowed origins |
 | `ENVIRONMENT` | No | `development` | Runtime environment |
 | `CATEGORIZATION_SERVICE_URL` | No | `http://categorization-service:8005` | Categorization service base URL |
 

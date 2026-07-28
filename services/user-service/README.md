@@ -35,7 +35,7 @@ curl http://localhost:8001/health
 
 ```text
 app/
-├── main.py              # FastAPI app, lifespan, CORS, exception handlers
+├── main.py              # FastAPI app, lifespan, exception handlers
 ├── config.py            # Pydantic BaseSettings (env vars)
 ├── auth.py              # JWT creation + validation, bcrypt hashing
 ├── database.py          # Async SQLAlchemy engine + session factory
@@ -133,7 +133,6 @@ All services (monolith, transaction-service) validate tokens using the same shar
 | `JWT_SECRET` | Yes | — | JWT signing key (must match across services) |
 | `JWT_ALGORITHM` | No | `HS256` | JWT algorithm |
 | `JWT_EXPIRE_MINUTES` | No | `60` | Token expiration in minutes |
-| `CORS_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | Allowed origins |
 | `ENVIRONMENT` | No | `development` | Runtime environment |
 
 ## Testing

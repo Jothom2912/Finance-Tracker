@@ -9,23 +9,13 @@ from app.application.dto import (
 )
 from app.application.ports.inbound import IGoalService
 from app.auth import get_current_user_id
-from app.config import settings
 from app.dependencies import get_goal_service
 from app.domain.exceptions import AccountNotFoundForGoal, NotAccountOwner, UpstreamServiceUnavailable
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 app = FastAPI(title="Goal Service")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.exception_handler(AccountNotFoundForGoal)

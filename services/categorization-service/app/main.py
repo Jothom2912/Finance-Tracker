@@ -3,13 +3,11 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound.categorize_api import categorize_router
 from app.adapters.inbound.category_api import category_router, subcategory_router
 from app.adapters.inbound.rules_api import rules_router
-from app.config import settings
 from app.domain.exceptions import (
     CategoryHasSubcategories,
     CategoryNotFound,
@@ -32,14 +30,6 @@ app = FastAPI(
     "rule engine, and categorization pipeline. "
     "Exposes sync /categorize for tier 1 and async event-driven "
     "categorization for tier 2/3.",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 

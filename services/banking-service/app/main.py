@@ -5,10 +5,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
-from app.config import settings
 from app.dependencies import aclose_banking_client
 from app.domain.exceptions import (
     BankAccountNotOwned,
@@ -31,14 +29,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Banking Service", version="1.0.0", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.exception_handler(BankConnectionNotFound)

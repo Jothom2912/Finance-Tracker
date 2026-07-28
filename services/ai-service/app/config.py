@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     RETRIEVAL_TOP_K: int = 10
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
 
 
 settings = Settings()

@@ -77,7 +77,6 @@ DoneEvent (med latency metadata)
 | `BUDGET_SERVICE_URL` | `http://budget-service:8003` | Budget service URL |
 | `RETRIEVAL_TOP_K` | `10` | Antal resultater ved semantisk søgning |
 | `JWT_SECRET` | — | Shared JWT secret (required) |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Allowed CORS origins |
 
 ## Models
 

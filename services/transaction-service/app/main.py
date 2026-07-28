@@ -4,7 +4,6 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound.rest_api import planned_router, transaction_router
@@ -26,14 +25,6 @@ app = FastAPI(
     description="Handles financial transactions and planned transactions. "
     "Domain events are persisted via transactional outbox and "
     "published by a separate worker process.",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 

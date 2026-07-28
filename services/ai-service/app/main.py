@@ -3,10 +3,8 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.inbound.stream_api import stream_router
-from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -15,14 +13,6 @@ app = FastAPI(
     version="0.1.0",
     description="RAG-based Q&A chat service for personal finance data. "
     "Uses Ollama (local LLM) with Elasticsearch hybrid search via analytics-service.",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 

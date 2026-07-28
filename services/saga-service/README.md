@@ -103,7 +103,6 @@ sequenceDiagram
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | sqlite in-memory | PostgreSQL connection string |
 | `RABBITMQ_URL` | Yes | `amqp://guest:guest@rabbitmq:5672/` | RabbitMQ broker |
-| `CORS_ORIGINS` | No | localhost:3000,3001 | Allowed CORS origins |
 | `SAGA_TIMEOUT_SECONDS` | No | `300` | Max age before saga is timed out |
 | `TIMEOUT_CHECK_INTERVAL_SECONDS` | No | `30` | Timeout worker poll interval |
 | `ENVIRONMENT` | No | `development` | Runtime environment |

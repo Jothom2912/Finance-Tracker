@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     INTERNAL_API_KEY: str | None = None
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
     ENVIRONMENT: str = "development"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)

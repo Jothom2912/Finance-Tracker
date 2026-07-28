@@ -167,7 +167,6 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       JWT_EXPIRE_MINUTES: "60"
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
     depends_on:
       postgres:
@@ -210,7 +209,6 @@ services:
       ACCOUNT_SERVICE_URL: http://account-service:8003
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       ENVIRONMENT: development
     depends_on:
       postgres-goals:
@@ -310,7 +308,6 @@ services:
       DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       CATEGORIZATION_SERVICE_URL: http://categorization-service:8005
       CATEGORIZATION_TIMEOUT_S: "0.5"
@@ -337,7 +334,6 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       USER_SERVICE_URL: http://user-service:8001
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
     depends_on:
       postgres-account:
         condition: service_healthy
@@ -489,7 +485,6 @@ services:
       DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
     depends_on:
@@ -563,7 +558,6 @@ services:
       BUDGET_SERVICE_URL: http://budget-service:8003
       RETRIEVAL_TOP_K: "10"
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
     depends_on:
       ollama-pull:
@@ -608,7 +602,6 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       CATEGORY_SERVICE_URL: http://categorization-service:8005
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
@@ -720,7 +713,6 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
       ACCOUNT_SERVICE_URL: http://account-service:8003
       <<: *enable-banking-env
@@ -832,7 +824,6 @@ services:
       SAGA_SERVICE_URL: http://saga-service:8011
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
       SECRET_KEY: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
       ENVIRONMENT: development
     depends_on:
       categorization-service:
@@ -933,7 +924,6 @@ services:
       DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       ENVIRONMENT: development
       SAGA_TIMEOUT_SECONDS: 300
     depends_on:
@@ -1038,7 +1028,6 @@ services:
       ACCOUNT_SERVICE_URL: http://account-service:8003
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       ENVIRONMENT: development
     depends_on:
       postgres-notifications:
