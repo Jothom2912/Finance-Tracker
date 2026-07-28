@@ -7,11 +7,15 @@
 // grøn ud på en tom app. Målt under P3-25. Den slags må ikke ligge i hver spec.
 //
 // PRÆCISERING (målt i P2-39's kontrol-kørsel): på GRAPHQL-stien er headeren ikke bærende
-// for denne suite. Gateway'en falder tilbage til brugerens standardkonto ud fra tokenet
-// (gateway auth.py:82-95), så fjerner man `X-Account-ID` fra graphqlClient, bliver ALLE
-// suiter grønne. Konsekvensen for hvad instrumentet kan måle: suiten har én konto pr.
-// bruger og kan derfor IKKE se konto-scoping-fejl på læsesiden. Det kræver en anden
-// fixture med to konti, og det er ikke skrevet endnu.
+// for `session`. Gateway'en falder tilbage til brugerens standardkonto ud fra tokenet
+// (gateway auth.py:82-95), så fjerner man `X-Account-ID` fra graphqlClient, bliver enhver
+// spec der kun bruger `session` grøn — den har én konto pr. bruger, og med én konto er
+// enhver fallback det rigtige svar.
+//
+// LUKKET I P2-40: `twoAccountSession` + `accountScopedPage` nedenfor seeder to konti og
+// vælger den ANDEN, og `dashboard-scopes-to-selected-account.spec.js` er rød på netop den
+// mutation. Konto-scoping er altså målt nu — men kun af den spec. En grøn `appPage`-spec
+// siger stadig intet om den.
 //
 // Fixturen er worker-scoped: hele suiten deler én bruger og én session. Det er ikke en
 // optimering, det er perimeteren — nginx rate-limiter /users/login og /users/register til
@@ -27,6 +31,27 @@ const AUTH_KEYS = ['access_token', 'user_id', 'username', 'account_id', 'account
 
 const USERS = '/api/v1/users';
 const ACCOUNTS = '/api/v1/accounts/';
+
+/** Statuskode-specifik diagnose for en fejlet registrering. */
+function diagnoseRegisterFailure(status) {
+  if (status === 429) {
+    return (
+      'perimeterens auth_register-zone er 10r/m burst=5 (nginx.conf:54). Suiten deler én ' +
+      'session netop for at holde sig under den — kører der flere workers, eller er suiten ' +
+      'kørt gentagne gange inden for et minut?'
+    );
+  }
+  if (status === 502) {
+    return (
+      'nginx nåede ikke user-service. nginx opløser upstream-navne ved START og cacher ' +
+      "IP'en, så et `docker compose up --build <service>` der genskaber user-service med " +
+      'en ny IP giver 502 indtil `docker compose restart frontend`. Målt i P2-40 — og ' +
+      'dengang stod rate-limit-hintet ubetinget, så en 502 blev læst som en 429. ' +
+      'Tjek `docker logs finance-tracker-frontend-1` for "connect() failed".'
+    );
+  }
+  return 'ikke en kendt perimeter-fejl — læs svaret ovenfor og user-services logs.';
+}
 
 /**
  * Registrér en frisk bruger og log ind gennem PERIMETEREN.
@@ -46,13 +71,13 @@ async function registerAndLogin(api) {
 
   const registered = await api.post(`${USERS}/register`, { data: credentials });
   if (!registered.ok()) {
-    // 429 her betyder rate-limiten, ikke en produktfejl — sig det, så ingen jagter
-    // user-service i en halv time.
+    // Hintet er BETINGET af status'en. Da rate-limit-forklaringen stod ubetinget, læste en
+    // 502 som en 429, og diagnosen gik efter nginx.conf's zoner i stedet for efter det der
+    // faktisk var i vejen — målt i P2-40. En fejlbesked der gætter koster mere end en der
+    // kun oplyser status.
     throw new Error(
       `register fejlede: ${registered.status()} ${await registered.text()}\n` +
-        'Ved 429: perimeterens auth_register-zone er 10r/m burst=5 (nginx.conf:54). ' +
-        'Suiten deler én session netop for at holde sig under den — kører der flere ' +
-        'workers, eller er suiten kørt gentagne gange inden for et minut?'
+        diagnoseRegisterFailure(registered.status())
     );
   }
 
@@ -90,7 +115,21 @@ async function waitForDefaultAccount(api, token, timeoutMs = 30_000) {
     if (resp.ok()) {
       const accounts = await resp.json();
       if (Array.isArray(accounts) && accounts.length > 0) {
-        const account = accounts.find((a) => a.name === 'Default Account') ?? accounts[0];
+        // KUN navnet, ingen `?? accounts[0]`-hale (P2-40). Halen så defensiv ud, men den var
+        // den samme fejl gateway'en havde: findes 'Default Account' ikke, er `accounts[0]`
+        // ikke et dårligere svar — det er et svar om en ANDEN konto, og suiten ville måle
+        // den forkerte. Regelen er ét navn og et partielt unique index
+        // (`one_default_per_user`, migration 002); findes kontoen ikke, er det en fejl i
+        // seedingen og skal siges.
+        const account = accounts.find((a) => a.name === 'Default Account');
+        if (!account) {
+          throw new Error(
+            "Ingen konto hedder 'Default Account' — svaret er " +
+              `${JSON.stringify(accounts.map((a) => a.name))}. Har ` +
+              'account_creation_consumer ændret navnet? Vi vælger IKKE bare den første ' +
+              'konto: det er præcis fejlen P2-40 rettede i gateway auth.py.'
+          );
+        }
         // `idAccount ?? id` er appens egen fallback (AccountSelector.jsx:33), ikke en
         // gætteri: account-service svarer med `idAccount`. Målt — `account.id` alene gav
         // undefined, og fordi seedingen gør `String(...)` blev det strengen "undefined",
@@ -113,6 +152,73 @@ async function waitForDefaultAccount(api, token, timeoutMs = 30_000) {
       'Sagaen er sandsynligvis ikke gennemført — tjek `docker compose logs ' +
       'account-service-consumer`. Dette er en infrastruktur-fejl, ikke en UI-fejl.'
   );
+}
+
+/**
+ * Opret en EKSTRA konto på den allerede registrerede bruger.
+ *
+ * Ingen ny bruger: registrerings-perimeteren er 10r/m burst=5 (nginx.conf:54), og to konti
+ * på ÉT token er i øvrigt præcis den tilstand vi vil måle.
+ */
+async function createSecondAccount(api, token, name) {
+  const resp = await api.post(ACCOUNTS, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { name, saldo: 0, budget_start_day: 1 },
+  });
+  if (resp.status() !== 201) {
+    throw new Error(`kunne ikke oprette '${name}': ${resp.status()} ${await resp.text()}`);
+  }
+  const account = await resp.json();
+  const accountId = account.idAccount ?? account.id;
+  if (accountId === undefined || accountId === null) {
+    throw new Error(`Den nye konto mangler både idAccount og id: ${JSON.stringify(account)}`);
+  }
+  return { ...account, resolvedId: accountId };
+}
+
+/**
+ * Seed localStorage FØR sidens scripts, åbn dashboardet, og BEVIS at seedingen tog.
+ *
+ * Delt mellem `appPage` og `accountScopedPage`, fordi beviset er det der gør fixturen andet
+ * end en antagelse — og en kopi af det ville før eller siden være den halve.
+ *
+ * `addInitScript` kører før sidens egne scripts på hver navigation, altså før `AuthContext`s
+ * `useEffect` læser localStorage — det er hele grunden til at seedingen ikke kan gøres med
+ * et `page.evaluate` efter `goto`.
+ */
+async function seedAndOpenDashboard(page, storage) {
+  await page.addInitScript((entries) => {
+    for (const [key, value] of Object.entries(entries)) {
+      window.localStorage.setItem(key, value);
+    }
+  }, storage);
+
+  await page.goto('/dashboard');
+
+  // Assertér at seedingen tog. Fixturen må ikke ANTAGE det: en tom eller delvis
+  // localStorage giver ikke en fejl, den giver en app der ser tom ud — og en spec der
+  // asserterer på "ingen fejl" ville være grøn.
+  const seeded = await page.evaluate(
+    (keys) => Object.fromEntries(keys.map((k) => [k, window.localStorage.getItem(k)])),
+    AUTH_KEYS
+  );
+  for (const key of AUTH_KEYS) {
+    expect(seeded[key], `localStorage.${key} blev ikke seedet`).toBeTruthy();
+    // `toBeTruthy()` alene er IKKE nok, og det er målt: da fixturen læste et forkert felt
+    // blev `String(undefined)` strengen "undefined" — truthy, seedet, og appen sendte
+    // `X-Account-ID: undefined`. Assertionen bestod på præcis den tilstand den findes for
+    // at forhindre. Samme fejlmode som resten af dette item handler om.
+    expect(
+      seeded[key],
+      `localStorage.${key} blev seedet med den stringificerede værdi "${seeded[key]}" ` +
+        '— et felt er læst forkert et sted opstrøms'
+    ).not.toMatch(/^(undefined|null|NaN)$/);
+  }
+
+  // Og at appen faktisk anser os for logget ind. Uden dette ville en ændring i
+  // AuthContext's bootstrap-krav vise sig som en mystisk assertion-fejl i hver spec i
+  // stedet for som én ærlig fejl her.
+  await expect(page).toHaveURL(/\/dashboard/);
 }
 
 export const test = base.extend({
@@ -193,49 +299,59 @@ export const test = base.extend({
 
   /**
    * En `page` hvor sessionen ER seedet og hvor det er BEVIST at den blev det.
-   *
-   * `addInitScript` kører før sidens egne scripts på hver navigation, altså før
-   * `AuthContext`s `useEffect` læser localStorage — det er hele grunden til at seedingen
-   * ikke kan gøres med et `page.evaluate` efter `goto`.
    */
   appPage: async ({ page, pageErrors, session }, use) => {
     // `pageErrors` bruges ikke her; afhængigheden ER virkningen (lytterne hænger på før
-    // `goto` nedenfor). Fjernes den, holder specs op med at se fejl fra første load.
+    // `goto` i helperen). Fjernes den, holder specs op med at se fejl fra første load.
     void pageErrors;
 
-    await page.addInitScript((storage) => {
-      for (const [key, value] of Object.entries(storage)) {
-        window.localStorage.setItem(key, value);
-      }
-    }, session.storage);
+    await seedAndOpenDashboard(page, session.storage);
+    await use(page);
+  },
 
-    await page.goto('/dashboard');
+  /**
+   * Worker-scoped session med TO konti, hvor den ANDEN er den valgte (P2-40).
+   *
+   * Findes fordi `session` seeder én konto pr. bruger, og med én konto er enhver
+   * server-side konto-fallback usynlig: P2-39 fjernede `X-Account-ID` fra graphqlClient som
+   * mutations-kontrol og fik ALLE suiter grønne. Instrumentet kunne ikke se konto-scoping —
+   * det var ikke en egenskab ved produktet, men ved fixturen.
+   *
+   * At den valgte konto er den ANDEN, og ikke standardkontoen, er det bærende valg. Var
+   * standardkontoen den valgte, ville en server der ignorerer `X-Account-ID` og falder
+   * tilbage til standardkontoen svare rigtigt ved et tilfælde, og kontrollen ville være
+   * grøn igen.
+   */
+  twoAccountSession: [
+    async ({ session }, use) => {
+      const second = await createSecondAccount(session.api, session.token, 'P2-40 Anden Konto');
 
-    // Assertér at seedingen tog. Fixturen må ikke ANTAGE det: en tom eller delvis
-    // localStorage giver ikke en fejl, den giver en app der ser tom ud — og en spec der
-    // asserterer på "ingen fejl" ville være grøn.
-    const seeded = await page.evaluate(
-      (keys) => Object.fromEntries(keys.map((k) => [k, window.localStorage.getItem(k)])),
-      AUTH_KEYS
-    );
-    for (const key of AUTH_KEYS) {
-      expect(seeded[key], `localStorage.${key} blev ikke seedet`).toBeTruthy();
-      // `toBeTruthy()` alene er IKKE nok, og det er målt: da fixturen læste et forkert
-      // felt blev `String(undefined)` strengen "undefined" — truthy, seedet, og appen
-      // sendte `X-Account-ID: undefined`. Assertionen bestod på præcis den tilstand den
-      // findes for at forhindre. Samme fejlmode som resten af dette item handler om.
-      expect(
-        seeded[key],
-        `localStorage.${key} blev seedet med den stringificerede værdi "${seeded[key]}" ` +
-          '— et felt er læst forkert et sted opstrøms'
-      ).not.toMatch(/^(undefined|null|NaN)$/);
-    }
+      await use({
+        ...session,
+        // Den VALGTE konto for denne session er den anden.
+        accountId: second.resolvedId,
+        accountName: second.name,
+        // Standardkontoen beholdes navngivet, så specs kan lægge data på den og assertere
+        // at de IKKE vises.
+        defaultAccountId: session.accountId,
+        defaultAccountName: session.accountName,
+        storage: {
+          ...session.storage,
+          account_id: String(second.resolvedId),
+          account_name: second.name,
+        },
+      });
+    },
+    { scope: 'worker' },
+  ],
 
-    // Og at appen faktisk anser os for logget ind. Uden dette ville en ændring i
-    // AuthContext's bootstrap-krav vise sig som en mystisk assertion-fejl i hver spec
-    // i stedet for som én ærlig fejl her.
-    await expect(page).toHaveURL(/\/dashboard/);
+  /**
+   * Som `appPage`, men med tokonto-sessionen — altså den anden konto valgt.
+   */
+  accountScopedPage: async ({ page, pageErrors, twoAccountSession }, use) => {
+    void pageErrors;
 
+    await seedAndOpenDashboard(page, twoAccountSession.storage);
     await use(page);
   },
 });
