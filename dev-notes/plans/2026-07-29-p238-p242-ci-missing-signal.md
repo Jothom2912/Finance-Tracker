@@ -126,18 +126,46 @@ Commit per trin — rent rollback, jf. konventionen.
    målte baseline i kommentaren ved hver grænse ikke pynt: den er det der gør et `cancelled`
    job læseligt som *timeout* frem for som *nogen trykkede annuller*.
 
-3. [ ] **Wait-timeout på `es_container`.** Fil:
-   `services/analytics-service/tests/integration/conftest.py:19-24`.
-   Find først den knap `testcontainers` **4.14.2** faktisk eksponerer (`testcontainers_config`
-   / `TC_MAX_TRIES` / `wait_for_logs(timeout=)`) ved at læse pakken i servicens venv — *gæt
-   ikke på API'et*, versionen er nyere end de fleste eksempler.
-   **Vær eksplicit om hvad denne grænse ikke dækker:** i den hængte kørsel kom containeren
-   aldrig op, og et image-**pull** sker i docker-py før wait-strategien. Bounder den kun
-   waiten, er trin 2 stadig den ydre og pålidelige grænse — og så skal *det* stå i kommentaren
-   frem for at fixet foregiver at være komplet.
-   **Kontrol:** peg fixturen på et ikke-eksisterende image-tag → skal fejle med en læsbar
-   pytest-fejl inden for grænsen, ikke hænge. Kør `make -C services/analytics-service test`
-   bagefter for at bekræfte at den normale sti er uændret (123 tests).
+3. [x] **Wait-timeout på `es_container`.** Fil:
+   `services/analytics-service/tests/integration/conftest.py`.
+
+   **Delfixet var ikke nødvendigt, og det er målt frem for formodet.** Læsning af
+   `testcontainers` 4.14.2 i servicens venv: `WaitStrategy.__init__` sætter selv
+   `_startup_timeout = testcontainers_config.timeout`, som er `TC_MAX_TRIES` (120) ×
+   `TC_POOLING_INTERVAL` (1) = **120 s**. Waiten var altså aldrig ubundet.
+   Public API er `container.waiting_for(strategy)` + `strategy.with_startup_timeout(s)` —
+   ikke `wait_for_logs(timeout=)`.
+
+   **Kontrol 1 (wait rammer sin grænse):** en `ElasticSearchContainer` på `alpine:3.19` med
+   `sleep 300`, så den starter men aldrig lytter på 9200, `with_startup_timeout(10)`.
+   Resultat: `TimeoutError: HTTP endpoint not ready within 10.0 seconds. Endpoint:
+   http://localhost:54665/. Method: GET. Expected status codes: {200}. Hint: Check if the
+   service is listening on port 9200 …` efter 13,8 s. Altså **allerede** en læsbar
+   pytest-fejl — planens acceptkriterium (b) var opfyldt af pakke-defaults.
+
+   **Kontrol 2 var først blind, og det er selv en lektie.** Et tag på `:0.0.0-does-not-exist`
+   fejlede efter 0,10 s i `_environment_by_version` (`ValueError: Unknown elasticsearch
+   version given: 0`) — altså i versions-parsing, **før** pull-stien blev rørt. Instrumentet
+   målte ikke det det skulle. Gentaget med `:8.99.99`, som parser som 8.x: `docker.errors.
+   NotFound: 404 … not found` efter 1,67 s. Læsbar, hurtig.
+
+   **Det afgørende: hængen lå ikke i waiten, og de 836 s beviser det.** Var den i
+   wait-strategien, var jobbet fejlet efter 120 s. At det sad 836 s viser at hængen lå i
+   `docker_client.run(...)`'s **image-pull**, som kaldes før wait-strategien og er ubundet —
+   og som 4.14.2 ikke eksponerer nogen knap for. Samme gælder Ryuk-containeren.
+
+   **Hvad der så blev ændret:** grænsen skrevet eksplicit (`ES_STARTUP_TIMEOUT_S = 120`, samme
+   værdi, så adfærden er uændret) som en **pin** mod at defaulten eller de to env-vars flytter
+   sig uden at nogen rører filen — plus en kommentar der siger hvor grænsen *ikke* rækker, så
+   fixet ikke foregiver at være komplet. Den reelle grænse for pull-klassen er trin 2's
+   `timeout-minutes: 8`.
+
+   `make -C services/analytics-service test`: **123 passed, rc=0** — normal sti uændret.
+   Ruff check + format: rc=0.
+
+   **Konsekvens for findingen (trin 8):** påstanden *"uden nogen wait-timeout. testcontainers
+   venter så på ES' readiness uden en øvre grænse"* (finding, punkt 1) er **forkert** og skal
+   rettes. Det er det tredje forkerte tal i dette item.
 
 4. [ ] **De tre ugatede HTTP-services ind i `Wait for system` — hvis de kan bære det.**
    Fil: `.github/workflows/ci.yml` (`Wait for system`-loopet, `ci.yml:369`). Tilføj 8007
