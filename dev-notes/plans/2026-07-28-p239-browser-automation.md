@@ -158,7 +158,8 @@ var tom efter hver mutations-kontrol.
 | Test 2 kan se en violation (`script-src 'none'`) | violation-stien nås ikke — appen mounter ikke; rød på kort/dialog |
 | **C2 afgjort** (`style-src` uden `'unsafe-inline'`) | **1 violation**, `style-src-elem`/inline, ved dialog-klik · **0** på `/dashboard` |
 | Ingen regression | `npm test` 346 passed, `make test-e2e` 24 passed |
-| `make notes-check` | 134 notes, no problems |
+| `make notes-check` | 136 notes, no problems |
+| **CI grøn med suiten som gate** | run `30400981674`: 3 browser-tests **navngivet**, 18,9 s + 24 Python-e2e |
 
 ### Hvad planen fik forkert
 

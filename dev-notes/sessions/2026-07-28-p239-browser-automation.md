@@ -124,7 +124,8 @@ To lektioner ud over selve bug'en:
 
 - **P2-40** (gateway `accounts[0]`) og **P2-41** (ingen sletningssti) er skrevet, ikke løst.
 - **Suiten kan ikke se konto-scoping.** Én konto pr. bruger; det kræver en flerkonto-fixture.
-- **CI's egen mekanik virkede i første forsøg** (chromium-install ~28 s uden cache-hit,
-  port-3000-ventetiden, artifact-upload på 2 MB). Det var *appen* der var rød. Men gaten er
-  endnu ikke set **grøn** i CI — det kræver et push mere.
+- **Gaten er grøn i CI** (run `30400981674`): 3 browser-tests navngivet i outputtet, 18,9 s,
+  oven i de 24 Python-e2e. CI's mekanik virkede i første forsøg (chromium-install ~28 s uden
+  cache-hit, port-3000-ventetiden, artifact-upload); det var *appen* der var rød, og de to røde
+  kørsler er dermed instrumentets første to fund frem for opstartsproblemer.
 - Bruger `csp_probe` (368) og konti 370/371 står stadig i dev-stakken.
