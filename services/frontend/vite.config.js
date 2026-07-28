@@ -29,7 +29,17 @@ export default defineConfig({
         ['/api/v1/bank', 8009],
         ['/api/v1/graphql', 8010],
         ['/api/v1/sagas', 8010],
-      ].map(([path, port]) => [path, { target: `http://localhost:${port}`, changeOrigin: true }])
+      // changeOrigin: FALSE, og det er ikke en detalje. Med `true` omskriver Vite Host til
+      // målet (fx localhost:8004), og FastAPI's trailing-slash-redirect bygger sin ABSOLUTTE
+      // Location ud fra Host — så GET /api/v1/accounts svarede 307 til
+      // http://localhost:8004/api/v1/accounts/, som browseren følger CROSS-ORIGIN. Efter
+      // P3-43 trin 3 findes der ingen CORSMiddleware bagved, så symptomet er en CORS-fejl
+      // der peger på account-service i stedet for på denne linje. Målt 2026-07-28:
+      // Host: localhost:8004 → Location på 8004; Host: localhost:3000 → Location på 3000.
+      // Det er samme grund som nginx.conf's `proxy_set_header Host $http_host` — dev-siden
+      // havde bare den modsatte indstilling, så de to perimetre ikke opførte sig ens.
+      // Alle mål er localhost, så ingen upstream kræver en bestemt Host for at route.
+      ].map(([path, port]) => [path, { target: `http://localhost:${port}`, changeOrigin: false }])
     ),
   },
   build: {
