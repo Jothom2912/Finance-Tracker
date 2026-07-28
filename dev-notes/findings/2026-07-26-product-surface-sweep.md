@@ -122,6 +122,14 @@ same file), RabbitMQ 5672 + management UI 15672 on `guest:guest`, Elasticsearch 
 `xpack.security.enabled: "false"`, Redis 6380 with no password, Ollama 11435. Docker
 publishes on `0.0.0.0` by default, so this is LAN-reachable, not loopback-only.
 
+> **Datastore-halvdelen lukket 2026-07-28** i `5ea37f0d` — de 14 datastore-mappings binder
+> `127.0.0.1`. LAN-rækkevidden var **ikke teoretisk**: målt før fixet svarede alle 14 porte fra
+> LAN-IP'en, ES gav `transactions_v2` 642 docs + `accounts_v1` 292 uden auth, og RabbitMQ-mgmt
+> gav fuld admin på `guest:guest`. Efter: 0/14. **De ti browser-origins og ADR'en står stadig**,
+> og credentials er urørte — angrebsfladen er flyttet fra "alle på LAN'et" til "alt på
+> maskinen", ikke lukket.
+> [Plan + Outcome](../plans/2026-07-28-p324-datastore-loopback-bind.md#outcome).
+
 This is the root cause behind several separate symptoms and should be decided as one thing:
 
 - there is no single place to add rate limiting (`SEC-4`), CSP, or a WAF;

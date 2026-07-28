@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P2-29)
+# Status — 2026-07-28 (efter P3-24's datastore-halvdel)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,9 +9,30 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-29 lukkede 2026-07-28. Næste item er ikke valgt — se **Next up**.
+**Intet aktivt item.** P3-24's datastore-halvdel lukkede 2026-07-28. Næste item er ikke valgt
+— se **Next up**.
 
-Sidst shippet: **P2-29** (2026-07-28) — byte-, række- og transportgrænse på `/import-csv`.
+Sidst shippet: **P3-24, datastore-halvdelen** (2026-07-28) — de 14 datastore-mappings i compose
+binder `127.0.0.1` i stedet for `0.0.0.0`. Én commit, `5ea37f0d`, kun `docker-compose.yml`.
+Ingen kode, ingen migration.
+
+**Eksponeringen var reel og blev målt før indgrebet**, ikke aflæst i compose-filen: alle 14
+porte svarede fra LAN-IP'en, ES gav `transactions_v2` **642 docs** + `accounts_v1` **292** uden
+auth, og RabbitMQ-mgmt gav fuld admin på `guest:guest`. Efter: **0/14 fra LAN, 14/14 på
+loopback**. Kontrol kørt — ES alene rullet tilbage til `0.0.0.0`, de 642 docs igen læsbare fra
+LAN, sat tilbage → refused.
+
+**Backloggens "no downside" var kun sandt for det ene af to indgreb.** At *slette* `ports:`
+ville rive syv legitime host-side-forbrugere over, heraf én i CI
+(`test_budget_month_closed_e2e.py` publicerer via mgmt-API'et på 15672). Truslen fundet
+navngiver er LAN-rækkevidde, så loopback-bind rammer egenskaben uden den omkostning. Rubrikken
+i BACKLOG.md er rettet.
+
+**ADR'en står stadig åben**, og credentials er urørte: angrebsfladen er flyttet fra "alle på
+LAN'et" til "alt på maskinen" — ikke lukket. P3-25/P2-27 er fortsat blokeret af ADR-halvdelen.
+[Plan + Outcome](plans/2026-07-28-p324-datastore-loopback-bind.md#outcome).
+
+Den før det: **P2-29** (2026-07-28) — byte-, række- og transportgrænse på `/import-csv`.
 Fem commits: `555ffd5e` (`CSV_MAX_BYTES`/`CSV_MAX_ROWS`, handler-guard før `.read()`,
 rækkegrænse i `ParsedCSVResult.add_row` så de tre parsere deler én implementation),
 `7f4c35ac` (`Content-Length`-middleware), `d0661ad1` (12 tests — endpointets **første**
@@ -107,11 +128,14 @@ oprydning.
   compose-vs-kustomization-diffen, og P2-37 har allerede udvidet den fil fra "compose-check" til
   build hygiene — så der er præcedens for en tredje regel, men også en optjent omdøbning til
   `build_hygiene_check.py` at gøre først.
-- **P2-27/28** — rate limiting og taxonomy write auth. Begge fra product-surface-sweepet.
-  Bemærk at ingen af dem er så uafhængige som P2-29 var: P2-27's *placering* afhænger af P3-24
-  (der er ingen perimeter i dag), og P2-28 kræver en beslutning om et rolle-begreb, som ikke
-  findes nogen steder i kodebasen. P3-24's billige halvdel — fjern host-publishing for de ni
-  Postgres-instanser, RabbitMQ, ES, Redis og Ollama — har ingen downside og oplåser P2-27.
+- **P3-24's ADR-halvdel** — den billige halvdel er væk nu, så det der er tilbage er selve
+  beslutningen: er gatewayen en sikkerhedsgrænse? Den blokerer **P3-25** (security headers,
+  HttpOnly-cookie) og **P2-27** (rate limitings placering), og kan ikke skæres mindre — kernen
+  er de ti browser-origins i `frontend/src/config/serviceUrls.js`. Det er nu det billigste træk
+  der oplåser to andre items.
+- **P2-27/28** — rate limiting og taxonomy write auth. Begge fra product-surface-sweepet, og
+  ingen af dem er så uafhængige som P2-29 var: P2-27's *placering* afhænger af ADR'en ovenfor,
+  og P2-28 kræver en beslutning om et rolle-begreb, som ikke findes nogen steder i kodebasen.
 
 Ikke akut, selvom titlen lyder sådan: **P2-36** (`x-retry-count` → uendelig redelivery) — hver
 writer i repoet sætter en `int`, så `str`-grenen nås ikke af vores egne republishes. Hærdning.
@@ -143,7 +167,20 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
   of the code, and repo-wide `make lint`/`make check` abort on it before reaching the other
   eleven. See P3-39 (banking's half closed by P3-23; its suite now runs locally, 68 passed).
 - Never pipe a verification command through `tail`/`head` — the pipeline's exit code is the
-  last command's, so `check | tail && git commit` commits on a failing check.
+  last command's, so `check | tail && git commit` commits on a failing check. **Ramte igen
+  2026-07-28** i P3-24's kontrol: `curl … | head -3 && echo "kontrol rød"` printede beskeden
+  mens curl intet returnerede, fordi ES ikke var startet endnu. En kontrol var ét sekund fra at
+  blive noteret som bestået uden at være kørt. Fælden overlever at være skrevet ned — læs
+  `rc=$?` eksplicit i stedet.
+- **Genskaber du datastore-containere under kørende app-services, ligner det en regression.**
+  Set i P3-24: `docker compose up -d postgres-*` gav 7 e2e-fejl med
+  `InterfaceError: connection is closed`, fordi asyncpg-poolene holdt døde forbindelser.
+  `docker compose restart` af app-laget → 24 passed. Genstart app-services efter datastores,
+  før du konkluderer noget om ændringen.
+- **Datastores er kun loopback-bundne, ikke sikrede** (P3-24). `guest:guest`,
+  `xpack.security.enabled: "false"` og Postgres-passwords i klartekst i compose er uændrede,
+  og enhver container når stadig hosten via `host.docker.internal` — verificeret. Antag ikke
+  at porten er lukningen.
 - **Workers are still second-class in compose**: P3-40 fixed the *image* half, but P3-17 is
   open — workers override `command:` and so skip the migrations that run in the API's `CMD`.
 - **En grøn `make check` er stadig ikke et løfte om at containeren starter** — men grunden er
