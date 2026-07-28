@@ -20,6 +20,13 @@ ladder republishes with an incremented ``x-retry-count`` header.  The
 inline sleep blocks this consumer only (prefetch=1) — same behavior as
 the pre-shared implementation, observed load-bearing in live runs.
 
+A row that exists with ``deleted_at`` set is the *other* case, and since
+P2-25 it is distinguishable: the categorization is moot, retrying cannot
+change that, so the message is acked with one INFO line.  Before
+soft-delete both states looked like "row not found", which is why tx 1133
+burned five retries and landed in the DLQ — see
+``dev-notes/findings/2026-07-25-transaction-hard-delete-categorized-dlq.md``.
+
 Run as a standalone process::
 
     python -m app.workers.categorized_consumer
@@ -74,6 +81,19 @@ class TransactionCategorizedConsumer(ConsumerBase):
             if tx is None:
                 await self._stale_backoff(message, transaction_id)
                 raise _TransactionNotFoundYet(transaction_id)
+            if tx.deleted_at is not None:
+                # Gone for good — retrying cannot help (P2-25).  Ack quietly
+                # rather than raising PoisonMessageError: this race is
+                # expected, and a DLQ that collects benign messages stops
+                # being a signal.  The transaction id is in the line on
+                # purpose — it is the only trace if deleted_at were ever set
+                # too broadly (e.g. a bad script) and this branch started
+                # swallowing real work.
+                logger.info(
+                    "Transaction %s deleted — categorization moot, acking",
+                    transaction_id,
+                )
+                return
 
             # v2 events carry the parent name; fall back to a local
             # lookup for v1/empty payloads.
@@ -193,6 +213,14 @@ class TransactionCategorizedConsumer(ConsumerBase):
 
     @staticmethod
     async def _get_transaction(session: AsyncSession, transaction_id: int) -> TransactionModel | None:
+        """Deliberately does NOT filter ``deleted_at IS NULL``.
+
+        Every other read path in the service does (P2-25).  This one must
+        see the tombstone: ``None`` has to keep meaning "not committed yet"
+        so the retry ladder stays right, and a soft-deleted row has to be
+        distinguishable from it.  Adding the filter here collapses the two
+        back together and restores the DLQ bug.
+        """
         stmt = select(TransactionModel).where(TransactionModel.id == transaction_id)
         result = await session.execute(stmt)
         return result.scalar_one_or_none()

@@ -11,6 +11,7 @@ Requires Docker running.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -277,3 +278,122 @@ class TestConsumerNoopOnSameData:
             assert tx.categorization_tier == "rule"
 
         msg.ack.assert_awaited()
+
+
+class TestGoneVsNotYet:
+    """P2-25: the two states that used to look identical.
+
+    Before soft-delete, a categorization for a deleted transaction and one
+    that raced ahead of its INSERT were the same observation — "row not
+    found" — so the consumer retried both.  For the deleted one that meant
+    five retries with 1/2/4/8/16 s backoff on a prefetch=1 consumer, then
+    the DLQ.  See
+    ``dev-notes/findings/2026-07-25-transaction-hard-delete-categorized-dlq.md``.
+
+    **Which change fixes which half — measured, by deleting the branch and
+    re-running this class.**  The soft-delete alone (migration 013 + the
+    repository) already kills the DLQ path: the row now exists, so
+    ``_get_transaction`` returns it and nothing backs off.  Only
+    ``test_deleted_transaction_is_not_categorized`` fails without the
+    branch, and that is the branch's real job — a tombstone must not get
+    its categorization fields rewritten, and the skip must be traceable in
+    the log.  The backoff assertions below are regression guards on the
+    property soft-delete bought, not evidence for the branch; saying
+    otherwise would make this docstring the untrue kind.
+    """
+
+    @staticmethod
+    def _msg(transaction_id: int) -> AsyncMock:
+        return _make_message(
+            {
+                "event_type": "transaction.categorized",
+                "transaction_id": transaction_id,
+                "subcategory_id": 7,
+                "tier": "rule",
+                "confidence": "high",
+            },
+            str(uuid4()),
+        )
+
+    async def test_deleted_transaction_is_acked_without_backoff(self, consumer, session_factory, monkeypatch) -> None:
+        """Done-criterion (b): acked, no DLQ, no 16 s sleep on a
+        prefetch=1 consumer.
+
+        This holds from migration 013 onward regardless of the branch —
+        see the class docstring.  It is kept because it is the criterion
+        the finding was written against, and because it would catch a
+        future change that reintroduced hard-delete underneath.
+        """
+        slept: list[int] = []
+        monkeypatch.setattr(
+            consumer,
+            "_stale_backoff",
+            AsyncMock(side_effect=lambda *a, **k: slept.append(1)),
+        )
+
+        async with session_factory() as session:
+            await session.execute(text("UPDATE transactions SET deleted_at = now() WHERE id = 1"))
+            await session.commit()
+
+        msg = self._msg(1)
+        await consumer._on_message(msg)
+
+        msg.ack.assert_awaited()
+        msg.nack.assert_not_awaited()
+        assert slept == []
+
+    async def test_deleted_transaction_is_not_categorized(self, consumer, session_factory, caplog) -> None:
+        """The load-bearing one: acking must mean "we skipped it", not "we
+        applied it and said nothing".
+
+        Without the ``deleted_at is not None`` branch this is the single
+        assertion in the class that fails — the consumer happily rewrites
+        a tombstone's categorization fields.
+        """
+        from app.models import TransactionModel
+
+        async with session_factory() as session:
+            await session.execute(text("UPDATE transactions SET deleted_at = now() WHERE id = 1"))
+            await session.commit()
+
+        with caplog.at_level(logging.INFO, logger="app.workers.categorized_consumer"):
+            await consumer._on_message(self._msg(1))
+
+        async with session_factory() as session:
+            tx = (await session.execute(select(TransactionModel).where(TransactionModel.id == 1))).scalar_one()
+            # Seeded values from ``_seed_transaction`` — untouched.
+            assert tx.subcategory_id == 1
+
+        # The skip must leave a trace naming the transaction: it is the only
+        # signal if deleted_at were ever set too broadly and this branch
+        # started swallowing real work.
+        assert any("Transaction 1 deleted" in r.message for r in caplog.records)
+
+    async def test_missing_transaction_still_retries(self, consumer, monkeypatch) -> None:
+        """The other control, and the one that proves we split the branch
+        rather than closed it: an id that never existed must still back off
+        and raise, so the retry ladder (and eventually the DLQ) is intact.
+        """
+        from app.workers.categorized_consumer import _TransactionNotFoundYet
+
+        backoff = AsyncMock()
+        monkeypatch.setattr(consumer, "_stale_backoff", backoff)
+
+        msg = self._msg(999_999)
+        payload = json.loads(msg.body)
+
+        with pytest.raises(_TransactionNotFoundYet):
+            await consumer.handle(payload, msg)
+
+        backoff.assert_awaited_once()
+
+    async def test_live_transaction_is_still_categorized(self, consumer, session_factory) -> None:
+        """The third branch, unchanged — guards against the new check
+        accidentally matching a live row (e.g. ``is not None`` inverted)."""
+        from app.models import TransactionModel
+
+        await consumer._on_message(self._msg(1))
+
+        async with session_factory() as session:
+            tx = (await session.execute(select(TransactionModel).where(TransactionModel.id == 1))).scalar_one()
+            assert tx.subcategory_id == 7
