@@ -45,6 +45,11 @@ loggen skriver aldrig ordet *timeout* eller grænsen — så `gh run view --log-
 rc=1. Signalet er "job `cancelled` + varighed ≈ grænsen", og derfor står den målte baseline i en
 kommentar ved hver grænse.
 
+Afledte items: **P3-50** (ingen `.dockerignore` — hele træet som build-kontekst; ikke en læk,
+verificeret), **P3-51** (sandbox-PEM'ens 644 er *bærende* fordi containeren er non-root, så
+spørgsmålet er ejerskab ikke mode), **P3-52** (analytics' venv er Python 3.14 lokalt mod 3.11 i
+CI). Alle tre faldt ud af verifikationen, ikke af itemet.
+
 ### Forrige: P2-40 — gateway'ens `accounts[0]`-fallback
 
 Shippet 2026-07-29, tre commits

@@ -382,16 +382,21 @@ det samme som [[project_measurement_instrument_validity]]:
 - **`Health: unhealthy` er bevidst udenfor gatens prædikat**, begrundet i scriptets docstring:
   HTTP-servicene er allerede dækket af `Wait for system`, og at tage det med ville gøre samme
   fejl rød to gange plus risikere en ny flake-klasse på langsomt startende healthchecks.
-- **Ingen `.dockerignore` i repoet**, så hele arbejdstræet — inkl. den gitignorerede
-  `enablebanking-sandbox.pem` — sendes til Docker-dæmonen som build-kontekst ved hvert
-  `up --build`. Ikke en læk (dæmonen er lokal, og ingen Dockerfile bruger bred `COPY .` —
-  empirisk verificeret at banking-imaget kun indeholder CA-bundles), men et manglende værn og
-  langsommere builds. Ikke et item endnu.
-- **Den lokale sandbox-PEM står `-rw-r--r--` (644).** CI's er throwaway så 644 er fint dér, men
-  den rigtige nøgle lokalt burde være 600. Ikke et item endnu.
-- **`analytics-service`s venv kører Python 3.14 lokalt mod 3.11 i CI** (`requires-python
-  >=3.11`). Faldt over det under trin 3; ikke undersøgt, ikke rørt. Kandidat til et item, da
-  "virker lokalt, ikke i deploy" er en navngivet tema i CLAUDE.md.
+Tre ting faldt ud af verifikationen uden at høre i itemet. Alle tre er nu i backloggen, fordi de
+ellers ville skulle findes igen:
+
+- **P3-50 — ingen `.dockerignore`**, så hele arbejdstræet sendes til dæmonen som build-kontekst
+  ved hvert `up --build`, inkl. den gitignorerede PEM. **Ikke en læk**, og det er verificeret
+  frem for antaget: ingen Dockerfile bruger bred `COPY .`, og `find / -name "*.pem"` i
+  banking-imaget giver kun CA-bundles. Men det er et manglende værn og langsommere builds.
+- **P3-51 — den lokale sandbox-PEM står 644.** Undersøgelsen ændrede itemet: 644 er **bærende**,
+  ikke sjusk. Containeren kører som `uid=10001` og læser via bind-mount, så P2-39 måtte
+  `chmod 644` netop fordi `genrsa`s default 600 (ejet af runneren) gav `PermissionError`. Et
+  blindt `chmod 600` brækker bank-sync. Det rigtige spørgsmål er ejerskab, ikke mode.
+- **P3-52 — `analytics-service`s venv kører Python 3.14 lokalt mod 3.11 i CI**
+  (`requires-python >=3.11` tillader begge). Præcis formen på "virker lokalt, ikke i deploy",
+  som er et navngivet tema i CLAUDE.md. Ikke undersøgt hvor mange af de 15 services divergerer —
+  itemet starter med at måle det, ikke med at pinne.
 
 ### CI grøn, og de nye steps aflæst navngivet — ikke kun "success"
 
