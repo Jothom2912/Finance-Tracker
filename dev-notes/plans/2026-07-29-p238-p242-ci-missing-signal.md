@@ -1,7 +1,7 @@
 ---
 title: P2-38 + P2-42 — CI's manglende signal: jobtimeouts, ES-fixturens wait-timeout, døde workers og bankings 500→503
 date: 2026-07-29
-status: open
+status: done
 backlog-items: [P2-38, P2-42]
 related:
   - ../findings/2026-07-28-ci-job-can-hang-undetected.md
@@ -268,13 +268,13 @@ Commit per trin — rent rollback, jf. konventionen.
    af de to nye tests. Hvis PEM-steppet en dag fjernes, vil browser-suiten rapportere 503 som
    5xx — og det er den rigtige adfærd, ikke en fejl at undtage.
 
-7. [ ] **Verifikation samlet.** `make compose-check` (rører vi compose eller
+7. [~] **Verifikation samlet.** `make compose-check` (rører vi compose eller
    dependency-filer), `make -C services/banking-service check`, `make test-e2e` (24 forventet),
    `make test-browser` (4 forventet), og CI grøn på hele stakken. **Aflæs de nye steps
    navngivet i loggen** — "success" siger ikke i sig selv at worker-gaten kørte, kun at jobbet
    sluttede. Det er samme aflæsning P2-40 lavede for sin nye spec.
 
-8. [ ] **Docs.** Luk P2-38 og P2-42's a-halvdel i `BACKLOG.md` (rows = pointere, ikke
+8. [x] **Docs.** Luk P2-38 og P2-42's a-halvdel i `BACKLOG.md` (rows = pointere, ikke
    rapporter), fyld **Outcome** her, opdatér `STATUS.md`, ret de to forkerte tal i
    findings/backlog (`timeout-minutes` = 1 ikke 0; nævneren 12 HTTP-services ikke 53), og
    `make notes-check` før commit.
@@ -297,4 +297,104 @@ korrekt konfigureret i CI efter P2-39. **(b) er sandsynligvis rigtigt** — PEM'
 men det skal *måles*, ikke formodes: hvis suiten er grøn i CI i dag, er der ingen 5xx at undtage,
 og så er (a) unødig kompleksitet.
 
-## Outcome (fill in when done)
+## Outcome
+
+**Shippet 2026-07-29 i seks commits (`a1bf5855`..`8d4cd472`), plus docs.** Alle fire
+delkriterier er leveret, men **kriterium (b) blev leveret som et negativt resultat** — fixturen
+manglede ikke det planen antog. Se trin 3.
+
+### Hvad der virker nu
+
+| Kriterium | Status | Verificeret ved |
+|---|---|---|
+| (a) `timeout-minutes` efter målt varighed på hvert job | ✅ alle 5 | `repo-lint` med grænse 1 + `sleep 120` → afbrudt efter 72 s (run 30405860162) |
+| (b) `es_container` fejler læsbart frem for at hænge | ✅ **var allerede sandt** | container der starter men ikke lytter → læsbar `TimeoutError` efter 13,8 s |
+| (c) `e2e-tests` fejler på exited-nonzero/restart-loop | ✅ | begge grene verificeret rødt hver for sig; uændret stak grøn |
+| (d) banking svarer 503 + WARNING | ✅ | live gennem containeren: begge ruter → 503, WARNING navngiver config-fejlen |
+
+Lokalt grønt: `make test-e2e` **24 passed**, `make test-browser` **4 passed**,
+`make -C services/banking-service check` rc=0 (59 unit + 11 integration, 68 → **70**),
+`make -C services/analytics-service test` **123 passed**, `make compose-check` rc=0,
+`make notes-check` rc=0, repo-bred `ruff check` + `format --check` rc=0 (666 filer).
+
+### De tre forkerte tal, rettet frem for pyntet
+
+Planen forudsagde to; der var tre.
+
+1. `grep -c timeout-minutes ci.yml` gav **1**, ikke 0 (P2-39 havde sat den på `e2e-tests`).
+2. Nævneren er **12 HTTP-services**, ikke 53.
+3. **Nyt:** findingens punkt 1 — *"uden nogen wait-timeout … uden en øvre grænse"* — er forkert.
+   `testcontainers` 4.14.2 bounder waiten til 120 s og fejler meget læsbart.
+
+### Det vigtigste enkeltfund
+
+**Worker-gatens prædikat kan ikke være "exited nonzero" alene.** En worker med uopnåelig
+`DATABASE_URL` rapporteres af compose som `restarting` med **`ExitCode: 0`**, fordi 25 af de 53
+services er `restart: on-failure` og cykler frem for at sætte sig i `exited`. Havde jeg
+implementeret planens overskrifts-prædikat og kun kørt kontrollen for `ollama-pull`-fælden, var
+gaten blevet grøn på præcis den fejlklasse den findes for at fange. Det er samme fejlmode som
+itemet handler om, én lag længere inde — og det er grunden til at *begge* grene blev verificeret
+hver for sig frem for at én rød kørsel blev taget som bevis for gaten.
+
+### Fire ting hvor målingen modsagde planen
+
+- **De 836 s beviser hvor hængen *ikke* var.** En hængende wait var fejlet efter 120 s. Altså lå
+  den i `docker_client.run(...)`'s image-pull, som kaldes før wait-strategien og er ubundet uden
+  nogen knap i 4.14.2. Det gør `timeout-minutes` til den *eneste* grænse for klassen — ikke
+  "begge grænser i serie" som findingen foreslog — og det gør den foreslåede image-cache mere
+  relevant, ikke mindre.
+- **8007 var gratis, ikke dyr.** Bekymringen var at `ai-service`s
+  `service_completed_successfully`-afhængighed af et 3,7 GB ollama-pull ikke kunne nå de 180 s.
+  Men `docker compose up -d` blokerer selv på den betingelse, så pullet betales i `Start system`
+  (målt 173/181/183 s) og er færdigt før deadlinen begynder at tælle — derfor er
+  `Wait for system` kun 3-7 s.
+- **Bankings rute-`try/except` var død, ikke blot overflødig.** Planen sagde at handleren
+  "dækker" de to `status_code=500`. Reproduktionen viste at de aldrig havde fanget en manglende
+  PEM: fejlen kastes under dependency-resolution, så de blokerede kun config-fejl *inde i*
+  servicekaldet (JWT-signering). Begge ruter gav 500 ad samme vej.
+- **Det åbne valg blev (b), målt.** `Run browser tests` er success i alle tre seneste kørsler og
+  PEM-steppet ligeså, så banking *er* konfigureret i CI, der er ingen 5xx at undtage, og (a)
+  ville være unødig kompleksitet. Konsekvensen der skal siges højt: **503-stien er dermed ikke
+  dækket i CI** — den er dækket af de to nye tests.
+
+### Instrumenter der var blinde undervejs
+
+Tre gange målte jeg noget andet end det jeg troede. Værd at have skrevet ned, fordi mønsteret er
+det samme som [[project_measurement_instrument_validity]]:
+
+1. **Kontrol 2 i trin 3:** et image-tag på `:0.0.0-does-not-exist` fejlede i versions-parsing
+   efter 0,10 s, altså **før** pull-stien blev rørt. Gentaget med `:8.99.99`, som parser som 8.x.
+2. **`ollama list`s mtime:** `qwen3:4b` og `bge-m3` stod "34 sekunder siden", hvilket lignede en
+   cold pull. Men `ollama-pull`-containeren kørte start→finish i **2 s** — modellerne var
+   cachede, og `ollama pull` opdaterer mtime på et no-op. Lokal måling kunne derfor ikke besvare
+   8007-spørgsmålet; CI's step-varighed kunne.
+3. **`make test | tail -5`:** viste "9 passed" og fik banking til at se ud som om kun
+   integrationstestene kørte. `make test` kører unit og integration som to pytest-kald, så
+   trunkeringen skjulte de første 59. Samme fælde som
+   [[feedback_pipe_hides_exit_code]], nu 7×.
+
+### Efterladt
+
+- **P2-42's b-halvdel er fortsat open.** Den nye worker-gate ville **ikke** have fanget banking:
+  servicen kørte, `/health` svarede 200 hele vejen, og PEM'en læses per request. Gaten fanger en
+  *død* container — en anden, hidtil udækket klasse. Et liveness-probe kan stadig ikke se en
+  brudt afhængighed.
+- **`Health: unhealthy` er bevidst udenfor gatens prædikat**, begrundet i scriptets docstring:
+  HTTP-servicene er allerede dækket af `Wait for system`, og at tage det med ville gøre samme
+  fejl rød to gange plus risikere en ny flake-klasse på langsomt startende healthchecks.
+- **Ingen `.dockerignore` i repoet**, så hele arbejdstræet — inkl. den gitignorerede
+  `enablebanking-sandbox.pem` — sendes til Docker-dæmonen som build-kontekst ved hvert
+  `up --build`. Ikke en læk (dæmonen er lokal, og ingen Dockerfile bruger bred `COPY .` —
+  empirisk verificeret at banking-imaget kun indeholder CA-bundles), men et manglende værn og
+  langsommere builds. Ikke et item endnu.
+- **Den lokale sandbox-PEM står `-rw-r--r--` (644).** CI's er throwaway så 644 er fint dér, men
+  den rigtige nøgle lokalt burde være 600. Ikke et item endnu.
+- **`analytics-service`s venv kører Python 3.14 lokalt mod 3.11 i CI** (`requires-python
+  >=3.11`). Faldt over det under trin 3; ikke undersøgt, ikke rørt. Kandidat til et item, da
+  "virker lokalt, ikke i deploy" er en navngivet tema i CLAUDE.md.
+
+### CI
+
+Se noten nedenfor — de seks commits ligger på lokal `master` og er **ikke pushet**, så
+kriteriet "CI grøn på hele stakken" med de nye steps aflæst navngivet i loggen er **ikke
+opfyldt endnu**. Det er den sidste udestående del af trin 7.

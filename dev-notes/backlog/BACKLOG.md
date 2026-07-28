@@ -83,8 +83,8 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P2-39 | **Browser-automatisering som ejet instrument.** Nul browser-lag i repoet, og begge eksisterende suiter var grønne gennem hele P1-16. [→ detail](#p2-39) | frontend, test, CI | M | **done 2026-07-28** | [plan + Outcome](../plans/2026-07-28-p239-browser-automation.md#outcome) · [decision](../decisions/2026-07-28-browser-automation-instrument.md) |
 | P2-40 | **Gateway'ens `accounts[0]`-fallback: vælg eksplicit eller fejl ærligt.** Uden `X-Account-ID` fik en flerkonto-bruger en anden kontos data uden en fejl. [→ detail](#p2-40) | gateway, account, test | S | **done 2026-07-29** | [plan + Outcome](../plans/2026-07-28-p240-gateway-explicit-account-resolution.md#outcome) · [finding](../findings/2026-07-28-gateway-falls-back-to-first-account.md) |
 | P2-41 | Hverken account- eller user-service eksponerer DELETE, og `Account` har ingen `is_deleted`-kolonne — soft-delete-konventionen er fraværende for de to entiteter der ejer alt andet. Ingen GDPR-sti, og dev-stakken kan kun ryddes med `down -v`. DB-sletning er udelukket: `Account` er projiceret i tre services | account, user, domain | M | open | [findings/2026-07-28-no-delete-path-for-account-or-user.md](../findings/2026-07-28-no-delete-path-for-account-or-user.md) |
-| P2-42 | banking-service svarer **500** når integrationen ikke er konfigureret, hvor konventionen for utilgængelig bank er **503** (`BankConnectionInactive` → 503 + WARNING) — dashboardet larmer altså en serverfejl for en valgfri integration. Beslægtet: kun 9 af 53 compose-services har en opstarts-gate i CI, så resten kan være døde uden signal | banking, CI | S | open | [findings/2026-07-28-banking-service-dead-in-ci.md](../findings/2026-07-28-banking-service-dead-in-ci.md) |
-| P2-38 | Intet `timeout-minutes` i `ci.yml` og ingen wait-timeout på ES-fixturen, så et CI-job kan hænge i 6 timer uden signal. [→ detail](#p2-38) | ci, analytics | S | open | [findings/2026-07-28-ci-job-can-hang-undetected.md](../findings/2026-07-28-ci-job-can-hang-undetected.md) |
+| P2-42 | **a-halvdel done 2026-07-29:** `BankConfigError` → 503 + WARNING (app-level handler, fordi fejlen kastes under dependency-resolution og ingen rute-`try/except` kan nå den), plus en gate der fanger døde/restartende containere — den klasse `Wait for system` strukturelt ikke kan se, da 26 workers ingen HTTP-overflade har. **Tilbage (open):** b-halvdelen — et liveness-probe kan stadig ikke se en brudt afhængighed, hvilket var bankings faktiske fejlmode | banking, CI | S | a done, b open | [plan + Outcome](../plans/2026-07-29-p238-p242-ci-missing-signal.md#outcome) · [finding](../findings/2026-07-28-banking-service-dead-in-ci.md) |
+| P2-38 | **done 2026-07-29:** `timeout-minutes` på alle 5 job-definitioner, sat efter målt varighed og verificeret rød. Negativt resultat: ES-fixturen manglede *ikke* en wait-timeout — testcontainers 4.14.2 bounder den til 120 s og fejler læsbart, og de 836 s beviser at hængen lå i det ubundne image-**pull**, som ingen fixture kan bounde. [→ detail](#p2-38) | ci, analytics | S | **done 2026-07-29** | [plan + Outcome](../plans/2026-07-29-p238-p242-ci-missing-signal.md#outcome) · [finding](../findings/2026-07-28-ci-job-can-hang-undetected.md) |
 | P2-36 | `x-retry-count` læses fem steder på fire forskellige måder; `shared/messaging`, analytics ×2 og banking mangler stadig hærdning, og bankings kopi kaster `TypeError` på en `str`-header inde i retry-handleren → uendelig redelivery. Overvej at flytte transactions `retry_headers.retry_count` til shared og lade alle fem kalde den | cross, messaging | S | open | [findings/2026-07-27-retry-header-read-five-ways.md](../findings/2026-07-27-retry-header-read-five-ways.md) |
 | P2-35 | `id: Optional[int]` på domain-entiteter gør persisteret og upersisteret entitet til samme type, så hver læse-sti får den svagere invariant (budget 3 entiteter, categorization 6, account 2, goal 1). Pydantic vagter de fleste kaldsteder; `mark_closed(budget.id)` gør ikke, og et `None` dér bliver `WHERE id IS NULL` → vildledende 409. Vælg mellem assert, split type (`Persisted*`) eller status quo | cross, domain | M | open | [findings/2026-07-27-optional-id-hides-unpersisted-entity.md](../findings/2026-07-27-optional-id-hides-unpersisted-entity.md) |
 | P2-34 | `goal-service`: `Goal` bygges med `float` af det ene repository og `Decimal` af det andet, `Mapped[float]` mod en `Numeric`-kolonne, og forskellen lækker ud i event-payloads via `str()`; desuden `Goal.status` som magic string hvor `GoalStatus` findes. Blokerer servicen for typecheck-gaten (23 fejl, 5 ægte) | goal, domain | M | open | [findings/2026-07-27-goal-entity-two-runtime-types.md](../findings/2026-07-27-goal-entity-two-runtime-types.md) |
@@ -529,19 +529,35 @@ derefter **ikke én testlinje i 836 sekunder**, hvor den foregående grønne kø
 `PASSED` **36 s** efter collection. De 36 s er `es_container`-fixturen (pull + boot af ES); i den
 hængte kørsel kom containeren aldrig op. **Bevist transient, ikke forårsaget af ændringen:** en
 genkørsel af samme commit uden kodeændring blev grøn, og pushet rørte nul analytics- eller
-shared-filer. Fejlen er ikke flaken — det er at intet oversætter den til et signal:
-(1) `services/analytics-service/tests/integration/conftest.py:19-24` gør `with container:` uden
-wait-timeout, og (2) `grep -n "timeout-minutes" .github/workflows/ci.yml` giver **0 hits**, så
-alle jobs arver GitHubs default på **360 min**. Klassen er den samme som
+shared-filer. Fejlen er ikke flaken — det er at intet oversætter den til et signal.
+**To af de oprindelige påstande her var forkerte, målt under P2-38 og rettet 2026-07-29:**
+(1) `grep -c timeout-minutes .github/workflows/ci.yml` gav **1**, ikke 0 — P2-39 havde sat den på
+`e2e-tests`, så det var 4 af 5 job-definitioner der manglede, ikke 5.
+(2) `es_container`-fixturen manglede **ikke** en wait-timeout: `testcontainers` 4.14.2 sætter selv
+`_startup_timeout = TC_MAX_TRIES × TC_POOLING_INTERVAL` = **120 s** og rejser en meget læsbar
+`TimeoutError` med endpoint og hint. Og de **836 s beviser** at hængen ikke lå der — en hængende
+wait var fejlet efter 120 s. Den lå i `docker_client.run(...)`'s image-**pull**, som kaldes *før*
+wait-strategien og er ubundet uden nogen knap i 4.14.2. Den ydre grænse er derfor den eneste der
+kunne fange denne klasse, altså `timeout-minutes` — ikke "begge grænser i serie". Klassen er
+fortsat den samme som
 [banking's CI-job der aldrig kunne collecte](../findings/2026-07-25-banking-ci-could-not-collect.md):
 **en gate der ikke kan rapportere fejl.** Skærpende omstændigheder, alle observeret: logs
 udleveres først når jobbet slutter (`BlobNotFound` mens det kørte), så diagnosen krævede at man
 *først gav op og dernæst undersøgte*; baselinen på 36 s fandtes kun fordi tidligere kørsler
 tilfældigvis lå i loggen, for **der er ingen alarm på varighed**; og de øvrige 18 jobs var grønne,
-så kørslen rapporterede `in_progress` i det uendelige. Fix = begge grænser, sat efter målt
-varighed frem for et rundt tal — den ene uden den anden flytter kun symptomet. Cache af
-`docker.elastic.co`-imaget er en *overvejelse*, ikke en udpeget årsag: registryet svarede på
-0,47 s fra udviklermaskinen under hændelsen
+så kørslen rapporterede `in_progress` i det uendelige. **Leveret 2026-07-29:** `timeout-minutes`
+på alle 5 job-definitioner efter målt baseline (`repo-lint` 5, `python-services` 8,
+`shared-packages` 5, `frontend` 5, `e2e-tests` 30 fra P2-39), plus fixturens grænse skrevet
+eksplicit som en *pin* mod at pakke-defaulten eller `TC_MAX_TRIES`/`TC_POOLING_INTERVAL` flytter
+sig. Grænsen er verificeret rød: `repo-lint` med `timeout-minutes: 1` + `sleep 120` blev afbrudt
+efter 72 s (run 30405860162). **Aflæsnings-forbehold der koster tid hvis man ikke kender det:**
+GitHub rapporterer en timeout som `cancelled`, ikke `failure`, og loggen skriver kun
+`The operation was canceled.` — ordet *timeout* optræder aldrig og grænsen navngives ikke, så
+`gh run view --log-failed` returnerer **tomt med rc=1**. Signalet er "job `cancelled` + varighed ≈
+grænsen", og det er derfor den målte baseline står i en kommentar ved hver grænse. Cache af
+`docker.elastic.co`-imaget er stadig en *overvejelse*, ikke en udpeget årsag: registryet svarede på
+0,47 s fra udviklermaskinen under hændelsen — men bemærk at pull-stien nu er udpeget som der hvor
+de 836 s lå, hvilket gør cachen mere relevant end da fundet blev skrevet
 
 ### P3-41
 

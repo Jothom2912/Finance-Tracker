@@ -102,10 +102,23 @@ og svarede 500). Det pegede på banking, og compose-logsene i CI-outputtet bekr�
 
 ## Hvad der ikke er afgjort
 
-- **Om et 500 fra en valgfri integration er en produktfejl.** `BankConnectionWidget` fanger
-  fejlen og render en tilstand, men servicen svarer 500 hvor konventionen for utilgængelig
-  bank-forbindelse er **503** (`BankConnectionInactive` → 503 + WARNING). En 500 for
-  "integrationen er ikke konfigureret" er ikke en ærlig statuskode. Ikke rørt her — P2-39's
-  non-goal er nul produktkode.
-- **Hvad ellers der er dødt i CI uden at nogen ved det.** Kontrollen der findes nu, er
-  ventetiden på ni porte. Compose kører **53 services**; de resterende har ingen gate.
+- ~~**Om et 500 fra en valgfri integration er en produktfejl.**~~ **Afgjort i P2-42a
+  (2026-07-29): ja.** `BankConfigError` mappes nu til **503 + WARNING** via en app-level
+  `@app.exception_handler` i `main.py`. Reproduktionen afdækkede at det var værre end beskrevet
+  her: fejlen kastes under resolution af `Depends(get_banking_service)`, altså **før** nogen
+  rutekrop, så `/available-banks`' eget `except BankConfigError` havde **aldrig** fanget en
+  manglende PEM — kun config-fejl inde i servicekaldet, fx JWT-signering. Begge ruter gav 500 ad
+  samme vej, og de to `status_code=500` var døde for denne fejlklasse; de er fjernet.
+  Live-verificeret gennem containeren: begge ruter → 503, og to requests gav to log-linjer, så
+  singletonen latcher ikke — 503'eren er reelt retryable.
+- **Nævneren var forkert: `53` er ikke det tal der mangler en gate.** Målt 2026-07-29 fordeler de
+  53 compose-services sig som **14** datastores/infra (har allerede `healthcheck` +
+  `depends_on: service_healthy`), **12** HTTP-services, **1** frontend/nginx og **26** workers.
+  Af de 12 HTTP-services var 9 gated; de tre sidste (ai 8007, notification 8008, saga 8011) er
+  tilføjet `Wait for system` i P2-38. For de 26 workers er et portprobe ikke *manglende* — de har
+  ingen HTTP-overflade, så det er strukturelt umuligt. Deres gate er container-tilstand, leveret
+  som `scripts/compose_state_check.py` + et step i `e2e-tests`.
+- **Den nye worker-gate ville stadig ikke have fanget dette fund, og det skal ikke overclaimes.**
+  banking *kørte*, `/health` svarede 200 hele vejen, og PEM'en læses per request. Gaten fanger en
+  **død** container — en anden, hidtil helt udækket klasse. Lektien her står uændret: et
+  liveness-probe kan ikke se en brudt afhængighed. Det er P2-42's b-halvdel, fortsat **open**.

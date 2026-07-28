@@ -1,4 +1,4 @@
-# Status — 2026-07-29 (efter P2-40: gateway'en gætter ikke længere en konto)
+# Status — 2026-07-29 (efter P2-38 + P2-42a: CI kan nu rapportere et hængt job og en død container)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,11 +9,42 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-40 er shippet; næste er et valg mellem de items den efterlod
-(frontend-vagten, `make security` vs. CI's bandit) og de allerede kendte (P2-38, P2-41, P2-42,
-P3-41, P3-44, P3-46).
+**Intet aktivt item.** P2-38 og P2-42's a-halvdel er shippet; næste er et valg mellem de items
+P2-40 efterlod (frontend-vagten, `make security` vs. CI's bandit), **P2-42's b-halvdel** (et
+liveness-probe kan ikke se en brudt afhængighed — bankings faktiske fejlmode, som den nye
+worker-gate udtrykkeligt *ikke* dækker) og de kendte (P2-41, P3-41, P3-44, P3-46).
 
-Sidst shippet: **P2-40 — gateway'ens `accounts[0]`-fallback** (2026-07-29), tre commits
+Sidst shippet: **P2-38 + P2-42a — CI's manglende signal** (2026-07-29), seks commits
+`a1bf5855`..`8d4cd472`.
+[Plan + Outcome](plans/2026-07-29-p238-p242-ci-missing-signal.md#outcome).
+Fire ting: `timeout-minutes` på alle 5 job-definitioner efter målt baseline; de sidste tre
+HTTP-services (8007/8008/8011) ind i `Wait for system`; `scripts/compose_state_check.py` som
+gate mod døde/restartende containere; og bankings `BankConfigError` → **503 + WARNING**.
+
+**Tre tal i backloggen/findings var forkerte, og de er rettet frem for pyntet:**
+1. `grep -c timeout-minutes ci.yml` gav **1**, ikke 0 — P2-39 havde sat den på `e2e-tests`.
+2. Nævneren er **12 HTTP-services**, ikke 53. De 53 er 14 datastores (allerede gated), 12
+   HTTP-services, 1 nginx og **26 workers uden HTTP-overflade**, hvor et portprobe ikke er
+   manglende men umuligt.
+3. **ES-fixturen manglede aldrig en wait-timeout.** `testcontainers` 4.14.2 bounder den til
+   `TC_MAX_TRIES × TC_POOLING_INTERVAL` = 120 s og fejler meget læsbart. Og de **836 s beviser**
+   at hængen ikke lå der — en hængende wait var fejlet efter 120 s. Den lå i det ubundne
+   image-**pull**, som kaldes før wait-strategien og som 4.14.2 ikke eksponerer en knap for.
+   Fixturens grænse er derfor en *pin*, ikke et fix; den ydre `timeout-minutes` er den reelle.
+
+**Det vigtigste enkeltfund:** worker-gatens prædikat kan ikke være "exited nonzero" alene. En
+worker med uopnåelig `DATABASE_URL` rapporteres af compose som `restarting` med **`ExitCode: 0`**,
+fordi 25 af de 53 services er `restart: on-failure` og cykler frem for at sætte sig. En
+"exited nonzero"-only gate havde altså været grøn på præcis den fejl den findes for.
+
+**Aflæsnings-forbehold på timeouten:** GitHub rapporterer den som `cancelled`, ikke `failure`, og
+loggen skriver aldrig ordet *timeout* eller grænsen — så `gh run view --log-failed` er tomt med
+rc=1. Signalet er "job `cancelled` + varighed ≈ grænsen", og derfor står den målte baseline i en
+kommentar ved hver grænse.
+
+### Forrige: P2-40 — gateway'ens `accounts[0]`-fallback
+
+Shippet 2026-07-29, tre commits
 `ad0b8d54`..(docs). `get_account_id_from_headers` opløser nu `name = 'Default Account'`
 **eksplicit** når `X-Account-ID` mangler, og returnerer `None` frem for at gætte — hvorefter
 `_require_account_id`, som allerede fandtes, giver en ærlig fejl.
@@ -361,7 +392,7 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
 | Finding | Severity | Scheduled as |
 |---|---|---|
 | [product-surface sweep](findings/2026-07-26-product-surface-sweep.md) | HIGH | P2-26..29 (**29 lukket**), P3-24..34 (**24 lukket** → P3-43), F2-08..13 |
-| [CI-job kan hænge uopdaget](findings/2026-07-28-ci-job-can-hang-undetected.md) | MEDIUM | P2-38 |
+| ~~[CI-job kan hænge uopdaget](findings/2026-07-28-ci-job-can-hang-undetected.md)~~ **resolved** | MEDIUM | P2-38 (**done 2026-07-29**) |
 | [k8s manifest drift](findings/2026-07-25-k8s-manifest-drift.md) | MEDIUM | P2-21 |
 | [outbox-port erklærer fremmed entitet](findings/2026-07-27-outbox-port-declares-foreign-entity.md) | MEDIUM | P2-32 (7 services) |
 | [Optional id skjuler upersisteret entitet](findings/2026-07-27-optional-id-hides-unpersisted-entity.md) | MEDIUM | P2-35 |
@@ -394,13 +425,22 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
   `xpack.security.enabled: "false"` og Postgres-passwords i klartekst i compose er uændrede,
   og enhver container når stadig hosten via `host.docker.internal` — verificeret. Antag ikke
   at porten er lukningen.
-- **En CI-kørsel der står på `in_progress` kan være hængt, ikke langsom** — og intet i repoet
-  afgør hvilket. Set 2026-07-28: analytics' `Run tests` sad 836 s hvor baselinen er 36 s, og
-  ville have siddet i 360 min (ingen `timeout-minutes`, ingen wait-timeout på ES-fixturen →
-  P2-38). **Logs udleveres først når jobbet slutter**, så diagnosen kræver at man aflyser
-  først. Fremgangsmåden der virkede: sammenlign jobbets varighed med de sidste grønne kørsler
-  (`gh run list --status success` + `gh run view --json jobs`), aflys for at få loggen, og
+- **En CI-kørsel der står på `in_progress` kan være hængt, ikke langsom.** Set 2026-07-28:
+  analytics' `Run tests` sad 836 s hvor baselinen er 36 s, og ville have siddet i 360 min.
+  **Grænsen findes nu** (P2-38: 5-8 min per job), så tilstanden er tidsbegrænset — men to ting
+  består: **logs udleveres først når jobbet slutter**, så diagnosen kræver at man aflyser eller
+  venter; og **en timeout rapporteres som `cancelled`, ikke `failure`**, hvor loggen kun siger
+  `The operation was canceled.` uden at nævne ordet timeout eller grænsen. Så
+  `gh run view --log-failed` er **tomt med rc=1**, og du skal sammenholde varighed med den
+  grænse der står i en kommentar ved jobbet. Fremgangsmåden der virkede: sammenlign varigheden
+  med de sidste grønne kørsler (`gh run list --status success` + `gh run view --json jobs`), og
   genkør *samme commit* — bliver den grøn uden kodeændring, er det infrastruktur og ikke dig.
+- **`docker compose ps` kan rapportere `ExitCode: 0` på en container der er i stykker.** Målt
+  2026-07-29 under P2-38: en worker med uopnåelig `DATABASE_URL` står `State: restarting` med
+  `ExitCode: 0`, fordi 25 af de 53 services er `restart: on-failure` og cykler frem for at sætte
+  sig i `exited`. Et prædikat på "exited nonzero" alene er derfor blindt for den almindeligste
+  worker-fejl. `make compose-state-check` dækker begge grene; skriver du selv en sådan kontrol,
+  så husk `restarting` — og husk at `ollama-pull` er `exited 0` på en **korrekt** stak.
 - **En `curl`-verifikation beviser transporten, ikke klienten.** P3-43 verificerede GraphQL
   same-origin med `curl` og fik et sandt svar; klienten var alligevel brækket for hver bruger
   (P1-16). Rammer alt hvor et bibliotek står mellem appen og HTTP — `graphql-request` konstruerer
