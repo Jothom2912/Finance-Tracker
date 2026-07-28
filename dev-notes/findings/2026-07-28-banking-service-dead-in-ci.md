@@ -1,9 +1,9 @@
 ---
-title: banking-service har aldrig kørt i CI — PEM-mountet bliver en mappe, og dashboardet svarede 500 uden at nogen gate så det
+title: banking-service har aldrig kunnet svare på /bank/connections i CI — PEM'en er ulæselig, og et /health-probe kan ikke se det
 date: 2026-07-28
 severity: MEDIUM
 status: resolved
-resolved-by: P2-39 (2026-07-28) — throwaway `openssl genrsa`-PEM i CI, port 8009 i `Wait for system`, og 5xx fanges nu med URL i browser-fixturen. Den ÅBNE del (500 vs. 503 fra banking, og at 44 af 53 compose-services stadig ingen gate har) er ikke lukket her.
+resolved-by: P2-39 (2026-07-28) — throwaway `openssl genrsa`-PEM **med `chmod 644`** i CI, plus 5xx med URL i browser-fixturen. Det tog TO forsøg: første fix rettede kun filens eksistens og flyttede fejlen fra `IsADirectoryError` til `PermissionError`. Den ÅBNE del (500 vs. 503 fra banking) er ikke lukket her.
 scheduled-as: P2-39
 related:
   - ../plans/2026-07-28-p239-browser-automation.md
@@ -11,16 +11,30 @@ related:
   - ../findings/2026-07-28-ci-job-can-hang-undetected.md
 ---
 
-# banking-service har aldrig kørt i CI
+# banking-service har aldrig kunnet svare på `/bank/connections` i CI
 
-**`docker compose up` i CI starter en banking-service der dør ved boot, og dashboardet
-svarer derfor 500 på `/api/v1/bank/connections` ved hver sideindlæsning.** Det har været
-tilfældet så længe `e2e-tests` har kørt hele stakken, og ingen gate kunne se det.
+**I CI kan banking-service ikke læse sin PEM, så `GET /api/v1/bank/connections` svarer 500 —
+og dashboardet kalder den ved hver sideindlæsning.** Det har været tilfældet så længe
+`e2e-tests` har kørt hele stakken, og ingen gate kunne se det.
+
+**Rettelse til denne notes første udgave:** den påstod at servicen *døde ved boot*. Det er
+forkert, og målingen der modsagde den var min egen kontrol — port 8009 blev tilføjet til
+`Wait for system`, og den **bestod**:
 
 ```
-banking-service-1 | app.adapters.outbound.enable_banking_client.BankConfigError:
-banking-service-1 |   Cannot read PEM at /app/enablebanking.pem: IsADirectoryError(21, 'Is a directory')
+port 8009: healthy
+...
+banking-service-1 | INFO: Application startup complete.
+banking-service-1 | INFO: 127.0.0.1:34014 - "GET /health HTTP/1.1" 200 OK
+banking-service-1 | INFO: 172.18.0.46:40984 - "GET /api/v1/bank/connections?account_id=16 HTTP/1.0" 500
+banking-service-1 |   File "/app/app/adapters/outbound/enable_banking_client.py", line 71, in __init__
+banking-service-1 |     self._private_key = Path(config.key_path).read_bytes()
+banking-service-1 | PermissionError: [Errno 13] Permission denied: '/app/enablebanking.pem'
 ```
+
+Servicen starter fint: migrations kører, uvicorn er oppe, `/health` svarer 200 hele vejen.
+`EnableBankingClient` konstrueres **per request**, så PEM-læsningen sker på request-stien —
+ikke ved opstart.
 
 ## Mekanismen — og hvorfor fejlen ikke siger "file not found"
 
@@ -40,8 +54,10 @@ CI-vs-lokal-divergens. Det rammer også en frisk klon uden `.env`.
 ## Hvorfor tre gates var blinde
 
 1. **`tests/e2e/` rører ikke banking.** 24 tests, ingen af dem på port 8009.
-2. **`Wait for system` pollede ikke 8009.** Loopet dækkede 8001-8006, 8010, 8012 — så en død
-   banking-service passerede opstarts-checket lydløst.
+2. **`Wait for system` pollede ikke 8009** — men det ville ikke have hjulpet. Porten er
+   tilføjet nu, og den er **grøn på præcis den tilstand denne note handler om**, fordi
+   `/health` ikke rører PEM'en. Et liveness-probe kan ikke se en brudt afhængighed; det ser
+   at processen lever. Det er den vigtigste enkeltlektion her.
 3. **De 346 jsdom-tests mocker `api/bank.jsx`.** En 500 fra en service der ikke kører, er
    ikke en tilstand en mock kan komme i.
 
@@ -70,12 +86,16 @@ og svarede 500). Det pegede på banking, og compose-logsene i CI-outputtet bekr�
 
 ## Rettelser
 
-1. **`openssl genrsa -out enablebanking-sandbox.pem 2048` før `compose up` i CI.** En
-   throwaway-nøgle er nok: CI kalder ikke Enable Banking, nøglen skal kunne *læses* og kunne
-   *signere*. Verificeret: en `genrsa`-nøgle signerer RS256 med `pyjwt`.
-2. **Port 8009 tilføjet til `Wait for system`.** En død banking-service fejler nu i det step
-   der findes for at fange det, med servicens egne logs — ikke som en 500 i en browser-konsol
-   tre steps senere.
+1. **`openssl genrsa` + `chmod 644` før `compose up` i CI.** To forsøg, og det første var
+   lærerigt: `genrsa` alene rettede filens *eksistens* og flyttede fejlen fra
+   `IsADirectoryError` til `PermissionError`, fordi den skriver mode **600** ejet af runneren
+   mens containeren kører som `uid=10001 (appuser)`. Lokalt er filen 644 — deraf hele
+   CI-vs-lokal-divergensen. En throwaway-nøgle er nok: CI kalder ikke Enable Banking, nøglen
+   skal kunne *læses* og kunne *signere*. Verificeret: en `genrsa`-nøgle signerer RS256 med
+   `pyjwt`.
+2. **Port 8009 tilføjet til `Wait for system`** — beholdt, men uden at foregive at være
+   kontrollen for dette: den var grøn mens bug'en var i kraft. Den fanger en reelt død
+   service, ikke en brudt afhængighed.
 3. **Fixturen fanger 5xx på response-grænsen med URL på** (`e2e/fixtures/session.js`).
    Browserens URL-løse `Failed to load resource` filtreres væk, så hver 5xx rapporteres én
    gang, med adresse. Fejlbeskeden fra CI var alt man havde, og den nævnte ikke servicen.

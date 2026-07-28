@@ -343,19 +343,26 @@ jobs:
         working-directory: services/frontend
         run: npx playwright install --with-deps chromium
 
-      # banking-service læser sin PEM ved konstruktion og signerer et RS256-JWT som
-      # smoke-test (enable_banking_client.py:71-81), så uden en nøgle STARTER servicen
-      # ikke. Compose bind-mounter `./enablebanking-sandbox.pem`, og findes filen ikke,
-      # laver Docker en MAPPE på mount-punktet — deraf `IsADirectoryError`, ikke en
-      # "file not found".
+      # banking-service konstruerer `EnableBankingClient` PER REQUEST, og konstruktøren
+      # læser PEM'en (enable_banking_client.py:71). Servicen starter derfor fint uden en
+      # nøgle — migrations kører, `/health` svarer 200 — og fejler først på
+      # `GET /api/v1/bank/connections`, som dashboardet kalder ved hver load. Målt af
+      # P2-39's to første CI-kørsler; det er grunden til at et `/health`-probe på 8009
+      # ikke kan fange det.
       #
-      # Målt af P2-39's første CI-kørsel: banking-service var død i CI, og dashboardets
-      # BankConnectionWidget fik 500 ved hver load. Ingen af de to eksisterende suiter så
-      # det — `tests/e2e/` rører ikke banking, og port 8009 var ikke i ventetiden nedenfor.
-      # En throwaway-nøgle er nok, fordi CI ikke kalder Enable Banking: den skal kunne
-      # læses og kunne signere.
+      # Compose bind-mounter `./enablebanking-sandbox.pem`. Findes filen ikke, laver Docker
+      # en MAPPE på mount-punktet (→ `IsADirectoryError`, ikke "file not found").
+      #
+      # `chmod 644` er ikke kosmetik: `openssl genrsa` skriver 600 ejet af runneren, og
+      # containeren kører som en anden bruger → `PermissionError`. Første forsøg rettede kun
+      # eksistensen og flyttede dermed fejlen ét trin, ikke væk.
+      #
+      # En throwaway-nøgle er nok, fordi CI ikke kalder Enable Banking: den skal kunne læses
+      # og kunne signere RS256.
       - name: Generate throwaway Enable Banking key
-        run: openssl genrsa -out enablebanking-sandbox.pem 2048
+        run: |
+          openssl genrsa -out enablebanking-sandbox.pem 2048
+          chmod 644 enablebanking-sandbox.pem
 
       - name: Start system
         run: docker compose up -d --build
@@ -366,9 +373,11 @@ jobs:
       - name: Wait for system
         run: |
           deadline=$(( $(date +%s) + 180 ))
-          # 8009 (banking) tilføjet af P2-39: den var udenfor, og derfor kunne en død
-          # banking-service passere hele jobbet lydløst. Nu fejler DETTE step med
-          # servicens egne logs frem for at dukke op som en 500 i en browser-konsol.
+          # 8009 (banking) tilføjet af P2-39, men vær klar over hvad det IKKE beviser:
+          # banking-service svarede `/health` 200 gennem hele den kørsel hvor
+          # `/bank/connections` gav 500, fordi PEM'en først læses per request. Et
+          # health-probe kan altså ikke se en brudt afhængighed — det ser kun at processen
+          # lever. Porten er med fordi en reelt død service ellers passerer lydløst.
           for port in 8001 8002 8003 8004 8005 8006 8009 8010 8012; do
             until curl -fsS "http://localhost:${port}/health" > /dev/null 2>&1; do
               if [ "$(date +%s)" -ge "$deadline" ]; then

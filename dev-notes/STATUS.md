@@ -45,11 +45,14 @@ CSP, så en fejl i læsestien gør *begge* tests røde — læs test 1 først. O
 inde i instrumentet selv: fixturens egen vagt var grøn under `script-src 'none'`, altså på en app
 uden en linje kørende JS, indtil den fik en assertion om at appen mountede.
 
-**Første CI-kørsel var rød, og fundet var ægte: banking-service har aldrig kunnet starte i CI.**
-Den manglende PEM får Docker til at lave en *mappe* på mount-punktet, servicen dør ved boot, og
-dashboardet svarede 500 ved hver load. Tre gates var blinde — `tests/e2e/` rører ikke banking,
-ventetiden pollede ikke 8009, og jsdom mocker `api/bank.jsx`. Lukket med en throwaway-`genrsa`-nøgle
-+ 8009 i ventetiden; den åbne del (500 hvor konventionen er 503) er **P2-42**.
+**Første CI-kørsel var rød, og fundet var ægte: i CI kan banking-service ikke læse sin PEM, så
+`/bank/connections` svarer 500 ved hver dashboard-load.** Lukket i **to** forsøg, og begge fejl
+i min egen diagnose er værd at kende: (1) servicen *dør ikke ved boot* som jeg først skrev —
+`EnableBankingClient` konstrueres per request, og `/health` var 200 hele vejen, hvilket min egen
+8009-kontrol beviste ved at **bestå**; et liveness-probe kan ikke se en brudt afhængighed. (2)
+`openssl genrsa` alene var ikke nok: den skriver mode 600 ejet af runneren, mens containeren kører
+som `uid=10001`, så fejlen flyttede sig fra `IsADirectoryError` til `PermissionError`. `chmod 644`
+lukkede den. Den åbne del (500 hvor konventionen er 503) er **P2-42**.
 [Finding](findings/2026-07-28-banking-service-dead-in-ci.md).
 
 **Sideprodukt:** `e2e-tests` fik `timeout-minutes: 30` og **port 3000 i `Wait for system`**

@@ -95,10 +95,10 @@ fem i `transactions_v2` (doc-count falder *ikke*) → `periodOverview` fra 25.00
 
 ## Efterspil: første CI-kørsel var rød, og fundet var ægte
 
-Suiten fandt noget på sin **første kørsel i CI** som ingen gate havde set før:
-banking-service har aldrig kunnet starte dér. Den manglende PEM får Docker til at oprette en
-*mappe* på mount-punktet (deraf `IsADirectoryError`, ikke "file not found"), og dashboardet
-svarede 500 ved hver load. Beløbs-assertionerne var grønne — appen *virkede*, den larmede bare
+Suiten fandt noget på sin **første kørsel i CI** som ingen gate havde set før: i CI kan
+banking-service ikke læse sin PEM, så `/bank/connections` svarer 500 — og dashboardet kalder
+den ved hver load. Den manglende fil får Docker til at oprette en *mappe* på mount-punktet
+(deraf `IsADirectoryError`, ikke "file not found"). Beløbs-assertionerne var grønne — appen *virkede*, den larmede bare
 en serverfejl imens. Kun `pageErrors`-assertionen fangede det.
 [Finding](../findings/2026-07-28-banking-service-dead-in-ci.md), åben del → **P2-42**.
 
@@ -109,10 +109,16 @@ To lektioner ud over selve bug'en:
   sagde ikke hvilken service det var. Fixturen fanger nu 5xx på response-grænsen *med* adresse,
   og filtrerer browserens URL-løse variant væk. Et instrument der kan se en fejl, men ikke sige
   hvor den er, er halvt færdigt.
-- **Kontrollen der manglede var en opstarts-gate, ikke en test.** Port 8009 var ikke i
-  `Wait for system`, så en død service passerede lydløst. Den fejler nu dér, med servicens egne
-  logs, frem for som en konsol-500 tre steps senere. Bemærk grænsen: compose kører **53
-  services**, og ni af dem har nu en gate.
+- **Min egen rettelse var forkert diagnosticeret, og det var kontrollen der afslørede det.**
+  Jeg skrev at servicen døde ved boot og tilføjede port 8009 til `Wait for system` som gaten.
+  Næste kørsel: **`port 8009: healthy`** — og stadig 500 på `/bank/connections`.
+  `EnableBankingClient` konstrueres per request, så `/health` rører aldrig PEM'en. **Et
+  liveness-probe kan ikke se en brudt afhængighed.** Porten er beholdt, men den er ikke
+  kontrollen for dette.
+- **Og fixet skulle have to forsøg.** `openssl genrsa` rettede filens eksistens og flyttede
+  fejlen fra `IsADirectoryError` til `PermissionError`: den skriver mode **600** ejet af
+  runneren, mens containeren kører som `uid=10001 (appuser)`. Den lokale PEM er 644 — hele
+  divergensen sad i en filrettighed, ikke i konfigurationen.
 
 ## Åbne ender
 
