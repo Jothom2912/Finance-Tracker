@@ -5,11 +5,9 @@
 // for data. jsdom håndhæver ikke CSP, og `curl` kører ikke klienten.
 import { defineConfig, devices } from '@playwright/test';
 
-// 127.0.0.1, IKKE localhost. P3-43's første perimeter-måling ramte en Vite dev-server
-// på [::1]:3000 i stedet for nginx-containeren og fik plausible svar fra den forkerte
-// komponent. Denne suite skal måle det BYGGEDE image bag perimeteren (CSP + rate limits),
-// så adressen skal være utvetydig.
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000';
+// Adressen bor UDEN FOR `testDir`, fordi alt config'en importerer indlæses i
+// config-konteksten — en fil derfra må ikke være en del af test-træet. Se filen.
+import { BASE_URL } from './playwright.base-url.js';
 
 export default defineConfig({
   // Uden for `src/`, fordi vitest ellers opsamler disse filer. Bemærk at det ikke er
