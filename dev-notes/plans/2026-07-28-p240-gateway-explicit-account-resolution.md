@@ -203,6 +203,12 @@ i P2-39.
 - `make test-browser`: **4 passed**, plus kontrollen ovenfor.
 - `make test-e2e`: **24 passed**, upåvirket som forventet.
 - `make lint-repo`, `make compose-check`: grønne.
+- **CI grøn: [run 30404527271](https://github.com/Jothom2912/Finance-Tracker/actions/runs/30404527271)**,
+  19 jobs, alle `success`. Aflæst på mere end konklusionen: `e2e-tests`-loggen siger
+  `Running 4 tests using 1 worker` og navngiver den nye spec som grøn på 2,5 s — den blev altså
+  *kørt*, ikke sprunget over, og fixturens `POST /accounts/` + saga-ventetid holder også i CI.
+  gateway-service er grøn dér, som forventet: CI's `bandit -ll -ii` filtrerer det Low-fund der
+  fælder `make check` lokalt (P3-49), så divergensen er nu bekræftet fra begge sider.
 - **`make -C services/gateway-service check` er rød — men den var rød før fixet også.**
   `make security` kører `bandit -r app -x tests` uden `-ll -ii`, så et Low/Medium-fund
   (`B105` på `token = ""`, `auth.py:55`) fælder den lokalt, mens CI's `bandit -ll -ii`

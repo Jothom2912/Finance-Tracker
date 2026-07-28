@@ -56,6 +56,11 @@ fra den. Hintet er nu betinget af statuskoden og navngiver P3-45. (2) Den nye sp
 anden spec også skriver til; den fejlede på `9111.99 vs 10449.74`, altså på prædikatet, ikke på
 produktet. Nu måles en delta.
 
+**CI grøn: [run 30404527271](https://github.com/Jothom2912/Finance-Tracker/actions/runs/30404527271)**,
+19/19 jobs. `e2e-tests` kørte `Running 4 tests using 1 worker` med den nye spec navngivet grøn —
+aflæst i loggen, ikke kun på konklusionen, fordi "success" ikke i sig selv siger at en ny test blev
+udført.
+
 **En rød gate der ikke er en regression:** `make -C services/gateway-service check` fejler på
 `bandit`s `B105` (`token = ""`, `auth.py:55`) — og gjorde det også *før* fixet, verificeret ved at
 køre bandit på den gamle fil. Det lokale `make security` mangler CI's `-ll -ii`, så lokalt og CI
