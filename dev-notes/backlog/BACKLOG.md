@@ -80,6 +80,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P2-29 | CSV upload has no size limit, no MIME check and buffers the whole file. [→ detail](#p2-29) | transaction | S | done 2026-07-28 | [sweep SEC-7](../findings/2026-07-26-product-surface-sweep.md), [plan](../plans/2026-07-28-p229-csv-upload-guards.md) |
 | P2-32 | Outbox-porten erklærer domænets `OutboxEntry`, men adapteren tilskriver shared's klasse af samme navn — usand kontrakt i 7 services; fix er en mapping i adapteren, ikke en sletning af duplikatet (det er den hexagonale grænse) | cross, contracts | S | open | [findings/2026-07-27-outbox-port-declares-foreign-entity.md](../findings/2026-07-27-outbox-port-declares-foreign-entity.md) |
 | P2-37 | **Én install-sti per service.** `requirements.txt` og `uv.lock` er to sandhedskilder i én service — budget — hvor det lod en grøn gate udstede en container der døde ved import. [→ detail](#p2-37) | cross, CI, deps | S | done 2026-07-28 | [plan + Outcome](../plans/2026-07-28-p237-budget-single-install-path.md#outcome) · [finding](../findings/2026-07-27-none-annotation-204-fastapi-split.md) |
+| P2-38 | Intet `timeout-minutes` i `ci.yml` og ingen wait-timeout på ES-fixturen, så et CI-job kan hænge i 6 timer uden signal. [→ detail](#p2-38) | ci, analytics | S | open | [findings/2026-07-28-ci-job-can-hang-undetected.md](../findings/2026-07-28-ci-job-can-hang-undetected.md) |
 | P2-36 | `x-retry-count` læses fem steder på fire forskellige måder; `shared/messaging`, analytics ×2 og banking mangler stadig hærdning, og bankings kopi kaster `TypeError` på en `str`-header inde i retry-handleren → uendelig redelivery. Overvej at flytte transactions `retry_headers.retry_count` til shared og lade alle fem kalde den | cross, messaging | S | open | [findings/2026-07-27-retry-header-read-five-ways.md](../findings/2026-07-27-retry-header-read-five-ways.md) |
 | P2-35 | `id: Optional[int]` på domain-entiteter gør persisteret og upersisteret entitet til samme type, så hver læse-sti får den svagere invariant (budget 3 entiteter, categorization 6, account 2, goal 1). Pydantic vagter de fleste kaldsteder; `mark_closed(budget.id)` gør ikke, og et `None` dér bliver `WHERE id IS NULL` → vildledende 409. Vælg mellem assert, split type (`Persisted*`) eller status quo | cross, domain | M | open | [findings/2026-07-27-optional-id-hides-unpersisted-entity.md](../findings/2026-07-27-optional-id-hides-unpersisted-entity.md) |
 | P2-34 | `goal-service`: `Goal` bygges med `float` af det ene repository og `Decimal` af det andet, `Mapped[float]` mod en `Numeric`-kolonne, og forskellen lækker ud i event-payloads via `str()`; desuden `Goal.status` som magic string hvor `GoalStatus` findes. Blokerer servicen for typecheck-gaten (23 fejl, 5 ægte) | goal, domain | M | open | [findings/2026-07-27-goal-entity-two-runtime-types.md](../findings/2026-07-27-goal-entity-two-runtime-types.md) |
@@ -436,6 +437,28 @@ den kommer på typecheck-gaten), ikke en drift.
 > *Efterskrift 2026-07-28:* banking landede via P3-23 (**11 af 12** installerer nu fra `uv.lock`,
 > kun account mangler). Fælden var reel men **ikke armeret**: ingen rute i banking annoterede
 > `-> None`, så der var ingen 204-assertion at udløse. Den er nu væk med pinnet (fastapi 0.140.7).
+
+### P2-38
+
+**Et CI-job kan hænge i seks timer uden at nogen får det at vide — to manglende grænser i serie.**
+Målt 2026-07-28 på run `30381676420`: analytics' `Run tests` collectede 123 tests og udsendte
+derefter **ikke én testlinje i 836 sekunder**, hvor den foregående grønne kørsel havde første
+`PASSED` **36 s** efter collection. De 36 s er `es_container`-fixturen (pull + boot af ES); i den
+hængte kørsel kom containeren aldrig op. **Bevist transient, ikke forårsaget af ændringen:** en
+genkørsel af samme commit uden kodeændring blev grøn, og pushet rørte nul analytics- eller
+shared-filer. Fejlen er ikke flaken — det er at intet oversætter den til et signal:
+(1) `services/analytics-service/tests/integration/conftest.py:19-24` gør `with container:` uden
+wait-timeout, og (2) `grep -n "timeout-minutes" .github/workflows/ci.yml` giver **0 hits**, så
+alle jobs arver GitHubs default på **360 min**. Klassen er den samme som
+[banking's CI-job der aldrig kunne collecte](../findings/2026-07-25-banking-ci-could-not-collect.md):
+**en gate der ikke kan rapportere fejl.** Skærpende omstændigheder, alle observeret: logs
+udleveres først når jobbet slutter (`BlobNotFound` mens det kørte), så diagnosen krævede at man
+*først gav op og dernæst undersøgte*; baselinen på 36 s fandtes kun fordi tidligere kørsler
+tilfældigvis lå i loggen, for **der er ingen alarm på varighed**; og de øvrige 18 jobs var grønne,
+så kørslen rapporterede `in_progress` i det uendelige. Fix = begge grænser, sat efter målt
+varighed frem for et rundt tal — den ene uden den anden flytter kun symptomet. Cache af
+`docker.elastic.co`-imaget er en *overvejelse*, ikke en udpeget årsag: registryet svarede på
+0,47 s fra udviklermaskinen under hændelsen
 
 ### P3-41
 

@@ -88,3 +88,21 @@ Verifikationen krævede rigtige data: bruger `csp_probe` (id **368**), konto **3
 transaktioner (juli+juni 2026, 1.629,75 i udgifter, 25.000 i indkomst). De er **ikke** ryddet op.
 Det er bevidst — de er forudsætningen for at kunne gentage browser-verifikationen — men de tæller
 med i ES (`transactions_v2`), så et fremtidigt doc-count ikke matcher tidligere sessioners tal.
+
+## Efterspil: CI hang på analytics (ikke på ændringen)
+
+Pushet af de fem commits gav en kørsel der stod `in_progress` i 14 minutter på
+analytics-service. **Det var en transient flake, og genkørslen er beviset:** samme commit, ingen
+kodeændring, grøn. Havde årsagen ligget i ændringen, kunne det ikke ske. Pushet rørte i øvrigt
+nul analytics- eller shared-filer.
+
+Diagnosen er værd at gemme, fordi den var besværlig af strukturelle grunde og ikke af tekniske:
+`collected 123 items` fulgt af 836 s stilhed, mod 36 s til første `PASSED` i den foregående
+grønne kørsel — de 36 s *er* `es_container`-fixturen. **Loggen kunne ikke læses mens jobbet
+kørte** (`BlobNotFound`), så den måtte aflyses for at kunne undersøges: man giver op først og
+diagnosticerer bagefter. Og baselinen fandtes kun fordi tidligere kørsler tilfældigvis lå i
+loggen; der er ingen alarm på varighed.
+
+Skrevet ned som **P2-38** +
+[finding](../findings/2026-07-28-ci-job-can-hang-undetected.md). Fejlmoden er dagens
+gennemgående: noget der ser ud som om det virker — her en kørsel der ser ud som om den arbejder.

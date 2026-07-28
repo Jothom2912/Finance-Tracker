@@ -254,6 +254,7 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
 | Finding | Severity | Scheduled as |
 |---|---|---|
 | [product-surface sweep](findings/2026-07-26-product-surface-sweep.md) | HIGH | P2-26..29 (**29 lukket**), P3-24..34 (**24 lukket** → P3-43), F2-08..13 |
+| [CI-job kan hænge uopdaget](findings/2026-07-28-ci-job-can-hang-undetected.md) | MEDIUM | P2-38 |
 | [k8s manifest drift](findings/2026-07-25-k8s-manifest-drift.md) | MEDIUM | P2-21 |
 | [outbox-port erklærer fremmed entitet](findings/2026-07-27-outbox-port-declares-foreign-entity.md) | MEDIUM | P2-32 (7 services) |
 | [Optional id skjuler upersisteret entitet](findings/2026-07-27-optional-id-hides-unpersisted-entity.md) | MEDIUM | P2-35 |
@@ -286,6 +287,13 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
   `xpack.security.enabled: "false"` og Postgres-passwords i klartekst i compose er uændrede,
   og enhver container når stadig hosten via `host.docker.internal` — verificeret. Antag ikke
   at porten er lukningen.
+- **En CI-kørsel der står på `in_progress` kan være hængt, ikke langsom** — og intet i repoet
+  afgør hvilket. Set 2026-07-28: analytics' `Run tests` sad 836 s hvor baselinen er 36 s, og
+  ville have siddet i 360 min (ingen `timeout-minutes`, ingen wait-timeout på ES-fixturen →
+  P2-38). **Logs udleveres først når jobbet slutter**, så diagnosen kræver at man aflyser
+  først. Fremgangsmåden der virkede: sammenlign jobbets varighed med de sidste grønne kørsler
+  (`gh run list --status success` + `gh run view --json jobs`), aflys for at få loggen, og
+  genkør *samme commit* — bliver den grøn uden kodeændring, er det infrastruktur og ikke dig.
 - **En `curl`-verifikation beviser transporten, ikke klienten.** P3-43 verificerede GraphQL
   same-origin med `curl` og fik et sandt svar; klienten var alligevel brækket for hver bruger
   (P1-16). Rammer alt hvor et bibliotek står mellem appen og HTTP — `graphql-request` konstruerer
