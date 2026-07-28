@@ -146,13 +146,38 @@ export const test = base.extend({
   ],
 
   /**
+   * Alt appen har skrevet til konsollen, og alle ubehandlede exceptions.
+   *
+   * Dette er det signal de 346 jsdom-tests ikke har: P1-16's
+   * `TypeError: Failed to construct 'URL'` var en runtime-fejl i klienten, og den
+   * eneste grund til at nogen opdagede den var at et menneske åbnede konsollen.
+   *
+   * Egen fixture, ikke to `page.on(...)` i hver spec, fordi lytterne skal hænge på FØR
+   * `appPage`s `goto`. Playwright sætter fixtures op i den rækkefølge de er afhængige af
+   * hinanden, så `appPage`'s afhængighed nedenfor er det der garanterer rækkefølgen —
+   * lytter man i test-kroppen, er den første sideindlæsning allerede sket.
+   */
+  pageErrors: async ({ page }, use) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(`console.error: ${msg.text()}`);
+    });
+    await use(errors);
+  },
+
+  /**
    * En `page` hvor sessionen ER seedet og hvor det er BEVIST at den blev det.
    *
    * `addInitScript` kører før sidens egne scripts på hver navigation, altså før
    * `AuthContext`s `useEffect` læser localStorage — det er hele grunden til at seedingen
    * ikke kan gøres med et `page.evaluate` efter `goto`.
    */
-  appPage: async ({ page, session }, use) => {
+  appPage: async ({ page, pageErrors, session }, use) => {
+    // `pageErrors` bruges ikke her; afhængigheden ER virkningen (lytterne hænger på før
+    // `goto` nedenfor). Fjernes den, holder specs op med at se fejl fra første load.
+    void pageErrors;
+
     await page.addInitScript((storage) => {
       for (const [key, value] of Object.entries(storage)) {
         window.localStorage.setItem(key, value);
