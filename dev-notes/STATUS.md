@@ -1,4 +1,4 @@
-# Status — 2026-07-28 (efter P3-25 + P2-27 + P1-16)
+# Status — 2026-07-28 (efter P2-39: repoet har et browser-lag)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,26 +9,53 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**P2-39 — browser-automatisering som ejet instrument.** Beslutning truffet, plan skrevet,
-**ingen kode endnu**. `@playwright/test` i `services/frontend/`, to tests, kørt i det
-**eksisterende** `e2e-tests`-job (et nyt job ville koste en anden fuld `compose up --build`).
-[Decision](decisions/2026-07-28-browser-automation-instrument.md) ·
-[plan](plans/2026-07-28-p239-browser-automation.md).
+**Intet aktivt item.** P2-39 er shippet; næste er et valg mellem de items den afdækkede
+(P2-40, P2-41) og de allerede kendte (P2-38, P3-41, P3-44, P3-46).
 
-**Færdig-kriteriet er ikke "grøn", det er verificeret rød ved mutation.** Med P1-16 genindført
-skal browser-suiten fejle *mens* `npm test` bliver 346 grønne — det er beviset for at instrumentet
-er nyt og ikke overlappende. Kortlægningen bekræftede præmissen: der er **nul** browser-lag i
-repoet (ingen playwright/puppeteer/cypress/selenium i `package.json`, `uv.lock` eller nogen
-`requirements.txt`), og P3-25's probe var headless Chrome med `--dump-dom`, `sleep`, `kill -9` —
-**ikke checket ind**, og dens forudsætning ligger stadig som uoprydt tilstand i dev-stakken
-(bruger `csp_probe` id 368, konto 371). Trin 8 rydder dem, og at suiten stadig er grøn *bagefter*
-er testen af om fixturen seeder det den påstår.
+Sidst shippet: **P2-39 — browser-automatisering som ejet instrument** (2026-07-28), syv commits
+`35f2e047`..`9ea54d38`. Repoet har nu et **tredje instrument**: 3 Playwright-tests i
+`services/frontend/e2e/` der driver det byggede image bag perimeteren på `127.0.0.1:3000`, som
+hård gate i `e2e-tests`. `make test-browser` lokalt, ~16 s.
+[Plan + Outcome](plans/2026-07-28-p239-browser-automation.md#outcome) ·
+[decision](decisions/2026-07-28-browser-automation-instrument.md).
 
-**Tre fælder planen allerede kender:** `127.0.0.1:3000`, ikke `localhost` (P3-43 ramte en Vite
-dev-server på `[::1]:3000`); fixturen skal sætte alle **fem** localStorage-nøgler, for glemmes
-`account_id` svarer `periodOverview` med tavse nuller i stedet for en fejl — altså en
-grøn-udseende test på en tom app; og `e2e-tests` har **intet `timeout-minutes`** (P2-38), så en
-hængende browser hænger i 6 timer. `Makefile:49,91` siger desuden 5173 hvor porten reelt er 3000.
+**Det vigtigste udbytte er ikke suiten, men hvad mutations-kontrollen afslørede — to gange ved
+at blive GRØN.** Planens eget færdig-kriterium holdt ikke: P1-16 genindført gør *begge* suiter
+røde, fordi bug'en fik sin egen jsdom-regressionstest da den blev rettet. Kontrollen der
+adskiller instrumenterne er i stedet `totalIncome → totalIncomeTYPO` i `DASHBOARD_QUERY`:
+**`npm test` 346 passed, browser-suiten 2 failed** — GraphQL-dokumentet valideres mod det
+rigtige schema af intet andet i repoet. **Reglen der bliver:** vælg mutationen efter hvad de
+andre instrumenter *strukturelt* ikke kan se, ikke efter hvilken bug der motiverede itemet. En
+rettet bug er typisk også dækket.
+
+**Og en diagnose vi har troet på siden P3-25 var forkert.** "Uden `X-Account-ID` svarer
+`periodOverview` med tavse nuller" gælder REST-stien. På GraphQL-stien falder gateway'en tilbage
+til `accounts[0]` (`gateway/auth.py:99`), og P3-25's testbruger havde **to** konti — nullerne var
+et *korrekt svar om den tomme konto*. En flerkonto-bruger får altså en anden kontos data
+præsenteret som den valgte, uden en fejl (→ **P2-40**). Det blev fundet fordi mutationen blev
+grøn, hvilket er den ene ting man ikke kan overse.
+
+**C2 er lukket med et tal:** `style-src` uden `'unsafe-inline'` → **1 violation**
+(`style-src-elem`/inline) ved dialog-klikket, **0** på `/dashboard`. Direktivet er nødvendigt, og
+præcis kun af den grund `nginx.conf` angiver. Klikket P3-25 ikke kunne lave, er nu checket ind.
+
+**Grænser suiten har — læs dem før den bruges som dækning:** den seeder **én** konto pr. bruger,
+så konto-scoping (P2-40) er usynlig for den. Test 2 asserterer på et summary-kort før den måler
+CSP, så en fejl i læsestien gør *begge* tests røde — læs test 1 først. Og grøn-på-ingenting ramte
+inde i instrumentet selv: fixturens egen vagt var grøn under `script-src 'none'`, altså på en app
+uden en linje kørende JS, indtil den fik en assertion om at appen mountede.
+
+**Sideprodukt:** `e2e-tests` fik `timeout-minutes: 30` og **port 3000 i `Wait for system`**
+(loopet ventede kun på 8001-8012, så suiten kunne starte mod en frontend der ikke var oppe).
+`Makefile` sagde 5173 hvor porten er 3000.
+
+**Trin 8 stødte på en mur der blev et item:** hverken account- eller user-service eksponerer
+DELETE, og `Account` har ingen `is_deleted`-kolonne (→ **P2-41**). Kun P3-25's fem transaktioner
+blev ryddet — rent, via API'et: 5 × 204 → `is_deleted: true` i `transactions_v2` →
+`periodOverview` fra 25.000/1.629,75 til **0/0**. Bruger `csp_probe` (368) og konti 370/371
+**står** i dev-stakken, fordi der ikke findes en vej ud.
+
+### Forrige: P3-25 + P2-27 + P1-16
 
 Sidst shippet: **P3-25 + P2-27, plus P1-16 som utilsigtet udbytte** (2026-07-28), fire commits
 `38634dca`..`474b9643`. Perimeteren har nu fire security headers (med `always`, så også på
@@ -70,9 +97,9 @@ zone lod register-spam spærre alles login, så der er **to**.
 `:8001` gav nul 429, fordi portene stadig er på `0.0.0.0` (ADR-0005 punkt 3), og vores egen
 `tests/e2e/` er beviset, da den er upåvirket. Zonen er desuden per-IP i *form* og **én global
 bucket i praksis**, fordi `$remote_addr` er Docker-gatewayen for al host-trafik (per-IP bevist
-via en sibling-container). Og C2-kontrollen mangler sin app-nære form: at bevise
-`'unsafe-inline'` *i appen* kræver at en dialog åbnes, altså et klik — som repoet ikke kan
-automatisere.
+via en sibling-container). Og C2-kontrollen manglede sin app-nære form, fordi et
+dialog-klik ikke kunne automatiseres — **lukket af P2-39**: 1 violation med `style-src` uden
+`'unsafe-inline'`, 0 på `/dashboard`.
 
 Den før det: **P3-43 — nginx som perimeter, i drift** (2026-07-28), fem commits
 `4d73b527`..`cd9b94fb`. Browseren taler med én origin: 16 eksplicitte `proxy_pass`-locations
