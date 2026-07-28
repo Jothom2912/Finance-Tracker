@@ -144,7 +144,7 @@ def test_each_row_gets_its_own_event_id_and_aggregate(script, duplicate_row):
 
 
 def test_events_are_inserted_before_the_delete_and_committed_once(script, duplicate_row):
-    """Insert first: a failing DELETE then rolls the events back with it."""
+    """Insert first: a failing delete then rolls the events back with it."""
     cursor = _FakeCursor(deleted=1)
     conn = _FakeConn(cursor)
 
@@ -152,10 +152,29 @@ def test_events_are_inserted_before_the_delete_and_committed_once(script, duplic
 
     assert deleted == 1
     kinds = [kind for kind, _ in cursor.calls]
-    assert kinds == ["executemany", "execute"], "outbox insert must precede the DELETE"
+    assert kinds == ["executemany", "execute"], "outbox insert must precede the delete"
     assert "INSERT INTO outbox_events" in cursor.calls[0][1]
-    assert "DELETE FROM transactions" in cursor.calls[1][1]
     assert conn.committed and not conn.rolled_back
+
+
+def test_the_delete_is_soft_and_skips_existing_tombstones(script, duplicate_row):
+    """P2-25: this script must not be the last hard delete in the system.
+
+    ``AND deleted_at IS NULL`` is not decoration — without it a re-run would
+    match rows it already tombstoned, so the rowcount would equal the number
+    of outboxed events and the guard below would wave through a second round
+    of deletion events for transactions the read model already buried.
+    """
+    cursor = _FakeCursor(deleted=1)
+    conn = _FakeConn(cursor)
+
+    script._delete_rows(conn, [duplicate_row])
+
+    sql = cursor.calls[1][1]
+    assert "DELETE FROM transactions" not in sql
+    assert "UPDATE transactions" in sql
+    assert "deleted_at = now()" in sql
+    assert "deleted_at IS NULL" in sql
 
 
 def test_row_count_divergence_rolls_back_instead_of_committing(script, duplicate_row):

@@ -4,6 +4,11 @@ Duplicates are identified by the dedup key used in bulk_import:
 (user_id, account_id, date, amount, description). For each group
 of duplicates, the row with the lowest id (oldest) is kept.
 
+Since P2-25 "remove" means soft-delete: the row is stamped with
+``deleted_at`` and stays in the table, exactly as the service's own
+DELETE endpoint does.  Already-tombstoned rows are invisible to the
+duplicate search, so they neither form groups nor get re-deleted.
+
 amount is Numeric(12,2) — safe for equality matching.
 
 Safety rails
@@ -11,7 +16,7 @@ Safety rails
 * **--dry-run is the default.**  Shows counts and sample groups.
 * **--execute** must be passed explicitly to delete.
 * FK constraints are checked before any delete attempt.
-* SELECT + DELETE run in a single transaction to prevent races.
+* SELECT + soft-delete run in a single transaction to prevent races.
 * Every deleted row is logged as full JSON for audit.
 * Idempotent — running twice is safe (second run finds 0 duplicates).
 
@@ -26,7 +31,7 @@ the event is already gone, so no retry, replay or self-healing consumer
 can notice (see ``dev-notes/findings/2026-07-25-cleanup-script-desyncs-read-model.md``).
 
 So this script writes the same outbox rows in the same transaction as its
-DELETE, and the existing transaction-outbox-publisher does the rest.
+soft-delete, and the existing transaction-outbox-publisher does the rest.
 The event object is imported from ``contracts`` rather than hand-built as
 JSON, so the payload cannot drift from the contract.
 
@@ -112,7 +117,17 @@ def _check_fk_constraints(conn) -> list[str]:
 
 
 def _find_duplicates(conn) -> list[dict]:
-    """Find duplicate groups and return rows to delete (all but lowest id per group)."""
+    """Find duplicate groups and return rows to delete (all but lowest id per group).
+
+    Soft-deleted rows are excluded on both sides of the join (P2-25).  A
+    tombstone is not a duplicate of anything: leaving it in would let a
+    deleted row and its legitimate re-import form a "group", and since the
+    tombstone has the lower id it would be the one *kept* — the script
+    would delete the live row and preserve the dead one.  It would also
+    break the idempotency this script's own docstring promises, because a
+    second run would outbox events for rows the UPDATE no longer touches
+    and trip the rowcount guard.
+    """
     with conn.cursor() as cur:
         cur.execute("""
             WITH dupes AS (
@@ -121,6 +136,7 @@ def _find_duplicates(conn) -> list[dict]:
                     COUNT(*) AS cnt,
                     MIN(id) AS keep_id
                 FROM transactions
+                WHERE deleted_at IS NULL
                 GROUP BY user_id, account_id, date, amount, description
                 HAVING COUNT(*) > 1
             )
@@ -137,6 +153,7 @@ def _find_duplicates(conn) -> list[dict]:
                 AND t.amount = d.amount
                 AND (t.description = d.description OR (t.description IS NULL AND d.description IS NULL))
             WHERE t.id != d.keep_id
+              AND t.deleted_at IS NULL
             ORDER BY d.keep_id, t.id
         """)
         columns = [desc[0] for desc in cur.description]
@@ -146,12 +163,15 @@ def _find_duplicates(conn) -> list[dict]:
 def _get_summary(conn) -> dict:
     """Get overall transaction count and duplicate group stats."""
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM transactions")
+        # Live rows only — the reported total must match what the API
+        # shows, or the operator reads the report as a discrepancy.
+        cur.execute("SELECT COUNT(*) FROM transactions WHERE deleted_at IS NULL")
         total = cur.fetchone()[0]
 
         cur.execute("""
             SELECT COUNT(*) FROM (
                 SELECT 1 FROM transactions
+                WHERE deleted_at IS NULL
                 GROUP BY user_id, account_id, date, amount, description
                 HAVING COUNT(*) > 1
             ) groups
@@ -199,6 +219,15 @@ def _delete_rows(conn, rows: list[dict]) -> int:
     Both statements share the cursor and a single commit, so the read model
     can never learn about a delete that did not happen — nor miss one that
     did.  Insert first: a failed DELETE then rolls the events back with it.
+
+    Soft-delete since P2-25: this stamps ``deleted_at`` rather than removing
+    the row, same as the API.  It is not cosmetic — without it this script
+    would be the only remaining hard delete in the system, i.e. the repo's
+    own tooling breaking the invariant the service just adopted, and the
+    tombstone that ``categorized_consumer`` needs would not exist for rows
+    this script removed.  ``AND deleted_at IS NULL`` keeps the rowcount
+    guard below honest on a re-run: already-tombstoned rows must not be
+    counted as newly deleted.
     """
     ids = [row["id"] for row in rows]
     with conn.cursor() as cur:
@@ -214,7 +243,7 @@ def _delete_rows(conn, rows: list[dict]) -> int:
         outboxed = cur.rowcount
 
         cur.execute(
-            "DELETE FROM transactions WHERE id = ANY(%s)",
+            "UPDATE transactions SET deleted_at = now() WHERE id = ANY(%s) AND deleted_at IS NULL",
             (ids,),
         )
         deleted = cur.rowcount
