@@ -9,8 +9,26 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P3-25 + P2-27 + P1-16 lukkede 2026-07-28. Næste item er ikke valgt — se
-**Next up**.
+**P2-39 — browser-automatisering som ejet instrument.** Beslutning truffet, plan skrevet,
+**ingen kode endnu**. `@playwright/test` i `services/frontend/`, to tests, kørt i det
+**eksisterende** `e2e-tests`-job (et nyt job ville koste en anden fuld `compose up --build`).
+[Decision](decisions/2026-07-28-browser-automation-instrument.md) ·
+[plan](plans/2026-07-28-p239-browser-automation.md).
+
+**Færdig-kriteriet er ikke "grøn", det er verificeret rød ved mutation.** Med P1-16 genindført
+skal browser-suiten fejle *mens* `npm test` bliver 346 grønne — det er beviset for at instrumentet
+er nyt og ikke overlappende. Kortlægningen bekræftede præmissen: der er **nul** browser-lag i
+repoet (ingen playwright/puppeteer/cypress/selenium i `package.json`, `uv.lock` eller nogen
+`requirements.txt`), og P3-25's probe var headless Chrome med `--dump-dom`, `sleep`, `kill -9` —
+**ikke checket ind**, og dens forudsætning ligger stadig som uoprydt tilstand i dev-stakken
+(bruger `csp_probe` id 368, konto 371). Trin 8 rydder dem, og at suiten stadig er grøn *bagefter*
+er testen af om fixturen seeder det den påstår.
+
+**Tre fælder planen allerede kender:** `127.0.0.1:3000`, ikke `localhost` (P3-43 ramte en Vite
+dev-server på `[::1]:3000`); fixturen skal sætte alle **fem** localStorage-nøgler, for glemmes
+`account_id` svarer `periodOverview` med tavse nuller i stedet for en fejl — altså en
+grøn-udseende test på en tom app; og `e2e-tests` har **intet `timeout-minutes`** (P2-38), så en
+hængende browser hænger i 6 timer. `Makefile:49,91` siger desuden 5173 hvor porten reelt er 3000.
 
 Sidst shippet: **P3-25 + P2-27, plus P1-16 som utilsigtet udbytte** (2026-07-28), fire commits
 `38634dca`..`474b9643`. Perimeteren har nu fire security headers (med `always`, så også på
@@ -226,12 +244,8 @@ oprydning.
   omdøbningen er også optjent for anden gang. Bemærk at "build hygiene" ikke længere dækker
   scopet præcist: rule 5 er en sikkerhedsregel, ikke en build-regel, og de deler kun
   fejlmoden *en grøn kørsel der intet beviste*. Vælg navnet efter fejlmoden, ikke emnet.
-- **Browser-automatisering fortjener nu en beslutning, ikke en henvisning.** Argumentet er ikke
-  længere teoretisk: P3-25's ene ægte fund (P1-16) kom fra at drive appen i en browser, og den
-  næste måling der mangler — at `'unsafe-inline'` er nødvendig *i appen* — kræver et klik på en
-  dialog. Der er intet Playwright i repoet. Bemærk at det ikke er "flere tests": de 346 er
-  grønne og var grønne gennem hele regressionen. Det er et **andet instrument**, ikke mere af
-  det samme. Har intet ID endnu.
+- ~~Browser-automatisering fortjener en beslutning~~ — **truffet 2026-07-28 som P2-39**, se
+  **Active**. Har nu ID, decision-note og plan.
 - **P3-47** — en `location` med eget `add_header` fjerner tavst perimeterens fire security
   headers i den blok. Ikke akut i dag (filen har ingen andre `add_header`), men **P3-28 er det
   item der udløser det**, så de to hører sammen i rækkefølge.
