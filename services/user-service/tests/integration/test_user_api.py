@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 REGISTER_URL = "/api/v1/users/register"
 LOGIN_URL = "/api/v1/users/login"
 ME_URL = "/api/v1/users/me"
+ME_PASSWORD_URL = "/api/v1/users/me/password"
+ME_USERNAME_URL = "/api/v1/users/me/username"
 INTERNAL_API_KEY = "test-internal-api-key"
 
 VALID_USER = {
@@ -193,6 +195,185 @@ class TestGetMe:
         resp = await client.get(ME_URL, headers={"Authorization": "Bearer garbage.token.here"})
 
         assert resp.status_code == 401
+
+
+# ── Profil-skrivninger (F2-08) ──────────────────────────────────────
+
+
+async def _register_and_auth(client: AsyncClient) -> dict[str, str]:
+    """Registrér VALID_USER, log ind, og returnér en Authorization-header."""
+    await client.post(REGISTER_URL, json=VALID_USER)
+    token_data = await _login(client, VALID_USER["email"], VALID_USER["password"])
+    return {"Authorization": f"Bearer {token_data['access_token']}"}
+
+
+class TestChangePassword:
+    @pytest.mark.asyncio()
+    async def test_change_password_persists_new_hash(self, client: AsyncClient) -> None:
+        """204 alene beviser ingenting — ruten kunne svare 204 uden at
+        skrive. Beviset er at det NYE password logger ind og det GAMLE
+        afvises bagefter.
+        """
+        headers = await _register_and_auth(client)
+
+        resp = await client.put(
+            ME_PASSWORD_URL,
+            json={"current_password": "secret1234", "new_password": "brandnew5678"},
+            headers=headers,
+        )
+        assert resp.status_code == 204
+
+        with_new = await client.post(
+            LOGIN_URL,
+            json={"username_or_email": VALID_USER["email"], "password": "brandnew5678"},
+        )
+        assert with_new.status_code == 200
+
+        with_old = await client.post(
+            LOGIN_URL,
+            json={"username_or_email": VALID_USER["email"], "password": "secret1234"},
+        )
+        assert with_old.status_code == 401
+
+    @pytest.mark.asyncio()
+    async def test_wrong_current_password_is_403_never_401(self, client: AsyncClient) -> None:
+        """Assertionen på ``!= 401`` ser overflødig ud ved siden af
+        ``== 403``. Den er det ikke: den navngiver regressionen.
+
+        Frontendens apiClient kalder ``handleUnauthorized()`` på enhver
+        401 fra en ikke-auth-rute — den rydder auth-storage og redirecter
+        til /login. Svarer denne rute 401, bliver konsekvensen af en
+        tastefejl i "nuværende adgangskode" altså at brugeren logges ud,
+        og fejlen ligner ikke sin årsag. Genbruges
+        ``InvalidCredentialsException`` her ved en senere oprydning, er
+        det denne linje der fanger det.
+        """
+        headers = await _register_and_auth(client)
+
+        resp = await client.put(
+            ME_PASSWORD_URL,
+            json={"current_password": "wrong_password", "new_password": "brandnew5678"},
+            headers=headers,
+        )
+
+        assert resp.status_code == 403
+        assert resp.status_code != 401
+
+    @pytest.mark.asyncio()
+    async def test_wrong_current_password_leaves_password_unchanged(self, client: AsyncClient) -> None:
+        headers = await _register_and_auth(client)
+
+        await client.put(
+            ME_PASSWORD_URL,
+            json={"current_password": "wrong_password", "new_password": "brandnew5678"},
+            headers=headers,
+        )
+
+        still_works = await client.post(
+            LOGIN_URL,
+            json={"username_or_email": VALID_USER["email"], "password": "secret1234"},
+        )
+        assert still_works.status_code == 200
+
+    @pytest.mark.asyncio()
+    async def test_change_password_requires_auth(self, client: AsyncClient) -> None:
+        await client.post(REGISTER_URL, json=VALID_USER)
+
+        resp = await client.put(
+            ME_PASSWORD_URL,
+            json={"current_password": "secret1234", "new_password": "brandnew5678"},
+        )
+
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio()
+    async def test_too_short_new_password_is_422(self, client: AsyncClient) -> None:
+        headers = await _register_and_auth(client)
+
+        resp = await client.put(
+            ME_PASSWORD_URL,
+            json={"current_password": "secret1234", "new_password": "kort"},
+            headers=headers,
+        )
+
+        assert resp.status_code == 422
+
+
+class TestChangeUsername:
+    @pytest.mark.asyncio()
+    async def test_change_username_reflected_in_get_me(self, client: AsyncClient) -> None:
+        headers = await _register_and_auth(client)
+
+        resp = await client.put(ME_USERNAME_URL, json={"username": "alice_ny"}, headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.json()["username"] == "alice_ny"
+
+        me = await client.get(ME_URL, headers=headers)
+        assert me.json()["username"] == "alice_ny"
+
+    @pytest.mark.asyncio()
+    async def test_change_username_to_own_name_is_ok_not_conflict(self, client: AsyncClient) -> None:
+        """Uændret navn må ikke give 409. Uden no-op'et i use casen ville
+        unikhedstjekket finde brugeren selv og afvise gemmet.
+        """
+        headers = await _register_and_auth(client)
+
+        resp = await client.put(ME_USERNAME_URL, json={"username": "alice"}, headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.json()["username"] == "alice"
+
+    @pytest.mark.asyncio()
+    async def test_change_username_to_taken_name_is_409(self, client: AsyncClient) -> None:
+        headers = await _register_and_auth(client)
+        await client.post(
+            REGISTER_URL,
+            json={"username": "bob", "email": "bob@example.com", "password": "secret1234"},
+        )
+
+        resp = await client.put(ME_USERNAME_URL, json={"username": "bob"}, headers=headers)
+
+        assert resp.status_code == 409
+
+    @pytest.mark.asyncio()
+    async def test_change_username_requires_auth(self, client: AsyncClient) -> None:
+        await client.post(REGISTER_URL, json=VALID_USER)
+
+        resp = await client.put(ME_USERNAME_URL, json={"username": "alice_ny"})
+
+        assert resp.status_code == 401
+
+
+class TestUpdatedAtStamp:
+    """Migration 003's kolonne skal faktisk skrives.
+
+    Uden disse to ville feltet være dekoration: alle ruterne svarer det
+    samme uanset om ``updated_at`` sættes, så ingen anden test i filen
+    kan se forskel på en kolonne der virker og en der aldrig røres.
+    """
+
+    @pytest.mark.asyncio()
+    async def test_fresh_user_has_null_updated_at(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        await client.post(REGISTER_URL, json=VALID_USER)
+
+        from app.models import UserModel
+
+        result = await db_session.execute(select(UserModel))
+        assert result.scalars().one().updated_at is None
+
+    @pytest.mark.asyncio()
+    async def test_username_change_stamps_updated_at(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        headers = await _register_and_auth(client)
+
+        await client.put(ME_USERNAME_URL, json={"username": "alice_ny"}, headers=headers)
+
+        from app.models import UserModel
+
+        result = await db_session.execute(select(UserModel))
+        user = result.scalars().one()
+        await db_session.refresh(user)
+        assert user.updated_at is not None
 
 
 class TestInternalUserLookup:

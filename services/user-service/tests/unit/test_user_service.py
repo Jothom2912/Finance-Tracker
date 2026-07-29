@@ -6,10 +6,16 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from app.application.dto import LoginDTO, RegisterDTO
+from app.application.dto import (
+    ChangePasswordDTO,
+    ChangeUsernameDTO,
+    LoginDTO,
+    RegisterDTO,
+)
 from app.application.service import UserService
 from app.domain.entities import User, UserWithCredentials
 from app.domain.exceptions import (
+    CurrentPasswordIncorrectException,
     InvalidCredentialsException,
     UserAlreadyExistsException,
     UserNotFoundException,
@@ -348,3 +354,197 @@ class TestGetUser:
 
         with pytest.raises(UserNotFoundException):
             await service.get_user(999)
+
+
+# ── change_password (F2-08) ──────────────────────────────────────────
+
+
+class TestChangePassword:
+    @pytest.mark.asyncio()
+    async def test_change_password_success(self, service: UserService, uow: MagicMock) -> None:
+        uow.users.find_credentials_by_id.return_value = _make_user_with_creds()
+
+        dto = ChangePasswordDTO(current_password="secret123", new_password="brandnew456")
+        await service.change_password(1, dto)
+
+        uow.users.update_password.assert_awaited_once_with(1, "hashed_brandnew456")
+        uow.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio()
+    async def test_change_password_reads_credentials_not_plain_user(self, service: UserService, uow: MagicMock) -> None:
+        """Verifikationen SKAL gå gennem find_credentials_by_id.
+
+        ``find_by_id`` returnerer bevidst ``User`` uden password_hash, så
+        et skifte til den ville ikke kunne verificere noget — og en
+        implementation der "verificerede" mod en manglende hash ville
+        acceptere ethvert nuværende password.
+        """
+        uow.users.find_credentials_by_id.return_value = _make_user_with_creds()
+
+        dto = ChangePasswordDTO(current_password="secret123", new_password="brandnew456")
+        await service.change_password(1, dto)
+
+        uow.users.find_credentials_by_id.assert_awaited_once_with(1)
+        uow.users.find_by_id.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_change_password_wrong_current_password(self, service: UserService, uow: MagicMock) -> None:
+        uow.users.find_credentials_by_id.return_value = _make_user_with_creds()
+
+        dto = ChangePasswordDTO(current_password="not_my_password", new_password="brandnew456")
+
+        with pytest.raises(CurrentPasswordIncorrectException):
+            await service.change_password(1, dto)
+
+        uow.users.update_password.assert_not_awaited()
+        uow.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_change_password_wrong_current_is_not_invalid_credentials(
+        self, service: UserService, uow: MagicMock
+    ) -> None:
+        """Regressionsvagt for 403-vs-401-fælden.
+
+        ``InvalidCredentialsException`` mapper til 401, og frontendens
+        apiClient logger brugeren ud på enhver 401 fra en ikke-auth-rute.
+        Genbruges den her ved en senere "oprydning", forsvinder brugerens
+        session ved en tastefejl. De to exceptions deler basisklasse, så
+        en ``pytest.raises`` på den nye ville bestå for begge — derfor
+        asserteres typen negativt her.
+        """
+        uow.users.find_credentials_by_id.return_value = _make_user_with_creds()
+
+        dto = ChangePasswordDTO(current_password="not_my_password", new_password="brandnew456")
+
+        with pytest.raises(CurrentPasswordIncorrectException) as exc_info:
+            await service.change_password(1, dto)
+
+        assert not isinstance(exc_info.value, InvalidCredentialsException)
+
+    @pytest.mark.asyncio()
+    async def test_change_password_user_gone(self, service: UserService, uow: MagicMock) -> None:
+        uow.users.find_credentials_by_id.return_value = None
+
+        dto = ChangePasswordDTO(current_password="secret123", new_password="brandnew456")
+
+        with pytest.raises(UserNotFoundException):
+            await service.change_password(999, dto)
+
+        uow.users.update_password.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_change_password_offloads_bcrypt_from_event_loop(self, uow: MagicMock) -> None:
+        """Samme rationale som register/login: både verifikationen og
+        hashingen er bcrypt, altså ~250 ms CPU hver. To blokerende kald
+        på en enkelt request ville fryse event-loopet i et halvt sekund.
+        """
+        uow.users.find_credentials_by_id.return_value = _make_user_with_creds()
+
+        def slow_verify(plain: str, hashed: str) -> bool:
+            time.sleep(0.1)
+            return hashed == f"hashed_{plain}"
+
+        def slow_hash(password: str) -> str:
+            time.sleep(0.1)
+            return f"hashed_{password}"
+
+        service = UserService(
+            uow=uow,
+            hash_password=slow_hash,
+            verify_password=slow_verify,
+            create_token=lambda uid, uname, email: f"token_{uid}",
+        )
+
+        tick_count = 0
+
+        async def ticker() -> None:
+            nonlocal tick_count
+            while True:
+                await asyncio.sleep(0.01)
+                tick_count += 1
+
+        dto = ChangePasswordDTO(current_password="secret123", new_password="brandnew456")
+        ticker_task = asyncio.create_task(ticker())
+        try:
+            await service.change_password(1, dto)
+        finally:
+            ticker_task.cancel()
+
+        uow.users.update_password.assert_awaited_once_with(1, "hashed_brandnew456")
+        assert tick_count >= 5
+
+
+# ── change_username (F2-08) ──────────────────────────────────────────
+
+
+class TestChangeUsername:
+    @pytest.mark.asyncio()
+    async def test_change_username_success(self, service: UserService, uow: MagicMock) -> None:
+        uow.users.find_by_id.return_value = _make_user()
+        uow.users.find_by_username.return_value = None
+        uow.users.update_username.return_value = _make_user(username="alice_ny")
+
+        result = await service.change_username(1, ChangeUsernameDTO(username="alice_ny"))
+
+        assert result.username == "alice_ny"
+        uow.users.update_username.assert_awaited_once_with(1, "alice_ny")
+        uow.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio()
+    async def test_change_username_unchanged_is_noop(self, service: UserService, uow: MagicMock) -> None:
+        """Et gem uden ændring må ikke skrive — og må frem for alt ikke
+        ramme unikhedstjekket, hvor brugeren ville kollidere med sig selv
+        og få 409 for at gemme sit eget navn.
+        """
+        uow.users.find_by_id.return_value = _make_user(username="alice")
+
+        result = await service.change_username(1, ChangeUsernameDTO(username="alice"))
+
+        assert result.username == "alice"
+        uow.users.find_by_username.assert_not_awaited()
+        uow.users.update_username.assert_not_awaited()
+        uow.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_change_username_taken(self, service: UserService, uow: MagicMock) -> None:
+        uow.users.find_by_id.return_value = _make_user(username="alice")
+        uow.users.find_by_username.return_value = _make_user_with_creds(user_id=2, username="bob")
+
+        with pytest.raises(UserAlreadyExistsException) as exc_info:
+            await service.change_username(1, ChangeUsernameDTO(username="bob"))
+
+        assert exc_info.value.field == "username"
+        uow.users.update_username.assert_not_awaited()
+        uow.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_change_username_race_integrity_error_becomes_conflict(
+        self, service: UserService, uow: MagicMock
+    ) -> None:
+        """Samme check-then-write-race som register: navnet kan blive
+        taget mellem unikhedstjekket og skrivningen. DB-constrainten er
+        den rigtige vagt, men dens IntegrityError skal ud som 409, ikke
+        som en uhåndteret 500.
+        """
+        uow.users.find_by_id.return_value = _make_user(username="alice")
+        uow.users.find_by_username.return_value = None
+        uow.users.update_username.side_effect = IntegrityError(
+            "UPDATE users ...",
+            {},
+            Exception('duplicate key value violates unique constraint "ix_users_username"'),
+        )
+
+        with pytest.raises(UserAlreadyExistsException) as exc_info:
+            await service.change_username(1, ChangeUsernameDTO(username="bob"))
+
+        assert exc_info.value.field == "username"
+        uow.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio()
+    async def test_change_username_user_gone(self, service: UserService, uow: MagicMock) -> None:
+        uow.users.find_by_id.return_value = None
+
+        with pytest.raises(UserNotFoundException):
+            await service.change_username(999, ChangeUsernameDTO(username="ghost"))
+
+        uow.users.update_username.assert_not_awaited()
