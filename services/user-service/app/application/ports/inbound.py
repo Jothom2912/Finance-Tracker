@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from app.application.dto import LoginDTO, RegisterDTO, TokenResponse, UserResponse
+from app.application.dto import (
+    ChangePasswordDTO,
+    ChangeUsernameDTO,
+    LoginDTO,
+    RegisterDTO,
+    TokenResponse,
+    UserResponse,
+)
 
 
 class IUserService(ABC):
@@ -16,3 +23,9 @@ class IUserService(ABC):
 
     @abstractmethod
     async def get_user(self, user_id: int) -> UserResponse: ...
+
+    @abstractmethod
+    async def change_password(self, user_id: int, dto: ChangePasswordDTO) -> None: ...
+
+    @abstractmethod
+    async def change_username(self, user_id: int, dto: ChangeUsernameDTO) -> UserResponse: ...

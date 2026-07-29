@@ -30,6 +30,29 @@ class LoginDTO(BaseModel):
     password: str
 
 
+class ChangePasswordDTO(BaseModel):
+    # `current_password` valideres bevidst IKKE mod PASSWORD_MIN: et for
+    # kort gæt er et forkert password, og svaret skal være 403 fra
+    # verifikationen — ikke en 422 der røber at gættet var for kort til
+    # overhovedet at være et password i dette system.
+    current_password: str = Field(..., min_length=1, max_length=PASSWORD_MAX)
+    # Det nye password holdes derimod til samme grænser som RegisterDTO —
+    # konstanterne, ikke tallene, så de to steder ikke kan blive uenige.
+    new_password: str = Field(
+        ...,
+        min_length=PASSWORD_MIN,
+        max_length=PASSWORD_MAX,
+    )
+
+
+class ChangeUsernameDTO(BaseModel):
+    username: str = Field(
+        ...,
+        min_length=USERNAME_MIN,
+        max_length=USERNAME_MAX,
+    )
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -9,6 +9,8 @@ from contracts.events.user import UserCreatedEvent
 from sqlalchemy.exc import IntegrityError
 
 from app.application.dto import (
+    ChangePasswordDTO,
+    ChangeUsernameDTO,
     LoginDTO,
     RegisterDTO,
     TokenResponse,
@@ -17,6 +19,7 @@ from app.application.dto import (
 from app.application.ports.inbound import IUserService
 from app.application.ports.outbound import IUnitOfWork
 from app.domain.exceptions import (
+    CurrentPasswordIncorrectException,
     InvalidCredentialsException,
     UserAlreadyExistsException,
     UserNotFoundException,
@@ -134,4 +137,69 @@ class UserService(IUserService):
             username=user.username,
             email=user.email,
             created_at=user.created_at or datetime.now(timezone.utc),
+        )
+
+    async def change_password(self, user_id: int, dto: ChangePasswordDTO) -> None:
+        async with self._uow:
+            # find_by_id ville ikke duge: den returnerer User uden
+            # password_hash, så der ville ikke være noget at verificere mod.
+            user = await self._uow.users.find_credentials_by_id(user_id)
+            if user is None:
+                raise UserNotFoundException(user_id)
+
+            # Samme rationale som register()/login(): bcrypt er CPU-bundet
+            # og ~250 ms, så både verifikation og hashing køres af
+            # event-loopet.
+            current_ok = await anyio.to_thread.run_sync(self._verify_password, dto.current_password, user.password_hash)
+            if not current_ok:
+                # Bevidst ikke InvalidCredentialsException — den mapper til
+                # 401, og frontendens 401-håndtering logger brugeren ud.
+                # Se exceptionens docstring.
+                raise CurrentPasswordIncorrectException()
+
+            password_hash = await anyio.to_thread.run_sync(self._hash_password, dto.new_password)
+            await self._uow.users.update_password(user_id, password_hash)
+
+            await self._uow.commit()
+
+        logger.info("Changed password for user %s", user_id)
+
+    async def change_username(self, user_id: int, dto: ChangeUsernameDTO) -> UserResponse:
+        async with self._uow:
+            user = await self._uow.users.find_by_id(user_id)
+            if user is None:
+                raise UserNotFoundException(user_id)
+
+            if user.username == dto.username:
+                # No-op: et gem uden ændring skal ikke koste en skrivning,
+                # og skal slet ikke ramme unikhedstjekket nedenfor — der
+                # ville brugeren kollidere med sig selv og få 409.
+                return UserResponse(
+                    id=user.id,
+                    username=user.username,
+                    email=user.email,
+                    created_at=user.created_at or datetime.now(timezone.utc),
+                )
+
+            if await self._uow.users.find_by_username(dto.username):
+                raise UserAlreadyExistsException("username", dto.username)
+
+            try:
+                updated = await self._uow.users.update_username(user_id, dto.username)
+            except IntegrityError as err:
+                # Samme check-then-write-race som register(): en samtidig
+                # registrering eller omdøbning kan nå navnet mellem tjekket
+                # ovenfor og denne skrivning. DB'ens unique-constraint er
+                # den rigtige vagt; oversæt til samme 409 frem for en 500.
+                raise UserAlreadyExistsException("username", dto.username) from err
+
+            await self._uow.commit()
+
+        logger.info("Changed username for user %s", user_id)
+
+        return UserResponse(
+            id=updated.id,
+            username=updated.username,
+            email=updated.email,
+            created_at=updated.created_at or datetime.now(timezone.utc),
         )

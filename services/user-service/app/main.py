@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.inbound.rest_api import router as users_router
 from app.domain.exceptions import (
+    CurrentPasswordIncorrectException,
     InvalidCredentialsException,
     UserAlreadyExistsException,
     UserNotFoundException,
@@ -31,6 +32,14 @@ async def user_already_exists_handler(_request: Request, exc: UserAlreadyExistsE
 @app.exception_handler(InvalidCredentialsException)
 async def invalid_credentials_handler(_request: Request, exc: InvalidCredentialsException) -> JSONResponse:
     return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+
+@app.exception_handler(CurrentPasswordIncorrectException)
+async def current_password_incorrect_handler(_request: Request, exc: CurrentPasswordIncorrectException) -> JSONResponse:
+    # 403, ikke 401. En 401 herfra ville få frontendens apiClient til at
+    # rydde sessionen og redirecte til /login — altså logge brugeren ud
+    # fordi de tastede deres nuværende password forkert.
+    return JSONResponse(status_code=403, content={"detail": str(exc)})
 
 
 @app.exception_handler(UserNotFoundException)

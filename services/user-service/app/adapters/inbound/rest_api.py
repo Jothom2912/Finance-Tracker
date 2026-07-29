@@ -4,7 +4,14 @@ from hmac import compare_digest
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
-from app.application.dto import LoginDTO, RegisterDTO, TokenResponse, UserResponse
+from app.application.dto import (
+    ChangePasswordDTO,
+    ChangeUsernameDTO,
+    LoginDTO,
+    RegisterDTO,
+    TokenResponse,
+    UserResponse,
+)
 from app.application.ports.inbound import IUserService
 from app.auth import get_current_user_id
 from app.config import settings
@@ -64,6 +71,33 @@ async def get_me(
     return await service.get_user(user_id)
 
 
+@router.put(
+    "/me/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def change_my_password(
+    body: ChangePasswordDTO,
+    user_id: int = Depends(get_current_user_id),
+    service: IUserService = Depends(get_user_service),
+) -> None:
+    await service.change_password(user_id, body)
+
+
+@router.put(
+    "/me/username",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def change_my_username(
+    body: ChangeUsernameDTO,
+    user_id: int = Depends(get_current_user_id),
+    service: IUserService = Depends(get_user_service),
+) -> UserResponse:
+    return await service.change_username(user_id, body)
+
+
+# /me-ruterne står FØR /{user_id}. De kolliderer ikke på metode her, men
+# rækkefølgen er filens eksisterende regel og skal ikke brydes ved et uheld.
 @router.get(
     "/{user_id}",
     response_model=UserResponse,
