@@ -123,12 +123,13 @@ fanger en *fejlkonfigureret deploy*, ikke en *forsvunden fil under drift*.
          løftes til `shared/` senere uden omskrivning.
    → commit: `feat(banking): P2-42b — /ready rører DB og Enable Banking-konfigurationen`
 
-2. [x] **Unit-tests** — `services/banking-service/tests/test_readiness.py` (ny).
+2. [x] **Unit-tests** — `services/banking-service/tests/integration/test_readiness.py` (ny).
        Fire cases: alt ok → 200 + `ready`; PEM-sti findes ikke → **200** + `degraded` +
        `enable_banking.ok == false`; `app_id` tom → 200 + `degraded`; DB rejser → 503 +
        `unavailable`. Den anden case er den vigtigste — den låser beslutningen om at valgfri
        ≠ 503 fast i en test, så en fremtidig "oprydning" ikke kan gøre den til 503 i tavshed.
-       *Forbehold:* bankings tests kører kun i CI, ikke lokalt (P3-39 / memory).
+       *Forbeholdet holdt ikke:* de 74 tests kører fint lokalt med `uv run pytest tests`.
+       P3-23 gjorde bankings deps installerbare, så noten om at de kun kører i CI er forældet.
    → commit: `test(banking): P2-42b — readiness-niveauer, inkl. degraded ≠ 503`
 
 3. [x] **CI-gate** — `.github/workflows/ci.yml`, nyt step i `e2e-tests` **efter**
@@ -216,6 +217,11 @@ CI-kørsel aflæst *navngivet* — `/ready`-bodyen i loggen, og de 19 jobs.
 Done 2026-07-29, fem commits (`ee8602aa`, `67c4cddc`, `cf434d37`, `163554fd`, + docs).
 Alle tre instrumenter aflæst navngivet mod den lokale stak; ingen af de fire trin gav det
 resultat planen gættede på uden forbehold, og to af dem ændrede en konklusion.
+
+Bimæssigt: **bankings tests kører lokalt** (74 passed, `uv run pytest tests`). Planen skrev
+forbeholdet fra memory om at de kun kunne køre i CI — det er forældet efter P3-23, hvor
+deps blev installerbare. Testene er også mutation-kontrolleret: med `degraded` sat til 503
+fejler netop de to cases der låser beslutningen, og ingen andre.
 
 ### Verifikationen — de fire aflæsninger
 
