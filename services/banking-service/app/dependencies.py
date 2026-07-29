@@ -17,7 +17,7 @@ from app.database import get_db
 _banking_client: EnableBankingClient | None = None
 
 
-def _get_banking_client() -> EnableBankingClient:
+def get_banking_client() -> EnableBankingClient:
     # Process-wide singleton: the underlying httpx.AsyncClient keeps a
     # TCP/TLS connection pool that should be shared across requests
     # (per-request clients would re-handshake and re-read the PEM every
@@ -54,6 +54,6 @@ async def get_banking_service(
     return BankingService(
         uow=uow,
         account_port=account_port,
-        banking_client=_get_banking_client(),
+        banking_client=get_banking_client(),
         saga_status_port=SagaStatusPort(),
     )
