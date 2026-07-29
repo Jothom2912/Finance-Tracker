@@ -20,6 +20,8 @@ Sidst shippet: **P2-28 — taksonomi-mutationer internal-only** (2026-07-29),
 [decision](decisions/2026-07-29-taxonomy-authorization.md). De seks skrive-ruter ligger under
 `/api/v1/internal/…` bag servicens eksisterende `require_internal_api_key`; nul
 nginx-ændringer, fordi deny-backstoppen allerede 404'er præfikset.
+**CI grøn: run 30443466102, alle 19 jobs success** — aflæst navngivet: den nye
+`test_taxonomy_write_auth.py` på 35 PASSED-linjer, P1-15's vagt på 16 og grøn uændret.
 
 **Baseline-tallet der bar itemet:** en bruger registreret ét minut i forvejen, med **nul egne
 transaktioner**, omdøbte en kategori gennem perimeteren (200) og fik

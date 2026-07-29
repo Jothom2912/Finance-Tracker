@@ -263,10 +263,21 @@ den er "alt er 401" og "det er i stykker" ikke til at skelne. Læsestien: alle f
 
 ### Suiter
 
-`make -C services/categorization-service test` **165 passed**, `lint` + `typecheck` (mypy: 41
-filer) rene. `npm test` **346 passed** — præcis det planen forudsagde. `make test-browser`
+`make -C services/categorization-service test` **165 passed** lokalt, `lint` + `typecheck`
+(mypy: 41 filer) rene. `npm test` **346 passed** — præcis det planen forudsagde. `make test-browser`
 **4 passed** (suiten er vokset fra 2 til 4 siden planen blev skrevet). `make compose-check`
 grøn: 20 nginx-locations, 18 upstreams — antagelsen om nul nginx-ændringer holdt.
+
+**CI: run 30443466102, alle 19 jobs success.** Aflæst *navngivet* frem for som "success",
+jf. trin 8: `test_taxonomy_write_auth.py` optræder på **35** PASSED-linjer i
+categorization-service-jobbets log, og P1-15's `test_categorize_router_auth.py` på **16** —
+den eksisterende vagt kørte og var grøn uændret, som risikoafsnittet krævede. Jobbet melder
+**186 passed** mod 165 lokalt; differencen er de container-krævende integrationstests der
+ikke kører lokalt, ikke nye tests. `Typecheck (mypy)`: 41 filer.
+
+Bemærk undervejs: `gh run --log` gav exit 1 og 0 linjer mens kørslen stadig var
+`in_progress` — P2-38's `BlobNotFound` igen. Fanget fordi exit-koden blev læst eksplicit;
+utjekket ville et tomt grep have set ud som "testfilen kørte ikke".
 
 ### Tre ting undersøgelsen rettede undervejs
 
