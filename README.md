@@ -147,7 +147,7 @@ graph LR
     RMQ -->|user.created| ASC[Account Service<br/>Consumer]
     RMQ -->|transaction.created| CS
     RMQ -->|transaction.categorized| TCC[Categorized<br/>Consumer]
-    RMQ -->|category.*| CCSC[Cat-Service<br/>Category Sync]
+    RMQ -->|"category.* + subcategory.*"| TXC[Transaction Service<br/>Taxonomy Sync]
     RMQ -->|budget.month_closed| GBC[Goal Budget<br/>Consumer]
     RMQ -->|account.*| BAPC[Banking Account<br/>Projection]
     RMQ -->|saga.*| SAGA
@@ -155,6 +155,7 @@ graph LR
     SAGA -->|saga.cmd.*| TS
 
     ASC -->|INSERT Account| PG_A
+    TXC -->|"upsert read copies"| PG_T
 ```
 
 ### Key Architecture Decisions
@@ -319,10 +320,10 @@ See `services/ai-service/README.md` for model configuration and intent types.
 | Service | Port | Database | Role |
 |---------|------|----------|------|
 | **User Service** | 8001 | PostgreSQL (5433) | User registration, login, JWT issuing |
-| **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions, categories |
+| **Transaction Service** | 8002 | PostgreSQL (5434) | Transaction CRUD, CSV import, planned transactions (taxonomy: event-synced read copies only, per ADR-003) |
 | **Budget Service** | 8003 | PostgreSQL (5437) | Budgets, monthly budget summaries |
 | **Account Service** | 8004 | PostgreSQL (5436) | Account CRUD, account groups |
-| **Categorization Service** | 8005 | PostgreSQL (5435) | Transaction categorization pipeline |
+| **Categorization Service** | 8005 | PostgreSQL (5435) | Categorization pipeline **and sole owner/writer of the taxonomy** (categories, subcategories, merchants, rules) per ADR-003. Taxonomy reads are JWT'd; writes are internal-only under `/api/v1/internal/` (P2-28) |
 | **Goal Service** | 8006 | PostgreSQL (5438) | Savings goals, budget surplus allocation |
 | **AI Service** | 8007 | ChromaDB (volume) | Streaming financial Q&A (Ollama + ChromaDB) |
 | **Banking Service** | 8009 | PostgreSQL (5439) | PSD2 bank integration (Enable Banking) |
@@ -350,24 +351,39 @@ The monolith source remains in `services/monolith/` for reference but is exclude
 
 ### Workers & Consumers
 
-| Worker | Role |
+All **26** worker containers, matching `docker compose config --services`
+(`make compose-check` counts them):
+
+| Worker (compose service) | Role |
 |--------|------|
-| User Outbox Worker | Publishes user events to RabbitMQ |
-| Transaction Outbox Worker | Publishes transaction events to RabbitMQ |
-| Account Outbox Publisher | Publishes account events to RabbitMQ |
-| Account Service Consumer | Creates default account on `user.created` |
-| Budget Outbox Worker | Publishes budget events to RabbitMQ |
-| Categorization Outbox Worker | Publishes categorization events to RabbitMQ |
-| Goal Outbox Worker | Publishes goal events to RabbitMQ |
-| Banking Outbox Worker | Publishes banking events to RabbitMQ |
-| Saga Outbox Worker | Publishes saga commands to RabbitMQ |
-| Transaction Categorized Consumer | Writes categorization results back to transaction-service |
-| Categorization Category Sync | Syncs categories from transaction-service |
-| Categorization Transaction Consumer | Triggers async categorization on `transaction.created` |
-| Goal Budget Consumer | Handles `budget.month_closed` events (surplus → default goal) |
-| Banking Account Projection | Projects account events into banking-service |
-| Saga Start / Reply / Timeout Workers | Saga lifecycle management |
-| Banking / Transaction Saga Command Consumers | Execute saga steps in participating services |
+| `user-outbox-worker` | Publishes user events to RabbitMQ |
+| `transaction-outbox-worker` | Publishes transaction events to RabbitMQ |
+| `account-outbox-publisher` | Publishes account events to RabbitMQ |
+| `budget-outbox-worker` | Publishes budget events to RabbitMQ |
+| `categorization-outbox-worker` | Publishes categorization + `category.*`/`subcategory.*` events |
+| `goal-outbox-worker` | Publishes goal events to RabbitMQ |
+| `banking-outbox-worker` | Publishes banking events to RabbitMQ |
+| `saga-outbox-worker` | Publishes saga commands to RabbitMQ |
+| `account-service-consumer` | Creates default account on `user.created` |
+| `transaction-categorized-consumer` | Writes categorization results back to transaction-service |
+| `transaction-taxonomy-consumer` | Maintains transaction-service's taxonomy **read copies** from `category.*` + `subcategory.*` (ADR-003; self-healing upserts + inbox idempotency) |
+| `categorization-transaction-consumer` | Triggers async categorization on `transaction.created` |
+| `categorization-correction-consumer` | Learns user corrections as auto-managed rules (F1-03) |
+| `goal-budget-consumer` | Handles `budget.month_closed` (surplus → default goal) |
+| `banking-account-projection-consumer` | Projects account events into banking-service |
+| `analytics-projection-consumer` | Maintains the Elasticsearch read model (incl. `propagate_category_rename`) |
+| `analytics-embedding-consumer` | Embeds transactions into ChromaDB for semantic search |
+| `notification-consumer` | Fans domain events out to the in-app notification feed (F1-01) |
+| `banking-sync-scheduler` | Staleness-based nightly bank sync (F1-05) |
+| `budget-month-close-scheduler` | Day-7 automatic month close (F1-07) |
+| `budget-alert-scheduler` | Mid-month 80%/100% budget threshold alerts (F2-03) |
+| `saga-start-consumer`, `saga-reply-consumer`, `saga-timeout-worker` | Saga lifecycle management |
+| `banking-saga-command-consumer`, `transaction-saga-command-consumer` | Execute saga steps in participating services |
+
+Note the direction of the taxonomy sync: categorization-service **owns and
+writes** the taxonomy and transaction-service consumes it (ADR-003). The old
+`category-sync-consumer`, which synced the other way into the monolith's MySQL
+projection, is removed — see the comment at `docker-compose.yml:273`.
 
 ---
 

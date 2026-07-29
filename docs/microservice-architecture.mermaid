@@ -1,6 +1,7 @@
 graph TD
     %% Finans Tracker - Target State Microservice Architecture
-    %% Last updated: 2026-04-16 (post M1-M3.5)
+    %% Last updated: 2026-07-29 (post M1-M3.5; taxonomy ownership per ADR-003,
+    %% taxonomy writes internal-only per P2-28)
     %%
     %% Target-state after full monolith extraction (strangler fig pattern).
     %% See README.md "Architecture" section for the CURRENT state diagram.
@@ -48,14 +49,14 @@ graph TD
         end
 
         subgraph transactionService ["Transaction Service - port 8002"]
-            TS["TransactionService<br/>Transaction CRUD, CSV Import<br/>Planned Transactions<br/>Category CRUD owner"]
-            TS_DB[("PostgreSQL<br/>Transactions<br/>Planned Transactions<br/>Categories")]
+            TS["TransactionService<br/>Transaction CRUD, CSV Import<br/>Planned Transactions<br/>Taxonomy READ copies only - ADR-003"]
+            TS_DB[("PostgreSQL<br/>Transactions<br/>Planned Transactions<br/>Categories + Subcategories<br/>event-synced read copies")]
             TS_OB[["outbox_events"]]
         end
 
         subgraph categorizationService ["Categorization Service - port 8005"]
-            CAT["CategorizationService<br/>Rule - ML - LLM fallback<br/>Human-in-the-loop feedback"]
-            CAT_DB[("PostgreSQL<br/>Categorization feedback<br/>Pipeline state")]
+            CAT["CategorizationService<br/>Rule - ML - LLM fallback<br/>Human-in-the-loop feedback<br/>SOLE taxonomy owner+writer - ADR-003<br/>writes internal-only - P2-28"]
+            CAT_DB[("PostgreSQL<br/>Categories, Subcategories<br/>Merchants, Rules<br/>Categorization feedback")]
             CAT_OB[["outbox_events"]]
         end
 

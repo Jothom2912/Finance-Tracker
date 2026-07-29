@@ -106,6 +106,8 @@ betales løbende; besparelsen er engangs.
    service-til-service-ruter. En `location /api/ { proxy_pass … }` ville publicere dem. Kravet
    er eksplicitte location-blokke — hvilket samtidig gør nginx.conf til den eneste præcise
    beskrivelse af systemets offentlige overflade, hvilket der ikke findes i dag.
+   *(Ordlyden er udvidet to gange siden: punkt 4 under Implementeret 2026-07-28, og punkt 8
+   under Amendment 2026-07-29.)*
 3. **En perimeter er ikke en lukning før service-portene lukkes.** 8001–8012 bliver på
    `0.0.0.0` af denne ADR alene. At lukke dem brækker `tests/e2e/conftest.py`, hvis
    `_HEALTH_ENDPOINTS` poller **otte** porte direkte (8001–8006, 8010, 8012) — den skal have
@@ -173,3 +175,27 @@ Tre ting der ikke ændrer formen, men er værd at kende:
 **Punkt 3 står uændret:** service-portene 8001–8012 er stadig på `0.0.0.0`. `make test-e2e`
 giver 24 grønne netop fordi den rammer dem direkte. Perimeteren er en tilføjet vej, ikke en
 lukket dør.
+
+## Amendment 2026-07-29 (P2-28)
+
+8. **Punkt 2's ordlyd om hvem der ligger under `/api/v1/internal/*`.** ADR'en nævnte kun
+   account-service. Siden P2-28 ligger også **categorization-services seks
+   taksonomi-skriveruter** der (`/api/v1/internal/categories/…`,
+   `/api/v1/internal/subcategories/…`), bag samme `INTERNAL_API_KEY`-guard. Læse-ruterne
+   `/api/v1/categories` og `/api/v1/subcategories` bliver på den offentlige overflade med
+   JWT, så ruter-tabellen under Beslutning er uændret korrekt.
+
+   **Det er dette punkts egenskab der betalte sig, og det er værd at registrere som et
+   målt udfald frem for en forventning:** flytningen krævede **nul** nginx-ændringer, fordi
+   deny-backstoppen (punkt 1 ovenfor) allerede 404'er hele `/api/v1/internal/`-præfikset.
+   Verificeret *før* kodeændringen — `GET /api/v1/internal/categories/1` på `127.0.0.1:3000`
+   gav 404 — og igen efter. `make compose-check` er grøn med uændret nginx.conf: 20
+   locations, 18 upstreams.
+
+   En eksplicit `location`-blok for de nye ruter blev fravalgt af samme grund som punkt 4's
+   `/api/v1/users/{id}`-advarsel: den ville lægge en S2S-rute på den offentlige overflade,
+   hvor den *ser* lukket ud. En allowlist hvis bund er `return 404` har den egenskab at
+   "flyt ruten under `/api/v1/internal/`" i sig selv er en deployment af perimeteren.
+
+   Detaljer: [ADR-003's amendment](../ADR-003-taxonomy-ownership-consolidated.md#amendments) ·
+   [decision](../../dev-notes/decisions/2026-07-29-taxonomy-authorization.md).

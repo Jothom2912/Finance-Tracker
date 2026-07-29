@@ -30,6 +30,8 @@ UI). Before this ADR:
 - Full category CRUD and new subcategory CRUD live in
   categorization-service (`/api/v1/categories`, nested subcategory
   create/list, flat `/api/v1/subcategories` for list-all/update/delete).
+  **Paths amended 2026-07-29 — the writes moved to `/api/v1/internal/…`;
+  see [Amendments](#amendments). Ownership is unchanged.**
 - It emits full-state events via its transactional outbox:
   - `category.created|updated|deleted` **v2** — adds `display_order`,
     drops the unused `previous_name`/`previous_type` delta fields.
@@ -109,6 +111,57 @@ internal to the system.
   silent divergence (dev project, single deploy train).
 - ai-service's dashboard parsing was coupled to the REST shape and had
   to change with it (updated in the same train).
+
+## Amendments
+
+### 2026-07-29 — taxonomy writes moved behind `X-Internal-API-Key` (P2-28)
+
+**What changed:** the six write routes moved off the public prefixes.
+Reads are untouched.
+
+| Then (this ADR, as decided) | Now |
+|---|---|
+| `POST /api/v1/categories/` | `POST /api/v1/internal/categories/` |
+| `PUT /api/v1/categories/{id}` | `PUT /api/v1/internal/categories/{id}` |
+| `DELETE /api/v1/categories/{id}` | `DELETE /api/v1/internal/categories/{id}` |
+| `POST /api/v1/categories/{id}/subcategories` | `POST /api/v1/internal/categories/{id}/subcategories` |
+| `PUT /api/v1/subcategories/{id}` | `PUT /api/v1/internal/subcategories/{id}` |
+| `DELETE /api/v1/subcategories/{id}` | `DELETE /api/v1/internal/subcategories/{id}` |
+| `GET /api/v1/categories/`, `/{id}`, `/{id}/subcategories`, `GET /api/v1/subcategories/` | **unchanged**, JWT |
+
+The write router carries `require_internal_api_key` at router level;
+ADR-0005's deny-backstop (`location /api/ { return 404; }`) means the
+perimeter answers 404 for the whole `/api/v1/internal/` prefix, so no
+nginx change was needed.
+
+**What did *not* change: ownership.** This ADR settled *who writes the
+taxonomy*; P2-28 settled *who may ask it to*. categorization-service is
+still the sole owner and writer, still emits the same full-state
+`category.*` / `subcategory.*` events from the same outbox, and
+transaction-service's read copies are unaffected. The delete guards in
+"Delete guards" above are also untouched — no guard was added or removed.
+
+**One thing in Context above is now history:** the "taxonomy management
+UI" listed there as the trigger for this ADR
+(`components/CategoryManagement/`) was deleted by P2-28 — it could not
+stay and call routes that answer 405. It was true when this ADR was
+written; don't go looking for it. Its replacement, if the need returns,
+is per-user custom categories (**F2-15**) rather than a UI onto shared
+global state.
+
+**Why it was needed:** this ADR's write routes took
+`_user_id: int = Depends(get_current_user_id)` — identity resolved and
+discarded — so any authenticated user could write shared data. Measured
+before the fix: a user registered one minute earlier, owning zero
+transactions, renamed a category and analytics-service's
+`propagate_category_rename` rewrote the denormalized `category_name` on
+**150 documents across 23 other users** in Elasticsearch. No delete
+guard could have caught it, because a rename orphans nothing — which is
+why the fix is authorization in the adapter layer rather than another
+entry in the delete-guard list.
+
+Details: [decision](../dev-notes/decisions/2026-07-29-taxonomy-authorization.md) ·
+[plan + Outcome](../dev-notes/plans/2026-07-29-p228-taxonomy-internal-only.md#outcome).
 
 ## Exit criteria of ADR-002 (for the record)
 
