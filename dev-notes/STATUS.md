@@ -9,12 +9,42 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-38 og P2-42's a-halvdel er shippet; næste er et valg mellem de items
-P2-40 efterlod (frontend-vagten, `make security` vs. CI's bandit), **P2-42's b-halvdel** (et
-liveness-probe kan ikke se en brudt afhængighed — bankings faktiske fejlmode, som den nye
-worker-gate udtrykkeligt *ikke* dækker) og de kendte (P2-41, P3-41, P3-44, P3-46).
+**Intet aktivt item.** P2-28 er shippet; næste er et valg mellem de items P2-40 efterlod
+(frontend-vagten P3-48, `make security` vs. CI's bandit P3-49), **P2-42's b-halvdel** (et
+liveness-probe kan ikke se en brudt afhængighed — bankings faktiske fejlmode, som worker-gaten
+udtrykkeligt *ikke* dækker) og de kendte (P2-41, P3-41, P3-44, P3-46). To nye feature-items
+kom ud af P2-28: **F2-14** (admin-bruger, blokeret på F2-08) og **F2-15** (per-bruger-kategorier).
 
-Sidst shippet: **P2-38 + P2-42a — CI's manglende signal** (2026-07-29), seks commits
+Sidst shippet: **P2-28 — taksonomi-mutationer internal-only** (2026-07-29),
+[plan + Outcome](plans/2026-07-29-p228-taxonomy-internal-only.md#outcome) ·
+[decision](decisions/2026-07-29-taxonomy-authorization.md). De seks skrive-ruter ligger under
+`/api/v1/internal/…` bag servicens eksisterende `require_internal_api_key`; nul
+nginx-ændringer, fordi deny-backstoppen allerede 404'er præfikset.
+
+**Baseline-tallet der bar itemet:** en bruger registreret ét minut i forvejen, med **nul egne
+transaktioner**, omdøbte en kategori gennem perimeteren (200) og fik
+`propagate_category_rename` til at omskrive `category_name` på **150 docs fordelt på 23 andre
+brugere** i ES — og **0** af sine egne. Efter fixet: 405 gennem perimeteren, 404 på
+internal-præfikset, 401 direkte uden nøgle, 401 med gyldig bruger-JWT, og **200 + samme 150
+docs** med den interne nøgle. Den sidste er kontrollen mod at have *lukket* ruten frem for at
+*flytte* den.
+
+**Undersøgelsen rettede sweepet:** `DELETE` var allerede vagtet
+(`CategoryHasSubcategories`, `"Anden"`-fallbacken, merchant-mappings, regler). Den uvagtede
+fan-out var **`PUT`** — og ingen domæne-guard *kan* fange et rename, fordi intet bliver
+forældreløst. Derfor er fixet autorisation i adapter-laget, ikke logik i `CategoryService`.
+
+**Dækningsgrænse, ikke tryghed:** der fandtes ingen unit-test af `CategoryManagement`, så
+sletningen af 736 linjer frontend brækkede ingenting. De 346 grønne tests er derfor ikke et
+bevis for at sletningen var korrekt — ingen af dem så komponenten.
+
+**Zsh-glob-fælden ramte tre gange i denne session** (`--include=*.py`, `dto/*.py`,
+`--include=*.jsx`): et ikke-matchende glob afbryder *hele* kommandoen, så tidligere dele aldrig
+kører, og et tomt output ser ud som et negativt resultat. Det er sådan planens Context kom til
+at påstå at servicen manglede en `INTERNAL_API_KEY` — den havde en hele tiden
+(`config.py:17`). Samme klasse som `| tail`-fælden, nu i skallen frem for i pipen.
+
+Forrige: **P2-38 + P2-42a — CI's manglende signal** (2026-07-29), seks commits
 `a1bf5855`..`8d4cd472` + docs. **CI grøn: run 30407613111, alle 19 jobs success.**
 [Plan + Outcome](plans/2026-07-29-p238-p242-ci-missing-signal.md#outcome).
 De nye gates er aflæst *navngivet* i loggen, ikke bare som "success": worker-gaten skrev
