@@ -80,23 +80,22 @@
   margin-left: 2rem;
 }
 
-.user-info {
-  color: rgba(248, 250, 252, 0.6);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
+/* ── Brugermenu (F2-08) ── */
+
+.user-menu {
+  position: relative;
 }
 
-.user-info strong {
-  font-weight: 600;
-  color: rgba(248, 250, 252, 0.9);
-}
-
-.logout-button {
+.user-menu__trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: rgba(248, 250, 252, 0.8);
-  padding: 0.4rem 0.875rem;
+  padding: 0.4rem 0.75rem;
   border-radius: var(--radius-md);
+  font-family: inherit;
   font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
@@ -104,19 +103,48 @@
   white-space: nowrap;
 }
 
-.logout-button:hover {
+.user-menu__trigger strong {
+  font-weight: 600;
+  color: rgba(248, 250, 252, 0.9);
+}
+
+.user-menu__trigger:hover,
+.user-menu__trigger:focus-visible {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.25);
   color: var(--color-text-inverse);
 }
 
-.logout-button:active {
-  background: rgba(255, 255, 255, 0.06);
+.user-menu__dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 180px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 0.25rem;
+  z-index: 100;
 }
 
-.logout-button:focus-visible {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
+.user-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.user-menu__item:hover,
+.user-menu__item:focus-visible {
+  background: var(--color-bg-sunken);
 }
 
 @media (max-width: 768px) {
@@ -146,7 +174,7 @@
     gap: 0.75rem;
   }
 
-  .user-info {
+  .user-menu__trigger {
     font-size: var(--font-size-xs);
   }
 }
@@ -165,7 +193,7 @@
     padding: 0.4rem 0.625rem;
   }
 
-  .logout-button {
+  .user-menu__trigger {
     padding: 0.35rem 0.625rem;
     font-size: var(--font-size-xs);
   }

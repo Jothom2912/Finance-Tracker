@@ -21,6 +21,10 @@ test('fixturen seeder en session appen anser for logget ind', async ({ appPage, 
   // assertions ovenfor kan alle bestå på en tom HTML-side, fordi localStorage seedes af
   // fixturen og URL'en kun ændrer sig hvis React redirecter. Målt som bivirkning af
   // P2-39's kontrol-kørsel — og det er præcis den grøn-på-ingenting-fælde itemet handler om.
-  await expect(appPage.getByText('Logget ind som:')).toBeVisible();
-  await expect(appPage.getByText(session.username, { exact: true })).toBeVisible();
+  //
+  // F2-08 erstattede `Logget ind som: <navn>` med en brugermenu; ankeret er nu menuens
+  // trigger. Den bærer det samme: elementet findes kun hvis React har mountet, og navnet
+  // i det kommer fra AuthContext — ikke fra HTML'en.
+  await expect(appPage.getByTestId('user-menu-trigger')).toBeVisible();
+  await expect(appPage.getByTestId('user-menu-username')).toHaveText(session.username);
 });

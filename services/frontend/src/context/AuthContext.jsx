@@ -49,6 +49,19 @@ export const AuthProvider = ({ children }) => {
     setToken(response.access_token);
   };
 
+  // F2-08. `username` i localStorage kommer fra LOGIN-svaret, ikke fra
+  // tokenet — så uden dette viser navigationen det gamle navn indtil
+  // brugeren logger ind igen. Det er systemets eneste ægte kopi af
+  // brugernavnet der kan komme ud af sync (de øvrige er account-services
+  // synkrone HTTP-fetch, som er frisk per konstruktion, og JWT-claims
+  // som ingen læser). Derfor fixes det her og ikke med et event.
+  const updateUser = (partial) => {
+    setUser((prev) => (prev ? { ...prev, ...partial } : prev));
+    if (partial.username !== undefined) {
+      localStorage.setItem('username', partial.username);
+    }
+  };
+
   const logout = () => {
     queryClient.clear();
     clearAuthStorage();
@@ -84,6 +97,7 @@ export const AuthProvider = ({ children }) => {
       loading,
       login,
       logout,
+      updateUser,
       isAuthenticated,
       getAuthHeader
     }}>
