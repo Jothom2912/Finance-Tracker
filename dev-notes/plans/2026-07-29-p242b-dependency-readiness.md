@@ -214,7 +214,15 @@ CI-kørsel aflæst *navngivet* — `/ready`-bodyen i loggen, og de 19 jobs.
 
 ## Outcome
 
-Done 2026-07-29, fem commits (`ee8602aa`, `67c4cddc`, `cf434d37`, `163554fd`, + docs).
+Done 2026-07-29, seks commits `ee8602aa`..`07f38fc8`. **CI grøn: run 30447008216, alle 19 jobs
+success.** Gaten aflæst navngivet i loggen:
+`banking /ready: {"status":"ready","dependencies":{"database":{"ok":true},"enable_banking":{"ok":true}}}`
+i 0,13 s, placeret efter `compose-state-check: 53 containers, none dead …` og før E2E-suiten.
+
+**`enable_banking.ok = true` i CI er selvstændig ny information.** Indtil nu var det *antaget*
+at P2-39's `openssl genrsa` + `chmod 644` gav en PEM containeren kunne bruge — ingen gate læste
+det, og finding'en fra 28. juli er netop kørslen hvor den ikke kunne, med alle 19 jobs grønne.
+Den kørsel ville nu være rød på dette step, 0,13 s inde i `e2e-tests`, med årsagen i bodyen.
 Alle tre instrumenter aflæst navngivet mod den lokale stak; ingen af de fire trin gav det
 resultat planen gættede på uden forbehold, og to af dem ændrede en konklusion.
 

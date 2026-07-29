@@ -16,8 +16,15 @@ datastore ser "expected" ud for worker-gaten) og de kendte (P2-41, P3-41, P3-44,
 feature-items fra P2-28 står stadig: **F2-14** (admin-bruger, blokeret på F2-08) og **F2-15**
 (per-bruger-kategorier).
 
-Sidst shippet: **P2-42b — et probe der kan se en brudt afhængighed** (2026-07-29), fem commits
-`ee8602aa`..`163554fd` + docs. [Plan + Outcome](plans/2026-07-29-p242b-dependency-readiness.md#outcome).
+Sidst shippet: **P2-42b — et probe der kan se en brudt afhængighed** (2026-07-29), seks commits
+`ee8602aa`..`07f38fc8`. **CI grøn: run 30447008216, alle 19 jobs success.**
+[Plan + Outcome](plans/2026-07-29-p242b-dependency-readiness.md#outcome).
+Den nye gate er aflæst *navngivet*, ikke som "success":
+`banking /ready: {"status":"ready","dependencies":{"database":{"ok":true},"enable_banking":{"ok":true}}}`
+— og `enable_banking.ok = true` **i CI** er ny information: det er første gang CI beviser at den
+genererede PEM + `chmod 644` fra P2-39 faktisk er brugbar inde i containeren, frem for at det er
+antaget. Finding'en fra 28. juli er netop tilstanden hvor den ikke var, med CI grøn hele vejen.
+Steppet koster 0,13 s.
 `GET /ready` på banking rører DB og Enable Banking-konfigurationen; en CI-gate læser den og echoer
 bodyen. **To niveauer, fordi afhængighederne ikke er samme slags:** DB påkrævet → 503, Enable
 Banking valgfri → 200 + `degraded`. Et 503 på den valgfri ville have modsagt P2-42a inden for et
