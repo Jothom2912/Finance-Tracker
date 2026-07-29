@@ -23,8 +23,11 @@ format:
 format-check:
 	ruff format --check .
 
+# -ll -ii skal matche ci.yml (jobbene `python-services` og `shared-packages`).
+# Uden flagene er lokal bandit strengere end gaten, og `make check` er rød på
+# Low-fund CI aldrig har håndhævet. P3-49.
 security:
-	bandit -r app -x tests
+	bandit -r app -x tests -ll -ii
 
 check: lint format-check security test
 
