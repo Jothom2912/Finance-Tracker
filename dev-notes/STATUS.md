@@ -13,8 +13,9 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 **F2-09** (password-reset + email-verifikation), **F2-10** (GDPR-eksport/sletning) og **F2-14**
 (admin-bruger) ventede alle udelukkende på at der fandtes en skrive-sti til en eksisterende
 bruger overhovedet. Den findes nu. Øvrige åbne: P3-48 (frontend-vagten, det sidste P2-40
-efterlod), P2-42b's egne fund (**P3-53**, **P3-54**), F2-08's egne fund (**P3-55**, **P3-56**),
-og de kendte (P2-41, P3-41, P3-44, P3-46) samt **F2-15** (per-bruger-kategorier).
+efterlod), P2-42b's egne fund (**P3-53**, **P3-54**), F2-08's egne fund (**P3-55**, **P3-56** og
+**P3-57** — app-loggere når ikke loggen i 11 af 12 API-services) og de kendte (P2-41, P3-41,
+P3-44, P3-46) samt **F2-15** (per-bruger-kategorier).
 
 Sidst shippet: **F2-08 — profil & indstillinger, og skrive-stien bag den** (2026-07-29), seks
 commits `8093534e`..`d3e9fe27` + docs.
@@ -507,6 +508,13 @@ er banking** — det er ikke en regression, det er kvitteringen. Fjern ignoren i
 
 ## Standing traps
 
+- **`grep WARNING` i en API-services logs returnerer intet, også når warnings ER affyret.**
+  11 af 12 API-processer har ingen logging-konfiguration, så `app.*` arver root-niveauet
+  `WARNING` og skriver gennem `logging.lastResort` — den bare besked, uden niveau, tidsstempel
+  eller logger-navn. `logger.info` når slet ikke ud. Målt under F2-08, se **P3-57**. Konkret:
+  læser du en service' logs for at afgøre om noget gik galt, er fraværet af `WARNING`-linjer
+  **ikke** et negativt resultat — læs de uformaterede linjer, eller trig fejlen og se hvad der
+  faktisk kommer ud. Kun `gateway` og workerne logger rigtigt.
 - `account-service` is pip-based with no venv: `make test` / `make lint` fail locally regardless
   of the code, and repo-wide `make lint`/`make check` abort on it before reaching the other
   eleven. See P3-39 (banking's half closed by P3-23; its suite now runs locally, 68 passed).

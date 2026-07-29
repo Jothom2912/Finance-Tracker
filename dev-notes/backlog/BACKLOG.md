@@ -156,6 +156,7 @@ goes in the shipping plan's **Outcome** section and the session log, not here.
 | P3-53 | `/ready` findes kun på banking, og **intet i platformen læser den ud over CI** — compose-healthchecken og alle 11 k8s-manifesters `readinessProbe` peger stadig på det statiske `/health`, så readiness og liveness er umulige at skelne. Så længe kun CI læser den, er endpointet funktionelt et test-fixture der kan rådne. To dele: (a) løft tjek-listen til en helper i `services/shared/` og giv de 11 andre services et `/ready` — de har hver deres påkrævet/valgfri-opdeling at afgøre, og *det* er arbejdet, ikke koden; (b) flyt `readinessProbe.path` til `/ready`. (b) er første gang readiness og liveness divergerer i repoet og ændrer trafik-routing, så den skal have sin egen verifikation: kommer poden tilbage af sig selv når DB'en gør? | infra, cross, CI | M | open | [P2-42b's Non-goals + Outcome](../plans/2026-07-29-p242b-dependency-readiness.md#outcome) |
 | P3-54 | `compose_state_check.py:126` behandler **enhver** container med `state == "exited"` og exit 0 som `Exited cleanly (expected)`, fordi `ollama-pull` legitimt er det. `docker compose stop` giver også exit 0, så en stoppet datastore ser identisk ud — målt under P2-42b: med `postgres-banking` stoppet var gaten grøn og listede den som forventet. **Ikke et hul i CI** (intet stopper containere der), men gaten gør en antagelse den ikke ved at den gør. Fix: en eksplicit allowlist (`ollama-pull`) frem for et predikat på exit-koden | CI, infra | S | open | målt under [P2-42b](../plans/2026-07-29-p242b-dependency-readiness.md#outcome) |
 | P3-55 | **Et password-skift invaliderer ikke eksisterende tokens.** Der findes ingen revocation-mekanisme i systemet: 60-minutters HS256-tokens (`user-service/app/config.py`), client-side-only logout (`AuthContext.jsx:52-57`) og ingen denylist nogen steder. Efter et skift forbliver et stjålet token gyldigt indtil `exp`, altså op til en time — så F2-08's password-skift er en credential-rotation, **ikke** en kompromis-inddæmning. Det er en navngivet, accepteret asymmetri fra F2-08, ikke et overset hul, og ProfilePage siger det til brugeren i klartekst. Fix kræver en beslutning før kode: kortere levetid + refresh-tokens, en `token_version`-claim tjekket mod DB, eller en Redis-denylist — de tre koster hver især noget forskelligt (latency per request vs. kompleksitet vs. en ny afhængighed) | user, shared/auth | M | open | [F2-08's Non-goals](../plans/2026-07-29-f208-user-profile-write-path.md) |
+| P3-57 | **11 af 12 API-processer har ingen logging-konfiguration: `logger.info` når aldrig loggen, og `logger.warning` når den *uden* niveau, tidsstempel og logger-navn.** [→ detail](#p3-57) | cross, infra, observability | M | open | målt under [F2-08](../plans/2026-07-29-f208-user-profile-write-path.md#outcome) |
 | P3-56 | `RegisterPage.jsx:81` sætter `maxLength="20"` på brugernavn mens `RegisterDTO` tillader 50 (`dto.py:8`) — klienten er strammere end kontrakten uden at sige det, så placeholderteksten "3-20 tegn" er den eneste dokumentation af en grænse serveren ikke har. Uoverensstemmelsen blev synlig med F2-08, hvor ProfilePage bruger kontraktens 50: en bruger kan nu vælge et 30-tegns navn på profilsiden som de aldrig kunne have registreret sig med. Afgør hvilken grænse der er den rigtige og lad ét sted eje den — ikke to tal der er uenige | frontend, user | S | open | fundet under [F2-08](../plans/2026-07-29-f208-user-profile-write-path.md) |
 
 ---
@@ -682,3 +683,66 @@ en build-regel), og P2-21 vil også have en ny regel til compose-vs-kustomizatio
 afgøre regel-nummerering og filnavn som bivirkning af et S-item er hvordan man ender med et
 navn der ikke passer. Risikoen står i `nginx.conf` med reference hertil, så den ikke kun findes
 i en plan
+
+### P3-57
+
+**11 af 12 API-processer har ingen logging-konfiguration. `logger.info` fra application-laget
+når aldrig containerens log, og `logger.warning`/`error` når den *uden* niveau, tidsstempel og
+logger-navn.** Målt 2026-07-29 under F2-08, ikke formodet.
+
+**Mekanismen**, målt inde i det byggede image (`docker exec … python -c` der reproducerer
+uvicorns egen `dictConfig`):
+
+```
+uvicorn konfigurerer disse loggere: ['uvicorn', 'uvicorn.access', 'uvicorn.error']
+root handlers: []
+effektivt niveau for app.application.service: WARNING
+```
+
+uvicorn rører kun sine tre egne loggere. Root-loggeren står med **nul handlers** og default-niveau
+`WARNING`, så alt under `app.*` arver `WARNING`: `logger.info` dør på niveau-tjekket, og
+`logger.warning` slipper igennem til Pythons `logging.lastResort` — en handler uden formatter der
+skriver den **bare besked** til stderr. Ingen Dockerfile bruger `--log-config` eller `--log-level`
+(målt: nul hits på tværs af alle `services/*/Dockerfile`).
+
+**Konsekvensen er værre end tavshed, og det er den vigtige del: `grep WARNING` i disse services
+returnerer intet, også når warnings faktisk er affyret.** Målt på den kørende banking-service ved
+at trigge `bank_api.py:145` med et GET på `/api/v1/bank/callback?state=probe123`:
+
+```
+Bank callback missing authorization code [3c2fbfd2]: state=probe123
+INFO:     127.0.0.1:41934 - "GET /api/v1/bank/callback?state=probe123 HTTP/1.1" 303 See Other
+```
+
+Første linje *er* warningen. Den har intet `WARNING`, intet tidsstempel og intet
+`app.adapters.inbound.bank_api` — den er ikke til at skelne fra vilkårlig stdout-støj, og et
+log-filter der leder efter niveauer vil kalde servicen fejlfri. Det er en blind instrument-fælde
+af samme klasse som P3-54 og `/ready`.
+
+**Omfang.** Kun `gateway-service` har konfiguration (`app/main.py:11` — sin egen inline
+`basicConfig`, ikke den delte helper). De øvrige 11 API-processer har ingen. Log-kald ramt i
+API-stien (workers/consumers/tools fraregnet): **~53 `logger.info` tabt** og **~94
+`logger.warning`/`error`/`exception` uformaterede** — flest i account (16/17), banking (9/23) og
+ai (6/13).
+
+**Kontroller, så fundet ikke hviler på ét instrument:** (a) samme probe i gateway giver
+`root handlers: [StreamHandler]`, niveau `INFO`, og linjen kommer ud formateret
+(`2026-07-29 12:27:39 - app.adapters.outbound.account_client - INFO - …`); (b) `user-outbox-worker`
+logger fint under ægte trafik (`2026-07-29 12:27:05,024 INFO [messaging.worker] Published
+user.created …`). Pipelinen virker altså — det er konfigurationen der mangler, ikke stdout.
+
+**Hvorfor det er billigt at fixe, og hvorfor det alligevel er M og ikke S.** Helperen findes
+allerede: `services/shared/messaging/messaging/logging.py` med `setup_worker_logging`, brugt af
+**23 worker-/consumer-entrypoints** på tværs af 10 services. Navnet er selve fundet — nogen
+konsoliderede logging for workerne, og API-halvdelen var aldrig i scope. Selve ændringen er ét kald
+i hver `app/main.py`. Det der gør den M er tre beslutninger den tvinger frem, som ikke skal
+afgøres som bivirkning: (1) helperen skal omdøbes eller få en API-variant — `setup_worker_logging`
+i en FastAPI-`main.py` er en løgn der bliver kopieret videre; (2) formatet skal afgøres mod Loki:
+promtail fylder Loki fra hver pod (jf. P2-15-rækken), så det er nu spørgsmålet om JSON-logs og
+correlation-id hører hjemme, og at vælge `basicConfig`-strengen nu er at vælge imod det uden at
+sige det; (3) gateways inline-kopi skal med, ellers er der to sandheder.
+
+**Verifikationen skal være adfærdsmæssig, ikke "koden er tilføjet":** trig en kendt warning per
+service og assertér at linjen har niveau *og* logger-navn. Et `grep -c WARNING` der går fra 0 til
+>0 er den ærlige måling — og bemærk at kontrollen er den samme grep *før* ændringen, som skal være
+0 af den forkerte grund.

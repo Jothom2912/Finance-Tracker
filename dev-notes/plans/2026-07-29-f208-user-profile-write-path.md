@@ -316,15 +316,24 @@ elementet findes kun hvis React mountede, og navnet i det kommer fra AuthContext
   Derefter i DB: `live_1785327405_ny|t`, altså både det nye navn og `updated_at IS NOT NULL`.
   `user-service`s og `user-outbox-worker`s logs læst: ingen errors, ingen tracebacks.
 
-### Observation, ikke undersøgt
+### Afledt fund: P3-57 — app-loggere når ikke loggen
 
-`logger.info` fra `app/application/service.py` når **ikke** containerens logs. Access-loggen
-viser hver rute og statuskode, men hverken den nye `"Changed password for user %s"` eller den
-**eksisterende** `"Registered user %s (outbox event queued)"` dukker op — så det er en
-pre-existing gap i logging-konfigurationen (app-loggere er ikke hængt på uvicorns handlers),
-ikke noget F2-08 indførte. Konsekvensen er at de nye use cases har nul operationel synlighed
-ud over statuskoden. Ikke undersøgt om det gælder de øvrige services; det ville være det
-første at måle, ikke at antage.
+`logger.info` fra `app/application/service.py` når **ikke** containerens logs. Hverken den nye
+`"Changed password for user %s"` eller den **eksisterende** `"Registered user %s (outbox event
+queued)"` dukker op, så det er en pre-existing gap og ikke noget F2-08 indførte.
+
+Målt bagefter på opfordring, og det viste sig at være bredere og skarpere end observationen:
+**11 af 12 API-processer** har ingen logging-konfiguration, uvicorn rører kun sine egne tre
+loggere, root står med nul handlers, og `app.*` arver derfor `WARNING`. `logger.info` dør på
+niveau-tjekket; `logger.warning` slipper igennem til `logging.lastResort` og kommer ud som
+**bar besked uden niveau, tidsstempel eller logger-navn**. Konsekvensen er værre end tavshed:
+`grep WARNING` returnerer intet i disse services, også når warnings er affyret — verificeret på
+den kørende banking-service. Med gateway (som har `basicConfig`) og `user-outbox-worker` som
+positive kontroller, så fundet ikke hviler på ét instrument.
+
+Filed som **P3-57** med målingerne. Pointen for F2-08's vedkommende er at de tre nye
+`logger.info`-kald i `service.py` er *korrekte og virkningsløse* indtil P3-57 lander — de er
+skrevet efter konventionen, og konventionen er ikke i drift.
 
 ### Afledte items
 
