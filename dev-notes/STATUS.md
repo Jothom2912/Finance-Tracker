@@ -1,4 +1,4 @@
-# Status — 2026-07-29 (efter P2-42b: CI kan nu se en levende service med en ubrugelig afhængighed)
+# Status — 2026-07-29 (efter F2-08: user-service har for første gang en skrive-sti til en eksisterende bruger)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,14 +9,44 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-42b er shippet, og med den er **P2-42 lukket helt** og **P3-49** væk.
-Næste er et valg mellem P3-48 (frontend-vagten, det sidste P2-40 efterlod), de to items P2-42b
-selv fandt (**P3-53** — `/ready` på de 11 andre services + probes flyttet, **P3-54** — en stoppet
-datastore ser "expected" ud for worker-gaten) og de kendte (P2-41, P3-41, P3-44, P3-46). To
-feature-items fra P2-28 står stadig: **F2-14** (admin-bruger, blokeret på F2-08) og **F2-15**
-(per-bruger-kategorier).
+**Intet aktivt item.** F2-08 er shippet, og med den er **user-domænets blokade løftet**:
+**F2-09** (password-reset + email-verifikation), **F2-10** (GDPR-eksport/sletning) og **F2-14**
+(admin-bruger) ventede alle udelukkende på at der fandtes en skrive-sti til en eksisterende
+bruger overhovedet. Den findes nu. Øvrige åbne: P3-48 (frontend-vagten, det sidste P2-40
+efterlod), P2-42b's egne fund (**P3-53**, **P3-54**), F2-08's egne fund (**P3-55**, **P3-56**),
+og de kendte (P2-41, P3-41, P3-44, P3-46) samt **F2-15** (per-bruger-kategorier).
 
-Sidst shippet: **P2-42b — et probe der kan se en brudt afhængighed** (2026-07-29), seks commits
+Sidst shippet: **F2-08 — profil & indstillinger, og skrive-stien bag den** (2026-07-29), seks
+commits `8093534e`..`d3e9fe27` + docs.
+[Plan + Outcome](plans/2026-07-29-f208-user-profile-write-path.md#outcome).
+`IUserRepository` fik `find_credentials_by_id`/`update_password`/`update_username`,
+`PUT /api/v1/users/me/{password,username}`, `users.updated_at` (migration 003, verificeret med
+`\d users` mod den kørende Postgres — ikke bare exit 0), en profilside og en brugermenu.
+
+**Den bærende detalje er 403 og ikke 401.** Det oplagte var at genbruge
+`InvalidCredentialsException` ved et forkert `current_password`, men den mapper til 401, og
+`apiClient` kalder `handleUnauthorized()` på enhver 401 fra en ikke-auth-rute — en tastefejl
+ville altså have logget brugeren ud. Vogtet i tre lag: en unit-test der asserterer
+`not isinstance(..., InvalidCredentialsException)` (de deler basisklasse, så en `pytest.raises`
+på den nye ville bestå for begge), en integrationstest på `403` **og** `!= 401`, og et
+browser-trin der viser at sessionen overlever.
+
+**Det der faktisk kostede noget lå i det planen kaldte trivielt** — formularerne, ikke
+domænet. E2E-specen fandt to ægte fejl: `addInitScript` re-seeder localStorage ved *hver*
+navigation, så reload-assertionen målte fixturen frem for appen (persistensen måles nu mod
+serveren); og ProfilePages optimistiske startværdi lod `fetchMe` overskrive brugerens
+indtastning, så et hurtigt submit gemte det gamle navn — **grøn isoleret, rød under fuld
+suite-belastning**, altså en race og ikke flakiness. Feltet fyldes nu kun af serveren og er
+disabled indtil profilen er hentet.
+
+Ingen `UserUpdatedEvent`, og det er målt frem: `user.created` har én forbruger som kun læser
+`user_id`, ingen service uden for user-service har en `email`/`username`-kolonne, og claimene
+mintes men læses af ingen. Der er intet lagret read-model at desynke; den ægte desync var
+klientens `localStorage.username`, som `AuthContext.updateUser` lukker. Reglen der står
+tilbage i FEATURES.md: den *første* service der lagrer en lokal kopi tilføjer eventet i samme
+commit — ikke før, for et event uden læsere rådner stille.
+
+Forrige: **P2-42b — et probe der kan se en brudt afhængighed** (2026-07-29), seks commits
 `ee8602aa`..`07f38fc8`. **CI grøn: run 30447008216, alle 19 jobs success.**
 [Plan + Outcome](plans/2026-07-29-p242b-dependency-readiness.md#outcome).
 Den nye gate er aflæst *navngivet*, ikke som "success":
