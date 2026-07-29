@@ -105,15 +105,17 @@ app/
 | `PATCH` | `/api/v1/planned-transactions/{id}` | Update planned | Yes |
 | `DELETE` | `/api/v1/planned-transactions/{id}` | Deactivate (soft delete) | Yes |
 
-### Categories
+### Categories — **not served by this service**
 
-| Method | Path | Description | Auth |
-|--------|------|-------------|------|
-| `POST` | `/api/v1/categories/` | Create category | Yes |
-| `GET` | `/api/v1/categories/` | List all categories | Yes |
-| `GET` | `/api/v1/categories/{id}` | Get by ID | Yes |
-| `PUT` | `/api/v1/categories/{id}` | Update category | Yes |
-| `DELETE` | `/api/v1/categories/{id}` | Delete (if no transactions reference it) | Yes |
+Per ADR-003, categorization-service (`:8005`) is the sole owner and writer of the
+taxonomy; this service keeps event-synced read copies only and has no category
+routes. The table that used to sit here documented `POST`/`PUT`/`DELETE
+/api/v1/categories/` on `:8002` and had been stale since the ADR-003 cutover.
+
+Since P2-28 those writes are on no public prefix anywhere: they live at
+`/api/v1/internal/categories/…` on `:8005` behind `X-Internal-API-Key`, and the
+perimeter answers 404 for the `/api/v1/internal/` prefix. Reads
+(`GET /api/v1/categories/`, `GET /api/v1/subcategories/`) are unchanged on `:8005`.
 
 ### Query Filters
 
