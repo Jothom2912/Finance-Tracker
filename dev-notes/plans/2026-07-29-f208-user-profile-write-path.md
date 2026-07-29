@@ -310,6 +310,21 @@ elementet findes kun hvis React mountede, og navnet i det kommer fra AuthContext
 - Frontendens 346 jsdom-tests og `eslint src/` grønne.
 - Bemærk: `e2e/` er **ikke** dækket af `make lint` (`npx eslint src/`), så specens stil er
   holdt op mod den eksisterende fixture i hånden.
+- **Live-drev mod dev-stakken gennem perimeteren** (127.0.0.1:3000), aflæst navngivet frem for
+  som "virkede": `register 201` → `login 200` → forkert current password **`403`** → rigtigt
+  skift **`204`** → login med nyt **`200`** og med gammelt **`401`** → brugernavn **`200`**.
+  Derefter i DB: `live_1785327405_ny|t`, altså både det nye navn og `updated_at IS NOT NULL`.
+  `user-service`s og `user-outbox-worker`s logs læst: ingen errors, ingen tracebacks.
+
+### Observation, ikke undersøgt
+
+`logger.info` fra `app/application/service.py` når **ikke** containerens logs. Access-loggen
+viser hver rute og statuskode, men hverken den nye `"Changed password for user %s"` eller den
+**eksisterende** `"Registered user %s (outbox event queued)"` dukker op — så det er en
+pre-existing gap i logging-konfigurationen (app-loggere er ikke hængt på uvicorns handlers),
+ikke noget F2-08 indførte. Konsekvensen er at de nye use cases har nul operationel synlighed
+ud over statuskoden. Ikke undersøgt om det gælder de øvrige services; det ville være det
+første at måle, ikke at antage.
 
 ### Afledte items
 
