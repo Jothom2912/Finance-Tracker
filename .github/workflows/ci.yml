@@ -400,6 +400,13 @@ jobs:
           # health-probe kan altså ikke se en brudt afhængighed — det ser kun at processen
           # lever. Porten er med fordi en reelt død service ellers passerer lydløst.
           #
+          # P2-42b lukkede det for banking: `Check banking dependency readiness` nedenfor
+          # rammer `/ready`, som rører DB og Enable Banking-konfigurationen. Loopet her
+          # er stadig kun liveness for alle 12 — og det skal det være, ellers ville en
+          # valgfri, ukonfigureret integration blokere hele opstarten. De 11 andre
+          # services har ikke et `/ready` endnu; det er et opfølgnings-item, ikke en
+          # antagelse om at de er dækket.
+          #
           # P2-38: 8007 (ai), 8008 (notification), 8011 (saga) tilføjet. Det var de tre
           # sidste af de 12 HTTP-services uden en opstarts-gate — de øvrige 41
           # compose-services er 14 datastores (som har compose-healthcheck +
@@ -456,6 +463,39 @@ jobs:
       # not as whatever downstream assertion happens to fail because of it.
       - name: Check no container is dead or restarting
         run: python3 scripts/compose_state_check.py
+
+      # P2-42b. Tredje klasse af opstartsfejl, ved siden af de to ovenfor: processen
+      # lever (`Wait for system` grøn) OG containeren er ikke i restart-loop
+      # (`compose_state_check.py` grøn), men en afhængighed er ubrugelig. Præcis den
+      # tilstand banking var i 2026-07-28, hvor begge de to gates var grønne mens hver
+      # bank-rute gav 500 —
+      # dev-notes/findings/2026-07-28-banking-service-dead-in-ci.md.
+      #
+      # Gaten er MED VILJE strengere end proben. `/ready` svarer 200 + "degraded" ved
+      # manglende PEM, fordi Enable Banking er en valgfri integration og k8s ikke skal
+      # tage poden ud af service over den (P2-42a). Men her BRUGES bank-sync — steppet
+      # `Generate throwaway Enable Banking key` ovenfor genererer en PEM netop for det — så
+      # "degraded" er en fejlkonfigureret stak, ikke en gyldig tilstand. Derfor kræves
+      # både HTTP 200 og status == "ready".
+      #
+      # Bodyen echoes altid: en gate hvis log kun siger "success" kan ikke aflæses
+      # navngivet bagefter, og det var halvdelen af hvorfor fejlen ovenfor kunne leve i
+      # en grøn kørsel.
+      - name: Check banking dependency readiness
+        run: |
+          body=$(curl -fsS --max-time 10 http://localhost:8009/ready) || {
+            echo "::error::banking /ready svarede ikke 2xx — DB utilgængelig (503) eller servicen er væk"
+            curl -sS -i --max-time 10 http://localhost:8009/ready || true
+            docker compose logs banking-service
+            exit 1
+          }
+          echo "banking /ready: ${body}"
+          status=$(printf '%s' "${body}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+          if [ "${status}" != "ready" ]; then
+            echo "::error::banking readiness er '${status}', ikke 'ready' — en afhængighed er brudt (se bodyen ovenfor)"
+            docker compose logs banking-service
+            exit 1
+          fi
 
       # conftest.py aborts (instead of skipping) when services are unreachable
       # and CI is set, so this step can never go green with zero tests run.
