@@ -18,13 +18,19 @@ import './ProfilePage.css';
  * ikke i brug nogen steder i dette repo.
  */
 function ProfilePage() {
-  const { user, updateUser } = useAuth();
+  const { updateUser } = useAuth();
   const { showError, showSuccess } = useNotifications();
 
   const [profile, setProfile] = useState(null);
   const [loadError, setLoadError] = useState('');
 
-  const [username, setUsername] = useState(user?.username ?? '');
+  // Feltet starter TOMT og udfyldes af serveren, ikke af `user?.username`.
+  // Med en optimistisk startværdi ville brugeren kunne taste i feltet mens
+  // fetchMe stadig var undervejs, hvorefter svaret overskrev det tastede —
+  // og et submit ville så gemme det gamle navn. Målt: e2e-specen var rød på
+  // netop den race under fuld suite-belastning. Derfor er inputtet også
+  // disabled indtil profilen er hentet.
+  const [username, setUsername] = useState('');
   const [savingUsername, setSavingUsername] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -140,7 +146,7 @@ function ProfilePage() {
               minLength="3"
               maxLength="50"
               required
-              disabled={savingUsername}
+              disabled={savingUsername || !profile}
             />
           </div>
           <div className="form-actions">
@@ -148,7 +154,7 @@ function ProfilePage() {
               type="submit"
               className="button"
               data-testid="profile-username-submit"
-              disabled={savingUsername}
+              disabled={savingUsername || !profile}
             >
               {savingUsername ? 'Gemmer…' : 'Gem brugernavn'}
             </button>

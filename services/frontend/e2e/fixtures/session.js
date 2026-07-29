@@ -21,6 +21,13 @@
 // optimering, det er perimeteren — nginx rate-limiter /users/login og /users/register til
 // 10r/m med burst=5 (nginx.conf:53-54, P2-27), så en per-test-registrering ville gøre 429
 // til en flake-kilde der ligner en produktfejl.
+//
+// BUDGETTET ER DELT (F2-08). `registerAndLogin` og `waitForDefaultAccount` er eksporteret,
+// fordi `profile-write-path.spec.js` MÅ have sin egen bruger: den ændrer password og
+// brugernavn, og gjorde den det på den delte session, ville hver efterfølgende spec fejle på
+// login — altså langt fra sin årsag. Prisen er én ekstra registrering per kørsel, og der er
+// plads under burst=5. Men pladsen er ENDELIG: tilføjer du endnu en engangsbruger, så tæl
+// hvor mange der er i alt først. En 429 herfra ligner en produktfejl.
 import { test as base, request as apiRequest, expect } from '@playwright/test';
 
 import { BASE_URL } from '../../playwright.base-url.js';
@@ -62,7 +69,7 @@ function diagnoseRegisterFailure(status) {
  * alligevel skabes af en saga vi skal polle efter — så API-vejen er obligatorisk, og et
  * ægte login fjerner dermed JWT_SECRET fra suitens afhængigheder uden at koste et kald.
  */
-async function registerAndLogin(api) {
+export async function registerAndLogin(api) {
   const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
   const credentials = {
     username: `pw_${suffix}`,
@@ -103,7 +110,7 @@ async function registerAndLogin(api) {
  * (se tests/e2e/test_full_flow.py). Uden denne ventetid ville fixturen seede en session
  * uden `account_id`, altså præcis den tavse-nuller-tilstand den findes for at forhindre.
  */
-async function waitForDefaultAccount(api, token, timeoutMs = 30_000) {
+export async function waitForDefaultAccount(api, token, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
   let lastStatus = 'ingen kald nået';
 
