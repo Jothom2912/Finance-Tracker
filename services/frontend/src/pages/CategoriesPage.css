@@ -22,29 +22,6 @@
   letter-spacing: var(--letter-spacing-tight);
 }
 
-.manage-categories-btn {
-  padding: 0.625rem 1.25rem;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-brand-500);
-  color: var(--color-text-inverse);
-  font-weight: 600;
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
-  font-family: inherit;
-}
-
-.manage-categories-btn:hover {
-  background: var(--color-brand-600);
-}
-
-.manage-categories-btn:focus-visible {
-  outline: none;
-  background: var(--color-brand-600);
-  box-shadow: 0 0 0 3px rgba(54, 79, 199, 0.15);
-}
-
 /* ── No account state ── */
 .categories-no-account {
   text-align: center;
@@ -105,9 +82,5 @@
   .categories-page-header {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .manage-categories-btn {
-    text-align: center;
   }
 }
