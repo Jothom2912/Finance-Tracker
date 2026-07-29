@@ -121,4 +121,9 @@ og svarede 500). Det pegede på banking, og compose-logsene i CI-outputtet bekr�
 - **Den nye worker-gate ville stadig ikke have fanget dette fund, og det skal ikke overclaimes.**
   banking *kørte*, `/health` svarede 200 hele vejen, og PEM'en læses per request. Gaten fanger en
   **død** container — en anden, hidtil helt udækket klasse. Lektien her står uændret: et
-  liveness-probe kan ikke se en brudt afhængighed. Det er P2-42's b-halvdel, fortsat **open**.
+  liveness-probe kan ikke se en brudt afhængighed. Det var P2-42's b-halvdel, **lukket 2026-07-29**:
+  banking har nu `GET /ready`, som konstruerer Enable Banking-klienten og kører `SELECT 1`, og en
+  CI-gate der kræver `status == "ready"`. Kontrol 3 i verifikationen knytter den til netop dette
+  fund: med brudt PEM giver `GET /api/v1/bank/connections` 503 *og* `/ready` rapporterer `degraded`,
+  mens `/health` og worker-gaten bliver grønne — det er tre klasser, ikke én gate der blev bedre.
+  [Plan + Outcome](../plans/2026-07-29-p242b-dependency-readiness.md#outcome).

@@ -1,4 +1,4 @@
-# Status — 2026-07-29 (efter P2-38 + P2-42a: CI kan nu rapportere et hængt job og en død container)
+# Status — 2026-07-29 (efter P2-42b: CI kan nu se en levende service med en ubrugelig afhængighed)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,13 +9,35 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** P2-28 er shippet; næste er et valg mellem de items P2-40 efterlod
-(frontend-vagten P3-48, `make security` vs. CI's bandit P3-49), **P2-42's b-halvdel** (et
-liveness-probe kan ikke se en brudt afhængighed — bankings faktiske fejlmode, som worker-gaten
-udtrykkeligt *ikke* dækker) og de kendte (P2-41, P3-41, P3-44, P3-46). To nye feature-items
-kom ud af P2-28: **F2-14** (admin-bruger, blokeret på F2-08) og **F2-15** (per-bruger-kategorier).
+**Intet aktivt item.** P2-42b er shippet, og med den er **P2-42 lukket helt** og **P3-49** væk.
+Næste er et valg mellem P3-48 (frontend-vagten, det sidste P2-40 efterlod), de to items P2-42b
+selv fandt (**P3-53** — `/ready` på de 11 andre services + probes flyttet, **P3-54** — en stoppet
+datastore ser "expected" ud for worker-gaten) og de kendte (P2-41, P3-41, P3-44, P3-46). To
+feature-items fra P2-28 står stadig: **F2-14** (admin-bruger, blokeret på F2-08) og **F2-15**
+(per-bruger-kategorier).
 
-Sidst shippet: **P2-28 — taksonomi-mutationer internal-only** (2026-07-29),
+Sidst shippet: **P2-42b — et probe der kan se en brudt afhængighed** (2026-07-29), fem commits
+`ee8602aa`..`163554fd` + docs. [Plan + Outcome](plans/2026-07-29-p242b-dependency-readiness.md#outcome).
+`GET /ready` på banking rører DB og Enable Banking-konfigurationen; en CI-gate læser den og echoer
+bodyen. **To niveauer, fordi afhængighederne ikke er samme slags:** DB påkrævet → 503, Enable
+Banking valgfri → 200 + `degraded`. Et 503 på den valgfri ville have modsagt P2-42a inden for et
+døgn — en deploy uden PEM er unavailable-but-correct, og k8s skal ikke tage poden ud af service
+over den. Gaten er derfor **med vilje strengere end proben** (CI *bruger* bank-sync), og det er de
+to spørgsmåls faktiske forskel, ikke et kompromis.
+
+Verificeret rød ved mutation, med tre kontroller: med brudt PEM blev gaten rød *mens* `/health`
+svarede 200 og `compose_state_check.py` var grøn — de to instrumenter der var blinde for fejlen
+skulle blive blinde, ellers havde jeg brækket containeren frem for afhængigheden. **To fund der
+ændrede en konklusion:** (1) DB-niveauets 503 er slet ikke nåelig ved opstart — CMD er
+`alembic upgrade head && …`, så containeren restarter og P2-38's gate fanger den; niveauet er
+redundant ved *deploy* men unikt ved *drift* (DB-tab midt i kørsel, hvor begge de andre gates er
+blinde). (2) Fravalget af `# nosec B105` i P3-49 var rigtigt af en anden grund end planens: nosec
+fixer instansen, `-ll -ii` fixer klassen. Reglen der blev målt frem: **nosec er forbeholdt fund der
+overlever CI-tærsklen** — `B104` (Medium) rapporteres også med flagene og er load-bearing, `B105`
+(Low) filtreres og ville være død annotation. Første udkast af `/ready` havde selv en
+`# noqa: BLE001` for en regel `ruff.toml` ikke selecter — samme fejl, en time senere, i samme plan.
+
+Forrige: **P2-28 — taksonomi-mutationer internal-only** (2026-07-29),
 [plan + Outcome](plans/2026-07-29-p228-taxonomy-internal-only.md#outcome) ·
 [decision](decisions/2026-07-29-taxonomy-authorization.md). De seks skrive-ruter ligger under
 `/api/v1/internal/…` bag servicens eksisterende `require_internal_api_key`; nul
@@ -179,7 +201,8 @@ i min egen diagnose er værd at kende: (1) servicen *dør ikke ved boot* som jeg
 8009-kontrol beviste ved at **bestå**; et liveness-probe kan ikke se en brudt afhængighed. (2)
 `openssl genrsa` alene var ikke nok: den skriver mode 600 ejet af runneren, mens containeren kører
 som `uid=10001`, så fejlen flyttede sig fra `IsADirectoryError` til `PermissionError`. `chmod 644`
-lukkede den. Den åbne del (500 hvor konventionen er 503) er **P2-42**.
+lukkede den. Den åbne del (500 hvor konventionen er 503) blev **P2-42a**, og at intet kunne *opdage*
+tilstanden blev **P2-42b** — begge lukket 2026-07-29.
 [Finding](findings/2026-07-28-banking-service-dead-in-ci.md).
 
 **Sideprodukt:** `e2e-tests` fik `timeout-minutes: 30` og **port 3000 i `Wait for system`**
