@@ -6,7 +6,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.adapters.inbound.categorize_api import categorize_router
-from app.adapters.inbound.category_api import category_router, subcategory_router
+from app.adapters.inbound.category_api import (
+    category_router,
+    subcategory_router,
+    taxonomy_admin_router,
+)
 from app.adapters.inbound.rules_api import rules_router
 from app.domain.exceptions import (
     CategoryHasSubcategories,
@@ -94,6 +98,7 @@ async def duplicate_rule_handler(_request: Request, exc: DuplicateRule) -> JSONR
 app.include_router(categorize_router)
 app.include_router(category_router)
 app.include_router(subcategory_router)
+app.include_router(taxonomy_admin_router)
 app.include_router(rules_router)
 
 

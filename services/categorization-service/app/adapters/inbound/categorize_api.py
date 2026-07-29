@@ -13,11 +13,11 @@ caller probe another user's private rules through the ``tier`` field.
 
 from __future__ import annotations
 
-from hmac import compare_digest
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Body, Depends
 
+from app.adapters.inbound.internal_auth import require_internal_api_key
 from app.application.dto import CategorizeRequestDTO, CategorizeResponseDTO
 from app.config import settings
 from app.dependencies import build_categorization_service
@@ -27,25 +27,8 @@ from app.dependencies import build_categorization_service
 # tie up the rule engine.
 MAX_BATCH_ITEMS = 500
 
-
-def require_internal_api_key(
-    x_internal_api_key: str | None = Header(default=None, alias="X-Internal-API-Key"),
-) -> None:
-    """S2S guard — same shape as user-service's internal lookup.
-
-    ``compare_digest`` rather than ``!=`` so a wrong key costs the same
-    time regardless of how many leading bytes matched.
-    """
-    if not settings.INTERNAL_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Sync categorization is not configured",
-        )
-    if not x_internal_api_key or not compare_digest(x_internal_api_key, settings.INTERNAL_API_KEY):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid internal API key",
-        )
+# Re-exported for the tests that monkeypatch this module's ``settings``.
+__all__ = ["MAX_BATCH_ITEMS", "categorize_router", "require_internal_api_key", "settings"]
 
 
 # Router-level, not per-endpoint: a future endpoint added to this router

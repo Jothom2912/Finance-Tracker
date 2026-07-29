@@ -4,10 +4,18 @@ Asserts that category AND subcategory write routes are registered and
 that domain exceptions map to the documented HTTP statuses. DB-free:
 service + auth dependencies are overridden with stubs, and TestClient
 is not used as a context manager so startup warmup never hits the DB.
+
+Since P2-28 the write routes live under ``/api/v1/internal`` behind
+``X-Internal-API-Key``; this file asserts the status *mapping*, while
+``test_taxonomy_write_auth.py`` asserts that the guard is what closes
+them. Both are needed — a route can be guarded and still map a domain
+exception to the wrong status.
 """
 
 from __future__ import annotations
 
+import pytest
+from app.adapters.inbound import internal_auth
 from app.application.dto import CategoryResponseDTO, SubCategoryResponseDTO
 from app.auth import get_current_user_id
 from app.dependencies import get_category_service
@@ -56,6 +64,17 @@ class _StubCategoryService:
             raise SubCategoryInUse(subcategory_id, "it is the rule engine's fallback subcategory")
 
 
+KEY = "internal-key-for-tests"
+KEY_HEADER = {"X-Internal-API-Key": KEY}
+
+
+@pytest.fixture(autouse=True)
+def _configured_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The guard fails closed on an unset key, so these status-mapping
+    tests would all be 503 without a configured one."""
+    monkeypatch.setattr(internal_auth.settings, "INTERNAL_API_KEY", KEY)
+
+
 def _client() -> TestClient:
     app.dependency_overrides[get_category_service] = lambda: _StubCategoryService()
     app.dependency_overrides[get_current_user_id] = lambda: 42
@@ -68,7 +87,8 @@ def teardown_function() -> None:
 
 def test_create_category_returns_201() -> None:
     resp = _client().post(
-        "/api/v1/categories/",
+        "/api/v1/internal/categories/",
+        headers=KEY_HEADER,
         json={"name": "Ferie", "type": "expense", "display_order": 11},
     )
     assert resp.status_code == 201
@@ -77,27 +97,39 @@ def test_create_category_returns_201() -> None:
 
 
 def test_duplicate_category_maps_to_409() -> None:
-    resp = _client().post("/api/v1/categories/", json={"name": "Mad & drikke", "type": "expense"})
+    resp = _client().post(
+        "/api/v1/internal/categories/",
+        headers=KEY_HEADER,
+        json={"name": "Mad & drikke", "type": "expense"},
+    )
     assert resp.status_code == 409
 
 
 def test_invalid_type_maps_to_422() -> None:
-    resp = _client().post("/api/v1/categories/", json={"name": "X", "type": "bogus"})
+    resp = _client().post(
+        "/api/v1/internal/categories/",
+        headers=KEY_HEADER,
+        json={"name": "X", "type": "bogus"},
+    )
     assert resp.status_code == 422
 
 
 def test_update_category_not_found_maps_to_404() -> None:
-    resp = _client().put("/api/v1/categories/99", json={"name": "Y"})
+    resp = _client().put("/api/v1/internal/categories/99", headers=KEY_HEADER, json={"name": "Y"})
     assert resp.status_code == 404
 
 
 def test_delete_category_with_children_maps_to_409() -> None:
-    resp = _client().delete("/api/v1/categories/1")
+    resp = _client().delete("/api/v1/internal/categories/1", headers=KEY_HEADER)
     assert resp.status_code == 409
 
 
 def test_create_subcategory_returns_201() -> None:
-    resp = _client().post("/api/v1/categories/1/subcategories", json={"name": "Kaffe"})
+    resp = _client().post(
+        "/api/v1/internal/categories/1/subcategories",
+        headers=KEY_HEADER,
+        json={"name": "Kaffe"},
+    )
     assert resp.status_code == 201
     body = resp.json()
     assert body["category_id"] == 1
@@ -111,12 +143,12 @@ def test_list_all_subcategories_returns_200() -> None:
 
 
 def test_delete_fallback_subcategory_maps_to_409() -> None:
-    resp = _client().delete("/api/v1/subcategories/32")
+    resp = _client().delete("/api/v1/internal/subcategories/32", headers=KEY_HEADER)
     assert resp.status_code == 409
 
 
 def test_delete_subcategory_returns_204() -> None:
-    resp = _client().delete("/api/v1/subcategories/3")
+    resp = _client().delete("/api/v1/internal/subcategories/3", headers=KEY_HEADER)
     assert resp.status_code == 204
 
 
