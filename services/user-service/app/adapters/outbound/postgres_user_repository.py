@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from typing import Any, cast
+
+from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ports.outbound import IUserRepository
 from app.domain.entities import User, UserWithCredentials
+from app.domain.exceptions import UserNotFoundException
 from app.models import UserModel
 
 
@@ -40,6 +43,45 @@ class PostgresUserRepository(IUserRepository):
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
+
+    async def find_credentials_by_id(self, user_id: int) -> UserWithCredentials | None:
+        stmt = select(UserModel).where(UserModel.id == user_id)
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return self._to_credentials_entity(model) if model else None
+
+    async def update_password(self, user_id: int, password_hash: str) -> None:
+        await self._update(user_id, password_hash=password_hash)
+
+    async def update_username(self, user_id: int, username: str) -> User:
+        await self._update(user_id, username=username)
+        # Re-læs frem for RETURNING: aiosqlite i testene og Postgres i drift
+        # skal opføre sig ens, og en ekstra SELECT inde i samme transaktion
+        # er billigere end at fejle forskelligt de to steder.
+        model = await self._session.get(UserModel, user_id)
+        if model is None:  # pragma: no cover — _update har lige bevist rækken findes
+            raise UserNotFoundException(user_id)
+        return self._to_entity(model)
+
+    async def _update(self, user_id: int, **values: str) -> None:
+        """Skriv felter på en eksisterende bruger og stempl ``updated_at``.
+
+        Tidsstemplet kommer fra databasens ur (``func.now()``), ikke fra
+        processens — samme kilde som ``created_at``s server_default, så de
+        to felter er sammenlignelige, og der er intet ``datetime.now()`` at
+        injicere et ur udenom.
+
+        Commit ejes af UoW'en som i ``create``.
+        """
+        stmt = update(UserModel).where(UserModel.id == user_id).values(updated_at=func.now(), **values)
+        # execute() er typet som Result[Any] for enhver statement; en DML
+        # giver i praksis en CursorResult, som er den der bærer rowcount.
+        result = cast(CursorResult[Any], await self._session.execute(stmt))
+        if result.rowcount == 0:
+            # Brugeren blev slettet mellem use casens opslag og denne skrivning.
+            # Et tavst no-op ville svare 200/204 på en ændring der ikke skete.
+            raise UserNotFoundException(user_id)
+        await self._session.flush()
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:

@@ -24,6 +24,22 @@ class IUserRepository(ABC):
     @abstractmethod
     async def find_by_id(self, user_id: int) -> User | None: ...
 
+    @abstractmethod
+    async def find_credentials_by_id(self, user_id: int) -> UserWithCredentials | None:
+        """Slå en bruger op *med* password-hash.
+
+        ``find_by_id`` returnerer bevidst ``User`` uden credentials, så et
+        password-skift kan ikke verificere det nuværende password gennem
+        den. Denne er derfor ikke bekvemmelighed, men forudsætningen for
+        ``change_password``.
+        """
+
+    @abstractmethod
+    async def update_password(self, user_id: int, password_hash: str) -> None: ...
+
+    @abstractmethod
+    async def update_username(self, user_id: int, username: str) -> User: ...
+
 
 class IEventPublisher(ABC):
     """Port for publishing domain events to the message broker.
