@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "finans-tracker-observability"
+version = "0.1.0"
+description = "Shared process-wide logging configuration for API processes and workers"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "pytest",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["observability"]
