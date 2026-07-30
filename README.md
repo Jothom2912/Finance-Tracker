@@ -1,8 +1,8 @@
 # Finance Tracker — Microservices Personal Finance Application
 
-A personal finance tracking application built as event-driven microservices. The backend uses FastAPI with hexagonal architecture (ports & adapters), CQRS-lite (REST writes, GraphQL reads via gateway-service), event-driven communication via RabbitMQ, and PostgreSQL database-per-service. Includes live bank integration via Enable Banking (PSD2 Open Banking) with distributed saga orchestration for bank sync, automatic transaction categorization through a multi-tier pipeline (rule engine live; ML/LLM tiers prepared), and a streaming AI chat assistant powered by Ollama and ChromaDB.
+A personal finance tracking application built as event-driven microservices. The backend uses FastAPI with hexagonal architecture (ports & adapters), CQRS-lite (REST writes, GraphQL reads via gateway-service), event-driven communication via RabbitMQ, and PostgreSQL database-per-service. Includes live bank integration via Enable Banking (PSD2 Open Banking) with distributed saga orchestration for bank sync, automatic transaction categorization through a multi-tier pipeline (rule engine live; ML/LLM tiers prepared), an Elasticsearch-backed denormalized read store for analytics, an in-app notification feed, and a streaming AI chat assistant powered by Ollama and ChromaDB.
 
-The legacy Django/MySQL monolith (`services/monolith/`) is no longer part of the runtime stack — all reads go through gateway-service (port 8010).
+The legacy Django/MySQL monolith is gone — the `services/monolith/` directory no longer exists in the repo. All reads go through gateway-service (port 8010), which aggregates domain services and the Elasticsearch read side in analytics-service.
 
 ## Table of Contents
 
@@ -11,6 +11,8 @@ The legacy Django/MySQL monolith (`services/monolith/`) is no longer part of the
 - [Bank Integration](#bank-integration)
 - [Distributed Sagas](#distributed-sagas)
 - [Categorization Pipeline](#categorization-pipeline)
+- [Analytics Read Store](#analytics-read-store)
+- [Notifications](#notifications)
 - [AI Chat Pipeline](#ai-chat-pipeline)
 - [Service Map](#service-map)
 - [Project Structure](#project-structure)
@@ -54,8 +56,10 @@ This starts all services:
 | PostgreSQL (goals) | 5438 | Goal-service database |
 | PostgreSQL (banking) | 5439 | Banking-service database |
 | PostgreSQL (saga) | 5440 | Saga-service database |
+| PostgreSQL (notifications) | 5441 | Notification-service database |
 | RabbitMQ | 5672 / 15672 | Event bus + management UI |
 | Redis | 6380 | Cache for transaction/budget services |
+| Elasticsearch | 9200 | Denormalized read store (analytics-service) |
 | Ollama | 11435 | Local LLM runtime (qwen3 + bge-m3) |
 | User Service | 8001 | Registration, login, JWT issuing |
 | Transaction Service | 8002 | Transaction CRUD, CSV import, planned transactions |
@@ -64,11 +68,18 @@ This starts all services:
 | Categorization Service | 8005 | Rule/ML/LLM categorization pipeline |
 | Goal Service | 8006 | Savings goals, budget surplus allocation |
 | AI Service | 8007 | Streaming financial Q&A (Ollama + ChromaDB) |
+| Notification Service | 8008 | In-app notification feed |
 | Banking Service | 8009 | PSD2 bank integration (Enable Banking) |
 | Gateway Service | 8010 | Dashboard REST + GraphQL reads (BFF) |
 | Saga Service | 8011 | Distributed saga orchestration (bank sync) |
+| Analytics Service | 8012 | Elasticsearch-backed analytics reads |
+| Frontend (nginx) | 3000 | Built SPA behind the nginx perimeter |
+
+In total 53 compose services: 12 HTTP services, 26 workers/consumers/schedulers, the frontend, and 14 infrastructure containers.
 
 **Wait 30–60 seconds** for health checks to pass. The `ollama-pull` init container downloads `qwen3:4b` and `bge-m3` on first start.
+
+Note that `docker compose up -d` serves the **built** frontend image on port 3000 behind nginx (CSP + rate limits, see ADR-0005). `npm run dev` uses the same port but bypasses the perimeter — browser tests must run against the built image.
 
 ### Frontend
 
@@ -90,10 +101,14 @@ curl http://localhost:8004/health   # Account Service
 curl http://localhost:8005/health   # Categorization Service
 curl http://localhost:8006/health   # Goal Service
 curl http://localhost:8007/health   # AI Service
+curl http://localhost:8008/health   # Notification Service
 curl http://localhost:8009/health   # Banking Service
 curl http://localhost:8010/health   # Gateway Service
 curl http://localhost:8011/health   # Saga Service
+curl http://localhost:8012/health   # Analytics Service
 ```
+
+Banking-service also exposes `/ready`, which touches its DB and Enable Banking configuration — liveness alone was not enough to catch a service that starts but cannot work (P2-42b). `make compose-state-check` asserts no container is dead, exited nonzero, or restarting.
 
 ---
 
@@ -113,9 +128,13 @@ graph LR
     FE -->|dashboard, GraphQL| GW[Gateway Service<br/>:8010]
     FE -->|bank connect| BANK[Banking Service<br/>:8009]
     FE -->|AI chat| AI[AI Service<br/>:8007]
+    FE -->|notification feed| NS[Notification Service<br/>:8008]
     FE -->|saga status| GW
 
     GW -->|saga poll| SAGA[Saga Service<br/>:8011]
+    GW -->|"analytics reads"| ANS[Analytics Service<br/>:8012]
+    ANS --> ES[(Elasticsearch)]
+    NS -->|write| PG_N[(PostgreSQL<br/>Notifications)]
 
     US -->|"write + outbox"| PG_U[(PostgreSQL<br/>Users)]
     TS -->|"write + outbox"| PG_T[(PostgreSQL<br/>Transactions)]
@@ -151,11 +170,15 @@ graph LR
     RMQ -->|budget.month_closed| GBC[Goal Budget<br/>Consumer]
     RMQ -->|account.*| BAPC[Banking Account<br/>Projection]
     RMQ -->|saga.*| SAGA
+    RMQ -->|"transaction.*, account.*,<br/>category.*, goal.*"| APC[Analytics<br/>Projection Consumer]
+    RMQ -->|"bank.sync.completed,<br/>goal.*, budget.month_closed"| NC[Notification<br/>Consumer]
     SAGA -->|saga.cmd.*| BANK
     SAGA -->|saga.cmd.*| TS
 
     ASC -->|INSERT Account| PG_A
     TXC -->|"upsert read copies"| PG_T
+    APC -->|project| ES
+    NC -->|INSERT Notification| PG_N
 ```
 
 ### Key Architecture Decisions
@@ -172,7 +195,10 @@ graph LR
 | **Distributed sagas** | Bank sync orchestrated by saga-service with compensation (rollback import on failure) |
 | **Multi-tier categorization** | Rule engine first (fast, deterministic), then ML/LLM (expensive, probabilistic) |
 | **PSD2 via Enable Banking** | Aggregator abstracts bank-specific APIs; JWT-signed requests; OAuth for user consent |
-| **Monolith retired** | MySQL monolith and sync consumers removed; gateway-service is the sole read aggregation layer |
+| **Monolith retired** | MySQL monolith and its sync consumers are deleted; gateway-service is the sole read entry point for clients |
+| **Elasticsearch read store** | Aggregations and Danish full-text search live in analytics-service, not in the gateway. Idempotency via document `_id` + event-timestamp guards rather than a `processed_events` table ([ADR-0004](docs/adr/0004-analytics-elasticsearch-read-store.md)) |
+| **Single taxonomy owner** | categorization-service owns and writes categories/subcategories; every other service holds event-synced read copies ([ADR-003](docs/ADR-003-taxonomy-ownership-consolidated.md)) |
+| **nginx as security perimeter** | The built frontend image terminates CSP and rate limits in front of the SPA ([ADR-0005](docs/adr/0005-nginx-as-security-perimeter.md)) |
 
 ### Hexagonal Architecture (per service)
 
@@ -289,6 +315,65 @@ flowchart LR
 
 The rule engine tier is live. ML and LLM tiers are implemented but not yet wired in production paths.
 
+`is_user_confirmed` protects a manual choice: automatic re-categorization never
+overwrites it. User corrections are learned as auto-managed rules by
+`categorization-correction-consumer` (F1-03).
+
+---
+
+## Analytics Read Store
+
+The analytics-service (port 8012) is the CQRS read side: an Elasticsearch-backed
+denormalized store that the gateway reads from instead of aggregating across
+domain services itself.
+
+```mermaid
+flowchart LR
+    RMQ[RabbitMQ] -->|"transaction.*, account.*,<br/>category.*/subcategory.*, goal.*"| PC[projection_consumer]
+    PC --> ES[(Elasticsearch<br/>aliases: transactions,<br/>accounts, taxonomy, goals)]
+    RMQ -->|transaction.*| EC[embedding_consumer]
+    EC --> CDB[(ChromaDB)]
+    GW[Gateway Service] -->|HTTP| API["analytics-service<br/>/api/v1/analytics/*"]
+    API --> ES
+```
+
+| Aspect | Detail |
+|--------|--------|
+| Write side | `projection_consumer` projects events into ES indices behind aliases |
+| Idempotency | Document `_id` + event-timestamp guards — **no** `processed_events` table, unlike other consumers ([ADR-0004](docs/adr/0004-analytics-elasticsearch-read-store.md)) |
+| Read side | Aggregations and Danish full-text search run in ES, behind the gateway's outbound port |
+| Domain layer | `app/domain/` owns the canonical expense/income classification and budget-month period rules |
+| Backfill | `python -m app.tools.backfill` for historical data; it writes with `event_ts=0` so live events always win |
+| Embeddings | `embedding_consumer` writes transaction embeddings to ChromaDB for the AI service's semantic search |
+
+A read model does not self-heal against events that were never emitted. When a
+projection looks wrong, diff the id sets across the whole dataset rather than
+spot-checking rows.
+
+---
+
+## Notifications
+
+The notification-service (port 8008) turns domain events into a per-user in-app
+feed, surfaced by the frontend's `NotificationBell`.
+
+| Trigger event | Notification |
+|---------------|--------------|
+| `bank.sync.completed` | "Banksynkronisering færdig" |
+| `goal.updated` where current ≥ target | "Mål nået! 🎉" (manual edit reaching the target) |
+| `goal.reached` | "Mål nået! 🎉" (automatic surplus allocation completes a goal — F1-08) |
+| `budget.month_closed` | "Måned lukket" (+ surplus) |
+| `budget.line_threshold_crossed` | Mid-month 80% / 100% budget alerts (F2-03) |
+
+Delivery is at-least-once, so each notification carries a deterministic
+`source_key` under a unique index — redeliveries and repeated `goal.updated`
+events collapse onto the same row, and both goal paths dedupe on
+`goal.reached:{goal_id}`. `transaction.categorized` is deliberately **not**
+consumed (too noisy). Email is deferred: `IEmailPort` exists with a no-op
+adapter so SMTP can be wired later without touching the application layer.
+
+See `services/notification-service/README.md`.
+
 ---
 
 ## AI Chat Pipeline
@@ -326,18 +411,18 @@ See `services/ai-service/README.md` for model configuration and intent types.
 | **Categorization Service** | 8005 | PostgreSQL (5435) | Categorization pipeline **and sole owner/writer of the taxonomy** (categories, subcategories, merchants, rules) per ADR-003. Taxonomy reads are JWT'd; writes are internal-only under `/api/v1/internal/` (P2-28) |
 | **Goal Service** | 8006 | PostgreSQL (5438) | Savings goals, budget surplus allocation |
 | **AI Service** | 8007 | ChromaDB (volume) | Streaming financial Q&A (Ollama + ChromaDB) |
+| **Notification Service** | 8008 | PostgreSQL (5441) | In-app notification feed (bank sync done, goal reached, month closed, budget thresholds) |
 | **Banking Service** | 8009 | PostgreSQL (5439) | PSD2 bank integration (Enable Banking) |
 | **Gateway Service** | 8010 | — (fans out) | Dashboard REST + GraphQL BFF |
 | **Saga Service** | 8011 | PostgreSQL (5440) | Distributed saga orchestration |
+| **Analytics Service** | 8012 | Elasticsearch (9200) | Denormalized CQRS read store: overview, expenses/cashflow by month, comparison, Danish full-text transaction search, top merchants |
 
-### Planned / Stub Services
+All twelve services are live in `docker-compose.yml` and in the CI matrix. The
+earlier "Analytics = stub, Notification = planned" state no longer holds:
+analytics-service is the read side the gateway reads from, and
+notification-service backs the frontend's notification bell.
 
-| Service | Port | Status |
-|---------|------|--------|
-| **Analytics Service** | — | Stub — reads handled by gateway-service |
-| **Notification Service** | 8008 | Planned — budget threshold and goal event notifications |
-
-### Removed Components (June 2026)
+### Removed Components
 
 The following components have been retired and are no longer part of the runtime stack:
 
@@ -347,7 +432,7 @@ The following components have been retired and are no longer part of the runtime
 | MySQL database | PostgreSQL database-per-service |
 | 4 sync consumers (user, category, transaction, account) | Event-driven consumers on domain services |
 
-The monolith source remains in `services/monolith/` for reference but is excluded from `docker-compose.yml`.
+The monolith directory has been deleted from the repo — it is not merely excluded from `docker-compose.yml`. Nothing in the runtime stack, CI, or `k8s/` refers to it.
 
 ### Workers & Consumers
 
@@ -402,17 +487,17 @@ Finance-Tracker/
 │   ├── banking-service/        # PSD2 bank integration, saga participant
 │   ├── gateway-service/        # Dashboard BFF (GraphQL + REST)
 │   ├── saga-service/           # Distributed saga orchestration
-│   ├── frontend/               # React + Vite SPA
-│   ├── shared/                 # Event contracts + auth lib
-│   ├── analytics-service/      # Stub (reads via gateway)
-│   ├── notification-service/   # Planned
-│   ├── monolith/               # Legacy Django app (not in docker-compose)
+│   ├── analytics-service/      # Elasticsearch read store + projection/embedding workers
+│   ├── notification-service/   # In-app notification feed
+│   ├── frontend/               # React + Vite SPA (nginx perimeter, Playwright specs in e2e/)
+│   ├── shared/                 # 4 path-dep packages: contracts, messaging, auth, domain
 │   └── serverless-health-job/  # KEDA health monitor
 ├── k8s/                        # Kubernetes manifests (Kustomize + monitoring)
 ├── monitoring/                 # Prometheus/Grafana/Loki configs (local overlay)
-├── tests/e2e/                  # End-to-end tests
+├── tests/e2e/                  # End-to-end tests (also run in CI)
 ├── scripts/                    # Dev/ops utility scripts
-├── docs/                       # ADRs, assignment reports
+├── docs/                       # ADRs, assignment reports, AsyncAPI
+├── dev-notes/                  # Working notes: backlog, decisions, findings, plans, STATUS
 ├── docker-compose.yml          # Local development stack
 ├── docker-compose.monitoring.yml  # Optional monitoring overlay
 └── Makefile                    # Orchestration targets
@@ -426,15 +511,20 @@ Each service exposes versioned REST endpoints under `/api/v1/`. OpenAPI docs are
 
 | Service | Key endpoints |
 |---------|---------------|
-| User | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` |
+| User | `POST /api/v1/users/register`, `POST /api/v1/users/login`, `GET /api/v1/users/me`, `PUT /api/v1/users/me/password`, `PUT /api/v1/users/me/username` |
 | Transaction | `GET/POST /api/v1/transactions/`, `POST /api/v1/transactions/import-csv` |
 | Account | `GET/POST /api/v1/accounts/`, `GET/POST /api/v1/account-groups/` |
 | Budget | `GET/POST /api/v1/budgets/`, `GET /api/v1/monthly-budgets/summary` |
+| Categorization | `GET /api/v1/categories/` (JWT reads); taxonomy **writes** only under `/api/v1/internal/` behind `INTERNAL_API_KEY` (P2-28) |
 | Goal | `GET/POST /api/v1/goals/` |
-| Banking | `POST /api/v1/bank/connect`, `POST /api/v1/bank/connections/{id}/sync` |
+| Notification | `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `POST /api/v1/notifications/{id}/read`, `POST /api/v1/notifications/read-all`, `DELETE /api/v1/notifications/{id}` |
+| Banking | `POST /api/v1/bank/connect`, `POST /api/v1/bank/connections/{id}/sync`, `GET /health`, `GET /ready` |
 | Gateway | `GET /api/v1/dashboard/`, `POST /api/v1/graphql`, `GET /api/v1/sagas/{id}` |
 | AI | `POST /api/v1/chat/stream` (SSE), `POST /api/v1/ingest` |
 | Saga | `GET /api/v1/sagas/{id}` (internal; prefer gateway for authenticated access) |
+| Analytics | `GET /api/v1/analytics/overview`, `/expenses-by-month`, `/cashflow-by-month`, `/comparison`, `/transactions`, `/top-merchants`, `POST /api/v1/analytics/search/hybrid` |
+
+Auth lives under `/api/v1/users/`, not `/api/v1/auth/` — an earlier version of this table said the latter, and no such route exists.
 
 GraphQL schema is served by gateway-service at `/api/v1/graphql` (Strawberry).
 
@@ -449,14 +539,24 @@ All services publish to a single topic exchange: `finans_tracker.events`
 | Routing Key | Publisher | Consumers |
 |-------------|-----------|-----------|
 | `user.created` | user-service | account-service-consumer |
-| `transaction.created` | transaction-service | categorization-transaction-consumer |
-| `transaction.categorized` | categorization-service | transaction-categorized-consumer |
-| `category.*` | transaction-service | categorization-category-sync |
-| `account.*` | account-service | banking-account-projection-consumer |
-| `budget.month_closed` | budget-service | goal-budget-consumer |
+| `transaction.*` | transaction-service | categorization-transaction-consumer (`transaction.created`), analytics-projection-consumer, analytics-embedding-consumer |
+| `transaction.categorized` | categorization-service | transaction-categorized-consumer, analytics-projection-consumer |
+| `category.*` / `subcategory.*` | **categorization-service** (sole taxonomy owner, ADR-003) | transaction-taxonomy-consumer, analytics-projection-consumer |
+| `account.*` | account-service | banking-account-projection-consumer, analytics-projection-consumer |
+| `budget.month_closed` | budget-service | goal-budget-consumer, notification-consumer |
+| `goal.updated` / `goal.reached` | goal-service (`goal.reached` from the budget-surplus allocation handler) | analytics-projection-consumer, notification-consumer |
+| `budget.line_threshold_crossed` | budget-alert-scheduler (F2-03) | notification-consumer |
+| `bank.sync.completed` | banking-service (saga command consumer, on `mark_sync_complete`) | notification-consumer |
 | `saga.bank_sync.start` | banking-service | saga-start-consumer |
 | `saga.cmd.*` | saga-service (via outbox) | banking/transaction saga command consumers |
 | `saga.reply.*` | participating services | saga-reply-consumer |
+
+The `category.*` row previously named transaction-service as publisher and a
+`categorization-category-sync` consumer. That was the pre-ADR-003 direction and
+the consumer no longer exists; the sync runs the other way now.
+
+Full payload schemas, queue names and DLQ bindings are documented in
+[`docs/asyncapi.yaml`](docs/asyncapi.yaml).
 
 ### Outbox Pattern
 
@@ -482,8 +582,18 @@ See `example.env` for all available options.
 | `TIMEOUT_CHECK_INTERVAL_SECONDS` | Saga | 30 | Saga timeout worker poll interval |
 | `OLLAMA_BASE_URL` | AI service | `http://ollama:11434` | Ollama server URL |
 | `GATEWAY_SERVICE_URL` | AI service | `http://gateway-service:8010` | Gateway URL for analytics data |
+| `ELASTICSEARCH_URL` | Analytics | `http://elasticsearch:9200` | Elasticsearch read store |
+| `ANALYTICS_SERVICE_URL` | Gateway | `http://analytics-service:8000` | Analytics read-side URL (note: container port 8000, host 8012) |
 
-Each service reads its own `DATABASE_URL` from the environment (set in `docker-compose.yml`).
+Each service reads its own `DATABASE_URL` from the environment (set in
+`docker-compose.yml`). Alembic's `env.py` reads the same variable — a service
+whose `env.py` only reads `alembic.ini` will silently migrate an ephemeral
+SQLite file instead.
+
+Several services publish on a container port that differs from the host port:
+account-service `8004→8003`, ai-service `8007→8004`, analytics-service
+`8012→8000`. Use the host port from the outside and the container port in
+inter-service URLs.
 
 Copy the template before local development:
 
@@ -532,7 +642,7 @@ See [`KUBERNETES_GUIDE.md`](KUBERNETES_GUIDE.md) for full prerequisites, step-by
 
 ### GitHub Actions (current)
 
-The project uses GitHub Actions for continuous integration. The pipeline runs on every push and pull request to `master`/`main`:
+The project uses GitHub Actions (`.github/workflows/ci.yml`) for continuous integration. The pipeline runs on every push and pull request to `master`/`main`, and consists of five jobs:
 
 ```mermaid
 flowchart LR
@@ -541,32 +651,38 @@ flowchart LR
         PR["Pull Request"]
     end
 
-    subgraph matrix ["Matrix (9 services)"]
-        Lint["Ruff lint"]
-        Format["Ruff format check"]
-        Bandit["Bandit security scan"]
-        Test["pytest"]
-    end
+    RL["repo-lint<br/>ruff over services+scripts+tests<br/>+ build-hygiene check"]
+    PS["python-services<br/>matrix of 12"]
+    SP["shared-packages<br/>matrix of 4"]
+    FE["frontend<br/>lint + vitest + build"]
+    E2E["e2e-tests<br/>compose up + pytest + Playwright"]
 
-    Push --> matrix
-    PR --> matrix
+    Push --> RL & PS & SP & FE
+    PR --> RL & PS & SP & FE
+    PS --> E2E
+    FE --> E2E
 ```
 
-| Service | Lint | Format | Security | Tests |
-|---------|------|--------|----------|-------|
-| user-service | ruff | ruff format | bandit | pytest |
-| transaction-service | ruff | ruff format | bandit | pytest |
-| account-service | ruff | ruff format | bandit | pytest |
-| budget-service | ruff | ruff format | bandit | pytest |
-| goal-service | ruff | ruff format | bandit | pytest |
-| categorization-service | ruff | ruff format | bandit | pytest |
-| banking-service | ruff | ruff format | bandit | pytest |
-| gateway-service | ruff | ruff format | bandit | pytest |
-| ai-service | ruff | ruff format | bandit | pytest |
+| Job | Scope | Steps |
+|-----|-------|-------|
+| `repo-lint` | Whole repo (`services`, `scripts`, `tests`) | ruff lint + format check, `scripts/compose_check.py` (worker image sharing P3-40, one install path per service P2-37) |
+| `python-services` | 12 services | ruff lint, ruff format, **mypy** (allowlisted), bandit, pytest |
+| `shared-packages` | `contracts`, `messaging`, `auth`, `domain` | ruff lint, ruff format, bandit, pytest |
+| `frontend` | `services/frontend` | eslint, vitest, production build |
+| `e2e-tests` | Full compose stack | `pytest tests/e2e`, container-state gate, banking readiness gate, Playwright browser suite |
 
-All services run against Python 3.11. The pipeline uses `uv` for dependency management and sets test environment variables (`TESTING=1`, `JWT_SECRET`, `INTERNAL_API_KEY`).
+The `python-services` matrix covers **all twelve** services: account, gateway, user, transaction, budget, goal, ai, categorization, banking, saga, analytics, notification. All run on Python 3.11 with `uv` and test env vars (`TESTING=1`, `JWT_SECRET`, `INTERNAL_API_KEY`).
 
-E2E tests are run locally via `make test-e2e` (requires Docker Compose) and are not part of the CI pipeline.
+**The typecheck gate is an allowlist.** `TYPECHECK_SERVICES` in `ci.yml` names the 9 services where `make typecheck` is a hard gate: analytics, user, notification, ai, budget, saga, transaction, categorization, banking. Outside it, with reasons: `goal` (two runtime types for `Goal`), `account` (no `pyproject.toml` to hang mypy on), `gateway` (Strawberry-generated errors, own item). Adding a name to that list *is* the rollout; removing it is the rollback. `make verify-typecheck-gate` asserts the gate covers exactly its allowlist.
+
+**E2E and browser tests run in CI**, not only locally. The `e2e-tests` job brings up the full stack with `compose up --build` and then:
+
+1. `pytest tests/e2e` — hits service ports directly, deliberately bypassing the perimeter. `conftest.py` aborts rather than skips when services are unreachable and `CI` is set, so the job cannot go green with zero tests run.
+2. A gate asserting no container is dead, exited nonzero, or restarting (P2-38).
+3. A banking dependency-readiness gate — `/ready`, not just liveness (P2-42b).
+4. `npm run test:browser` — Playwright against the built frontend image behind nginx.
+
+Every job has an explicit `timeout-minutes` (P2-38), sized from measured baselines rather than guessed — the finding behind it was a job that hung for six hours with no signal.
 
 ---
 
@@ -615,12 +731,40 @@ make test
 # Run E2E tests (requires docker compose up)
 make test-e2e
 
+# Run browser tests against the BUILT frontend behind nginx (needs `make dev-docker` first)
+make test-browser
+
 # Run tests for a specific service
 make -C services/user-service test
 make -C services/saga-service test
 ```
 
-The project has 650+ automated tests (~490 Python across microservices and e2e, ~170 frontend Vitest).
+### Test inventory
+
+Counted by static scan of the repo (`def test_*` / `it(`/`test(` declarations), not by a test-runner collection:
+
+| Layer | Files | Test declarations |
+|-------|-------|-------------------|
+| Python (services + `tests/e2e`) | 133 | ~1300 |
+| Frontend Vitest | 35 | ~346 |
+| Playwright browser specs (`services/frontend/e2e/`) | 5 | 5 |
+
+The Python figure includes unit, integration (Testcontainers), architecture
+(pytest-archon) and e2e tests. An earlier version of this section claimed
+"650+ tests (~490 Python, ~170 frontend)" — that number is roughly half the
+current count.
+
+### What the layers are for
+
+- **Unit** — all domain logic, including edge cases. Deterministic: injected clock or freezegun, never `datetime.now()` in domain code.
+- **Architecture** — pytest-archon enforces hexagonal boundaries (domain must not import adapters/infrastructure).
+- **Integration** — Testcontainers against real PostgreSQL / RabbitMQ / Elasticsearch.
+- **E2E** (`tests/e2e/`) — hits service ports directly, bypassing the perimeter on purpose.
+- **Browser** (`services/frontend/e2e/`) — Playwright against the built image behind nginx, so CSP and rate limits are in scope. `npm run dev` does *not* exercise the perimeter even though it uses the same port.
+
+A green `make check` is static — it does not import `app.main` under the image's
+pinned versions. After touching a Dockerfile or a dependency set, start the
+container and read the **workers'** logs, not just the API's.
 
 ---
 
@@ -630,7 +774,9 @@ The project has 650+ automated tests (~490 Python across microservices and e2e, 
 
 | Command | Description |
 |---------|-------------|
+| `make help` | List all available targets |
 | `make install-deps` | Install deps for all services |
+| `make install-hooks` | Enable the tracked git hooks (run once per clone) |
 | `make dev` | Start infra, print instructions |
 | `make dev-docker` | Start everything in Docker |
 | `make down` | Stop all Docker containers |
@@ -638,10 +784,26 @@ The project has 650+ automated tests (~490 Python across microservices and e2e, 
 | `make build` | Build all Docker images |
 | `make test` | Run all tests |
 | `make test-e2e` | Run E2E tests |
-| `make lint` | Run ruff on all Python services |
-| `make format` | Auto-format all Python services |
-| `make check` | Run all quality checks |
+| `make test-browser` | Playwright against the built frontend behind nginx |
+| `make lint` / `make format` / `make format-check` | ruff on all Python services |
+| `make lint-repo` | Lint + format-check the whole repo, incl. `scripts/` and `tests/` |
+| `make check` | All quality checks (lint + format + types + tests) |
+| `make compose-check` | Build hygiene: worker image drift (P3-40) + one install path per service (P2-37) |
+| `make compose-state-check` | Runtime: no container dead, exited nonzero, or restarting (needs stack up) |
+| `make verify-typecheck-gate` | Prove the mypy gate covers exactly its allowlist |
+| `make notes-check` | Check `dev-notes/` for index drift, dead links, bad frontmatter |
+| `make ci-status` | Show the latest CI run for the current branch (exit 1 if red) |
 | `make clean-test-containers` | Remove orphaned Testcontainers |
+
+Per service: `make -C services/<name> lint typecheck test check migrate`.
+
+### Code conventions enforced by tooling
+
+- **ruff** — pre-commit hook on staged files, plus the repo-wide `repo-lint` CI job. No service defines its own `[tool.ruff]`; all inherit the root `ruff.toml`. The hook is per-clone and bypassable with `--no-verify`, which is why the CI job backstops it.
+- **mypy** — default mypy (not `--strict`) plus `disallow_untyped_defs`, `warn_unused_ignores`, `warn_redundant_casts`, `no_implicit_optional`. In force on 9 of 12 services; see [CI/CD Pipeline](#cicd-pipeline). A `# type: ignore` must carry an item reference.
+- **uv** — one install path per service: 11 of 12 install in the image from the same `uv.lock` that tests and typecheck read. `make compose-check` fails a service that grows both `uv.lock` and `requirements.txt`. The exception is `account-service` (`pip install -r requirements.txt`, no lockfile), which is also why it has nowhere to hang mypy.
+- **`py.typed`** is mandatory on new `shared/*` packages — without the marker everything from the package degrades to `Any` in each consuming service. Bump the package version at the same time: path deps install as copies, so uv will not refresh them at an unchanged version.
+- **bandit** — same threshold locally and in CI (P3-49).
 
 Per-service development (infra must be running via `make dev` or `docker compose up -d`):
 
@@ -655,7 +817,7 @@ Per-service development (infra must be running via `make dev` or `docker compose
 | `make dev-goal-service` | 8006 |
 | `make dev-frontend` | 3000 |
 
-Banking-service (8009), gateway-service (8010), saga-service (8011), and ai-service (8007) are developed via Docker (`docker compose up -d`) or their per-service Makefiles directly. They are not yet wired into the root `make dev-*` targets.
+AI-service (8007), notification-service (8008), banking-service (8009), gateway-service (8010), saga-service (8011), and analytics-service (8012) are developed via Docker (`docker compose up -d`) or their per-service Makefiles directly. They are not wired into the root `make dev-*` targets.
 
 ### Frontend development
 
@@ -665,6 +827,32 @@ npm install
 npm run dev
 ```
 
+React + Vite SPA, react-router. Routes:
+
+| Route | Page | Notes |
+|-------|------|-------|
+| `/dashboard` | DashboardPage | Summary cards, category spending, trends, budget/goal progress, bank connection widget |
+| `/transactions` | TransactionsPage | List, filters, pagination, CSV import |
+| `/categories` | CategoriesPage | Taxonomy **read-only** — the write surface was removed in P2-28 (categorization-service owns it) |
+| `/rules` | RulesPage | Categorization rules |
+| `/budget` | BudgetPage | Budgets and monthly summaries |
+| `/goals` | GoalPage | Savings goals |
+| `/chat` | ChatPage | Streaming AI assistant (SSE) |
+| `/profile` | ProfilePage | Change username / password (F2-08) |
+| `/login`, `/register` | Login/RegisterPage | Public |
+| `/bank/callback` | BankCallbackPage | PSD2 OAuth return |
+| `/account-selector` | AccountSelector | Account scoping |
+
+Cross-cutting: `NotificationBell` (notification-service feed), `ErrorBoundary`,
+global toast via `useNotifications()`, central `bankFormats.js` for CSV bank
+configs, `serviceUrls.js` for service base URLs.
+
+**Form convention:** `useState` per field, validation in `handleSubmit`, errors
+surfaced through the global toast (`showError` / `showSuccess`), `disabled={isSaving}`
+with a label swap, trim before validating. See `RulesPage.jsx` and `ProfilePage.jsx`.
+There is no React Hook Form or Zod in this repo — do not add one for a single new
+form; converting the existing forms would be a frontend-wide change in its own right.
+
 ### Adding a new service
 
 1. Create `services/<name>/` with hexagonal structure
@@ -672,8 +860,13 @@ npm run dev
 3. Add outbox worker if the service publishes events
 4. Add shared event contracts to `services/shared/contracts/`
 5. Add K8s manifest to `k8s/apps/` and workers to `k8s/workers/`
-6. Add the service to the CI matrix in `.github/workflows/ci.yml`
-7. Bootstrap from an existing service (e.g. account-service) — match env.py, config, and Docker setup patterns
+6. Add the service to the CI matrix in `.github/workflows/ci.yml`, and to `TYPECHECK_SERVICES` once mypy is clean
+7. Bootstrap from an existing service — match `env.py`, config and Docker setup. Prefer a service that is *inside* the tooling gates (user, transaction, budget) over `account-service`, which has no `pyproject.toml` and no lockfile
+
+Two extraction gotchas worth repeating here:
+
+- **Alembic `env.py` must read `DATABASE_URL` from the environment**, not only from `alembic.ini`. A default SQLite fallback lets migrations "succeed" against a meaningless ephemeral DB. Verify the tables actually exist after the first deploy — `alembic upgrade head` exiting 0 is not evidence.
+- **A "CORS error" is usually a server crash.** Exceptions thrown before the CORS middleware can set headers look exactly like misconfigured CORS. Read `docker logs` first.
 
 ---
 
@@ -690,10 +883,18 @@ Utility scripts for development, deployment, and operations live in `scripts/`:
 | `k8s-port-forward.ps1` | Port-forward services for local access |
 | `k8s-status.ps1` | Check pod and service status |
 | `monitoring-up.sh` / `.ps1` | Deploy monitoring stack to Kubernetes |
+| `k8s-port-forward.sh` | Port-forward services for local access (bash) |
 | `keda-demo.ps1` | Demonstrate KEDA ScaledJob with health-check message |
 | `e2e-test.sh` | Run E2E test suite |
+| `compose_check.py` | Build hygiene gate: worker image sharing + one install path per service |
+| `compose_state_check.py` | Runtime gate: no container dead, exited nonzero, or restarting |
+| `verify_typecheck_gate.py` | Assert the mypy gate covers exactly its allowlist |
+| `notes_check.py` | Validate `dev-notes/` index, links and frontmatter |
+| `ci_status.py` | Report the latest CI run for the current branch |
 | `backfill_category_names.py` | Backfill denormalized category names on transactions |
 | `cleanup_pg_duplicates.py` | Remove duplicate transactions (maintenance) |
+
+Scripts under `scripts/` are inside the repo-wide ruff perimeter (`make lint-repo`, `repo-lint` in CI) — they write directly to service databases, so they are not treated as throwaway.
 
 ---
 
@@ -707,5 +908,11 @@ Utility scripts for development, deployment, and operations live in `scripts/`:
 | [`docs/asyncapi.yaml`](docs/asyncapi.yaml) | AsyncAPI documentation for RabbitMQ events, queues, routing keys, payload schemas, producers and consumers |
 | [`docs/MONITORING.md`](docs/MONITORING.md) | Monitoring stack setup and dashboards |
 | [`docs/MANDATORY_ASSIGNMENT_1_REPORT.md`](docs/MANDATORY_ASSIGNMENT_1_REPORT.md) | Course assignment report |
-| [`docs/adr/`](docs/adr/) | Architecture Decision Records |
-| Service-level READMEs | Each service has its own README with API docs and domain details |
+| [`docs/adr/`](docs/adr/) | Numbered ADRs: npm for frontend (0001), imperative confirm dialog (0002), goal allocation from budget surplus (0003), Elasticsearch read store (0004), nginx as security perimeter (0005) |
+| [`docs/ADR-003-taxonomy-ownership-consolidated.md`](docs/ADR-003-taxonomy-ownership-consolidated.md) | Taxonomy ownership — supersedes [ADR-002](docs/ADR-002-categories-ownership-deferred.md) |
+| [`docs/security-audit-notes.md`](docs/security-audit-notes.md) | Security audit findings |
+| [`docs/retrospective-transaction-ownership.md`](docs/retrospective-transaction-ownership.md) | Retrospective on the transaction-ownership extraction |
+| [`dev-notes/`](dev-notes/) | Working notes: [`STATUS.md`](dev-notes/STATUS.md), backlog, decisions, findings, plans, session logs. Validated by `make notes-check` |
+| Service-level READMEs | user, transaction, budget, goal, ai, saga, analytics, notification, frontend |
+
+Nine of the twelve services have their own README. Missing: account, categorization, banking, gateway.
