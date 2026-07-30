@@ -11,7 +11,12 @@ from sqlalchemy import engine_from_config, pool
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False er ikke kosmetik: default True sætter
+    # ``.disabled = True`` på hver logger der findes når migrationen kører — også
+    # uvicorns.  Kører alembic i samme proces som appen (migrate-on-startup, som
+    # account-service gør), er processen stum bagefter: målt til 4 logliner på 35
+    # timers uptime, uden access-log, mens containeren var healthy.  Se P3-58.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Læs DATABASE_URL direkte fra os.environ (undgår caching i Pydantic settings)
 _raw_url = os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
