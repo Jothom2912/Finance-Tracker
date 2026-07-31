@@ -243,7 +243,7 @@ præcist — og fase 2 kan rulles tilbage alene, hvilket er hele grunden til at 
    `GET /{user_id}` er den entydig. Samme exception, to tvetydigheder — så linjen hører i
    handleren, med ruten på.
 
-4. [ ] **account-service** — flest punkter, ingen handlere i dag:
+4. [x] **account-service** — flest punkter, ingen handlere i dag:
    - `account_api.py:47` og `:90`: de to ejerskabs-403'er → `warning`. Et krydsbruger-forsøg,
      læs som skriv, er i dag sporløst.
    - `user_adapter.py:26` og `:32-42`: non-200 fra user-service → `warning` **før** det
@@ -254,6 +254,68 @@ præcist — og fase 2 kan rulles tilbage alene, hvilket er hele grunden til at 
      x_internal_api_key != INTERNAL_API_KEY` blander dem i dag.
    - `application/service.py:73`, `:165`, `:188`: de tre domænefejl loggede ved raise, så den
      ubrugte logger på `:37` får sit formål.
+
+   ### Fase 4's resultat (2026-07-31)
+
+   Otte kald, alle drevet fra en HTTP-request mod den kørende stak. **Planen var upræcis på
+   ét punkt, og det punkt var dens egen vigtigste linje:**
+
+   - Planen foreskrev at logge **non-200** i `user_adapter`. Efter reglen er det for meget:
+     en `404` er user-services *entydige* "den bruger findes ikke", og det er præcis hvad
+     400'en til klienten derefter siger. En linje dér ville fyre hver gang nogen taster et
+     forkert bruger-id i en gruppe — netop den støj reglen findes for at holde ude. Cuttet
+     er derfor `not in (200, 404)`. Det er samme afgørelse som fase 3's `UserNotFound`, set
+     fra den anden ende af det samme kald.
+   - Planens præmis om at 400'en også dækker "user-service er nede" **holder ikke helt**: er
+     servicen helt væk, kaster `httpx` en `ConnectError` som ingen fanger → 500 med uvicorns
+     egen traceback. Grimt, men ikke tavst. Det tvetydige tilfælde er non-404-*svar* — 401
+     fra en roteret nøgle, 5xx fra en syg service — og det er dem linjen dækker.
+
+   **Live-drevet, den stærkeste enkeltobservation i hele itemet.** Med en skæv
+   `INTERNAL_API_KEY` (engangs-container, `docker compose run -e`) siger de to ender nu
+   tilsammen hele diagnosen — fase 3 og fase 4 komponerer:
+
+   ```
+   user-service-1 | WARNING [app.adapters.inbound.rest_api] Internt bruger-opslag afvist: nøglen matcher ikke
+   account-svc    | WARNING [app.adapters.outbound.user_adapter] user-service svarede 401 på eksistens-tjek
+                    af bruger 497 — kaldet kollapser til 'findes ikke' og bliver en 400 til klienten
+   account-svc    | WARNING [app.application.service] Kontooprettelse afvist: user-service kender ikke
+                    bruger 497 fra et gyldigt token
+   ```
+
+   **Mutations-kontrollen viste hvorfor adapter-linjen ikke er valgfri.** Med den fjernet
+   overlever `service.py`-linjen — og den *lyver*: "user-service kender ikke bruger 497" er
+   falsk, brugeren findes, nøglen var skæv. En tavs log er dårlig; en log der selvsikkert
+   siger det forkerte er værre. Mutationen blev verificeret i begge instrumenter: 0
+   `user_adapter`-linjer i den live-drevne kørsel, og 4 røde tests — og kun de fire der hører
+   til linjen.
+
+   Live-tælling efter fase 4 (samme probe som step 1, plus tre nye drives):
+
+   | drive | statuskode | linje |
+   |---|---|---|
+   | AC1 GET fremmed konto | 403 | `account_api` WARNING, med bruger, konto og ejer |
+   | AC2 PUT fremmed konto | 403 | `account_api` WARNING, egen ordlyd (skriv ≠ læs) |
+   | AC3 forkert intern nøgle | 403 | `internal_api` WARNING, uden nogen nøgleværdi |
+   | AC4 intern nøgle mangler | 422 | **ingen** — uopnåelig gren, se nedenfor |
+   | AC5 gruppe med ukendte id'er | 400 | `service` WARNING, navngiver `[987654, 987655]` |
+   | AC6 gruppe med gyldige id'er | 201 | **ingen** (negativ kontrol) |
+   | AC7 skæv nøgle → kontooprettelse | 400 | `user_adapter` + `service` WARNING |
+   | ordinær 404 på `/accounts/999999` | 404 | **ingen** (negativ kontrol) |
+
+   Step 1's `AC4`-fund er fastholdt som en test frem for kun en note: `Header(...)` er uden
+   default, så "nøgle mangler helt" afvises af Pydantic med 422 og når aldrig
+   `_verify_internal_key`. Giver nogen senere headeren en default, bliver testen rød i stedet
+   for at grenen stille bliver nåelig.
+
+   To bevidste fravalg, hver med en negativ test: den ordinære `404 "Konto ikke fundet"` og
+   det interne `GET /{account_id}/owner`s 404 — sidstnævnte er både entydig *og* den normale
+   måde goal-service får svaret på.
+
+   **Dækningen her er svagere end i fase 3, og det er strukturelt.** `account` er ikke på
+   typecheck-gaten (P3-01/P3-39: intet `pyproject.toml`) og har ingen lokal værktøjskæde, så
+   tests, ruff og bandit blev kørt i en `python:3.11-slim`-container mod det mountede repo —
+   samme sti som CI, men manuelt. 44 tests grønne, ruff og bandit rene.
 
 5. [ ] **goal-service** — fra nul til noget; `logger = logging.getLogger(__name__)` skal først
    oprettes:

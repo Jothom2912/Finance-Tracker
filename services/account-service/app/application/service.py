@@ -70,6 +70,15 @@ class AccountService(IAccountService):
 
     def create_account(self, data: AccountCreate) -> AccountSchema:
         if not self._user_port.exists(data.User_idUser):
+            # P3-59: `User_idUser` kommer fra JWT'et, ikke fra bodyen — kaldet bar altså et
+            # gyldigt token for en bruger user-service ikke vil vedkende sig.  Enten er
+            # brugeren slettet under en levende session, eller også fejlede opslaget (og så
+            # har `user_adapter` netop logget statuskoden lige før denne linje).  De to
+            # linjer sammen er hele diagnosen; hver for sig er ingen af dem den.
+            logger.warning(
+                "Kontooprettelse afvist: user-service kender ikke bruger %s fra et gyldigt token",
+                data.User_idUser,
+            )
             raise UserNotFoundForAccount(data.User_idUser)
 
         account = Account(
@@ -162,6 +171,12 @@ class AccountService(IAccountService):
         if user_ids:
             valid_users = self._user_port.get_users_by_ids(user_ids)
             if len(valid_users) != len(user_ids):
+                logger.warning(
+                    "Kontogruppe afvist ved oprettelse: %s af %s bruger-id'er kunne ikke bekræftes (%s)",
+                    len(user_ids) - len(valid_users),
+                    len(user_ids),
+                    self._unresolved_user_ids(user_ids, valid_users),
+                )
                 raise InvalidUserInGroup()
 
         group = AccountGroup(
@@ -185,6 +200,13 @@ class AccountService(IAccountService):
         if user_ids:
             valid_users = self._user_port.get_users_by_ids(user_ids)
             if len(valid_users) != len(user_ids):
+                logger.warning(
+                    "Kontogruppe %s afvist ved opdatering: %s af %s bruger-id'er kunne ikke bekræftes (%s)",
+                    group_id,
+                    len(user_ids) - len(valid_users),
+                    len(user_ids),
+                    self._unresolved_user_ids(user_ids, valid_users),
+                )
                 raise InvalidUserInGroup()
 
         updated_group = AccountGroup(
@@ -200,6 +222,18 @@ class AccountService(IAccountService):
     # ------------------------------------------------------------------
     # Mapping helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _unresolved_user_ids(requested: list[int], resolved: list[tuple[int, str]]) -> list[int]:
+        """De id'er `get_users_by_ids` ikke gav et svar for.
+
+        P3-59: `InvalidUserInGroup` bliver til "Mindst én bruger ID er ugyldig." — sandt,
+        men ubrugeligt når gruppen har tyve medlemmer.  Bodyen forbliver bevidst vag (den
+        skal ikke bekræfte over for en fremmed hvilke bruger-id'er der findes); loggen er
+        stedet hvor vi må være præcise.
+        """
+        found = {user_id for user_id, _ in resolved}
+        return [user_id for user_id in requested if user_id not in found]
 
     def _account_to_dto(self, account: Account) -> AccountSchema:
         return AccountSchema(

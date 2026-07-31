@@ -1,5 +1,7 @@
 """REST API adapter for Account bounded context."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.application.dto import (
@@ -13,6 +15,8 @@ from app.application.service import AccountService
 from app.auth import get_current_user_id
 from app.dependencies import get_account_service
 from app.domain.exceptions import UserNotFoundForAccount
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/accounts",
@@ -38,12 +42,25 @@ def get_account(
     """Henter detaljer for en specifik konto."""
     account = service.get_account(account_id)
     if not account:
+        # P3-59, fravalg: den ordinære 404 får ingen linje.  Access-linjen siger allerede
+        # metode, sti og statuskode, og der er ikke mere at sige.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Konto ikke fundet.",
         )
 
     if account.User_idUser != current_user_id:
+        # P3-59: 403'en er tvetydig på den måde der betyder noget — den kan være en helt
+        # normal bruger hvis frontend holder et forældet konto-id, eller et bruger-til-bruger
+        # opslag.  Statuskoden skelner ikke, men *ophobning på samme token* gør, og det
+        # kræver at forsøget efterlader et spor.  Bemærk at 404'en ovenfor rammer først, så
+        # en 403 her betyder at kontoen findes og tilhører en anden — ikke et blindt gæt.
+        logger.warning(
+            "Afvist læsning af fremmed konto: bruger %s forsøgte konto %s (ejet af %s)",
+            current_user_id,
+            account_id,
+            account.User_idUser,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Du kan kun se dine egne konti.",
@@ -87,6 +104,16 @@ def update_account(
         )
 
     if existing.User_idUser != current_user_id:
+        # Samme tvetydighed som på GET, men et skriveforsøg — derfor står den som sit eget
+        # kald med sin egen ordlyd frem for en delt hjælpefunktion: det er forskellen på et
+        # forældet konto-id i en liste og et forsøg på at overskrive en fremmed konto, og
+        # den forskel skal kunne læses direkte i loggen.
+        logger.warning(
+            "Afvist opdatering af fremmed konto: bruger %s forsøgte konto %s (ejet af %s)",
+            current_user_id,
+            account_id,
+            existing.User_idUser,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Du kan kun opdatere dine egne konti.",
