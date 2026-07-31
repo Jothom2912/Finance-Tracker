@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -9,6 +10,12 @@ from app.auth import get_current_user_id
 
 # P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
 setup_logging()
+
+# P3-59: servicens tre eksisterende warnings ligger i orchestratoren. Loggeren her hører
+# til API-processen — og med vilje i `main.py`, ikke i `postgres_saga_repository.py:15`s
+# ubrugte logger: den fil importeres af alle fire workers, så en linje dér ville fyre i
+# fem processer og gøre det umuligt at se hvad der kom fra en request.
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Saga Service")
 
@@ -52,6 +59,36 @@ async def get_saga_status(saga_id: str, user_id: int = Depends(get_current_user_
         except (TypeError, ValueError):
             owner_id = None
         if owner_id is None or owner_id != user_id:
+            # P3-59: den ene 403 har tre årsager, og de kræver *modsatte* handlinger.
+            # De to første er data-integritetssignaler: en saga uden ejer i konteksten er
+            # ikke tilgængelig for nogen, hvilket er en bug hos den der startede den. Den
+            # tredje er et sikkerhedssignal. Samme respons, samme statuskode — så uden
+            # denne linje er de ikke til at skelne, hverken fra hinanden eller fra et probe.
+            #
+            # Værdien logges KUN i den korrupte gren, hvor den er hele signalet (typisk en
+            # liste eller en streng hvor et heltal var forventet). I krydstenant-grenen
+            # logges ejerens id, ikke noget fra requesten.
+            if raw_owner_id is None:
+                logger.warning(
+                    "Afvist saga-opslag (403): saga %s har intet user_id i sin kontekst "
+                    "— utilgængelig for alle, bruger %s spurgte",
+                    instance.id,
+                    user_id,
+                )
+            elif owner_id is None:
+                logger.warning(
+                    "Afvist saga-opslag (403): saga %s har et korrupt user_id i konteksten (%r) — bruger %s spurgte",
+                    instance.id,
+                    raw_owner_id,
+                    user_id,
+                )
+            else:
+                logger.warning(
+                    "Afvist saga-opslag (403): bruger %s forsøgte saga %s (ejet af %s)",
+                    user_id,
+                    instance.id,
+                    owner_id,
+                )
             raise HTTPException(status_code=403, detail="Access denied")
 
         current_step_name = None

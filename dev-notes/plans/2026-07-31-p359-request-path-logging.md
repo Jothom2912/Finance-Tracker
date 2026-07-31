@@ -385,7 +385,7 @@ præcist — og fase 2 kan rulles tilbage alene, hvilket er hele grunden til at 
    (P2-34: `Goal` har to runtime-typer). Dækningen her er derfor som `account`s: tests +
    live-drift, ingen mypy.
 
-6. [ ] **notification + saga** — færrest punkter, mest tvetydige:
+6. [x] **notification + saga** — færrest punkter, mest tvetydige:
    - notification `main.py:65` og `:78`: 404 hvor ejerskabstjekket ligger i `WHERE`-klausulen
      (`postgres_notification_repository.py:100-108`, `:128-136`), så "findes ikke", "ikke din"
      og "allerede afvist" er samme svar. At skelne dem koster en ekstra query, og det er
@@ -398,6 +398,67 @@ præcist — og fase 2 kan rulles tilbage alene, hvilket er hele grunden til at 
    - saga `main.py:54`: 403 → `warning`, og den skal navngive hvilken af de tre årsager der
      ramte. `postgres_saga_repository.py:15`s ubrugte logger er ikke det rigtige sted — den
      fil importeres af **alle fire workers** også, så en linje dér fyrer i fem processer.
+
+   ### Fase 6's resultat (2026-07-31)
+
+   Syv HTTP-drevne linjer (4 notification, 3 saga), alle mod den kørende stak. Planen holdt
+   her — begge services blev som beskrevet.
+
+   **notification: én hjælper, tre tilstande, og en linje der siger at den ikke ved hvilken.**
+   Alle tre blev fremprovokeret *live* frem for kun i tests, hvilket er hele grunden til at
+   ordlyden er som den er:
+
+   | drive | statuskode | linje |
+   |---|---|---|
+   | N1 `read` ukendt id | 404 | `main` WARNING |
+   | N2 `dismiss` ukendt id | 404 | `main` WARNING, `afvisning` |
+   | N3 `read` **fremmed** række (ejet af bruger 1) | 404 | `main` WARNING |
+   | N4 `dismiss` egen række | 204 | **ingen** (negativ kontrol) |
+   | N5 `dismiss` **igen** (allerede afvist) | 404 | `main` WARNING |
+   | N6 `limit=0` | 422 | **ingen** (negativ kontrol) |
+   | N7 `GET /notifications` | 200 | **ingen** (negativ kontrol) |
+
+   N3 og N5 er de to der gør linjen værd at have: de er *ikke* til at skelne fra N1 —
+   hverken for klienten eller i access-loggen — og de betyder noget helt andet.
+   Testene kører mod en rigtig (sqlite-)DB frem for et fake repository, netop fordi
+   påstanden er at de tre tilstande rammer *samme* gren; med en mock ville jeg kun teste min
+   egen antagelse om hvad `WHERE`-klausulen gør.
+
+   Asymmetrien mellem de to ruter blev bekræftet undervejs og er nu en negativ test:
+   `mark_read` bruger `coalesce`, så et gen-mark **matcher** og logger intet (et dobbeltklik
+   er normal brug), mens `dismiss`' `dismissed_at`-guard gør et gen-afvis til en 404 *med*
+   linje. Havde begge logget, ville signalet drukne i dobbeltklik.
+
+   **saga: én statuskode, tre årsager, tre ordlyd.** Alle tre drevet live — den korrupte
+   gren krævede en ny probe-række (`22222222-…`, `context_json` med `user_id: ["1","2"]`)
+   ud over step 1's `11111111-…`:
+
+   | drive | statuskode | linje |
+   |---|---|---|
+   | S1 krydstenant (saga ejet af bruger 1) | 403 | `main` WARNING, navngiver bruger + ejer |
+   | S2 intet `user_id` i konteksten | 403 | `main` WARNING, "utilgængelig for alle" |
+   | S3 korrupt `user_id` (`['1', '2']`) | 403 | `main` WARNING **med værdien** |
+   | S4 ukendt saga-id | 404 | **ingen** (negativ kontrol) |
+
+   Værdien logges kun i S3, hvor den *er* diagnosen, og den kommer fra vores egen
+   saga-kontekst — ikke fra requesten. Loggeren ligger i `main.py`, ikke i
+   `postgres_saga_repository.py:15`s ubrugte logger: den fil importeres af alle fire workers,
+   så en linje dér ville fyre i fem processer.
+
+   **Mutations-kontrollen fandt en blind kontrol, og det er fasens mest lærerige del.**
+   `test_the_three_branches_do_not_share_wording` sammenlignede oprindeligt `getMessage()`.
+   Den er upræcis: to grene kan dele ordlyd og *stadig* give forskellige beskeder, fordi
+   saga-id og bruger-id interpoleres ind — og krydstenant-grenen er den udsatte, da den er
+   den eneste der kaldes med et andet bruger-id. Skiftet til `record.msg` (format-strengen)
+   udtrykker den påstand jeg faktisk mener. Verificeret ved at kollapse den korrupte gren
+   til den manglendes ordlyd: nu rød, hvor kollapset ellers kunne være sluppet igennem.
+   Samme klasse som `project_measurement_instrument_validity` — en kontrol der ikke kan
+   fejle på det den findes for at fange.
+
+   Notifications mutation blev også kørt (fjern `dismiss`-kaldet): 2 røde tests, kun de to
+   der hører til linjen.
+
+   Begge services er på typecheck-gaten: mypy rent, ruff rent, 98 + 61 tests grønne.
 
 7. [ ] **Docs.** CLAUDE.md: ret `BankConnectionInactive`-eksemplet til `BankConfigError`, og
    ret `execute_with_logging`-konventionen til at sige hvad der faktisk findes (én service) —
