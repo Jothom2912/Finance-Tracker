@@ -68,3 +68,7 @@ k8s/secrets.yaml
 services/frontend/test-results/
 services/frontend/playwright-report/
 services/frontend/blob-report/
+
+# P3-59: probe-tokens til log-verifikationen. Kortlivede JWT'er for probe-brugere —
+# genskabes med et login (se scripts/p359_probe.sh), hører ikke i historikken.
+scripts/tok_p359*

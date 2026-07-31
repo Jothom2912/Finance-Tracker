@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from app.application.dto import (
     AllocationHistoryEntryResponse,
     GoalBase,
@@ -19,11 +21,38 @@ from sqlalchemy.exc import IntegrityError
 # P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
 setup_logging()
 
+# P3-59: servicen havde indtil nu NUL logging-statements i hele API-processen — ikke få,
+# ingen.  Loggeren her er den første.
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Goal Service")
+
+
+def _parse_account_id(x_account_id: str) -> int:
+    """Læs `X-Account-ID` som et heltal, eller afvis med 400.
+
+    P3-59: to ruter havde samme ``try/except ValueError`` ordret.  De er samlet her fordi
+    linjen skal være ét sted — ikke for at spare fem linjer, men fordi to kopier med tiden
+    bliver to forskellige beskeder for samme afvisning.
+
+    Hvorfor den fortjener en linje: headeren sættes af vores egen frontend og er altid et
+    tal.  En værdi der ikke er det, kommer ikke fra en normal session — det er enten en
+    klient vi ikke kender, eller nogen der prøver hvad headeren kan bære.  Værdien står
+    på linjen, afkortet, fordi det er hele signalet.
+    """
+    try:
+        return int(x_account_id)
+    except ValueError:
+        logger.warning("Afvist X-Account-ID der ikke er et heltal: %r", x_account_id[:64])
+        raise HTTPException(status_code=400, detail="Invalid X-Account-ID header")
 
 
 @app.exception_handler(AccountNotFoundForGoal)
 async def account_not_found_handler(_request: Request, exc: AccountNotFoundForGoal) -> JSONResponse:
+    # P3-59, fravalg: 400'en er entydig og navngiver allerede kontoen ("Account 512 not
+    # found").  Den opstår når account-service svarer 404 på et konto-id, altså en klient
+    # med et forældet id — almindelig brug.  De *utvetydige* upstream-fejl (nedetid,
+    # afvist nøgle) logges i `account_adapter`, hvor statuskoden findes.
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
@@ -48,10 +77,7 @@ async def list_goals(
     service: IGoalService = Depends(get_goal_service),
     x_account_id: str = Header(..., alias="X-Account-ID"),
 ):
-    try:
-        account_id = int(x_account_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid X-Account-ID header")
+    account_id = _parse_account_id(x_account_id)
     return await service.list_goals(account_id, user_id)
 
 
@@ -62,10 +88,7 @@ async def get_unallocated_surplus(
     service: IGoalService = Depends(get_goal_service),
     x_account_id: str = Header(..., alias="X-Account-ID"),
 ):
-    try:
-        account_id = int(x_account_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid X-Account-ID header")
+    account_id = _parse_account_id(x_account_id)
     return await service.get_unallocated_surplus(account_id, user_id)
 
 
@@ -104,6 +127,13 @@ async def set_default_goal(
     except IntegrityError:
         # Race mod det partielle unique index (to samtidige set-default);
         # klienten refetcher og prøver igen.
+        #
+        # P3-59: 409'en er korrekt og selvforklarende for *klienten* — men for os er der
+        # ingen måde at vide om denne race fyrer én gang om måneden eller konstant.  De to
+        # tilfælde kræver modsatte handlinger (ignorér vs. genovervej at et konto må have
+        # præcis ét default-mål), og uden en linje kan vi ikke se hvilket vi er i.
+        # `warning`, ikke `error`: indexet gjorde præcis sit arbejde.
+        logger.warning("Tabt race mod default-mål-indexet: mål %s, bruger %s", goal_id, user_id)
         raise HTTPException(status_code=409, detail="Default goal changed concurrently, retry")
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")

@@ -317,7 +317,7 @@ præcist — og fase 2 kan rulles tilbage alene, hvilket er hele grunden til at 
    tests, ruff og bandit blev kørt i en `python:3.11-slim`-container mod det mountede repo —
    samme sti som CI, men manuelt. 44 tests grønne, ruff og bandit rene.
 
-5. [ ] **goal-service** — fra nul til noget; `logger = logging.getLogger(__name__)` skal først
+5. [x] **goal-service** — fra nul til noget; `logger = logging.getLogger(__name__)` skal først
    oprettes:
    - `account_adapter.py:24-25`: `except httpx.RequestError: return False` → `warning`. Det
      er servicens værste sted: en nedetid bliver en 400 klienten (korrekt) aldrig genforsøger.
@@ -330,6 +330,60 @@ præcist — og fase 2 kan rulles tilbage alene, hvilket er hele grunden til at 
      "findes ikke" fra "ikke din". Bemærk asymmetrien reviewet fandt: `GET /goals` med en
      fremmed `X-Account-ID` giver 403, `GET /goals/{id}` giver 404 — ikke forkert, men
      uensartet, og linjen skal derfor sige hvilken af de to der skete.
+
+   ### Fase 5's resultat (2026-07-31)
+
+   Fem HTTP-drevne linjer, alle fanget i `docker logs` mod den kørende stak. Instrumentet
+   blev verificeret først med banking's `bank_api.py:145` (samme trigger som step 1), og
+   den gav niveau, tidsstempel og `[app.…]`.
+
+   | drive | statuskode | linje |
+   |---|---|---|
+   | G1 `GET /goals` fremmed `X-Account-ID` | 403 | `service` WARNING, navngiver **403** + bruger/konto/ejer |
+   | G2 `X-Account-ID: abc` | 400 | `main` WARNING med værdien |
+   | G2b `X-Account-ID` 300 tegn | 400 | `main` WARNING, afkortet til 64 |
+   | G3 `GET /goals/50` fremmed mål | 404 | `service` WARNING, navngiver **404** + operation `læsning` |
+   | G5 surplus, fremmed konto | 403 | `service` WARNING |
+   | G4 ordinær 404 som ejer | 404 | **ingen** (negativ kontrol) |
+   | G6 egen konto | 200 | **ingen** (negativ kontrol) |
+   | upstream skæv nøgle → `GET`/`POST /goals` | 503 | `account_adapter` WARNING, navngiver 403'en |
+   | upstream host væk → `GET`/`POST /goals` | 503 | `account_adapter` WARNING, `ConnectError` |
+
+   403/404-asymmetrien er dermed **synlig i loggen med statuskoden på**, mens klienten ser
+   præcis det samme som før. Det var hele pointen: 404-varianten var ikke til at skelne fra
+   en helt almindelig "målet findes ikke".
+
+   **Planen var upræcis på det sted den selv kaldte servicens værste, og live-kørslen
+   afgjorde det.** Planen sagde: `account_adapter.exists`'s `except httpx.RequestError:
+   return False` gør en nedetid til en 400 klienten aldrig genforsøger. Det sker ikke.
+   `exists` har præcis én kalder — `service.py:94` i `create_goal` — og den kalder
+   `_verify_ownership` **to linjer tidligere** (`:92`), altså `get_owner_user_id` mod samme
+   upstream. Fejler upstream, rejses 503'en dér. Målt i begge fejlmoder (skæv
+   `INTERNAL_API_KEY` via engangs-container; `ACCOUNT_SERVICE_URL` til en ikke-eksisterende
+   host): `POST /goals` giver **503, ikke 400**, og `exists`-linjerne fyrede aldrig.
+
+   Konsekvensen for tallet: `exists`'s to fejlgrene er **uopnåelige fra en request**. De er
+   dækket af adapter-tests, men de tælles **ikke** som HTTP-drevne linjer — at gøre det
+   ville være præcis den selvvalgte, flatterende optælling step 8 advarer imod
+   (`feedback_baseline_can_be_accidentally_right`). Fundet er fastholdt som en
+   reachability-test (`port.exists.assert_not_awaited()`) frem for en kommentar, af samme
+   grund som fase 4's `AC4`: bytter nogen om på de to kald, bliver testen rød i stedet for
+   at et dødt logkald bliver liggende og tælle med. Jf. `feedback_dead_suppression_annotations`
+   — et logkald i en død gren har samme fejlform som en død `noqa`.
+
+   Racen på default-mål-indexet (`main.py:127`) er det ene nye kald der **ikke** kan drives
+   fra en enkelt request — den kræver to samtidige. Den er derfor dækket af en
+   `TestClient`-test, og mutations-kontrolleret: fjernes linjen, bliver præcis én test rød.
+
+   `X-Account-ID`-parsingen blev samlet i `_parse_account_id` fordi to ordret identiske
+   `try/except`-kopier med tiden bliver to forskellige beskeder for samme afvisning.
+   Værdien afkortes til 64 tegn: den er hele signalet, men den er også fremmed input, og en
+   ubegrænset værdi ville lade en klient bestemme længden af vores loglinjer.
+
+   121 tests grønne, ruff rent. **`goal` er ikke på typecheck-gaten** — planens step 7 var
+   forkert om det; `TYPECHECK_SERVICES` i `ci.yml:158` har den ikke, og CLAUDE.md har ret
+   (P2-34: `Goal` har to runtime-typer). Dækningen her er derfor som `account`s: tests +
+   live-drift, ingen mypy.
 
 6. [ ] **notification + saga** — færrest punkter, mest tvetydige:
    - notification `main.py:65` og `:78`: 404 hvor ejerskabstjekket ligger i `WHERE`-klausulen
@@ -373,10 +427,12 @@ Rækkefølgen er valgt så et fladt resultat kan afvises som instrumentfejl før
 6. **`caplog`-tests** for hvert nyt kald: niveau, loggernavn og at beskeden indeholder den
    diskriminerende værdi. En loglinje med forkert logger eller niveau er præcis den tavse fejl
    dette item findes for.
-7. `make check` + `make -C services/<svc> typecheck` for `user`, `notification`, `saga`, `goal`
-   (alle fire er på gaten). **`account` er ikke** (P3-01/P3-39: intet `pyproject.toml`), så
-   dens ændringer er kun dækket af punkt 2 og 6 — det er den svageste del af verifikationen og
-   skal læses som sådan.
+7. `make check` + `make -C services/<svc> typecheck` for `user`, `notification` og `saga` —
+   ~~`goal`~~ **er ikke på gaten**; det stod forkert her indtil fase 5 kørte, og
+   `TYPECHECK_SERVICES` i `ci.yml:158` afgør det (CLAUDE.md havde ret: P2-34, `Goal` har to
+   runtime-typer). **`account` er heller ikke** (P3-01/P3-39: intet `pyproject.toml`). For
+   de to services udenfor er ændringerne kun dækket af punkt 2 og 6 — det er den svageste
+   del af verifikationen og skal læses som sådan.
 8. Efter-tallet skrives som `X af Y punkter logget, pr. service`, med Y = de punkter reglen
    udvalgte — ikke de 96. Et "0 → N" på et selvvalgt Y er tilfældigt flatterende, og det er
    sket før (`feedback_baseline_can_be_accidentally_right`).
@@ -393,7 +449,7 @@ Rækkefølgen er valgt så et fladt resultat kan afvises som instrumentfejl før
 
 ## Items der spawnes, ikke løses her
 
-Reviewet fandt fire ting der ikke er logningshuller, og som en logningsplan ikke skal afgøre:
+Reviewet og fase 5 fandt fem ting der ikke er logningshuller, og som en logningsplan ikke skal afgøre:
 
 1. **goal: en klient kan gøre en række permanent 500.** `dto.py:15` har `status: Optional[str]`
    uvalideret, `GoalResponse.status` er `GoalStatus` (`dto.py:38`), og `_to_dto`
@@ -409,7 +465,14 @@ Reviewet fandt fire ting der ikke er logningshuller, og som en logningsplan ikke
    men det er den inkonsistens der gør P3-16's invariant svær at stole på. Dertil: det
    partielle unique-index har ingen `deleted_at`-klausul, så invarianten holdes af konvention,
    ikke af skemaet.
-4. **goal: audit-trailet er bevaret i DB'en men uopnåeligt gennem API'et.**
+4. **goal: `create_goal` gør to round-trips hvor den ene er død.** `service.py:92` kalder
+   `_verify_ownership` → `get_owner_user_id`, som 404'er hvis kontoen ikke findes; `:94`
+   kalder derefter `exists()` mod samme service. `exists()` kan kun returnere `False` hvis
+   kontoen forsvandt mellem de to kald, og enhver upstream-fejl er allerede blevet en 503
+   på det første. Altså: et ekstra HTTP-kald pr. målsoprettelse hvis eneste opnåelige
+   resultat er `True`. Fundet under fase 5's live-kørsel. Fjernelsen er en adfærdsændring
+   (`AccountNotFoundForGoal` ville skifte kilde), så den hører ikke i en logningsplan.
+5. **goal: audit-trailet er bevaret i DB'en men uopnåeligt gennem API'et.**
    `get_allocation_history` kalder `get_by_id` først (`service.py:164`), som filtrerer
    `deleted_at IS NULL` → 404. P3-16 beholdt rækkerne netop for at bevare historikken.
 
