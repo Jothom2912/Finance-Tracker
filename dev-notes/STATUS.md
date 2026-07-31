@@ -1,4 +1,4 @@
-# Status — 2026-07-29 (efter F2-08: user-service har for første gang en skrive-sti til en eksisterende bruger)
+# Status — 2026-07-31 (efter P3-57: platformens logning er for første gang læsbar i alle 12 API-processer)
 
 Where the work stands right now. **Read this first**; it exists so a session does not start
 by guessing which of 32 plans is live. Update it when the active plan changes, an item
@@ -9,7 +9,39 @@ not a second source of truth. If it disagrees with `backlog/BACKLOG.md`, the bac
 
 ## Active
 
-**Intet aktivt item.** F2-08 er shippet, og med den er **user-domænets blokade løftet**:
+**Intet aktivt item.** Sidst shippet: **P3-57 + P3-58 — logging-konfiguration i alle 12
+API-processer** (2026-07-31), fire commits `772a891d`, `4d2db80c`, `31c15ca6`, `3cf32022`
++ docs. [Plan + Outcome](plans/2026-07-31-p357-api-logging-config.md#outcome).
+
+Ny pakke `shared/observability` med én `dictConfig`, kaldt på modul-niveau i hver
+`app/main.py`, som **også overtager uvicorns tre loggere** — så access-linjer bærer
+niveau, tidsstempel og logger-navn i alle 12. `messaging.setup_worker_logging` er nu en shim,
+så workernes 23 kaldsteder er urørte.
+
+**Tre ting fra kørslen er værd at kende, før du stoler på en log-baseret verifikation:**
+
+1. **`disable_existing_loggers=False` var nødvendigt men ikke tilstrækkeligt.** Enhver
+   `fileConfig`/`dictConfig` senere i samme proces er en **fuld rekonfiguration, ikke et
+   delta** — alembic erstattede root-handleren og satte niveauet til `WARN` *efter* vores
+   kald, i den ene service der migrerer in-process. Se
+   [finding](findings/2026-07-31-account-service-log-silenced-by-alembic.md).
+2. **Fem services logger intet i request-stien** (`account`, `user`, `goal`, `notification`,
+   `saga`); `goal` har nul logging-statements i hele API-processen. **P3-59**. En
+   logging-gate dækker dem ikke, uanset konfiguration.
+3. **Et efter-tal kan være tilfældigt flatterende.** En probe gav 12 × `grep WARNING` 0 → 1,
+   men uvicorns eget format var `WARNING:  <besked>` og matchede allerede. Det ægte før/efter
+   findes kun på app-niveau. Sidestykke til `feedback_baseline_can_be_accidentally_right`,
+   med fortegnet vendt.
+
+Øvrige åbne: P3-48 (frontend-vagten, det sidste P2-40 efterlod), P2-42b's egne fund
+(**P3-53**, **P3-54**), F2-08's egne fund (**P3-55**, **P3-56**), P3-57's eget fund
+(**P3-59**) og de kendte (P2-41, P3-41, P3-44, P3-46) samt **F2-15** (per-bruger-kategorier).
+P3-17 (migrations som eksplicit trin) har fået et konkret argument mere: `_reassert_logging`
+i account-service findes kun fordi migrations kører i API-processen.
+
+## Tidligere: F2-08
+
+F2-08 er shippet, og med den er **user-domænets blokade løftet**:
 **F2-09** (password-reset + email-verifikation), **F2-10** (GDPR-eksport/sletning) og **F2-14**
 (admin-bruger) ventede alle udelukkende på at der fandtes en skrive-sti til en eksisterende
 bruger overhovedet. Den findes nu. Øvrige åbne: P3-48 (frontend-vagten, det sidste P2-40

@@ -3,7 +3,8 @@ title: account-service' API-proces er helt tavs — alembics fileConfig slukker 
 date: 2026-07-31
 severity: medium
 area: [account, observability, cross]
-status: open
+status: resolved
+resolved-by: P3-58, 2026-07-31 (772a891d + 3cf32022) — disable_existing_loggers=False i alle 9 env.py + _reassert_logging() efter migrationen; kwarg alene var ikke nok, se Fix. Verificeret live med mutation.
 backlog-items: [P3-57, P3-17]
 related:
   - ../plans/2026-07-31-p357-api-logging-config.md
@@ -94,13 +95,43 @@ lukket den ét sted, uden at det blev en konvention — så de resterende 8 stå
    kontroller siger "fin". Den ene ting der ville have vist det — er der access-logs? — er
    ikke noget nogen gate læser.
 
-## Fix
+## Fix — landet 2026-07-31 (P3-58, commits `772a891d` + `3cf32022`)
 
-Ligger i P3-57, som en navngiven delopgave frem for et selvstændigt item, fordi det er samme
-fejlklasse og skal verificeres i samme kørsel:
+**Vigtig tilføjelse fra implementeringen: `disable_existing_loggers=False` var nødvendigt
+men ikke tilstrækkeligt.** `fileConfig` **erstatter** også root-handleren med
+`alembic.ini`'s (intet tidsstempel) og sætter root til `WARN` — så `account-service` fik
+sine access-logs tilbage, men mistede stadig `app.*`-logning efter migrationen. Målt:
+`Database migrations applied successfully` udgik helt af loggen. Der skulle et
+`_reassert_logging()` til efter migrationen. Enhver `fileConfig`/`dictConfig` i samme
+proces er en **fuld rekonfiguration, ikke et delta** — spørgsmålet er ikke "slukker den
+noget", men "hvem konfigurerede sidst".
+
+Hvad der landede:
 
 - `disable_existing_loggers=False` i alle **9** `env.py`, ikke kun `account-service`'s.
-  `transaction-service` er præcedensen. De 8 andre er harmløse i dag, men det er en egenskab
+  `transaction-service` var præcedensen. De 8 andre er harmløse i dag, men det er en egenskab
   ved deres *procesopdeling*, ikke ved deres kode — og P3-17 er ved at ændre procesopdelingen.
-- Verifikationen for `account-service` er ikke "kommer der linjer", men **kommer access-logs
-  efter at `lifespan` har kørt** — altså efter migrations, ikke før.
+- `_reassert_logging()` i `account-service/app/main.py` efter migrationen, i begge grene.
+  Plaster med item-reference: **P3-17 fjerner behovet** ved at tage migrations ud af
+  API-processen, og det er den rigtige løsning.
+
+Verificeret i den kørende stak, ikke statisk — og med mutation, fordi en genstartet container
+ellers selv kunne forklare de nye linjer:
+
+| | access-linjer | `Application startup complete` |
+|---|---|---|
+| før (35 timers uptime) | 0 | 0 |
+| efter | 2 | 1 |
+| kwarg rullet tilbage (~32 s polling) | 0 | 0 |
+| gendannet | 2 | 1 |
+
+Slutresultatet, hvor `[app.main]`-linjen er den der forsvandt undervejs:
+
+```
+2026-07-31 00:05:54,222 INFO     [app.main] Database migrations applied successfully
+2026-07-31 00:05:54,222 INFO     [uvicorn.error] Application startup complete.
+2026-07-31 00:05:58,765 INFO     [uvicorn.access] 127.0.0.1:36594 - "GET /health HTTP/1.1" 200
+```
+
+De to `alembic.runtime.migration`-linjer beholder med vilje alembics eget format: det er
+alembics konfiguration for alembics output.

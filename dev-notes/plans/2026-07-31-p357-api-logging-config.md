@@ -1,8 +1,9 @@
 ---
 title: P3-57 — logging-konfiguration i de 12 API-processer (shared/observability)
 date: 2026-07-31
-status: open
+status: done
 backlog-items: [P3-57, P3-58]
+commits: [772a891d, 4d2db80c, 31c15ca6, 3cf32022]
 related:
   - ../findings/2026-07-31-account-service-log-silenced-by-alembic.md
   - ../findings/2026-07-27-sync-trigger-double-value.md
@@ -238,7 +239,7 @@ ramme præcist.
    warning i hver af de 12" ikke holdt: 5 services har ingen, og det var ikke til at vide uden
    at måle.
 
-2. [ ] **`disable_existing_loggers=False` i alle 9 `env.py`** — egen commit, *før* pakken, så
+2. [x] **`disable_existing_loggers=False` i alle 9 `env.py`** — egen commit, *før* pakken, så
    den kan verificeres isoleret: `account-service` skal gå fra 4 linjer til at have en
    access-log, og det sker uden at nogen ny kode er indført. Præcedensen er
    `transaction-service/migrations/env.py:25`, som allerede gør det; de 8 andre (`account`,
@@ -246,7 +247,7 @@ ramme præcist.
    argument. De 8 er harmløse i dag alene i kraft af deres procesopdeling — og P3-17 er ved at
    ændre procesopdelingen, så det er et værn og ikke kosmetik.
 
-3. [ ] **Ny pakke `services/shared/observability/`** — `pyproject.toml` (hatchling,
+3. [x] **Ny pakke `services/shared/observability/`** — `pyproject.toml` (hatchling,
    `name = "finans-tracker-observability"`, `version = "0.1.0"`, ingen runtime-deps ud over
    stdlib), `observability/__init__.py`, `observability/logging.py`,
    `observability/py.typed` (obligatorisk per CLAUDE.md — uden markøren degraderer alt fra
@@ -261,7 +262,7 @@ ramme præcist.
    med `propagate: True` og ingen egne handlers, så de arver root's formatter. `level=None`
    ⇒ `os.getenv("LOG_LEVEL", "INFO")`.
 
-4. [ ] **Tests for pakken** — `services/shared/observability/tests/test_logging.py`. Fire
+4. [x] **Tests for pakken** — `services/shared/observability/tests/test_logging.py`. Fire
    tests, hvor de to første er de vigtige:
    - en logger oprettet **før** `setup_logging()` logger stadig efter (vagten mod
      `disable_existing_loggers`-fælden fra afsnittet ovenfor);
@@ -271,7 +272,7 @@ ramme præcist.
    - `uvicorn.access` har ingen egne handlers og propagerer;
    - idempotens: to kald giver stadig én handler på root.
 
-5. [ ] **`messaging.setup_worker_logging` bliver en delegerende shim** —
+5. [x] **`messaging.setup_worker_logging` bliver en delegerende shim** —
    `shared/messaging/messaging/logging.py` kalder `observability.setup_logging`, beholder sin
    signatur (`(name, level=INFO) -> Logger`) og sin `LOG_FORMAT`-konstant som re-export, så
    `shared/messaging/tests/test_logging.py` og de 23 kaldsteder er uændrede.
@@ -279,7 +280,7 @@ ramme præcist.
    path-deps installeres som kopier, så uv genopretter dem ikke ved uændret version
    (CLAUDE.md).
 
-6. [ ] **De 12 API-processer** — én commit, eller to hvis diffen bliver uoverskuelig
+6. [x] **De 12 API-processer** — én commit, eller to hvis diffen bliver uoverskuelig
    (`pyproject`/`Dockerfile`-churn separat fra `main.py`-kaldene). Per service:
    - `pyproject.toml`: `observability` som path-dep (`account-service`:
      `requirements.txt` får `../shared/observability`, samme mønster som dens tre andre);
@@ -295,14 +296,14 @@ ramme præcist.
      urørt, er den et fast punkt at måle imod.
    - `uv lock` per service.
 
-7. [ ] **`make -C services/<svc> check`** (lint + typecheck + test) for de 11 services på
+7. [x] **`make -C services/<svc> check`** (lint + typecheck + test) for de 11 services på
    gaten, `make -C services/account-service test` for account. Nyt shared-modul ⇒
    `TYPECHECK_SERVICES` skal fortsat være grøn; en manglende `py.typed` vil vise sig som
    `Any`-degradering og ikke som en fejl, så step 2's markør er ikke valgfri.
 
-8. [ ] **Verification** — se næste afsnit. Egen commit for eventuelle rettelser den afdækker.
+8. [x] **Verification** — se næste afsnit. Egen commit for eventuelle rettelser den afdækker.
 
-9. [ ] **Docs** — `BACKLOG.md`-rækken → `done 2026-07-31` + link hertil, `STATUS.md`,
+9. [x] **Docs** — `BACKLOG.md`-rækken → `done 2026-07-31` + link hertil, `STATUS.md`,
    `00-INDEX.md`, session-log, og planens **Outcome** med begge målings-tabeller.
    CLAUDE.md's kode-stil-afsnit får en linje om at nye services kalder `setup_logging()` i
    `app/main.py` — ellers gentager fejlen sig ved service nr. 13, og det er den *eneste*
@@ -376,4 +377,102 @@ universelle først, den selektive bagefter.
   `pyproject`/`Dockerfile` og locks. Ingen migrations, ingen event-kontrakter, ingen
   API-overflade. `git revert` af fase-commits er tilstrækkeligt, i omvendt rækkefølge.
 
-## Outcome (fill in when done)
+## Outcome
+
+**Shippet 2026-07-31.** Fire commits: `772a891d` (env.py ×8), `4d2db80c` (pakken),
+`31c15ca6` (messaging-shim), `3cf32022` (de 12 services). Step 1's egne fund står i
+[Step 1's resultat](#step-1s-resultat-målt-2026-07-31) og gentages ikke her.
+
+### Resultatet, målt i den kørende stak (52 containere)
+
+| kriterium | før | efter |
+|---|---|---|
+| access-linje med niveau + tidsstempel + logger-navn | 0 af 12 | **12 af 12** |
+| app-niveau `WARNING` grep-bar med fuldt format | 0 | **4 målt** (banking, transaction, categorization, analytics) |
+| app-niveau `INFO` når loggen | 0 (dødt overalt) | **2 målt** (account, user) |
+| `uvicorn.error` lever (negativ kontrol) | ja | **ja** |
+| workernes format | uændret | **uændret**, millisekunder bevaret |
+
+Eksempel på det der før var uskelnelig stdout-støj:
+
+```
+før:   Bank callback missing authorization code [a3d6407f]: state=p357probe
+efter: 2026-07-31 00:06:29,354 WARNING  [app.adapters.inbound.bank_api] Bank callback missing authorization code [34217992]: state=p357after
+```
+
+### Planens forudsigelse om account-service holdt, og den kostede et ekstra greb
+
+Planen sagde at `account-service` ville være den ene service hvor fixet leveres og ikke
+virker. Det skete præcis sådan, og det var **ikke** fanget af step 2: `disable_existing_loggers=False`
+forhindrer at loggere *slukkes*, men `fileConfig` **erstatter** stadig root-handleren med
+`alembic.ini`'s (`%(levelname)-5.5s [%(name)s]`, intet tidsstempel) og sætter root til `WARN`.
+Vores kald sker ved import, alembic kører bagefter i `lifespan`.
+
+Det viste sig i loggen som et skift midt i opstarten — og det var **den manglende linje**,
+ikke formatet, der afslørede omfanget:
+
+```
+2026-07-31 00:03:15,930 INFO     [uvicorn.error] Started server process [1]   ← vores config
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.                 ← alembic overtog
+INFO  [uvicorn.access] 127.0.0.1 - "GET /health HTTP/1.1" 200                  ← intet tidsstempel
+(og "Database migrations applied successfully" udgik helt: root er nu WARN)
+```
+
+Fixet er `_reassert_logging()` efter migrationen, i begge grene. **Den generelle lektie er
+værd at holde fast på: at rette `disable_existing_loggers` var nødvendigt men ikke
+tilstrækkeligt.** Enhver `fileConfig`/`dictConfig` i samme proces er en fuld
+rekonfiguration, ikke et delta — så spørgsmålet er aldrig "slukker den noget", men "hvem
+konfigurerede sidst". P3-17 fjerner behovet ved at tage migrations ud af API-processen, og
+det er den rigtige langsigtede løsning; `_reassert_logging` er et plaster med en
+item-reference.
+
+### Det overclaim der næsten kom med
+
+En probe der sendte ugyldig HTTP til alle 12 porte gav **12 × `grep -c WARNING` 0 → 1**, og
+det var lige ved at blive planens hovedresultat: et adfærdsmæssigt før/efter der dækker alle
+12, inklusive de 5 uden app-logning. Kontrollen viste at det er **tilfældigt rigtigt**.
+Reproduceret i før-tilstanden:
+
+```
+uvicorn.error:  WARNING:  Invalid HTTP request received.     ← indeholder "WARNING"
+app.probe:      app-niveau warning                            ← bar besked
+```
+
+uvicorns eget format har altid haft niveauet i teksten, så `grep WARNING` fandt uvicorns
+warnings også før. Det ægte før/efter findes **kun på app-niveau**; for uvicorn-linjerne er
+gevinsten format og logger-navn, ikke greppability. Det er samme fælde som
+`feedback_baseline_can_be_accidentally_right`, bare med fortegnet vendt: her var det
+*efter*-målingen der var tilfældigt flatterende.
+
+Det ændrer ikke konklusionen — de 12 services har nu ét format, og access-linjen bærer
+logger-navn i alle 12 — men det ændrer *hvad* der er bevist, og forskellen er hele forskellen
+mellem en måling og en påstand.
+
+### Bivirkning der er en gevinst
+
+`saga-service` har nul logging-statements i sin API-proces (P3-59), men får nu alligevel en
+grep-bar, tidsstemplet `WARNING  [uvicorn.error] Invalid HTTP request received.` Det er
+argumentet for beslutning (b) i praksis: ved at tage uvicorns loggere med, har selv de fem
+tavse services et minimum af observerbarhed de ikke havde før.
+
+### Afvigelser fra planen
+
+- **Step 2 blev delt fra P3-57 til sit eget item (P3-58)** undervejs, fordi fundet er
+  selvstændigt og har egen finding-note.
+- **`_reassert_logging` i account-service var ikke i planen.** Den er en konsekvens af step
+  1 (iii)'s fund, som planen forudsagde kvalitativt men ikke i mekanisme.
+- **Verifikationen af de 6 warning-triggere blev 4, ikke 6.** `gateway`s
+  `auth.py:113` fyrede ikke: proben-brugeren *har* en `Default Account`, fordi registrering
+  opretter én via sagaen, så betingelsen kræver en bruger med nul konti. `ai` kræver
+  Ollama-routing der lykkes først (P3-46 gør den upålidelig under fuld stak). Ikke
+  verificeret ≠ virker ikke, og de står som ikke-verificerede frem for antaget grønne.
+- **`make test` for `account-service` kunne ikke køres** (`pytest: command not found`) —
+  P3-39, uændret, prøvet frem for gentaget som forbehold.
+
+### Følger
+
+- **P3-59** (fem services uden logning i request-stien) er nyt og er den direkte fortsættelse.
+- **P3-17** får et konkret argument mere: `_reassert_logging` findes kun fordi migrations
+  kører i API-processen.
+- **CLAUDE.md** har nu en linje om at nye services kalder `setup_logging()` i `app/main.py`.
+  Det er den eneste grund til at denne plan ikke skal laves igen ved service nr. 13.
