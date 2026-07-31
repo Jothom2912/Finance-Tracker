@@ -4,7 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "finans-tracker-auth"
-version = "0.1.0"
+# 0.2.0 (P3-59): 401-stien logger nu HVORFOR et token blev afvist.  Bumpet er ikke
+# kosmetisk — path-deps installeres som kopier, så uv genopretter ikke forbrugerne ved
+# uændret version, og imaget ville beholde 0.1.0 uden linjen.  Samme mekanik som
+# py.typed-reglen i CLAUDE.md.
+version = "0.2.0"
 description = "Shared JWT decoding and FastAPI auth dependency for inter-service authentication"
 requires-python = ">=3.11"
 dependencies = [

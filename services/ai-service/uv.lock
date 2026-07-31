@@ -426,7 +426,7 @@ dev = [
 
 [[package]]
 name = "finans-tracker-auth"
-version = "0.1.0"
+version = "0.2.0"
 source = { directory = "../shared/auth" }
 dependencies = [
     { name = "fastapi" },

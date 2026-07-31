@@ -5,11 +5,18 @@ banking-service, saga-service and account-service today.
 
 from __future__ import annotations
 
+import logging
 from typing import Callable, Optional, Sequence
 
 from fastapi import Header, HTTPException, status
 
 from .jwt import DEFAULT_ALGORITHMS, InvalidTokenError, decode_token
+
+# P3-59: loggeren heder ``auth.fastapi``, altså UDEN ``app.``-præfiks, fordi den bor i en
+# delt pakke og ikke i en services ``app``-træ.  Det er med vilje — men det betyder at
+# ``grep '\[app\.'`` (P3-57's verifikationsgreb) **ikke** finder linjer herfra.  Samme fælde
+# som ``analytics.usecase`` i CLAUDE.md.  Grep efter ``[auth.fastapi]`` for disse.
+logger = logging.getLogger(__name__)
 
 SecretProvider = Callable[[], str]
 """A zero-argument callable returning the current shared JWT secret.
@@ -78,6 +85,21 @@ def make_current_user_dependency(
                 require_exp=require_exp,
             )
         except InvalidTokenError as exc:
+            # P3-59: ``exc`` er det ENESTE sted der findes hvorfor — udløbet vs. forkert
+            # signatur vs. manglende ``user_id``/``sub``-claim.  Uden denne linje kastes den
+            # væk, og mislykket autentifikation er sporløs i alle ~10 forbrugere af pakken.
+            #
+            # De to 401-grene ovenfor logger med vilje IKKE: "header mangler" og "ikke
+            # Bearer-format" er entydige ud fra statuskoden alene, og admissionsreglen
+            # afviser dem.  Guarded af test_missing_header_does_not_log/-format-.
+            #
+            # ``warning``, ikke ``error``: det siger noget om en *caller*, ikke om os.
+            # Intet ``exc_info`` — stacktracen er altid den samme og siger intet ud over
+            # beskeden, og en frontend i et token-refresh-loop kan gentage linjen.
+            # Ingen ``sub``/``user_id`` på linjen: vi HAR den ikke, tokenet kunne ikke
+            # dekodes.  Og aldrig tokenet selv — det er stadig et gyldigt credential for
+            # den der kan bruge det.
+            logger.warning("Token afvist: %s", exc)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired authentication token",
