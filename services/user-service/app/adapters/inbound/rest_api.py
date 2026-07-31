@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from hmac import compare_digest
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -17,6 +18,8 @@ from app.auth import get_current_user_id
 from app.config import settings
 from app.dependencies import get_user_service
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
 
@@ -24,11 +27,24 @@ def require_internal_api_key(
     x_internal_api_key: str | None = Header(default=None, alias="X-Internal-API-Key"),
 ) -> None:
     if not settings.INTERNAL_API_KEY:
+        # P3-59: dette er den ene ende af det tavse account→user-kald.  account-service'
+        # `user_adapter.py:26` kollapser alt non-200 til `False`, hvilket bliver en 400
+        # "Bruger med dette ID findes ikke" hos slutbrugeren.  En manglende
+        # INTERNAL_API_KEY her rapporteres altså som en *valideringsfejl* dér — og indtil
+        # nu i tavshed i begge ender.  `error`, ikke `warning`: det er VORES fejl, en
+        # deployment uden en påkrævet variabel, ikke noget en caller gjorde.
+        logger.error("INTERNAL_API_KEY er ikke sat — internt bruger-opslag afvises med 503")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Internal user lookup is not configured",
         )
     if not x_internal_api_key or not compare_digest(x_internal_api_key, settings.INTERNAL_API_KEY):
+        # De to grene skelnes, fordi de betyder forskellige ting: en manglende header er
+        # typisk en fejlkonfigureret *kaldende service* (eller en probe der rammer den
+        # interne rute udefra), mens en forkert nøgle er en rotation der kun er nået halvt
+        # rundt.  Aldrig hvad der blev sendt — kun at det ikke passede.
+        reason = "header mangler" if not x_internal_api_key else "nøglen matcher ikke"
+        logger.warning("Internt bruger-opslag afvist: %s", reason)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid internal API key",

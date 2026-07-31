@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
 from sqlalchemy import CursorResult, func, select, update
@@ -9,6 +10,8 @@ from app.application.ports.outbound import IUserRepository
 from app.domain.entities import User, UserWithCredentials
 from app.domain.exceptions import UserNotFoundException
 from app.models import UserModel
+
+logger = logging.getLogger(__name__)
 
 
 class PostgresUserRepository(IUserRepository):
@@ -80,6 +83,17 @@ class PostgresUserRepository(IUserRepository):
         if result.rowcount == 0:
             # Brugeren blev slettet mellem use casens opslag og denne skrivning.
             # Et tavst no-op ville svare 200/204 på en ændring der ikke skete.
+            #
+            # P3-59: 404'en der følger er ikke til at skelne fra "brugeren fandtes aldrig",
+            # men dette sted VED at den fandtes for et øjeblik siden — use casen slog den
+            # op.  Den viden findes kun her, og den er forskellen på en TOCTOU-race og et
+            # ganske almindeligt opslag på et forkert id.  Feltnavnene, ikke værdierne:
+            # `values` indeholder password-hash på password-stien.
+            logger.warning(
+                "TOCTOU: bruger %s fandtes ved use casens opslag men ikke ved skrivningen (felter=%s)",
+                user_id,
+                sorted(values),
+            )
             raise UserNotFoundException(user_id)
         await self._session.flush()
 

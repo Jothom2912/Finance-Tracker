@@ -75,6 +75,12 @@ class UserService(IUserService):
                 # the pre-checks raise instead of letting it surface as
                 # an unhandled 500.
                 orig_message = str(err.orig).lower() if err.orig else ""
+                # P3-59: uden denne linje er en tabt race umulig at skelne fra en
+                # almindelig dobbelt-tilmelding — begge giver 409 med samme body.  Det er
+                # forskellen på "en bruger valgte et taget navn" og "to requests ramte
+                # samme mikrosekund", og kun den anden siger noget om systemet.
+                # `warning`, ikke `error`: constrainten gjorde præcis sit arbejde.
+                logger.warning("Tabt race mod unique-constraint under registrering: %s", err.orig)
                 if "username" in orig_message:
                     raise UserAlreadyExistsException("username", dto.username) from err
                 raise UserAlreadyExistsException("email", dto.email) from err
@@ -191,6 +197,9 @@ class UserService(IUserService):
                 # registrering eller omdøbning kan nå navnet mellem tjekket
                 # ovenfor og denne skrivning. DB'ens unique-constraint er
                 # den rigtige vagt; oversæt til samme 409 frem for en 500.
+                # P3-59: samme begrundelse som i register() — 409'en alene skjuler om det
+                # var en race eller et taget navn.
+                logger.warning("Tabt race mod unique-constraint ved omdøbning (user=%s): %s", user_id, err.orig)
                 raise UserAlreadyExistsException("username", dto.username) from err
 
             await self._uow.commit()
