@@ -1,7 +1,7 @@
 ---
 title: P3-59 — de fem tavse services får et spor, valgt efter én admissionsregel
 date: 2026-07-31
-status: open
+status: done
 backlog-items: [P3-59]
 related:
   - plans/2026-07-31-p357-api-logging-config.md
@@ -219,13 +219,13 @@ præcist — og fase 2 kan rulles tilbage alene, hvilket er hele grunden til at 
      context-gren krævede en indsat probe-række (`11111111-…-111111111111`, `context_json`
      uden `user_id`) — begge saga-årsager er altså drivbare, men kun den ene uden DB-setup.
 
-2. [ ] **`shared/auth`: én `logger.warning` på 401-stien** (`auth/fastapi.py:80-85`), der
+2. [x] **`shared/auth`: én `logger.warning` på 401-stien** (`auth/fastapi.py:80-85`), der
    navngiver *hvorfor* fra `exc`. Version-bump på `finans-tracker-auth` + `uv.lock`-regen i
    hver forbruger. Test i pakkens egen suite med `caplog`, inkl. at de to *andre* 401-grene
    (manglende header, forkert format) **ikke** logger — de er entydige og falder uden for
    reglen.
 
-3. [ ] **user-service** — den billigste, fordi chokepunktet findes:
+3. [x] **user-service** — den billigste, fordi chokepunktet findes:
    - `main.py:32-52`: log i de fire handlere. `InvalidCredentialsException` → `warning`
      (mislykket login er i dag **helt uden spor**, så credential-stuffing er usynligt);
      `CurrentPasswordIncorrectException` → `warning`; `UserAlreadyExistsException` og
@@ -460,12 +460,12 @@ præcist — og fase 2 kan rulles tilbage alene, hvilket er hele grunden til at 
 
    Begge services er på typecheck-gaten: mypy rent, ruff rent, 98 + 61 tests grønne.
 
-7. [ ] **Docs.** CLAUDE.md: ret `BankConnectionInactive`-eksemplet til `BankConfigError`, og
+7. [x] **Docs.** CLAUDE.md: ret `BankConnectionInactive`-eksemplet til `BankConfigError`, og
    ret `execute_with_logging`-konventionen til at sige hvad der faktisk findes (én service) —
    samme behandling som RHF+Zod-posten fik. `patterns/hexagonal-architecture.md:33-34, 47`
    samme. Plus backlog + STATUS.
 
-8. [ ] **Verification** (næste sektion).
+8. [x] **Verification** (næste sektion).
 
 ## Verification
 
@@ -510,31 +510,111 @@ Rækkefølgen er valgt så et fladt resultat kan afvises som instrumentfejl før
 
 ## Items der spawnes, ikke løses her
 
-Reviewet og fase 5 fandt fem ting der ikke er logningshuller, og som en logningsplan ikke skal afgøre:
+Reviewet og faserne fandt seks ting der ikke er logningshuller, og som en logningsplan ikke skal
+afgøre. Alle seks er filet, så de ikke bor i en plan-fil alene:
 
-1. **goal: en klient kan gøre en række permanent 500.** `dto.py:15` har `status: Optional[str]`
+1. **P2-43 — goal: en klient kan gøre en række permanent 500.** `dto.py:15` har `status: Optional[str]`
    uvalideret, `GoalResponse.status` er `GoalStatus` (`dto.py:38`), og `_to_dto`
    (`service.py:204`) bygger modellen direkte. `PUT /goals/{id}` med `{"status": "bogus"}`
    passerer 422, **committes**, og kaster derefter `ValidationError` → 500 ved hvert
    efterfølgende `GET` af det mål. Klient-trigget, persistent. Foreslås som **P2-tier** efter
    samme admissionsregel P1-13 brugte: klassen afgør tieren, ikke datoen.
-2. **goal + account: upstream-nedetid rapporteres som en brugerfejl.** `account_adapter.py:24`
+2. **P3-60 — goal + account: upstream-nedetid rapporteres som en brugerfejl.** `account_adapter.py:24`
    og `user_adapter.py:26` giver 400 "findes ikke" når upstream er nede. Fase 4 og 5 gør det
    *synligt*; de retter ikke statuskoden til 503. Eget item — det er en kontraktændring.
-3. **goal: `clear_default_savings_goal` mangler `deleted_at`-filteret**
+3. **P3-61 — goal: `clear_default_savings_goal` mangler `deleted_at`-filteret**
    (`postgres_goal_repository.py:90-93`), hvor hver søsterstatement har det. Benignt i dag,
    men det er den inkonsistens der gør P3-16's invariant svær at stole på. Dertil: det
    partielle unique-index har ingen `deleted_at`-klausul, så invarianten holdes af konvention,
    ikke af skemaet.
-4. **goal: `create_goal` gør to round-trips hvor den ene er død.** `service.py:92` kalder
+4. **P3-62 — goal: `create_goal` gør to round-trips hvor den ene er død.** `service.py:92` kalder
    `_verify_ownership` → `get_owner_user_id`, som 404'er hvis kontoen ikke findes; `:94`
    kalder derefter `exists()` mod samme service. `exists()` kan kun returnere `False` hvis
    kontoen forsvandt mellem de to kald, og enhver upstream-fejl er allerede blevet en 503
    på det første. Altså: et ekstra HTTP-kald pr. målsoprettelse hvis eneste opnåelige
    resultat er `True`. Fundet under fase 5's live-kørsel. Fjernelsen er en adfærdsændring
    (`AccountNotFoundForGoal` ville skifte kilde), så den hører ikke i en logningsplan.
-5. **goal: audit-trailet er bevaret i DB'en men uopnåeligt gennem API'et.**
+5. **P3-64 — `shared/auth`s 401-linje ligger uden for `app.*` og misses af platformens egen søgning.**
+   Loggeren er `auth.fastapi`. Målt i efter-kørslen: `grep '\[app\.'` = 14 linjer,
+   `grep WARNING` = 15. Den manglende er den ene linje der dækker alle ~10 services. Samme
+   fejlform som `analytics.usecase`. Valget er ikke oplagt — `auth.*` er pakkens naturlige
+   modulnavn — så det er en navngivnings-/gate-beslutning: skal delte pakker logge under
+   `app.*`, eller skal en log-gate matche på niveau frem for loggernavn? Hører sammen med
+   P3-11.
+6. **P3-63 — goal: audit-trailet er bevaret i DB'en men uopnåeligt gennem API'et.**
    `get_allocation_history` kalder `get_by_id` først (`service.py:164`), som filtrerer
    `deleted_at IS NULL` → 404. P3-16 beholdt rækkerne netop for at bevare historikken.
 
-## Outcome (udfyldes når den er kørt)
+## Outcome (2026-07-31)
+
+**Alle fem services taler nu, og tallet er målt med samme probe som før-målingen.** Samme
+script, samme 22 drives, samme instrument — det er hele grunden til at scriptet blev gemt i
+step 1.
+
+| service | `[app.*]`-linjer før | efter | udvalgte punkter (Y) | logget (X) |
+|---|---|---|---|---|
+| user | 0 | **4** | 8 | 8 |
+| account | 0 | **3** | 8 | 7 (+1 uopnåelig: `AC4`) |
+| goal | 0 | **3** | 7 | 5 (+2 uopnåelige: `exists`) |
+| notification | 0 | **2** | 6 | 6 |
+| saga | 0 | **2** | 4 | 4 |
+
+De to tal er forskellige med vilje. **Efter-linjerne** er hvad *denne probe* driver i én
+kørsel; **X af Y** er alle de punkter admissionsreglen udvalgte, inkl. dem der kræver en
+skæv nøgle, en død upstream eller to samtidige requests og derfor ikke ligger i probens 22
+drives. Y er de udvalgte punkter — **ikke** de 96. Et "0 → N" på et selvvalgt Y er
+tilfældigt flatterende, og det er sket før
+(`feedback_baseline_can_be_accidentally_right`), så begge tal står her frem for det
+pænere ene.
+
+Verifikationens punkter, i den rækkefølge de blev kørt:
+
+1. **Instrumentet:** banking's `bank_api.py:145` gav niveau, tidsstempel og `[app.…]`. Ikke
+   gateway'ens `auth.py:113` som planen sagde — den fyrer ikke, hvilket P3-57 allerede havde
+   dokumenteret. Se step 1.
+2. **5/5 services** har mindst én HTTP-drevet warning. Kriteriet er nået.
+3. **Negativ kontrol:** ordinær 404 (`/goals/999999` som ejer), 422 fra Pydantic
+   (`limit=0`, og `AC4`s manglende header) → **nul** nye linjer. Access-linjen står alene.
+4. **Negativ kontrol på `shared/auth`:** manglende `Authorization` og malformet `Bearer`
+   logger ikke; kun den udekodbare token gør. 1 af 3 401-grene, som besluttet.
+5. **Mutations-kontrol:** kørt tre gange — `user_adapter` (fase 4), default-mål-racen (fase
+   5) og notifications `dismiss`-kald + sagas wording-test (fase 6). Hver gang blev præcis de
+   tests røde der hører til linjen.
+6. **`caplog`-tests** for hvert nyt kald: niveau, loggernavn, diskriminerende værdi, plus en
+   negativ test pr. fravalg.
+7. `make check` + `mypy` grønt på `user`, `notification`, `saga`. `goal` og `account` er
+   **ikke** på gaten, så deres dækning er tests + live-drift. Det er verifikationens
+   svageste del og skal læses som sådan.
+
+### Det itemet lærte, ud over linjerne
+
+**(1) Reglen var det egentlige produkt, og den holdt hele vejen — men den var upræcis to
+gange, og begge gange på planens *vigtigste* linje.** Fase 4: `user_adapter` skulle logge
+non-200, men en 404 er user-services entydige svar, så cuttet blev `not in (200, 404)`. Fase
+5: `exists`'s fejlgrene kan slet ikke nås fra en request. Begge fund kom fra at *drive*
+koden, ikke fra at læse den. En regel skrevet før koden er stadig en hypotese.
+
+**(2) Et logkald i en uopnåelig gren er samme fejlform som en død `noqa`.** Tre af planens
+kald ligger i grene der ikke kan nås (`AC4`s 422-afvisning, `exists`' to). De er beholdt —
+de er korrekte hvis de nås — men de er **fastholdt med reachability-tests** frem for
+kommentarer, og de tælles ikke som HTTP-drevne. Jf.
+`feedback_dead_suppression_annotations`.
+
+**(3) En kontrol kan selv være blind, og fase 6 fangede en.** Sagas
+wording-test sammenlignede `getMessage()`, hvor to grene kan dele ordlyd og *alligevel* give
+forskellige beskeder fordi id'erne interpoleres ind. Nu `record.msg`, mutations-verificeret
+ved et ægte kollaps. `project_measurement_instrument_validity`, instans nummer otte.
+
+**(4) Den mest værdifulde linje i itemet er usynlig for platformens egen søgning.**
+`shared/auth`s 401-warning logger på **`auth.fastapi`**, ikke `app.*`. Målt i efter-kørslen:
+`grep '\[app\.'` finder 14 linjer, `grep WARNING` finder 15 — den manglende er præcis den
+linje der dækker alle ~10 services. Det er samme fejlform som `execute_with_logging`s
+`analytics.usecase`, som fase 7 lige skrev ned i CLAUDE.md. En log-gate scopet til `app.*`
+ville være grøn uden at se den. **Spawnet som eget item** (nedenfor) — det er en
+navngivnings-/gate-beslutning, ikke en logningsmangel.
+
+**(5) To ender af samme kald komponerer, og mutationen viste hvorfor det ikke er valgfrit.**
+Fase 3 + fase 4 giver tilsammen hele diagnosen ved en roteret nøgle. Fjern
+adapter-linjen, og `service.py`-linjen overlever og *lyver*: "user-service kender ikke
+bruger 497" er falsk. En tavs log er dårlig; en log der selvsikkert siger det forkerte er
+værre. Det er den observation der bedst forsvarer hele itemet.
