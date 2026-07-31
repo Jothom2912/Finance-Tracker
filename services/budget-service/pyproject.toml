@@ -22,9 +22,11 @@ dependencies = [
     "finans-tracker-messaging",
     "finans-tracker-domain",
     "finans-tracker-contracts",
+    "finans-tracker-observability",
 ]
 
 [tool.uv.sources]
+finans-tracker-observability = { path = "../shared/observability" }
 finans-tracker-auth = { path = "../shared/auth" }
 finans-tracker-contracts = { path = "../shared/contracts" }
 finans-tracker-messaging = { path = "../shared/messaging" }

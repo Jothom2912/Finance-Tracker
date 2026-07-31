@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from observability import setup_logging
 
 from app.adapters.inbound.rest_api import router as analytics_router
 from app.adapters.outbound.elasticsearch.bootstrap import ensure_indices
@@ -16,6 +17,9 @@ from app.domain.exceptions import (
     InvalidPeriodError,
     ReadStoreUnavailableError,
 )
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging()
 
 logger = logging.getLogger(__name__)
 

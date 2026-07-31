@@ -379,6 +379,7 @@ dependencies = [
     { name = "anyio" },
     { name = "fastapi" },
     { name = "finans-tracker-auth" },
+    { name = "finans-tracker-observability" },
     { name = "httpx" },
     { name = "ollama" },
     { name = "pydantic" },
@@ -403,6 +404,7 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.0.0" },
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "finans-tracker-auth", directory = "../shared/auth" },
+    { name = "finans-tracker-observability", directory = "../shared/observability" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "ollama", specifier = ">=0.4.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -440,6 +442,19 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[[package]]
+name = "finans-tracker-observability"
+version = "0.1.0"
+source = { directory = "../shared/observability" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]

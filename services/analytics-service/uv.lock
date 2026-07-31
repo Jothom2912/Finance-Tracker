@@ -533,6 +533,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "finans-tracker-contracts" },
     { name = "finans-tracker-domain" },
+    { name = "finans-tracker-observability" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -560,6 +561,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "finans-tracker-contracts", directory = "../shared/contracts" },
     { name = "finans-tracker-domain", directory = "../shared/domain" },
+    { name = "finans-tracker-observability", directory = "../shared/observability" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
@@ -601,6 +603,19 @@ dev = [
 name = "finans-tracker-domain"
 version = "0.1.1"
 source = { directory = "../shared/domain" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[[package]]
+name = "finans-tracker-observability"
+version = "0.1.0"
+source = { directory = "../shared/observability" }
 
 [package.metadata]
 

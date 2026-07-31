@@ -18,6 +18,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "finans-tracker-contracts",
     "finans-tracker-domain",
+    "finans-tracker-observability",
 ]
 
 [dependency-groups]
@@ -34,6 +35,7 @@ dev = [
 ]
 
 [tool.uv.sources]
+finans-tracker-observability = { path = "../shared/observability" }
 finans-tracker-contracts = { path = "../shared/contracts" }
 finans-tracker-domain = { path = "../shared/domain" }
 

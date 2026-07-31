@@ -4,6 +4,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from observability import setup_logging
 
 from app.adapters.inbound.categorize_api import categorize_router
 from app.adapters.inbound.category_api import (
@@ -12,6 +13,7 @@ from app.adapters.inbound.category_api import (
     taxonomy_admin_router,
 )
 from app.adapters.inbound.rules_api import rules_router
+from app.config import settings
 from app.domain.exceptions import (
     CategoryHasSubcategories,
     CategoryNotFound,
@@ -24,6 +26,9 @@ from app.domain.exceptions import (
     SubCategoryNotFound,
 )
 from app.rule_engine_provider import rule_engine_provider
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging(settings.LOG_LEVEL)
 
 logger = logging.getLogger(__name__)
 

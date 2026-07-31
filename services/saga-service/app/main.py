@@ -3,8 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
+from observability import setup_logging
 
 from app.auth import get_current_user_id
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging()
 
 app = FastAPI(title="Saga Service")
 

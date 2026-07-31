@@ -599,16 +599,18 @@ dev = [
 
 [[package]]
 name = "finans-tracker-messaging"
-version = "0.1.2"
+version = "0.1.3"
 source = { directory = "../shared/messaging" }
 dependencies = [
     { name = "aio-pika" },
+    { name = "finans-tracker-observability" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "aio-pika", specifier = ">=9.4.0" },
+    { name = "finans-tracker-observability", directory = "../shared/observability" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
 
@@ -617,6 +619,19 @@ dev = [
     { name = "aiosqlite" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[[package]]
+name = "finans-tracker-observability"
+version = "0.1.0"
+source = { directory = "../shared/observability" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
     { name = "ruff" },
 ]
 
@@ -633,6 +648,7 @@ dependencies = [
     { name = "finans-tracker-auth" },
     { name = "finans-tracker-contracts" },
     { name = "finans-tracker-messaging" },
+    { name = "finans-tracker-observability" },
     { name = "psycopg2-binary" },
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
@@ -663,6 +679,7 @@ requires-dist = [
     { name = "finans-tracker-auth", directory = "../shared/auth" },
     { name = "finans-tracker-contracts", directory = "../shared/contracts" },
     { name = "finans-tracker-messaging", directory = "../shared/messaging" },
+    { name = "finans-tracker-observability", directory = "../shared/observability" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },

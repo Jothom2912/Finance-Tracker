@@ -17,6 +17,7 @@ COPY services/shared/contracts /shared/contracts
 COPY services/shared/auth /shared/auth
 COPY services/shared/messaging /shared/messaging
 COPY services/shared/domain /shared/domain
+COPY services/shared/observability /shared/observability
 
 COPY services/budget-service/pyproject.toml services/budget-service/uv.lock ./
 RUN uv sync --frozen --no-dev

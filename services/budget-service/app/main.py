@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
+from observability import setup_logging
 from redis import asyncio as aioredis
 
 from app.adapters.inbound.monthly_budget_api import router as monthly_budget_router
@@ -23,6 +24,9 @@ from app.domain.exceptions import (
     MonthlyBudgetException,
     MonthlyBudgetNotFound,
 )
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging(settings.LOG_LEVEL)
 
 logger = logging.getLogger(__name__)
 

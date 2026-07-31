@@ -13,7 +13,11 @@ from app.dependencies import get_goal_service
 from app.domain.exceptions import AccountNotFoundForGoal, NotAccountOwner, UpstreamServiceUnavailable
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
+from observability import setup_logging
 from sqlalchemy.exc import IntegrityError
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging()
 
 app = FastAPI(title="Goal Service")
 

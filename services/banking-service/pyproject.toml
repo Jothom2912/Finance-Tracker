@@ -23,11 +23,13 @@ dependencies = [
     "finans-tracker-auth",
     "finans-tracker-contracts",
     "finans-tracker-messaging",
+    "finans-tracker-observability",
 ]
 
 # Three packages, not four: banking imports contracts, auth and messaging.
 # `domain` is not imported anywhere under app/ or tests/ and is deliberately absent.
 [tool.uv.sources]
+finans-tracker-observability = { path = "../shared/observability" }
 finans-tracker-auth = { path = "../shared/auth" }
 finans-tracker-contracts = { path = "../shared/contracts" }
 finans-tracker-messaging = { path = "../shared/messaging" }

@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from observability import setup_logging
 
 from app.application.dto import (
     MarkAllReadResponse,
@@ -12,6 +13,9 @@ from app.application.dto import (
 from app.application.ports.outbound import IUnitOfWork
 from app.auth import get_current_user_id
 from app.dependencies import get_uow
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging()
 
 app = FastAPI(title="Notification Service", version="0.1.0")
 

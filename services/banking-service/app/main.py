@@ -6,10 +6,12 @@ from typing import Any, AsyncIterator
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse, Response
+from observability import setup_logging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.enable_banking_client import BankConfigError
+from app.config import settings
 from app.database import get_db
 from app.dependencies import aclose_banking_client, get_banking_client
 from app.domain.exceptions import (
@@ -20,6 +22,9 @@ from app.domain.exceptions import (
     PendingAuthorizationNotFound,
     ProjectionIntegrityError,
 )
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging(settings.LOG_LEVEL)
 
 logger = logging.getLogger(__name__)
 

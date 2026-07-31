@@ -11,6 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
 COPY services/shared/auth /shared/auth
+COPY services/shared/observability /shared/observability
 COPY services/ai-service/pyproject.toml services/ai-service/uv.lock ./
 RUN uv sync --frozen --no-dev
 

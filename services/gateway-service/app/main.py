@@ -2,17 +2,16 @@ import logging
 
 import uvicorn
 from fastapi import FastAPI
+from observability import setup_logging
 
 from app.adapters.inbound.graphql_api import create_graphql_router
 from app.adapters.inbound.saga_api import saga_router
 from app.config import ENVIRONMENT, LOG_LEVEL
 
-_log_level = getattr(logging, LOG_LEVEL, logging.INFO)
-logging.basicConfig(
-    level=_log_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# P3-57: var husets eneste fungerende logging-konfiguration og dermed før-målingens
+# kontrol. Erstattet af den delte, som også overtager uvicorns tre loggere — dens format
+# er workernes (millisekunder i asctime), ikke basicConfig-blokkens.
+setup_logging(LOG_LEVEL)
 
 logger = logging.getLogger(__name__)
 

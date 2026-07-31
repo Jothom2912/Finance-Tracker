@@ -16,6 +16,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # context — never build with the service directory as context.
 COPY services/shared/auth /shared/auth
 COPY services/shared/domain /shared/domain
+COPY services/shared/observability /shared/observability
 COPY services/gateway-service/pyproject.toml services/gateway-service/uv.lock ./
 RUN uv sync --frozen --no-dev
 

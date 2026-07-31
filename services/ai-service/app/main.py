@@ -3,8 +3,12 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI
+from observability import setup_logging
 
 from app.adapters.inbound.stream_api import stream_router
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging()
 
 logger = logging.getLogger(__name__)
 

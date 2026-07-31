@@ -4,14 +4,19 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from observability import setup_logging
 
 from app.adapters.inbound.rest_api import router as users_router
+from app.config import settings
 from app.domain.exceptions import (
     CurrentPasswordIncorrectException,
     InvalidCredentialsException,
     UserAlreadyExistsException,
     UserNotFoundException,
 )
+
+# P3-57: uvicorn konfigurerer kun sine egne loggere — uden dette arver app.* root's WARNING.
+setup_logging(settings.LOG_LEVEL)
 
 logger = logging.getLogger(__name__)
 
