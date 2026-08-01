@@ -17,9 +17,6 @@ class _AccountPortStub:
     async def get_owner_user_id(self, account_id: int) -> int:
         return 1
 
-    async def exists(self, account_id: int) -> bool:
-        return True
-
 
 @pytest.mark.asyncio()
 async def test_goal_api_round_trip_persists_through_service_and_repository() -> None:

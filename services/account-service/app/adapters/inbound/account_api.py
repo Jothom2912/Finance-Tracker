@@ -14,7 +14,7 @@ from app.application.dto import (
 from app.application.service import AccountService
 from app.auth import get_current_user_id
 from app.dependencies import get_account_service
-from app.domain.exceptions import UserNotFoundForAccount
+from app.domain.exceptions import UpstreamServiceUnavailable, UserNotFoundForAccount
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,9 @@ def create_account(
     try:
         return service.create_account(data)
     except UserNotFoundForAccount as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except UpstreamServiceUnavailable as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
 
 
 @router.put("/{account_id}", response_model=AccountSchema)

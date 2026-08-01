@@ -30,7 +30,6 @@ def make_uow() -> MagicMock:
 @pytest.fixture()
 def account_port() -> AsyncMock:
     port = AsyncMock()
-    port.exists.return_value = True
     port.get_owner_user_id.return_value = OWNER_USER_ID
     return port
 
@@ -63,7 +62,9 @@ def _active_goal(**overrides) -> Goal:
 
 
 @pytest.mark.asyncio()
-async def test_create_goal_persists_goal_and_outbox(service: GoalService, uow: MagicMock) -> None:
+async def test_create_goal_persists_goal_and_outbox(
+    service: GoalService, account_port: AsyncMock, uow: MagicMock
+) -> None:
     uow.goals.create.return_value = _active_goal()
 
     result = await service.create_goal(
@@ -82,6 +83,7 @@ async def test_create_goal_persists_goal_and_outbox(service: GoalService, uow: M
     uow.goals.create.assert_awaited_once()
     uow.outbox.add.assert_awaited_once()
     uow.commit.assert_awaited_once()
+    account_port.get_owner_user_id.assert_awaited_once_with(ACCOUNT_ID)
 
 
 @pytest.mark.asyncio()
@@ -109,7 +111,7 @@ async def test_create_goal_emits_event_with_owner_user_id_not_account_id(service
 async def test_create_goal_rejects_unknown_account(
     service: GoalService, account_port: AsyncMock, uow: MagicMock
 ) -> None:
-    account_port.exists.return_value = False
+    account_port.get_owner_user_id.side_effect = AccountNotFoundForGoal(99)
 
     with pytest.raises(AccountNotFoundForGoal):
         await service.create_goal(
@@ -124,6 +126,32 @@ async def test_create_goal_rejects_unknown_account(
             user_id=OWNER_USER_ID,
         )
 
+    uow.goals.create.assert_not_called()
+    uow.outbox.add.assert_not_called()
+
+
+@pytest.mark.asyncio()
+async def test_create_goal_propagates_upstream_failure_before_write(
+    service: GoalService, account_port: AsyncMock, uow: MagicMock
+) -> None:
+    from app.domain.exceptions import UpstreamServiceUnavailable
+
+    account_port.get_owner_user_id.side_effect = UpstreamServiceUnavailable("account-service")
+
+    with pytest.raises(UpstreamServiceUnavailable):
+        await service.create_goal(
+            GoalCreate(
+                name="Vacation",
+                target_amount=5000,
+                current_amount=1000,
+                target_date=None,
+                status="active",
+                Account_idAccount=ACCOUNT_ID,
+            ),
+            user_id=OWNER_USER_ID,
+        )
+
+    account_port.get_owner_user_id.assert_awaited_once_with(ACCOUNT_ID)
     uow.goals.create.assert_not_called()
     uow.outbox.add.assert_not_called()
 

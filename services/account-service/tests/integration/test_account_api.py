@@ -2,6 +2,8 @@
 
 from unittest.mock import patch
 
+from app.domain.exceptions import UpstreamServiceUnavailable
+
 from tests.conftest import _make_auth_header
 
 
@@ -101,6 +103,23 @@ class TestAccountCRUD:
                 headers=_make_auth_header(user_id=999),
             )
         assert resp.status_code == 400
+
+    def test_create_account_reports_upstream_failure_as_503_without_write(self, client):
+        with patch(
+            "app.adapters.outbound.user_adapter.UserServiceAdapter.exists",
+            side_effect=UpstreamServiceUnavailable("user-service"),
+        ):
+            resp = client.post(
+                "/api/v1/accounts/",
+                json={"name": "Må ikke gemmes", "saldo": 0},
+                headers=_make_auth_header(user_id=77),
+            )
+
+        assert resp.status_code == 503
+        assert resp.json() == {"detail": "user-service er midlertidigt utilgængelig."}
+        list_resp = client.get("/api/v1/accounts/", headers=_make_auth_header(user_id=77))
+        assert list_resp.status_code == 200
+        assert list_resp.json() == []
 
     def test_no_auth_returns_401(self, client):
         resp = client.get("/api/v1/accounts/")

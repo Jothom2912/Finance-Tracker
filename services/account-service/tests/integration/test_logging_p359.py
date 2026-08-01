@@ -20,6 +20,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from app.adapters.outbound.user_adapter import UserServiceAdapter
+from app.domain.exceptions import UpstreamServiceUnavailable
 
 from tests.conftest import _make_auth_header
 
@@ -204,10 +205,13 @@ class TestUserAdapter:
     def test_non_404_failure_logs_status_code(self, caplog, status_code):
         adapter = UserServiceAdapter()
 
-        with patch("httpx.get", return_value=_fake_response(status_code)), caplog.at_level(logging.DEBUG):
-            result = adapter.exists(42)
+        with (
+            patch("httpx.get", return_value=_fake_response(status_code)),
+            caplog.at_level(logging.DEBUG),
+            pytest.raises(UpstreamServiceUnavailable),
+        ):
+            adapter.exists(42)
 
-        assert result is False
         records = _records(caplog, USER_ADAPTER, logging.WARNING)
         assert len(records) == 1
         message = records[0].getMessage()
@@ -215,6 +219,22 @@ class TestUserAdapter:
         # Uden den er linjen kun "noget gik galt", hvilket 400'en allerede antydede.
         assert str(status_code) in message
         assert "42" in message
+
+    def test_request_error_logs_type_and_raises_unavailable(self, caplog):
+        adapter = UserServiceAdapter()
+        request = httpx.Request("GET", "http://mock-user-service:8001/api/v1/users/42")
+
+        with (
+            patch("httpx.get", side_effect=httpx.ConnectError("connection refused", request=request)),
+            caplog.at_level(logging.DEBUG),
+            pytest.raises(UpstreamServiceUnavailable),
+        ):
+            adapter.exists(42)
+
+        records = _records(caplog, USER_ADAPTER, logging.WARNING)
+        assert len(records) == 1
+        assert "ConnectError" in records[0].getMessage()
+        assert "42" in records[0].getMessage()
 
     def test_404_is_the_unambiguous_answer_and_logs_nothing(self, caplog):
         """Fravalget der gør de øvrige linjer brugbare.

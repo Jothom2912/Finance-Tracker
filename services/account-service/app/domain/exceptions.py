@@ -23,6 +23,14 @@ class UserNotFoundForAccount(AccountException):
         super().__init__("Bruger med dette ID findes ikke.")
 
 
+class UpstreamServiceUnavailable(AccountException):
+    """Raised when a required upstream cannot give a usable answer."""
+
+    def __init__(self, service_name: str) -> None:
+        self.service_name = service_name
+        super().__init__(f"{service_name} er midlertidigt utilgængelig.")
+
+
 class AccountGroupNotFound(AccountException):
     """Raised when account group is not found."""
 

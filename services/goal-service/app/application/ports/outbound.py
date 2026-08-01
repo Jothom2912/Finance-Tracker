@@ -36,9 +36,6 @@ class IGoalRepository(ABC):
 
 class IAccountPort(ABC):
     @abstractmethod
-    async def exists(self, account_id: int) -> bool: ...
-
-    @abstractmethod
     async def get_owner_user_id(self, account_id: int) -> int: ...
 
 

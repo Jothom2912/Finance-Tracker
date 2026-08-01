@@ -112,7 +112,6 @@ def uow() -> MagicMock:
 def foreign_port() -> AsyncMock:
     """En konto-port hvor kontoen tilhører en ANDEN end den der spørger."""
     port = AsyncMock()
-    port.exists.return_value = True
     port.get_owner_user_id.return_value = OWNER_USER_ID
     return port
 
@@ -262,108 +261,6 @@ def _response(status_code: int, body: dict | None = None) -> httpx.Response:
 
 def _adapter() -> AccountServiceAdapter:
     return AccountServiceAdapter(base_url="http://account-service:8003", api_key="k", timeout=1.0)
-
-
-class TestAccountAdapterExists:
-    """``exists``s to fejlgrene er korrekte — og **kan ikke nås fra en HTTP-request**.
-
-    Planen antog at ``exists`` var servicens værste sted: en upstream-nedetid der bliver en
-    400 klienten med rette aldrig genforsøger. Live-drevet holder det ikke.
-    ``create_goal`` er den eneste kalder (``service.py:94``), og den kalder
-    ``_verify_ownership`` **først** (``:92``) — altså ``get_owner_user_id`` mod den samme
-    upstream, to linjer tidligere. Er account-service nede eller nøglen skæv, rejses 503'en
-    dér, og ``exists`` kører aldrig. Målt: `POST /goals` giver **503**, ikke 400, i begge
-    fejlmoder.
-
-    Grenene testes derfor her på adapter-niveau og tælles IKKE som HTTP-drevne linjer i
-    itemets efter-tal. Se `test_exists_is_unreachable_when_upstream_fails` nedenfor for
-    ordningen der gør dem døde, og planens spawnede item for den redundante round-trip.
-    """
-
-    @pytest.mark.asyncio()
-    async def test_request_error_logs_the_exception_type(self, caplog) -> None:
-        fake = _FakeAsyncClient(error=httpx.ConnectError("connection refused"))
-
-        with patch(f"{ADAPTER_LOGGER}.httpx.AsyncClient", fake), caplog.at_level(logging.DEBUG):
-            assert await _adapter().exists(ACCOUNT_ID) is False
-
-        records = _records(caplog, ADAPTER_LOGGER, logging.WARNING)
-        assert len(records) == 1
-        message = records[0].getMessage()
-        assert "ConnectError" in message
-        assert str(ACCOUNT_ID) in message
-
-    @pytest.mark.asyncio()
-    @pytest.mark.parametrize("status_code", [403, 422, 500, 503])
-    async def test_any_non_200_logs_the_status_code(self, caplog, status_code) -> None:
-        """Cuttet er simplere end i account-services `user_adapter`, og med vilje.
-
-        ``/exists`` svarer ``200 {"exists": false}`` når kontoen ikke findes — den har ingen
-        404-gren. Så der er ingen "normal brug"-status at holde ude af loggen; enhver
-        non-200 er anomal.
-        """
-        fake = _FakeAsyncClient(response=_response(status_code))
-
-        with patch(f"{ADAPTER_LOGGER}.httpx.AsyncClient", fake), caplog.at_level(logging.DEBUG):
-            assert await _adapter().exists(ACCOUNT_ID) is False
-
-        records = _records(caplog, ADAPTER_LOGGER, logging.WARNING)
-        assert len(records) == 1
-        assert str(status_code) in records[0].getMessage()
-
-    @pytest.mark.asyncio()
-    async def test_account_absent_is_a_200_and_logs_nothing(self, caplog) -> None:
-        """Den negative kontrol der beviser at cuttet ikke bare er "log alt".
-
-        En konto der ikke findes er et normalt, sandt svar — og det kommer som 200.
-        """
-        fake = _FakeAsyncClient(response=_response(200, {"exists": False}))
-
-        with patch(f"{ADAPTER_LOGGER}.httpx.AsyncClient", fake), caplog.at_level(logging.DEBUG):
-            assert await _adapter().exists(ACCOUNT_ID) is False
-
-        assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
-
-    @pytest.mark.asyncio()
-    async def test_account_present_logs_nothing(self, caplog) -> None:
-        fake = _FakeAsyncClient(response=_response(200, {"exists": True}))
-
-        with patch(f"{ADAPTER_LOGGER}.httpx.AsyncClient", fake), caplog.at_level(logging.DEBUG):
-            assert await _adapter().exists(ACCOUNT_ID) is True
-
-        assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
-
-    @pytest.mark.asyncio()
-    async def test_exists_is_unreachable_when_upstream_fails(self, uow: MagicMock, caplog) -> None:
-        """Ordningen der gør de to grene ovenfor døde — fastholdt, ikke kun noteret.
-
-        ``create_goal`` rammer den samme upstream to gange: ``get_owner_user_id`` først,
-        ``exists`` derefter. Fejler upstream, fejler det første kald, og ``exists`` bliver
-        aldrig kaldt. Testen er skrevet som en *reachability*-påstand frem for en note,
-        fordi det er den slags fund der ellers stille bliver forkert: bytter nogen om på de
-        to kald, eller fjernes den redundante ``exists``, bliver linjen her rød i stedet
-        for at et dødt logkald bliver liggende og tælle med.
-        """
-        port = AsyncMock()
-        port.get_owner_user_id.side_effect = UpstreamServiceUnavailable("account-service")
-        service = GoalService(uow=uow, account_port=port)
-
-        with caplog.at_level(logging.DEBUG), pytest.raises(UpstreamServiceUnavailable):
-            await service.create_goal(
-                GoalCreate(
-                    name="Vacation",
-                    target_amount=5000,
-                    current_amount=0,
-                    target_date=None,
-                    status="active",
-                    Account_idAccount=ACCOUNT_ID,
-                ),
-                user_id=OWNER_USER_ID,
-            )
-
-        port.exists.assert_not_awaited()
-        # Og linjen kommer fra ejerskabs-opslaget, ikke fra `exists`.
-        assert _records(caplog, ADAPTER_LOGGER, logging.WARNING) == []
 
 
 class TestAccountAdapterOwner:

@@ -9,6 +9,7 @@ import httpx
 
 from app.application.ports.outbound import IUserPort
 from app.config import INTERNAL_API_KEY, USER_SERVICE_URL
+from app.domain.exceptions import UpstreamServiceUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -22,36 +23,32 @@ class UserServiceAdapter(IUserPort):
         return {"X-Internal-API-Key": INTERNAL_API_KEY}
 
     def exists(self, user_id: int) -> bool:
-        response = httpx.get(
-            f"{USER_SERVICE_URL}/api/v1/users/{user_id}",
-            headers=self._headers(),
-            timeout=5,
-        )
-        # P3-59: linjen deler non-200 i to, fordi kun den ene halvdel er tvetydig.
-        #
-        # En 404 er user-services *entydige* måde at sige "den bruger findes ikke" på, og
-        # det er præcis hvad 400'en til klienten derefter påstår.  Sandt svar, ingen linje —
-        # samme fravalg som `UserNotFoundException` fik i fase 3, set fra den anden ende af
-        # samme kald.
-        #
-        # Alt andet — 401 fordi INTERNAL_API_KEY er roteret i den ene ende, 422 fordi
-        # `_headers()` udelod headeren helt, 5xx fordi user-service er syg — kollapser her til
-        # det samme `False`, og klienten får "Bruger med dette ID findes ikke."  Det er en
-        # konfigurations- eller driftsfejl rapporteret som en valideringsfejl, og indtil nu i
-        # tavshed i begge ender.  Statuskoden er hele diskriminanten, så den står på linjen.
-        #
-        # Bemærk hvad linjen IKKE dækker: er user-service helt nede, kaster `httpx` en
-        # `ConnectError` der ikke fanges nogen steder → 500 med uvicorns egen traceback.
-        # Grimt, men ikke tavst, og at fange den her ville være den kontraktændring
-        # non-goals holder ude (spawnet item 2 i planen).
-        if response.status_code not in (200, 404):
-            logger.warning(
-                "user-service svarede %s på eksistens-tjek af bruger %s — "
-                "kaldet kollapser til 'findes ikke' og bliver en 400 til klienten",
-                response.status_code,
-                user_id,
+        try:
+            response = httpx.get(
+                f"{USER_SERVICE_URL}/api/v1/users/{user_id}",
+                headers=self._headers(),
+                timeout=5,
             )
-        return response.status_code == 200
+        except httpx.RequestError as exc:
+            logger.warning(
+                "user-service kunne ikke nås ved eksistens-tjek af bruger %s (%s: %s)",
+                user_id,
+                type(exc).__name__,
+                exc,
+            )
+            raise UpstreamServiceUnavailable("user-service") from exc
+
+        if response.status_code == 200:
+            return True
+        if response.status_code == 404:
+            return False
+
+        logger.warning(
+            "user-service svarede %s på eksistens-tjek af bruger %s — behandles som utilgængelig",
+            response.status_code,
+            user_id,
+        )
+        raise UpstreamServiceUnavailable("user-service")
 
     def get_users_by_ids(self, user_ids: list[int]) -> list[tuple[int, str]]:
         users = []

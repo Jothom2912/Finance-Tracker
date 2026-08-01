@@ -56,7 +56,7 @@ app/
 │       ├── postgres_goal_repository.py
 │       ├── postgres_goal_allocation_repository.py
 │       ├── postgres_outbox_repository.py
-│       ├── account_adapter.py          # Validates accounts via user-service
+│       ├── account_adapter.py          # Resolves account ownership via account-service
 │       ├── unit_of_work.py
 │       └── rabbitmq_publisher.py
 ├── workers/
@@ -68,7 +68,7 @@ app/
 
 - **Unit of Work pattern**: All repositories share the same `AsyncSession`. Domain writes and outbox events are committed atomically.
 - **Transactional outbox**: Events written to `outbox_events` in the same DB transaction as domain data. Standalone worker publishes to RabbitMQ with `SELECT ... FOR UPDATE SKIP LOCKED`.
-- **Account validation**: Goal creation validates that the account exists by calling user-service via HTTP (with configurable timeout).
+- **Account validation**: Goal creation resolves ownership through account-service via one HTTP call (with configurable timeout); account-service distinguishes a missing account from upstream failure.
 - **No foreign keys**: `user_id` and `account_id` are plain integers with no FK constraints to other services.
 - **ADR-0003 support**: Schema includes `goal_allocation_history`, `unallocated_budget_surplus`, and `is_default_savings_goal` for automatic budget surplus allocation (consumer not yet implemented).
 

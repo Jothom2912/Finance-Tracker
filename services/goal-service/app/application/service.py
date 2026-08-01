@@ -13,7 +13,7 @@ from app.application.dto import Goal as GoalDTO
 from app.application.ports.inbound import IGoalService
 from app.application.ports.outbound import IAccountPort, IUnitOfWork
 from app.domain.entities import Goal, GoalStatus
-from app.domain.exceptions import AccountNotFoundForGoal, NotAccountOwner
+from app.domain.exceptions import NotAccountOwner
 from contracts.events.goal import GoalCreatedEvent, GoalDeletedEvent, GoalUpdatedEvent
 
 logger = logging.getLogger(__name__)
@@ -90,9 +90,6 @@ class GoalService(IGoalService):
 
     async def create_goal(self, data: GoalCreate, user_id: int) -> GoalDTO:
         owner_id = await self._verify_ownership(data.Account_idAccount, user_id)
-
-        if not await self._account_port.exists(data.Account_idAccount):
-            raise AccountNotFoundForGoal(data.Account_idAccount)
 
         goal = Goal(
             id=None,

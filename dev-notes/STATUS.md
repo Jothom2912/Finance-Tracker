@@ -9,6 +9,10 @@ No active implementation plan.
 
 ## Recently shipped
 
+- **P3-60 + P3-62** — honest 404/503 split for account → user, explicit temporary frontend
+  error and one account lookup per goal creation; live negative smoke proved 503 + zero write,
+  and the restored 62-container stack is healthy.
+  [Plan + Outcome](plans/2026-08-01-p360-p362-upstream-error-honesty.md#outcome-fill-in-when-done).
 - **P2-21 + P3-17** — Kubernetes workload parity and explicit migration ordering; clean and
   idempotent live rollout verified with zero workload restarts.
   [Plan + Outcome](plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md#outcome).
@@ -27,7 +31,6 @@ No active implementation plan.
 
 ## Next candidates
 
-- **P3-60** — goal/account collapse upstream failure into a non-retryable user error.
 - **P3-47** before **P3-28** — an nginx location-level `add_header` would silently remove the
   perimeter's security headers.
 - **P3-46** — local Docker memory prevents end-to-end chat evidence with `qwen3:8b`.

@@ -72,7 +72,11 @@ export default function AccountSelector() {
       setError(null);
       selectAccount(newAccount.idAccount || newAccount.id, newAccount.name);
     } catch (err) {
-      setError(err.message || 'Forbindelsesfejl - kan ikke nå backend');
+      setError(
+        err.status === 503
+          ? 'Kontotjenesten kan ikke bekræfte din bruger lige nu. Prøv igen om et øjeblik.'
+          : err.message || 'Forbindelsesfejl - kan ikke nå backend'
+      );
     }
   };
 

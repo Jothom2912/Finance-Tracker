@@ -26,9 +26,6 @@ class _AccountPortStub:
     async def get_owner_user_id(self, account_id: int) -> int:
         return 1
 
-    async def exists(self, account_id: int) -> bool:
-        return True
-
 
 @pytest.fixture()
 async def api_client():
