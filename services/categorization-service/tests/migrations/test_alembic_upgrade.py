@@ -126,7 +126,7 @@ class TestMerchantSeed:
     def test_merchants_seeded(self, engine) -> None:
         with engine.connect() as conn:
             count = conn.execute(text("SELECT COUNT(*) FROM merchants")).scalar()
-            assert count > 80, f"Expected 80+ merchants from SEED_MERCHANT_MAPPINGS, got {count}"
+            assert count == 130, f"Expected the pinned 130 legacy merchants, got {count}"
 
     def test_merchant_references_valid_subcategory(self, engine) -> None:
         with engine.connect() as conn:
@@ -157,7 +157,7 @@ class TestRuleSeed:
     def test_rules_seeded(self, engine) -> None:
         with engine.connect() as conn:
             count = conn.execute(text("SELECT COUNT(*) FROM categorization_rules")).scalar()
-            assert count > 80, f"Expected 80+ rules from SEED_MERCHANT_MAPPINGS, got {count}"
+            assert count == 130, f"Expected the pinned 130 legacy rules, got {count}"
 
     def test_all_rules_are_system_rules(self, engine) -> None:
         with engine.connect() as conn:

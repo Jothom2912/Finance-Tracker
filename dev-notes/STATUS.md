@@ -9,6 +9,9 @@ No active implementation plan.
 
 ## Recently shipped
 
+- **TAX-04–05** — separated inactive seed manifests plus an executable 130-rule audit yielding
+  82 provenance-bearing constrained rules; legacy migrations and runtime behavior remain pinned.
+  [Plan + Outcome](plans/2026-08-01-tax04-tax05-seed-model-and-audit.md#outcome-fill-in-when-done).
 - **TAX-01–03** — approved 13/67 purpose-first taxonomy, UUIDv7 + stable-key identity policy,
   complete 10/41 legacy mapping and executable baseline guard; no data migration performed.
   [Plan + Outcome](plans/2026-08-01-tax01-tax03-taxonomy-foundation.md#outcome-fill-in-when-done).
@@ -43,8 +46,8 @@ No active implementation plan.
 
 ## Next candidates
 
-- **TAX-04 + TAX-05** — separate taxonomy definitions, merchant aliases and constrained rules,
-  then audit all 130 global mappings before migration work.
+- **TAX-06** — additive taxonomy migration and full-state event repair after TAX-04/05 approval
+  and completion.
 
 ## Blockers
 

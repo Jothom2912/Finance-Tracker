@@ -60,3 +60,12 @@ tx-service's categorized-consumer refuses to overwrite `tier="manual"` rows
   open.
 - Danish transliteration/normalization lives with the engine — reuse it, don't re-implement
   ([import-dedup](import-dedup.md) has the same normalize-before-compare theme).
+
+## Approved target contract (TAX-04, not active yet)
+
+The future global seed separates canonical merchants and their provider/country aliases from
+categorization rules. Aliases provide identity evidence but never own taxonomy targets; each rule
+owns its target, direction, confidence and provenance. Only structured merchant/counterparty
+evidence may be high confidence, while description-text matching is capped at medium. Direction
+is `amount > 0` incoming and `amount < 0` outgoing; zero matches only direction-agnostic rules.
+See the [accepted decision](../decisions/2026-08-01-seed-evidence-and-rule-confidence.md).
