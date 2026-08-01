@@ -95,6 +95,11 @@ SERVICES = REPO_ROOT / "services"
 NGINX_CONF = SERVICES / "frontend" / "nginx.conf"
 KUSTOMIZATION = REPO_ROOT / "k8s" / "kustomization.yaml"
 
+# This one root resource is deliberately gitignored; k8s-up.sh fails closed
+# with instructions to create it from the tracked example. A fresh CI checkout
+# must still be able to validate workload parity without inventing credentials.
+KUSTOMIZE_OPTIONAL_RESOURCES = {KUSTOMIZATION.parent / "secrets.yaml"}
+
 # Tags this repo builds itself, as opposed to `postgres:16` and friends.
 LOCAL_IMAGE_PREFIX = "finance-tracker-"
 
@@ -519,8 +524,14 @@ def collect_kustomize_names(kustomization: Path, problems: list[str]) -> set[str
         if target.name == "kustomization.yaml":
             names.update(collect_kustomize_names(target, problems))
             continue
+        if not target.is_file() and target in KUSTOMIZE_OPTIONAL_RESOURCES:
+            continue
         if not target.is_file():
-            problems.append(f"{kustomization.relative_to(REPO_ROOT)} references missing resource `{match.group(1)}`")
+            try:
+                source = kustomization.relative_to(REPO_ROOT)
+            except ValueError:
+                source = kustomization
+            problems.append(f"{source} references missing resource `{match.group(1)}`")
             continue
         for line in target.read_text(encoding="utf-8").splitlines():
             name_match = YAML_METADATA_NAME.match(line)

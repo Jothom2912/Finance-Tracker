@@ -60,6 +60,27 @@ def test_k8s_parity_accepts_alias_and_excludes_migration(tmp_path: Path) -> None
     assert problems == []
 
 
+def test_k8s_parity_allows_only_the_explicitly_optional_secret(tmp_path: Path) -> None:
+    k8s = tmp_path / "k8s"
+    k8s.mkdir()
+    kustomization = k8s / "kustomization.yaml"
+    kustomization.write_text(
+        "resources:\n  - secrets.yaml\n  - missing-app.yaml\n",
+        encoding="utf-8",
+    )
+    problems: list[str] = []
+    optional = k8s / "secrets.yaml"
+    compose_check.KUSTOMIZE_OPTIONAL_RESOURCES.add(optional)
+    try:
+        required, names = check_k8s_parity([], kustomization, problems)
+    finally:
+        compose_check.KUSTOMIZE_OPTIONAL_RESOURCES.remove(optional)
+
+    assert (required, names) == (0, 0)
+    assert len(problems) == 1
+    assert "missing-app.yaml" in problems[0]
+
+
 def test_migration_ordering_detects_worker_without_completed_dependency() -> None:
     owner = _service("user-service")
     owner.image = "finance-tracker-user-service"
