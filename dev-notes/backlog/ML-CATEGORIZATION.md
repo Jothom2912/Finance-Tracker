@@ -2,6 +2,10 @@
 
 Companion to [FEATURES.md](FEATURES.md) (F1-02 user rules, F1-03 feedback loop, F1-06 ML tier), [BACKLOG.md](BACKLOG.md) (P2-06 wire rules DB) and [AI-IMPROVEMENTS.md](AI-IMPROVEMENTS.md) (AI-14 shares the embedding-classifier pattern, AI-16 shares the feedback pattern). IDs `ML-xx` are stable.
 
+The default-category and seed redesign that should precede collection of durable labels is
+tracked separately in [TAXONOMY-OPTIMIZATION.md](TAXONOMY-OPTIMIZATION.md). In particular,
+settle TAX-01–03 before freezing ML-01's golden labels against category identifiers.
+
 Current state (see [architecture/services/categorization-and-ai-services.md](../architecture/services/categorization-and-ai-services.md)): tier orchestrator has **ready but empty ML/LLM slots** (`Optional` ports, nothing injected); rules tier live from a hardcoded seed dict; `categorization_results` records tier/confidence/needs_review for every decision (an audit log that becomes training data); `merchants` table has a dead `is_user_confirmed` flag; taxonomy (categories + subcategories, "Anden" fallback) is owned here per ADR-003. Transactions are short Danish strings ("REMA1000 KOEBENHAVN", "MobilePay Anabelle…") with amount/sign/date metadata.
 
 **Ground rules** (mirror the AI backlog): **ML-01 eval set first** — every later item must prove itself against it. And **precision beats coverage**: a wrong auto-category costs more trust than a `needs_review`. The tier order is a precision ladder — each tier only sees what the more precise tier above couldn't decide.

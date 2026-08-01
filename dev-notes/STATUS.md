@@ -9,6 +9,9 @@ No active implementation plan.
 
 ## Recently shipped
 
+- **TAX-01–03** — approved 13/67 purpose-first taxonomy, UUIDv7 + stable-key identity policy,
+  complete 10/41 legacy mapping and executable baseline guard; no data migration performed.
+  [Plan + Outcome](plans/2026-08-01-tax01-tax03-taxonomy-foundation.md#outcome-fill-in-when-done).
 - **P3-46** — alle tre AI-modeller pulls deterministisk; med 16 GB Docker-memory gennemfører
   qwen3:8b-chatten rå SSE og Chromium-E2E uden OOM, med 62 stabile containere.
   [Plan + Outcome](plans/2026-08-01-p346-qwen8b-chat-e2e.md#outcome-fill-in-when-done).
@@ -40,7 +43,8 @@ No active implementation plan.
 
 ## Next candidates
 
-Ingen kandidat valgt efter P3-46 endnu.
+- **TAX-04 + TAX-05** — separate taxonomy definitions, merchant aliases and constrained rules,
+  then audit all 130 global mappings before migration work.
 
 ## Blockers
 

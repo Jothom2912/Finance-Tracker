@@ -74,6 +74,9 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [backlog/FEATURES.md](backlog/FEATURES.md) — feature backlog (F1 finish-half-built → F2 high-value → F3 bets), each with existing-scaffolding leverage + prerequisites.
 - [backlog/AI-IMPROVEMENTS.md](backlog/AI-IMPROVEMENTS.md) — AI-service ideas: RAG ladder (hybrid search, reranking, multi-hop), router/responder upgrades, eval-first sequencing.
 - [backlog/ML-CATEGORIZATION.md](backlog/ML-CATEGORIZATION.md) — ML categorization: getting-started ladder (merchant memory → baseline → shadow mode), feedback flywheel, hierarchical/zero-shot subcategory smarts.
+- [backlog/TAXONOMY-OPTIMIZATION.md](backlog/TAXONOMY-OPTIMIZATION.md) — TAX-01–09 roadmap: default-taxonomy audit, stable identity, seed separation, additive migration, sandbox personas and quality gate before ML labels accumulate.
+- [plans/2026-08-01-tax01-tax03-taxonomy-foundation.md](plans/2026-08-01-tax01-tax03-taxonomy-foundation.md) — approval-gated TAX-01–03 plan for category definitions, stable semantic identity and complete current-to-target mapping.
+- [decisions/2026-08-01-taxonomy-semantics-and-identity.md](decisions/2026-08-01-taxonomy-semantics-and-identity.md) — purpose-first 13/67 taxonomy; UUIDv7 protocol identity, flat stable keys, explicit fallbacks and soft lifecycle.
 - [plans/2026-07-07-refactoring-roadmap.md](plans/2026-07-07-refactoring-roadmap.md) — 4-phase execution strategy for the technical backlog, with verification approach.
 - [plans/2026-07-07-feature-roadmap.md](plans/2026-07-07-feature-roadmap.md) — feature sequencing interleaved with refactor phases + build sketches for the top items.
 - [plans/2026-07-11-es-analytics-integration.md](plans/2026-07-11-es-analytics-integration.md) — rebase phase-1-fixes onto master's ES analytics read-side (ADR-0004), bring-up/backfill/dual-read re-verify, + AI-19..21 ES-for-chat…
