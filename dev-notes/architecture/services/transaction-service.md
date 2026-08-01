@@ -1,7 +1,7 @@
 ---
 title: transaction-service
-updated: 2026-07-17
-source: architecture audit 2026-07-07; F1-03 update 2026-07-17
+updated: 2026-08-01
+source: architecture audit 2026-07-07; F1-03 update 2026-07-17; TAX-06
 ---
 
 # transaction-service (port 8002)
@@ -15,7 +15,7 @@ Largest service: transaction CRUD, CSV import, bulk import, planned transactions
 - **Inbound**: `rest_api.py` — `/api/v1/transactions` (POST/GET list cached 60s/GET/PUT/DELETE/{id}, `/import-csv`, `/bulk` max 500) + `/api/v1/planned-transactions`.
 - **Outbound**: Postgres repos (transaction, planned, category + subcategory read-copies, outbox), async UoW, `rabbitmq_publisher.py`, `categorization_client.py` (sync HTTP → categorization-service, 500ms timeout, graceful degrade to None — no port interface, duck-typed).
 - **Workers (4 containers)**: `outbox_publisher` (poll 2s, batch 20, SKIP LOCKED), `categorized_consumer` (applies `transaction.categorized`, skips `tier="manual"`, inbox dedup via `processed_events`), `taxonomy_sync_consumer` (maintains `categories`/`subcategories` read copies per ADR-003), `saga_command_consumer` (`saga.cmd.bulk_import_transactions` / `saga.cmd.rollback_import` → `saga.reply.*`).
-- **DB**: 10 Alembic migrations; `transactions`, `planned_transactions`, taxonomy read copies, `outbox_events`, `processed_events` (inbox, unique `(message_id, consumer_name)`), positive-amount CHECK.
+- **DB**: 14 Alembic migrations; `transactions`, `planned_transactions`, taxonomy read copies, `outbox_events`, `processed_events` (inbox, unique `(message_id, consumer_name)`), positive-amount CHECK. Migration 014 adds nullable canonical taxonomy identity/lifecycle fields while retaining integer joins.
 - **Redis**: only fastapi-cache2 on the list endpoint; URL hardcoded in `main.py:29`.
 
 ## Data flows
@@ -24,7 +24,7 @@ Largest service: transaction CRUD, CSV import, bulk import, planned transactions
 - **Manual correction** *(F1-03, 2026-07-17)*: PUT with category-field change → `categorization_tier="manual"` + second outbox event `TransactionCategoryCorrectedEvent` (`transaction.category_corrected`, skipped when the correction clears the category) → categorization-service's corrected-consumer learns a user rule. See [decisions/2026-07-17-learned-corrections-as-rules.md](../../decisions/2026-07-17-learned-corrections-as-rules.md).
 - **CSV import**: whole file into memory → parser registry → per-row `find_duplicate` SELECT (dedup key `(user_id, account_id, date, amount, description)`) → bulk insert + batch outbox in one commit.
 - **Saga bulk import**: `saga.cmd.bulk_import_transactions` → `bulk_import` (no sync categorization) → reply with `imported_ids`. Compensation `rollback_import` = per-id **hard** delete, failures swallowed, always replies success (⚠).
-- **Taxonomy sync**: categorization-service owns taxonomy (ADR-003); full-state `category.*`/`subcategory.*` events upserted into local read copies.
+- **Taxonomy sync**: categorization-service owns taxonomy (ADR-003); v3 full-state `category.*`/`subcategory.*` events upsert UUIDv7/key/version/lifecycle metadata atomically, while v1/v2 remain accepted and cannot erase newer canonical identity.
 
 ## Open problems
 

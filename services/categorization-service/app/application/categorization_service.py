@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from functools import partial
 from typing import Optional
 
 from app.application.dto import CategorizeRequestDTO, CategorizeResponseDTO
@@ -43,7 +44,7 @@ class CategorizationService:
 
     async def categorize(self, request: CategorizeRequestDTO) -> CategorizeResponseDTO:
         """Categorize a single transaction (sync, tier 1 only for now)."""
-        result = self._run_pipeline(request.description, request.amount)
+        result = self._run_pipeline(request)
         return self._to_response(result)
 
     async def categorize_batch(
@@ -53,14 +54,25 @@ class CategorizationService:
         """Batch categorization — rule engine on all, then ML/LLM on remainder."""
         return [await self.categorize(r) for r in requests]
 
-    def _run_pipeline(self, description: str, amount: float) -> CategorizationResult:
+    def _run_pipeline(self, request: CategorizeRequestDTO) -> CategorizationResult:
+        description = request.description
+        amount = request.amount
         desc_short = description[:40]
 
-        result = self._try_tier(
-            "rules",
-            desc_short,
-            lambda: self._rule_engine.match(description, amount),
-        )
+        evidence = (request.merchant, request.counterparty, request.provider, request.country)
+        if any(value is not None for value in evidence):
+            match_rule = partial(
+                self._rule_engine.match,
+                description,
+                amount,
+                merchant=request.merchant,
+                counterparty=request.counterparty,
+                provider=request.provider,
+                country=request.country,
+            )
+        else:
+            match_rule = partial(self._rule_engine.match, description, amount)
+        result = self._try_tier("rules", desc_short, match_rule)
         if result is not None:
             return result
 

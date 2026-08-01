@@ -135,6 +135,13 @@ class TaxonomyProjector:
             display_order=event.display_order,
             is_deleted=isinstance(event, CategoryDeletedEvent),
             event_ts=event_ts_millis(event),
+            public_id=event.public_id,
+            semantic_key=event.semantic_key,
+            taxonomy_version=event.taxonomy_version,
+            lifecycle=event.lifecycle,
+            deprecated_in_version=event.deprecated_in_version,
+            replaced_by_public_id=event.replaced_by_public_id,
+            description=event.description,
         )
         # Denormaliserede navne på transaktioner opdateres kun ved
         # anvendte renames — et stale event må ikke rulle navne tilbage.
@@ -154,6 +161,15 @@ class TaxonomyProjector:
             is_default=event.is_default,
             is_deleted=isinstance(event, SubCategoryDeletedEvent),
             event_ts=event_ts_millis(event),
+            public_id=event.public_id,
+            semantic_key=event.semantic_key,
+            parent_public_id=event.parent_public_id,
+            taxonomy_version=event.taxonomy_version,
+            lifecycle=event.lifecycle,
+            deprecated_in_version=event.deprecated_in_version,
+            replaced_by_public_id=event.replaced_by_public_id,
+            is_fallback=event.is_fallback,
+            description=event.description,
         )
         if applied and isinstance(event, SubCategoryUpdatedEvent):
             await self._store.propagate_subcategory_rename(subcategory_id=event.subcategory_id, name=event.name)

@@ -30,11 +30,11 @@ from itertools import groupby
 from sqlalchemy import select, text
 
 from app.adapters.outbound.postgres_rule_repository import PostgresRuleRepository
-from app.adapters.outbound.rule_engine import RuleEngine, TieredRuleEngine
+from app.adapters.outbound.rule_engine import ConstrainedRuleEngine, PersistedSeedRule, RuleEngine, TieredRuleEngine
 from app.application.ports.outbound import IRuleEngine
 from app.database import async_session_factory
-from app.domain.value_objects import PatternType
-from app.models import CategoryModel, SubCategoryModel
+from app.domain.value_objects import Confidence, PatternType
+from app.models import CategorizationRuleModel, CategoryModel, MerchantAliasModel, SubCategoryModel
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ _MAX_USER_CACHE = 512
 class RuleEngineProvider:
     def __init__(self, ttl_seconds: float = DEFAULT_TTL_SECONDS) -> None:
         self._ttl = ttl_seconds
-        self._engine: RuleEngine | None = None
+        self._engine: IRuleEngine | None = None
         self._fallback_subcategory_id: int = 0
         self._fallback_category_id: int = 0
         self._loaded_at: datetime | None = None
@@ -93,7 +93,7 @@ class RuleEngineProvider:
         """Drop a user's cached overlay so the next categorize rebuilds it."""
         self._user_engines.pop(user_id, None)
 
-    async def _get_global(self) -> RuleEngine:
+    async def _get_global(self) -> IRuleEngine:
         now = datetime.now(timezone.utc)
 
         if self._engine is not None and self._loaded_at is not None:
@@ -167,31 +167,56 @@ class RuleEngineProvider:
                 if sub.category_id in cat_ids:
                     subcategory_lookup[sub.name] = (sub.id, sub.category_id)
 
-            rules = await PostgresRuleRepository(session).find_active_rules()
+            rule_rows = await session.execute(
+                select(CategorizationRuleModel).where(
+                    CategorizationRuleModel.user_id.is_(None),
+                    CategorizationRuleModel.active.is_(True),
+                    CategorizationRuleModel.rule_key.is_not(None),
+                )
+            )
+            rules = rule_rows.scalars().all()
+            alias_rows = await session.execute(select(MerchantAliasModel))
+            aliases: dict[int, list[str]] = {}
+            for alias in alias_rows.scalars().all():
+                aliases.setdefault(alias.merchant_id, []).append(alias.normalized_value)
 
-        keyword_mappings = [
-            (rule.pattern_value, subcategory_name_by_id[rule.matches_subcategory_id])
+        category_by_subcategory = {sub.id: sub.category_id for sub in subs}
+        constrained = [
+            PersistedSeedRule(
+                target_subcategory_id=rule.matches_subcategory_id,
+                target_category_id=category_by_subcategory[rule.matches_subcategory_id],
+                match_field=rule.match_field or "description",
+                operator=rule.match_operator or "contains",
+                direction=rule.direction or "any",
+                confidence=Confidence(rule.confidence or "medium"),
+                pattern=rule.pattern_value,
+                aliases=tuple(aliases.get(rule.merchant_id or 0, ())),
+                provider=rule.provider,
+                country=rule.country,
+                minimum_amount=rule.minimum_amount,
+                maximum_amount=rule.maximum_amount,
+                merchant_id=rule.merchant_id,
+            )
             for rule in rules
-            if rule.pattern_type == PatternType.KEYWORD and rule.matches_subcategory_id in subcategory_name_by_id
+            if rule.matches_subcategory_id in category_by_subcategory
         ]
-        self._engine = RuleEngine(
-            keyword_mappings=keyword_mappings,
-            subcategory_lookup=subcategory_lookup,
-        )
+        self._engine = ConstrainedRuleEngine(constrained)
         self._subcategory_lookup = subcategory_lookup
         self._subcategory_name_by_id = subcategory_name_by_id
         # Taxonomy maps changed — cached user overlays reference the old
         # lookup, so rebuild them lazily on next use.
         self._user_engines.clear()
 
-        fallback = subcategory_lookup.get("Anden", (0, 0))
-        self._fallback_subcategory_id = fallback[0]
-        self._fallback_category_id = fallback[1]
+        fallback_model = next((sub for sub in subs if sub.semantic_key == "shopping_unspecified"), None)
+        if fallback_model is None:
+            fallback_model = next((sub for sub in subs if sub.name == "Anden"), None)
+        self._fallback_subcategory_id = fallback_model.id if fallback_model is not None else 0
+        self._fallback_category_id = fallback_model.category_id if fallback_model is not None else 0
         self._loaded_at = datetime.now(timezone.utc)
 
         logger.info(
-            "RuleEngine reloaded: %d keywords, %d subcategories",
-            len(keyword_mappings),
+            "RuleEngine reloaded: %d constrained rules, %d subcategories",
+            len(constrained),
             len(subcategory_lookup),
         )
 

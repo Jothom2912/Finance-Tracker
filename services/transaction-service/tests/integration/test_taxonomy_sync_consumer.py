@@ -86,6 +86,30 @@ async def _fetch_one(session_factory, sql: str, **params):
 
 
 class TestCategorySync:
+    async def test_v3_projects_canonical_identity(self, consumer, session_factory) -> None:
+        public_id = "019fba9e-d800-7d31-8208-aeddb2226b0f"
+        msg = _make_message(
+            {
+                "event_type": "category.created",
+                "event_version": 3,
+                "category_id": 150,
+                "name": "Mad & drikke",
+                "category_type": "expense",
+                "public_id": public_id,
+                "semantic_key": "food_drink",
+                "taxonomy_version": 1,
+                "lifecycle": "active",
+            },
+            str(uuid4()),
+        )
+        await consumer._on_message(msg)
+
+        row = await _fetch_one(
+            session_factory,
+            "SELECT public_id, semantic_key, taxonomy_version, lifecycle FROM categories WHERE id=150",
+        )
+        assert row == (public_id, "food_drink", 1, "active")
+
     async def test_created_inserts_row(self, consumer, session_factory) -> None:
         msg = _make_message(
             {

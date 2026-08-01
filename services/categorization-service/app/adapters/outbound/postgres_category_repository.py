@@ -29,7 +29,11 @@ class PostgresCategoryRepository(ICategoryRepository):
         return self._to_entity(model)
 
     async def find_all(self) -> list[Category]:
-        stmt = select(CategoryModel).order_by(CategoryModel.display_order, CategoryModel.name)
+        stmt = (
+            select(CategoryModel)
+            .where(CategoryModel.lifecycle == "active")
+            .order_by(CategoryModel.display_order, CategoryModel.name)
+        )
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
@@ -40,7 +44,7 @@ class PostgresCategoryRepository(ICategoryRepository):
         return self._to_entity(model) if model else None
 
     async def find_by_name(self, name: str) -> Optional[Category]:
-        stmt = select(CategoryModel).where(CategoryModel.name == name)
+        stmt = select(CategoryModel).where(CategoryModel.name == name, CategoryModel.lifecycle == "active")
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None

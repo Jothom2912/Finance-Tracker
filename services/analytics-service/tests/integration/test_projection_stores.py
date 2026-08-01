@@ -243,6 +243,32 @@ class TestTaxonomyRenamePropagation:
         assert doc["_source"]["name"] == "Dagligvarer"
         assert doc["_source"]["doc_type"] == "category"
 
+    async def test_v3_category_projects_canonical_identity(
+        self,
+        es: AsyncElasticsearch,
+        stores: tuple[EsTransactionProjectionStore, EsTaxonomyProjectionStore, str],
+        index_prefix: str,
+    ) -> None:
+        _, taxonomy_store, _ = stores
+        await TaxonomyProjector(taxonomy_store).handle_category(
+            CategoryCreatedEvent(
+                event_version=3,
+                category_id=13,
+                name="Mad & drikke",
+                category_type="expense",
+                public_id="019fba9e-d800-7d31-8208-aeddb2226b0f",
+                semantic_key="food_drink",
+                taxonomy_version=1,
+                lifecycle="active",
+                description="Food and groceries.",
+                timestamp=T0,
+            )
+        )
+
+        doc = await es.get(index=alias_name(index_prefix, "taxonomy"), id="category:13")
+        assert doc["_source"]["semantic_key"] == "food_drink"
+        assert doc["_source"]["taxonomy_version"] == 1
+
 
 class TestEmbeddingStore:
     """AI-20: guarded vektor-skriv + state-læsning til embed-workeren."""

@@ -32,7 +32,27 @@ class EsTaxonomyProjectionStore(ITaxonomyProjectionStore):
         display_order: int,
         is_deleted: bool,
         event_ts: int,
+        public_id: str | None = None,
+        semantic_key: str | None = None,
+        taxonomy_version: int | None = None,
+        lifecycle: str | None = None,
+        deprecated_in_version: int | None = None,
+        replaced_by_public_id: str | None = None,
+        description: str | None = None,
     ) -> bool:
+        optional = {
+            key: value
+            for key, value in {
+                "public_id": public_id,
+                "semantic_key": semantic_key,
+                "taxonomy_version": taxonomy_version,
+                "lifecycle": lifecycle,
+                "deprecated_in_version": deprecated_in_version,
+                "replaced_by_public_id": replaced_by_public_id,
+                "description": description,
+            }.items()
+            if value is not None
+        }
         return await guarded_full_state_upsert(
             self._es,
             alias=self._alias,
@@ -44,6 +64,7 @@ class EsTaxonomyProjectionStore(ITaxonomyProjectionStore):
                 "category_type": category_type,
                 "display_order": display_order,
                 "is_deleted": is_deleted,
+                **optional,
             },
             event_ts=event_ts,
         )
@@ -57,7 +78,31 @@ class EsTaxonomyProjectionStore(ITaxonomyProjectionStore):
         is_default: bool,
         is_deleted: bool,
         event_ts: int,
+        public_id: str | None = None,
+        semantic_key: str | None = None,
+        parent_public_id: str | None = None,
+        taxonomy_version: int | None = None,
+        lifecycle: str | None = None,
+        deprecated_in_version: int | None = None,
+        replaced_by_public_id: str | None = None,
+        is_fallback: bool | None = None,
+        description: str | None = None,
     ) -> bool:
+        optional = {
+            key: value
+            for key, value in {
+                "public_id": public_id,
+                "semantic_key": semantic_key,
+                "parent_public_id": parent_public_id,
+                "taxonomy_version": taxonomy_version,
+                "lifecycle": lifecycle,
+                "deprecated_in_version": deprecated_in_version,
+                "replaced_by_public_id": replaced_by_public_id,
+                "is_fallback": is_fallback,
+                "description": description,
+            }.items()
+            if value is not None
+        }
         return await guarded_full_state_upsert(
             self._es,
             alias=self._alias,
@@ -69,6 +114,7 @@ class EsTaxonomyProjectionStore(ITaxonomyProjectionStore):
                 "name": name,
                 "is_default": is_default,
                 "is_deleted": is_deleted,
+                **optional,
             },
             event_ts=event_ts,
         )

@@ -106,12 +106,19 @@ class TaxonomySyncConsumer(ConsumerBase):
                     id=category_id,
                     name=body["name"],
                     type=body["category_type"],
+                    public_id=body.get("public_id"),
+                    semantic_key=body.get("semantic_key"),
+                    taxonomy_version=body.get("taxonomy_version"),
+                    lifecycle=body.get("lifecycle"),
+                    deprecated_in_version=body.get("deprecated_in_version"),
+                    replaced_by_public_id=body.get("replaced_by_public_id"),
                 )
             )
             logger.info("Category %s created in read copy", category_id)
         else:
             model.name = body["name"]
             model.type = body["category_type"]
+            TaxonomySyncConsumer._apply_identity(model, body)
             logger.info("Category %s updated in read copy", category_id)
 
     @staticmethod
@@ -134,6 +141,14 @@ class TaxonomySyncConsumer(ConsumerBase):
                     name=body["name"],
                     category_id=body["category_id"],
                     is_default=body.get("is_default", True),
+                    public_id=body.get("public_id"),
+                    semantic_key=body.get("semantic_key"),
+                    parent_public_id=body.get("parent_public_id"),
+                    is_fallback=body.get("is_fallback"),
+                    taxonomy_version=body.get("taxonomy_version"),
+                    lifecycle=body.get("lifecycle"),
+                    deprecated_in_version=body.get("deprecated_in_version"),
+                    replaced_by_public_id=body.get("replaced_by_public_id"),
                 )
             )
             logger.info("Subcategory %s created in read copy", subcategory_id)
@@ -141,6 +156,9 @@ class TaxonomySyncConsumer(ConsumerBase):
             model.name = body["name"]
             model.category_id = body["category_id"]
             model.is_default = body.get("is_default", True)
+            model.parent_public_id = body.get("parent_public_id", model.parent_public_id)
+            model.is_fallback = body.get("is_fallback", model.is_fallback)
+            TaxonomySyncConsumer._apply_identity(model, body)
             logger.info("Subcategory %s updated in read copy", subcategory_id)
 
     @staticmethod
@@ -160,6 +178,20 @@ class TaxonomySyncConsumer(ConsumerBase):
         )
         result = await session.execute(stmt)
         return result.scalar_one_or_none() is not None
+
+    @staticmethod
+    def _apply_identity(model: CategoryModel | SubCategoryModel, body: dict) -> None:
+        """Apply fields present in v3 without erasing identity on a late legacy event."""
+        for name in (
+            "public_id",
+            "semantic_key",
+            "taxonomy_version",
+            "lifecycle",
+            "deprecated_in_version",
+            "replaced_by_public_id",
+        ):
+            if name in body:
+                setattr(model, name, body[name])
 
     @staticmethod
     def _add_inbox_row(session: AsyncSession, message_id: str, event_type: str) -> None:

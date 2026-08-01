@@ -1,15 +1,16 @@
 """Rule engine adapter — Tier 1 deterministic keyword matching.
 
-Three core behaviors:
+Two core behaviors:
   1. Longest-match-first: keywords sorted by length descending
-  2. Sign-dependent overrides: some keywords map differently for +/-
-  3. Danish-character normalisation: oe->oe, ae->ae, aa->aa
+  2. Danish-character normalisation: oe->oe, ae->ae, aa->aa
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any, Optional
 
 from app.domain.value_objects import (
     CategorizationResult,
@@ -18,13 +19,6 @@ from app.domain.value_objects import (
 )
 
 logger = logging.getLogger(__name__)
-
-SIGN_OVERRIDES: dict[str, tuple[str, str]] = {
-    "renter": ("Renteindtaegter", "Renteudgifter"),
-    "rente": ("Renteindtaegter", "Renteudgifter"),
-    "mobilepay": ("MobilePay ind", "MobilePay ud"),
-    "opsparing": ("Opsparing (ind)", "Opsparing (ud)"),
-}
 
 
 def _normalize_for_matching(text: str) -> str:
@@ -53,20 +47,28 @@ class RuleEngine:
         self._sorted_keywords = sorted(normalised, key=lambda kv: len(kv[0]), reverse=True)
         self._lookup = subcategory_lookup
 
-    def match(self, description: str, amount: float) -> Optional[CategorizationResult]:
+    def match(
+        self,
+        description: str,
+        amount: float,
+        *,
+        merchant: str | None = None,
+        counterparty: str | None = None,
+        provider: str | None = None,
+        country: str | None = None,
+    ) -> Optional[CategorizationResult]:
         desc_normalised = _normalize_for_matching(description)
 
         for keyword, subcategory_name in self._sorted_keywords:
             if keyword not in desc_normalised:
                 continue
 
-            final_name = self._apply_sign_override(keyword, subcategory_name, amount)
-            ids = self._lookup.get(final_name)
+            ids = self._lookup.get(subcategory_name)
             if ids is None:
                 logger.warning(
                     "Keyword '%s' mapped to unknown subcategory '%s'",
                     keyword,
-                    final_name,
+                    subcategory_name,
                 )
                 continue
 
@@ -80,14 +82,6 @@ class RuleEngine:
 
         return None
 
-    @staticmethod
-    def _apply_sign_override(keyword: str, default_subcategory: str, amount: float) -> str:
-        override = SIGN_OVERRIDES.get(keyword)
-        if override is None:
-            return default_subcategory
-        positive_name, negative_name = override
-        return positive_name if amount > 0 else negative_name
-
 
 class TieredRuleEngine:
     """Priority-tiered composition of RuleEngines (F1-02).
@@ -99,12 +93,106 @@ class TieredRuleEngine:
     Satisfies the same IRuleEngine protocol as RuleEngine.
     """
 
-    def __init__(self, engines: list[RuleEngine]):
+    def __init__(self, engines: list[Any]):
         self._engines = engines
 
-    def match(self, description: str, amount: float) -> Optional[CategorizationResult]:
+    def match(
+        self,
+        description: str,
+        amount: float,
+        *,
+        merchant: str | None = None,
+        counterparty: str | None = None,
+        provider: str | None = None,
+        country: str | None = None,
+    ) -> Optional[CategorizationResult]:
         for engine in self._engines:
-            result = engine.match(description, amount)
+            result = engine.match(
+                description,
+                amount,
+                merchant=merchant,
+                counterparty=counterparty,
+                provider=provider,
+                country=country,
+            )
             if result is not None:
                 return result
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class PersistedSeedRule:
+    target_subcategory_id: int
+    target_category_id: int
+    match_field: str
+    operator: str
+    direction: str
+    confidence: Confidence
+    pattern: str
+    aliases: tuple[str, ...] = ()
+    provider: str | None = None
+    country: str | None = None
+    minimum_amount: Decimal | None = None
+    maximum_amount: Decimal | None = None
+    merchant_id: int | None = None
+
+
+class ConstrainedRuleEngine:
+    """TAX-06 rule engine: every match applies the persisted evidence constraints."""
+
+    def __init__(self, rules: list[PersistedSeedRule]):
+        self._rules = sorted(
+            rules, key=lambda rule: max((len(v) for v in rule.aliases), default=len(rule.pattern)), reverse=True
+        )
+
+    def match(
+        self,
+        description: str,
+        amount: float,
+        *,
+        merchant: str | None = None,
+        counterparty: str | None = None,
+        provider: str | None = None,
+        country: str | None = None,
+    ) -> Optional[CategorizationResult]:
+        evidence = {
+            "description": description,
+            "merchant": merchant,
+            "counterparty": counterparty,
+        }
+        direction = "incoming" if amount > 0 else "outgoing" if amount < 0 else "any"
+        absolute_amount = Decimal(str(abs(amount)))
+        for rule in self._rules:
+            raw = evidence.get(rule.match_field)
+            if raw is None or (rule.direction != "any" and rule.direction != direction):
+                continue
+            if rule.provider is not None and rule.provider != provider:
+                continue
+            if rule.country is not None and rule.country != country:
+                continue
+            if rule.minimum_amount is not None and absolute_amount < rule.minimum_amount:
+                continue
+            if rule.maximum_amount is not None and absolute_amount > rule.maximum_amount:
+                continue
+            normalized = _normalize_for_matching(raw)
+            candidates = rule.aliases or (rule.pattern,)
+            if not any(
+                self._matches(normalized, _normalize_for_matching(value), rule.operator) for value in candidates
+            ):
+                continue
+            return CategorizationResult(
+                category_id=rule.target_category_id,
+                subcategory_id=rule.target_subcategory_id,
+                merchant_id=rule.merchant_id,
+                tier=CategorizationTier.RULE,
+                confidence=rule.confidence,
+            )
+        return None
+
+    @staticmethod
+    def _matches(value: str, pattern: str, operator: str) -> bool:
+        if operator == "equals":
+            return value == pattern
+        if operator == "prefix":
+            return value.startswith(pattern)
+        return pattern in value

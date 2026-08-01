@@ -27,7 +27,7 @@ class PostgresSubCategoryRepository(ISubCategoryRepository):
         return self._to_entity(model)
 
     async def find_all(self) -> list[SubCategory]:
-        stmt = select(SubCategoryModel).order_by(SubCategoryModel.name)
+        stmt = select(SubCategoryModel).where(SubCategoryModel.lifecycle == "active").order_by(SubCategoryModel.name)
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
@@ -38,7 +38,7 @@ class PostgresSubCategoryRepository(ISubCategoryRepository):
         return self._to_entity(model) if model else None
 
     async def find_by_name(self, name: str) -> Optional[SubCategory]:
-        stmt = select(SubCategoryModel).where(SubCategoryModel.name == name)
+        stmt = select(SubCategoryModel).where(SubCategoryModel.name == name, SubCategoryModel.lifecycle == "active")
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
@@ -47,6 +47,7 @@ class PostgresSubCategoryRepository(ISubCategoryRepository):
         stmt = select(SubCategoryModel).where(
             SubCategoryModel.name == name,
             SubCategoryModel.category_id == category_id,
+            SubCategoryModel.lifecycle == "active",
         )
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
@@ -57,6 +58,7 @@ class PostgresSubCategoryRepository(ISubCategoryRepository):
             select(SubCategoryModel)
             .where(
                 SubCategoryModel.category_id == category_id,
+                SubCategoryModel.lifecycle == "active",
             )
             .order_by(SubCategoryModel.name)
         )

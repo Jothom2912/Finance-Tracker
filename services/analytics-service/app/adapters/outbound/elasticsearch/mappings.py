@@ -35,7 +35,7 @@ EMBEDDING_DIMS = 1024
 INDEX_VERSIONS: dict[str, str] = {
     TRANSACTIONS_INDEX: "v2",
     ACCOUNTS_INDEX: "v1",
-    TAXONOMY_INDEX: "v1",
+    TAXONOMY_INDEX: "v2",
     GOALS_INDEX: "v1",
 }
 
@@ -121,6 +121,15 @@ INDEX_DEFINITIONS: dict[str, dict[str, Any]] = {
                 "category_type": {"type": "keyword"},
                 "display_order": {"type": "integer"},
                 "is_default": {"type": "boolean"},
+                "public_id": {"type": "keyword"},
+                "semantic_key": {"type": "keyword"},
+                "parent_public_id": {"type": "keyword"},
+                "taxonomy_version": {"type": "integer"},
+                "lifecycle": {"type": "keyword"},
+                "deprecated_in_version": {"type": "integer"},
+                "replaced_by_public_id": {"type": "keyword"},
+                "is_fallback": {"type": "boolean"},
+                "description": {"type": "text", "analyzer": "danish"},
                 "is_deleted": {"type": "boolean"},
                 "event_ts": _TS,
                 "updated_at": _TS,

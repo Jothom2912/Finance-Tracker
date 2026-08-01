@@ -38,7 +38,7 @@ class Merchant:
     id: Optional[int]
     normalized_name: str
     display_name: str
-    subcategory_id: int
+    subcategory_id: int | None
     transaction_count: int = 0
     is_user_confirmed: bool = False
 

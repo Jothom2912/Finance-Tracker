@@ -6,6 +6,7 @@ Requires Docker to be running (testcontainers spins up a Postgres).
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 
@@ -70,14 +71,14 @@ class TestTablesExist:
 
 
 class TestCategorySeed:
-    def test_ten_categories_seeded(self, engine) -> None:
+    def test_legacy_and_target_categories_seeded(self, engine) -> None:
         with engine.connect() as conn:
             count = conn.execute(text("SELECT COUNT(*) FROM categories")).scalar()
-            assert count == 10
+            assert count == 23
 
     def test_category_ids_pinned(self, engine) -> None:
         with engine.connect() as conn:
-            rows = conn.execute(text("SELECT id, name FROM categories ORDER BY id")).fetchall()
+            rows = conn.execute(text("SELECT id, name FROM categories WHERE id <= 10 ORDER BY id")).fetchall()
             assert rows[0] == (1, "Mad & drikke")
             assert rows[-1] == (10, "Overfoersler")
 
@@ -91,16 +92,16 @@ class TestCategorySeed:
         CategorySyncConsumer — after upgrade the canonical ordering from
         migration 002 must hold."""
         with engine.connect() as conn:
-            rows = conn.execute(text("SELECT id, display_order FROM categories ORDER BY id")).fetchall()
+            rows = conn.execute(text("SELECT id, display_order FROM categories WHERE id <= 10 ORDER BY id")).fetchall()
             expected = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 10, 10: 20}
             assert dict(rows) == expected
 
 
 class TestSubcategorySeed:
-    def test_41_subcategories_seeded(self, engine) -> None:
+    def test_legacy_and_target_subcategories_seeded(self, engine) -> None:
         with engine.connect() as conn:
             count = conn.execute(text("SELECT COUNT(*) FROM subcategories")).scalar()
-            assert count == 41
+            assert count == 108
 
     def test_subcategory_ids_pinned(self, engine) -> None:
         with engine.connect() as conn:
@@ -126,7 +127,7 @@ class TestMerchantSeed:
     def test_merchants_seeded(self, engine) -> None:
         with engine.connect() as conn:
             count = conn.execute(text("SELECT COUNT(*) FROM merchants")).scalar()
-            assert count == 130, f"Expected the pinned 130 legacy merchants, got {count}"
+            assert count == 166, f"Expected 130 legacy plus 36 canonical merchants, got {count}"
 
     def test_merchant_references_valid_subcategory(self, engine) -> None:
         with engine.connect() as conn:
@@ -134,7 +135,7 @@ class TestMerchantSeed:
                 text(
                     "SELECT m.normalized_name FROM merchants m "
                     "LEFT JOIN subcategories s ON m.subcategory_id = s.id "
-                    "WHERE s.id IS NULL"
+                    "WHERE s.id IS NULL AND m.merchant_key IS NULL"
                 )
             ).fetchall()
             assert orphans == [], f"Merchants with invalid subcategory_id: {orphans}"
@@ -157,7 +158,7 @@ class TestRuleSeed:
     def test_rules_seeded(self, engine) -> None:
         with engine.connect() as conn:
             count = conn.execute(text("SELECT COUNT(*) FROM categorization_rules")).scalar()
-            assert count == 130, f"Expected the pinned 130 legacy rules, got {count}"
+            assert count == 212, f"Expected 130 legacy plus 82 target rules, got {count}"
 
     def test_all_rules_are_system_rules(self, engine) -> None:
         with engine.connect() as conn:
@@ -166,10 +167,13 @@ class TestRuleSeed:
             ).scalar()
             assert user_rules == 0
 
-    def test_all_rules_are_keyword_type(self, engine) -> None:
+    def test_target_rules_have_supported_pattern_types(self, engine) -> None:
         with engine.connect() as conn:
             non_keyword = conn.execute(
-                text("SELECT COUNT(*) FROM categorization_rules WHERE pattern_type != 'keyword'")
+                text(
+                    "SELECT COUNT(*) FROM categorization_rules "
+                    "WHERE rule_key IS NOT NULL AND pattern_type NOT IN ('keyword', 'merchant')"
+                )
             ).scalar()
             assert non_keyword == 0
 
@@ -192,6 +196,29 @@ class TestRuleSeed:
             priorities = [row[0] for row in distinct]
             assert priorities == [100], f"Expected all system rules at priority 100, got {priorities}"
 
+    def test_tax06_target_state_is_additive_and_canonical(self, engine) -> None:
+        with engine.connect() as conn:
+            active_categories = conn.execute(
+                text("SELECT COUNT(*) FROM categories WHERE semantic_key IS NOT NULL AND lifecycle='active'")
+            ).scalar()
+            active_subcategories = conn.execute(
+                text("SELECT COUNT(*) FROM subcategories WHERE semantic_key IS NOT NULL AND lifecycle='active'")
+            ).scalar()
+            deprecated_legacy = conn.execute(
+                text(
+                    "SELECT (SELECT COUNT(*) FROM categories WHERE semantic_key IS NULL AND lifecycle='deprecated') + "
+                    "(SELECT COUNT(*) FROM subcategories WHERE semantic_key IS NULL AND lifecycle='deprecated')"
+                )
+            ).scalar()
+            active_rules = conn.execute(
+                text("SELECT COUNT(*) FROM categorization_rules WHERE rule_key IS NOT NULL AND active")
+            ).scalar()
+            legacy_active = conn.execute(
+                text("SELECT COUNT(*) FROM categorization_rules WHERE rule_key IS NULL AND user_id IS NULL AND active")
+            ).scalar()
+            assert (active_categories, active_subcategories, deprecated_legacy) == (13, 67, 51)
+            assert (active_rules, legacy_active) == (82, 0)
+
 
 class TestInfrastructureTables:
     def test_outbox_holds_exactly_the_taxonomy_seed_events(self, engine) -> None:
@@ -201,9 +228,9 @@ class TestInfrastructureTables:
         with engine.connect() as conn:
             rows = conn.execute(text("SELECT event_type, COUNT(*) FROM outbox_events GROUP BY event_type")).fetchall()
             counts = dict(rows)
-            assert counts == {"category.created": 10, "subcategory.created": 41}
+            assert counts == {"category.created": 23, "subcategory.created": 108}
             pending = conn.execute(text("SELECT COUNT(*) FROM outbox_events WHERE status = 'pending'")).scalar()
-            assert pending == 51
+            assert pending == 131
 
     def test_processed_events_is_empty(self, engine) -> None:
         with engine.connect() as conn:
@@ -259,3 +286,39 @@ class TestUserRulesUniqueIndex:
             finally:
                 conn.execute(text("DELETE FROM categorization_rules WHERE pattern_value = 'uq-test-pattern'"))
                 conn.commit()
+
+
+class TestTaxonomyRepair:
+    def test_same_run_id_is_idempotent(self, engine) -> None:
+        from app.tools.repair_taxonomy import enqueue_repair
+
+        async def run_twice() -> tuple[int, int]:
+            return (
+                await enqueue_repair("migration-test-repair"),
+                await enqueue_repair("migration-test-repair"),
+            )
+
+        first, second = asyncio.run(run_twice())
+        assert (first, second) == (80, 0)
+        with engine.connect() as conn:
+            count = conn.execute(
+                text("SELECT COUNT(*) FROM outbox_events WHERE payload_json::jsonb ->> 'event_version' = '3'")
+            ).scalar()
+            assert count == 160
+
+    def test_forward_repair_roundtrip_restores_target_state(self, engine) -> None:
+        config = Config("alembic.ini")
+        config.set_main_option("sqlalchemy.url", engine.url.render_as_string(hide_password=False))
+        command.downgrade(config, "007")
+        command.upgrade(config, "head")
+
+        with engine.connect() as conn:
+            counts = conn.execute(
+                text(
+                    "SELECT "
+                    "(SELECT COUNT(*) FROM categories WHERE semantic_key IS NOT NULL), "
+                    "(SELECT COUNT(*) FROM subcategories WHERE semantic_key IS NOT NULL), "
+                    "(SELECT COUNT(*) FROM categorization_rules WHERE rule_key IS NOT NULL)"
+                )
+            ).one()
+            assert counts == (13, 67, 82)

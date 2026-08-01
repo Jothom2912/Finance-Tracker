@@ -22,8 +22,14 @@ class CategoryModel(Base):
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(45), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(45), nullable=False, index=True)
     type: Mapped[str] = mapped_column(String(20), nullable=False)
+    public_id: Mapped[str | None] = mapped_column(String(36), nullable=True, unique=True)
+    semantic_key: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
+    taxonomy_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lifecycle: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    deprecated_in_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    replaced_by_public_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now())
 
@@ -43,6 +49,14 @@ class SubCategoryModel(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     category_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    public_id: Mapped[str | None] = mapped_column(String(36), nullable=True, unique=True)
+    semantic_key: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
+    parent_public_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    is_fallback: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    taxonomy_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lifecycle: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    deprecated_in_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    replaced_by_public_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

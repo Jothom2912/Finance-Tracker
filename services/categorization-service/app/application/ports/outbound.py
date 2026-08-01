@@ -173,7 +173,16 @@ class IUnitOfWork(ABC):
 class IRuleEngine(Protocol):
     """Tier 1: deterministic keyword/rule matching."""
 
-    def match(self, description: str, amount: float) -> CategorizationResult | None: ...
+    def match(
+        self,
+        description: str,
+        amount: float,
+        *,
+        merchant: str | None = None,
+        counterparty: str | None = None,
+        provider: str | None = None,
+        country: str | None = None,
+    ) -> CategorizationResult | None: ...
 
 
 class IMlCategorizer(Protocol):

@@ -119,6 +119,13 @@ class ITaxonomyProjectionStore(ABC):
         display_order: int,
         is_deleted: bool,
         event_ts: int,
+        public_id: str | None = None,
+        semantic_key: str | None = None,
+        taxonomy_version: int | None = None,
+        lifecycle: str | None = None,
+        deprecated_in_version: int | None = None,
+        replaced_by_public_id: str | None = None,
+        description: str | None = None,
     ) -> bool:
         """Returnerer True hvis upserten blev anvendt (ikke stale/noop) —
         rename-propagering må kun ske for anvendte opdateringer."""
@@ -133,6 +140,15 @@ class ITaxonomyProjectionStore(ABC):
         is_default: bool,
         is_deleted: bool,
         event_ts: int,
+        public_id: str | None = None,
+        semantic_key: str | None = None,
+        parent_public_id: str | None = None,
+        taxonomy_version: int | None = None,
+        lifecycle: str | None = None,
+        deprecated_in_version: int | None = None,
+        replaced_by_public_id: str | None = None,
+        is_fallback: bool | None = None,
+        description: str | None = None,
     ) -> bool:
         pass
 

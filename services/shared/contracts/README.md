@@ -75,9 +75,9 @@ budget_event = BudgetMonthClosedEvent(
 
 | Event | Routing Key | Fields |
 |-------|-------------|--------|
-| `CategoryCreatedEvent` | `category.created` | `category_id`, `name`, `category_type` |
-| `CategoryUpdatedEvent` | `category.updated` | `category_id`, `name`, `category_type`, `previous_name`, `previous_type` |
-| `CategoryDeletedEvent` | `category.deleted` | `category_id`, `name`, `category_type` |
+| `CategoryCreatedEvent` | `category.created` | v3 adds `public_id`, `semantic_key`, `taxonomy_version`, lifecycle and definition fields; v1/v2 remain readable |
+| `CategoryUpdatedEvent` | `category.updated` | v3 full state with canonical identity; v1/v2 remain readable |
+| `CategoryDeletedEvent` | `category.deleted` | v3 full final state with canonical identity; v1/v2 remain readable |
 
 ### Budget Events (`contracts.events.budget`)
 

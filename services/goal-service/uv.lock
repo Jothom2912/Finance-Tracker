@@ -445,7 +445,7 @@ dev = [
 
 [[package]]
 name = "finans-tracker-contracts"
-version = "0.1.0"
+version = "0.2.0"
 source = { directory = "../shared/contracts" }
 dependencies = [
     { name = "pydantic" },

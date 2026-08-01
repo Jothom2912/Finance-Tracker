@@ -18,6 +18,10 @@ class CategorizeRequestDTO(BaseModel):
     transaction_id: int | None = None
     description: str
     amount: float
+    merchant: str | None = Field(default=None, max_length=200)
+    counterparty: str | None = Field(default=None, max_length=200)
+    provider: str | None = Field(default=None, max_length=50)
+    country: str | None = Field(default=None, min_length=2, max_length=2)
 
 
 class CategorizeResponseDTO(BaseModel):

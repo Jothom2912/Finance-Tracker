@@ -9,6 +9,9 @@ No active implementation plan.
 
 ## Recently shipped
 
+- **TAX-06** — additive 13/67 UUIDv7 taxonomy, 82 constrained rules, backward-compatible v3
+  events and idempotent transaction/analytics read-copy repair; legacy assignments remain for
+  TAX-07. [Plan + Outcome](plans/2026-08-01-tax06-additive-taxonomy-migration.md#outcome-fill-in-when-done).
 - **TAX-04–05** — separated inactive seed manifests plus an executable 130-rule audit yielding
   82 provenance-bearing constrained rules; legacy migrations and runtime behavior remain pinned.
   [Plan + Outcome](plans/2026-08-01-tax04-tax05-seed-model-and-audit.md#outcome-fill-in-when-done).
@@ -46,8 +49,8 @@ No active implementation plan.
 
 ## Next candidates
 
-- **TAX-06** — additive taxonomy migration and full-state event repair after TAX-04/05 approval
-  and completion.
+- **TAX-07** — dry-run existing-data reclassification after TAX-06; preserve manual decisions
+  and require separate approval before any bulk write.
 
 ## Blockers
 
