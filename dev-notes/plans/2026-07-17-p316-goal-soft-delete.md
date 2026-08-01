@@ -2,7 +2,7 @@
 title: P3-16 — Goal soft-delete (fix FK 500 on delete with allocation history)
 date: 2026-07-17
 status: done
-backlog-items: [P3-16]
+backlog: [P3-16]
 related:
   - ../findings/2026-07-17-goal-delete-fk-500.md
   - ../plans/2026-07-17-f104-goal-allocation-completion.md

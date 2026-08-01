@@ -2,7 +2,7 @@
 title: Feature roadmap — sequencing & build sketches
 date: 2026-07-07
 status: open
-backlog-items: [F1-01..F3-06]
+backlog: [F1-01..F3-06]
 related: [../backlog/FEATURES.md, ../backlog/BACKLOG.md, 2026-07-07-refactoring-roadmap.md]
 ---
 

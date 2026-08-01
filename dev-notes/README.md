@@ -6,20 +6,20 @@ session notes. It is an Obsidian vault, but every file is plain Markdown and mus
 readable without Obsidian.
 
 Both humans and AI agents read and write here. Agents: follow the `dev-notes` skill
-(`.claude/skills/dev-notes/`) for the rules on reading and updating this vault.
+(`.agents/skills/dev-notes/`) for bounded retrieval and maintenance rules.
 
 ## Structure
 
 | Folder | Contents | When to write here |
 |--------|----------|--------------------|
-| `STATUS.md` | Where the work stands: active plan, next up, open findings, standing traps | When the active plan changes, an item finishes, or a session ends |
+| `STATUS.md` | Bounded current state: active/recent work, next candidates, blockers, standing traps | When the active plan changes, an item finishes, or a blocker changes |
 | `architecture/` | System overview, per-service breakdowns, data flows (events are documented in the publishing service, not centrally) | When the architecture *changes* or understanding deepens |
 | `patterns/` | One file per recurring pattern: what, why, canonical implementation, gotchas | When a pattern is introduced, changes shape, or its gotchas grow |
 | `findings/` | Audit findings: problems, risks, tech debt (severity-tagged) | After any audit/review; mark items `resolved` when fixed |
 | `plans/` | Implementation plans for features/refactors (one file per plan) | Before starting non-trivial work |
 | `backlog/` | Prioritized backlog (`BACKLOG.md`) | When work is identified but not scheduled |
 | `decisions/` | Decision log (lightweight ADRs) | When an architectural/implementation decision is made |
-| `sessions/` | Session logs: what was done, what surprised us, open ends | End of significant working sessions |
+| `sessions/` | Resumable state, cross-item discoveries and open ends not owned by a plan Outcome | Only when meaningful context would otherwise be lost between sessions |
 | `templates/` | Templates for all the above | — |
 
 ## Conventions
@@ -30,9 +30,10 @@ Both humans and AI agents read and write here. Agents: follow the `dev-notes` sk
   `open | in-progress | done | resolved | superseded | wont-do`.
 - **Never delete** a finding/decision — mark it `resolved`/`superseded` with a pointer to
   what replaced it. History is the point.
-- **Update the index**: `00-INDEX.md` lists every document with a one-clause hook — enough
-  to decide whether to open it, no more. Session logs are indexed in
-  `sessions/00-SESSIONS.md` instead. `make notes-check` fails on a file that is in neither.
+- **Keep entry documents bounded**: `STATUS.md` is at most 100 lines / 1,200 words.
+  `00-INDEX.md` lists every document with a one-line routing hook of at most 240 characters.
+  Session logs are indexed in `sessions/00-SESSIONS.md`. `make notes-check` enforces these
+  retrieval budgets and fails on a file missing from its index.
 - **Retrieval is by ID**: backlog/feature IDs are this vault's primary key. Put the ID in
   `backlog:` frontmatter so `grep -rn P1-15 dev-notes/` returns the whole story — finding,
   item, plan, decision, session.
@@ -52,6 +53,9 @@ Both humans and AI agents read and write here. Agents: follow the `dev-notes` sk
   because it makes every other rule here look optional.)
 - **Cross-link** liberally: `[text](relative/path.md)` — keeps the graph navigable in
   Obsidian and in plain editors.
+- **One shipping narrative**: the plan's `Outcome` owns commits, measurements and deviations.
+  A session log is for resumable state, cross-item discoveries or open ends; do not repeat the
+  Outcome there or in backlog/index rows.
 
 ## Start here
 

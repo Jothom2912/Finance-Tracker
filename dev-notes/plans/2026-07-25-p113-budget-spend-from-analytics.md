@@ -2,7 +2,7 @@
 title: P1-13 — budget-service reads spend from analytics instead of 50 truncated rows
 date: 2026-07-25
 status: done
-backlog-items: [P1-13]
+backlog: [P1-13]
 related:
   - ../findings/2026-07-25-budget-spend-truncated-at-50.md
   - ../../docs/adr/0004-analytics-elasticsearch-read-store.md

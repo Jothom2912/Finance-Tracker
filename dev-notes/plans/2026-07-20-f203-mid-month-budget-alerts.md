@@ -2,7 +2,7 @@
 title: F2-03 — Mid-month budget alerts
 date: 2026-07-20
 status: done            # open | in-progress | done | superseded
-backlog-items: [F2-03]
+backlog: [F2-03]
 related:
   - plans/2026-07-20-f101-notification-service-mvp.md
   - decisions/2026-07-17-scheduler-pattern-worker-loop.md

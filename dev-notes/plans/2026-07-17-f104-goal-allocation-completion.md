@@ -2,7 +2,7 @@
 title: F1-04 — complete the goal-allocation flow (ADR-0003): surplus → goal, end-to-end incl. UI
 date: 2026-07-17
 status: done
-backlog-items: [F1-04]
+backlog: [F1-04]
 related:
   - ../backlog/FEATURES.md
   - ../../docs/adr/0003-goal-allocation-from-budget-surplus.md

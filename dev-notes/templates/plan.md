@@ -2,7 +2,7 @@
 title: <Plan title>
 date: YYYY-MM-DD
 status: open            # open | in-progress | done | superseded
-backlog-items: []       # e.g. [P1-03, P2-01]
+backlog: []             # e.g. [P1-03, P2-01]
 related: []             # links to findings/decisions/other plans
 ---
 

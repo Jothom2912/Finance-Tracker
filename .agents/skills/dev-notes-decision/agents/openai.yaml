@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dev Notes Decision"
+  short_description: "Record durable engineering decisions"
+  default_prompt: "Use $dev-notes-decision to record this choice and its trade-offs."

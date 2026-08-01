@@ -2,7 +2,7 @@
 title: P2-22 — inbox guard på saga-command consumers + loose ends fra notification-hardening
 date: 2026-07-25
 status: done
-backlog-items: [P2-22, P3-09]
+backlog: [P2-22, P3-09]
 related:
   - plans/2026-07-25-notification-service-hardening.md
   - patterns/idempotent-consumers.md

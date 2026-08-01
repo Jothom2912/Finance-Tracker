@@ -2,7 +2,7 @@
 title: F1-05 — Scheduled/automatic bank sync (nightly per active connection)
 date: 2026-07-17
 status: done
-backlog-items: [F1-05]
+backlog: [F1-05]
 related:
   - ../decisions/2026-07-17-scheduler-pattern-worker-loop.md
   - ../plans/2026-07-17-p314-serialize-bank-sync-sagas.md

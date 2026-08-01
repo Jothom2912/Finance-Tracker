@@ -2,7 +2,7 @@
 title: P3-40 — workers share their API service's image instead of building their own
 date: 2026-07-27
 status: done
-backlog-items: [P3-40]
+backlog: [P3-40]
 related:
   - ../findings/2026-07-25-per-worker-image-staleness.md
   - ../findings/2026-07-25-worker-migration-ordering.md

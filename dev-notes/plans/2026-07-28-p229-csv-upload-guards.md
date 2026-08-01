@@ -2,7 +2,7 @@
 title: "P2-29: størrelses-, MIME- og rækkegrænser på CSV-upload"
 date: 2026-07-28
 status: done
-backlog-items: [P2-29]
+backlog: [P2-29]
 related:
   - ../findings/2026-07-26-product-surface-sweep.md
   - ../backlog/FEATURES.md

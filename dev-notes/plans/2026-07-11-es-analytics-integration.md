@@ -2,7 +2,7 @@
 title: Integrate phase-1-fixes with master's Elasticsearch analytics read-side
 date: 2026-07-11
 status: done
-backlog-items: [P2-04, AI-03, AI-06, AI-11, AI-18, AI-19, AI-20, AI-21, ML-02, ML-13, ML-15]
+backlog: [P2-04, AI-03, AI-06, AI-11, AI-18, AI-19, AI-20, AI-21, ML-02, ML-13, ML-15]
 related:
   - ../sessions/2026-07-07-phase1-p1-fixes.md
   - ../sessions/2026-07-07-phase2-in-flight.md

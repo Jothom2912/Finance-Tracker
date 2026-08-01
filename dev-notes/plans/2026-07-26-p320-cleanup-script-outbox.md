@@ -2,7 +2,7 @@
 title: P3-20 — cleanup-scriptet skriver outbox-row i samme transaktion
 date: 2026-07-26
 status: done
-backlog-items: [P3-20, P3-21]
+backlog: [P3-20, P3-21]
 related:
   - findings/2026-07-25-cleanup-script-desyncs-read-model.md
   - patterns/transactional-outbox.md

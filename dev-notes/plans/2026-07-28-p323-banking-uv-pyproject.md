@@ -2,7 +2,7 @@
 title: "P3-23: banking-service på uv + pyproject — lockfile, dev-split og typecheck-gate"
 date: 2026-07-28
 status: done
-backlog-items: [P3-23]
+backlog: [P3-23]
 related:
   - plans/2026-07-28-p237-budget-single-install-path.md
   - plans/2026-07-27-p231-static-typecheck-gate.md

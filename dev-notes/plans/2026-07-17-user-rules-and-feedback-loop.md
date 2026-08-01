@@ -2,7 +2,7 @@
 title: F1-02 + F1-03 — user categorization rules (CRUD + UI) and the correction feedback loop
 date: 2026-07-17
 status: done
-backlog-items: [F1-02, F1-03]
+backlog: [F1-02, F1-03]
 related:
   - ../backlog/FEATURES.md
   - ../plans/2026-07-07-feature-roadmap.md

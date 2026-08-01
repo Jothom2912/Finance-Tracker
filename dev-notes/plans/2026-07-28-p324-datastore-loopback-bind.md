@@ -2,7 +2,7 @@
 title: P3-24 (billig halvdel) — datastores skal ikke være LAN-nåelige
 date: 2026-07-28
 status: done
-backlog-items: [P3-24]
+backlog: [P3-24]
 related:
   - ../findings/2026-07-26-product-surface-sweep.md
 ---

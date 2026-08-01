@@ -2,7 +2,7 @@
 title: P2-38 + P2-42 — CI's manglende signal: jobtimeouts, ES-fixturens wait-timeout, døde workers og bankings 500→503
 date: 2026-07-29
 status: done
-backlog-items: [P2-38, P2-42]
+backlog: [P2-38, P2-42]
 related:
   - ../findings/2026-07-28-ci-job-can-hang-undetected.md
   - ../findings/2026-07-28-banking-service-dead-in-ci.md

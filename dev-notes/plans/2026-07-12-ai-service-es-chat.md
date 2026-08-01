@@ -2,7 +2,7 @@
 title: AI-service on the ES read-store — structured intents, hybrid search, slot filters, cleanup
 date: 2026-07-12
 status: open
-backlog-items: [AI-01, AI-02, AI-03, AI-04, AI-05, AI-16, AI-19, AI-20, AI-21, P3-04, P3-07, F2-04]
+backlog: [AI-01, AI-02, AI-03, AI-04, AI-05, AI-16, AI-19, AI-20, AI-21, P3-04, P3-07, F2-04]
 related:
   - 2026-07-11-es-analytics-integration.md
   - ../backlog/AI-IMPROVEMENTS.md

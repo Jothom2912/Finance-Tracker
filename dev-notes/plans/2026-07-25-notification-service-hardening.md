@@ -2,7 +2,7 @@
 title: notification-service hardening — CI, sync-trigger, polish
 date: 2026-07-25
 status: done            # open | in-progress | done | superseded
-backlog-items: [P2-21, P3-17, P3-18]
+backlog: [P2-21, P3-17, P3-18]
 related:
   - plans/2026-07-20-f101-notification-service-mvp.md
   - plans/2026-07-20-f203-mid-month-budget-alerts.md

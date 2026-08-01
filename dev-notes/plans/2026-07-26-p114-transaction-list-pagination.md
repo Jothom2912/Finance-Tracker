@@ -2,7 +2,7 @@
 title: P1-14 — the transactions page pages the whole period, with an honest total
 date: 2026-07-26
 status: done
-backlog-items: [P1-14]
+backlog: [P1-14]
 related:
   - ../findings/2026-07-26-transaction-list-truncated-at-50.md
   - ../decisions/2026-07-26-transaction-list-envelope.md

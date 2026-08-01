@@ -2,7 +2,7 @@
 title: P3-25 + P2-27 — security headers og limit_req-zone i perimeteren
 date: 2026-07-28
 status: done
-backlog-items: [P3-25, P2-27, P1-16]
+backlog: [P3-25, P2-27, P1-16]
 related:
   - ../../docs/adr/0005-nginx-as-security-perimeter.md
   - ../plans/2026-07-28-p343-nginx-perimeter.md

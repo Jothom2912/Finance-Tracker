@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dev Notes Plan"
+  short_description: "Plan and close repository work"
+  default_prompt: "Use $dev-notes-plan to create a scoped implementation plan for this work."

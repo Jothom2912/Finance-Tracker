@@ -2,7 +2,7 @@
 title: F2-08 — Profil & indstillinger: den første skrive-sti til en eksisterende bruger
 date: 2026-07-29
 status: done
-backlog-items: [F2-08]
+backlog: [F2-08]
 related:
   - ../findings/2026-07-26-product-surface-sweep.md
   - ../backlog/FEATURES.md

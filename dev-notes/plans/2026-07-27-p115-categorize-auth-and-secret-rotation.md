@@ -2,7 +2,7 @@
 title: "P1-15 + P2-26: lås /api/v1/categorize, rotér den delte HS256-nøgle, slå require_exp til"
 date: 2026-07-27
 status: done            # open | in-progress | done | superseded
-backlog-items: [P1-15, P2-26]
+backlog: [P1-15, P2-26]
 related:
   - findings/2026-07-26-categorize-endpoint-unauthenticated.md
   - findings/2026-07-26-product-surface-sweep.md

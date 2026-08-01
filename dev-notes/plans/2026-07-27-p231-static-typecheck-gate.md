@@ -2,7 +2,7 @@
 title: P2-31 — statisk typecheck som gate, med analytics-service som pilot
 date: 2026-07-27
 status: done
-backlog-items: [P2-31]
+backlog: [P2-31]
 related:
   - ../findings/2026-07-27-sync-trigger-double-value.md
   - ../findings/2026-07-25-per-worker-image-staleness.md

@@ -2,7 +2,7 @@
 title: P3-57 — logging-konfiguration i de 12 API-processer (shared/observability)
 date: 2026-07-31
 status: done
-backlog-items: [P3-57, P3-58]
+backlog: [P3-57, P3-58]
 commits: [772a891d, 4d2db80c, 31c15ca6, 3cf32022]
 related:
   - ../findings/2026-07-31-account-service-log-silenced-by-alembic.md

@@ -2,7 +2,7 @@
 title: P2-42b — et probe der kan se en brudt afhængighed (banking), + P3-49 bandit-flag-mismatch
 date: 2026-07-29
 status: done
-backlog-items: [P2-42, P3-49]
+backlog: [P2-42, P3-49]
 related:
   - ../findings/2026-07-28-banking-service-dead-in-ci.md
   - ../plans/2026-07-29-p238-p242-ci-missing-signal.md

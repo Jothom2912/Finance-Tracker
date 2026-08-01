@@ -2,7 +2,7 @@
 title: "P2-25: transaction soft-delete + gone-vs-not-yet i categorization-write-backen"
 date: 2026-07-28
 status: done
-backlog-items: [P2-25, P3-37]
+backlog: [P2-25, P3-37]
 related:
   - ../findings/2026-07-25-transaction-hard-delete-categorized-dlq.md
   - ../findings/2026-07-25-cleanup-script-desyncs-read-model.md

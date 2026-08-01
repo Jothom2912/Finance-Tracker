@@ -2,7 +2,7 @@
 title: P2-39 — browser-automatisering som ejet instrument (@playwright/test, to tests)
 date: 2026-07-28
 status: done
-backlog-items: [P2-39]
+backlog: [P2-39]
 related:
   - ../decisions/2026-07-28-browser-automation-instrument.md
   - ../findings/2026-07-28-graphql-client-rejects-relative-url.md

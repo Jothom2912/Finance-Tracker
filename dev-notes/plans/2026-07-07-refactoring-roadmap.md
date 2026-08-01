@@ -2,7 +2,7 @@
 title: Refactoring roadmap — production-grade without functional change
 date: 2026-07-07
 status: open
-backlog-items: [P1-01..P1-12, P2-01..P2-20]
+backlog: [P1-01..P1-12, P2-01..P2-20]
 related: [../findings/2026-07-07-architecture-audit.md]
 ---
 

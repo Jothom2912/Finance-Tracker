@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dev Notes"
+  short_description: "Retrieve and maintain repository knowledge"
+  default_prompt: "Use $dev-notes to retrieve the relevant repository context before working."

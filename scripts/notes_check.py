@@ -24,6 +24,10 @@ What it checks:
 4. **Empty files** — a tracked 0-byte note is never intentional.
 5. **Resolved-without-a-pointer** — a finding marked `resolved` must say what
    resolved it, since the whole point of keeping it is the trail.
+6. **Retrieval budgets** — STATUS and index hooks stay bounded, so the files
+   every agent reads first cannot become release-history archives again.
+7. **Canonical metadata and skills** — plans use `backlog:` and Claude
+   compatibility entries resolve to the canonical `.agents/skills` folders.
 
 Usage::
 
@@ -78,6 +82,10 @@ FRONTMATTER = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
 # documents the link convention as `[text](relative/path.md)`, which is prose
 # about links, not a link.
 CODE = re.compile(r"```.*?```|`[^`]*`", re.DOTALL)
+STATUS_MAX_LINES = 100
+STATUS_MAX_WORDS = 1_200
+INDEX_HOOK_MAX_CHARS = 240
+REPO_SKILLS = ("dev-notes", "dev-notes-plan", "dev-notes-decision")
 
 
 def notes_files() -> list[Path]:
@@ -157,6 +165,12 @@ def check_frontmatter(files: list[Path], problems: list[str]) -> None:
             if field not in fields:
                 problems.append(f"{rel}: frontmatter missing '{field}'")
 
+        if top == "plans":
+            if "backlog-items" in fields:
+                problems.append(f"{rel}: use canonical 'backlog:' instead of 'backlog-items:'")
+            if "backlog" not in fields:
+                problems.append(f"{rel}: frontmatter missing 'backlog'")
+
         status = fields.get("status", "").split("#")[0].strip()
         if status and status not in VALID_STATUS:
             problems.append(f"{rel}: unknown status '{status}'")
@@ -182,6 +196,62 @@ def check_empty(files: list[Path], problems: list[str]) -> None:
             problems.append(f"{path.relative_to(NOTES).as_posix()}: empty file")
 
 
+def check_retrieval_budgets(problems: list[str]) -> None:
+    status = NOTES / "STATUS.md"
+    status_text = status.read_text(encoding="utf-8")
+    line_count = len(status_text.splitlines())
+    word_count = len(status_text.split())
+    if line_count > STATUS_MAX_LINES:
+        problems.append(
+            f"STATUS.md: {line_count} lines exceeds {STATUS_MAX_LINES}; move history to plan Outcome/session owners"
+        )
+    if word_count > STATUS_MAX_WORDS:
+        problems.append(f"STATUS.md: {word_count} words exceeds {STATUS_MAX_WORDS}; keep only current routing context")
+
+    index = NOTES / DEFAULT_INDEX
+    lines = index.read_text(encoding="utf-8").splitlines()
+    previous_was_hook = False
+    for number, line in enumerate(lines, start=1):
+        is_hook = line.startswith("- [")
+        if is_hook and len(line) > INDEX_HOOK_MAX_CHARS:
+            problems.append(f"00-INDEX.md:{number}: hook is {len(line)} characters; limit is {INDEX_HOOK_MAX_CHARS}")
+        if previous_was_hook and line.startswith((" ", "\t")):
+            problems.append(
+                f"00-INDEX.md:{number}: continuation makes the previous hook multiline; keep one physical line"
+            )
+        previous_was_hook = is_hook
+
+    backlog_lines = (NOTES / "backlog" / "BACKLOG.md").read_text(encoding="utf-8").splitlines()
+    previous_was_row = False
+    for number, line in enumerate(backlog_lines, start=1):
+        is_row = bool(re.match(r"^\| (?:P[123]|F[123]|AI|ML)-\d+", line))
+        if is_row and line.count("|") < 6:
+            problems.append(
+                f"backlog/BACKLOG.md:{number}: malformed work-item row; keep every field on one physical table line"
+            )
+        if previous_was_row and line.startswith((" ", "\t")):
+            problems.append(
+                f"backlog/BACKLOG.md:{number}: work-item row continues on another line; move detail below Item details"
+            )
+        previous_was_row = is_row
+
+
+def check_skill_canonicalization(problems: list[str]) -> None:
+    canonical_root = REPO_ROOT / ".agents" / "skills"
+    compatibility_root = REPO_ROOT / ".claude" / "skills"
+    for name in REPO_SKILLS:
+        canonical = canonical_root / name / "SKILL.md"
+        compatibility = compatibility_root / name / "SKILL.md"
+        if not canonical.is_file():
+            problems.append(f".agents/skills/{name}/SKILL.md: canonical skill missing")
+            continue
+        if not compatibility.is_file():
+            problems.append(f".claude/skills/{name}: Claude compatibility link/file missing")
+            continue
+        if canonical.read_bytes() != compatibility.read_bytes():
+            problems.append(f".claude/skills/{name}: stale duplicate; point it at .agents/skills/{name}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--quiet", action="store_true", help="only print problems")
@@ -197,6 +267,8 @@ def main() -> int:
     check_index_coverage(files, problems)
     check_links(files, problems)
     check_frontmatter(files, problems)
+    check_retrieval_budgets(problems)
+    check_skill_canonicalization(problems)
 
     if problems:
         print(f"notes-check: {len(problems)} problem(s) in dev-notes/\n", file=sys.stderr)

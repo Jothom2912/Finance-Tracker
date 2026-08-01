@@ -2,7 +2,7 @@
 title: "P2-37: én install-sti per service — budget-service på uv sync --frozen"
 date: 2026-07-28
 status: done
-backlog-items: [P2-37]
+backlog: [P2-37]
 related:
   - findings/2026-07-27-none-annotation-204-fastapi-split.md
   - plans/2026-07-27-p231-static-typecheck-gate.md

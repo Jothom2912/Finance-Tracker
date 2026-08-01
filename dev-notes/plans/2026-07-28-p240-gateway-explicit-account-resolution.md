@@ -2,7 +2,7 @@
 title: P2-40 — gateway'ens accounts[0]-fallback: vælg eksplicit eller fejl ærligt
 date: 2026-07-28
 status: done
-backlog-items: [P2-40]
+backlog: [P2-40]
 related:
   - ../findings/2026-07-28-gateway-falls-back-to-first-account.md
   - ../findings/2026-07-27-gateway-default-account-307.md

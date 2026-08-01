@@ -2,7 +2,7 @@
 title: P2-28 — taksonomi-mutationer internal-only
 date: 2026-07-29
 status: done
-backlog-items: [P2-28]
+backlog: [P2-28]
 related:
   - ../decisions/2026-07-29-taxonomy-authorization.md
   - ../findings/2026-07-26-product-surface-sweep.md

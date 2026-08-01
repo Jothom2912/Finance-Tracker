@@ -2,7 +2,7 @@
 title: F1-07 — Scheduled day-7 month-close (ADR-0003's original v1 trigger)
 date: 2026-07-17
 status: done
-backlog-items: [F1-07]
+backlog: [F1-07]
 related:
   - ../decisions/2026-07-17-scheduler-pattern-worker-loop.md
   - ../decisions/2026-07-17-manual-month-close-button.md

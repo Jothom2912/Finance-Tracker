@@ -2,7 +2,7 @@
 title: P3-43 — nginx som perimeter, i drift
 date: 2026-07-28
 status: done
-backlog-items: [P3-43]
+backlog: [P3-43]
 related:
   - ../../docs/adr/0005-nginx-as-security-perimeter.md
   - ../decisions/2026-07-28-nginx-as-perimeter.md

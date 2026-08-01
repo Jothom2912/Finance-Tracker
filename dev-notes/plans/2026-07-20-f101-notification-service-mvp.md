@@ -2,7 +2,7 @@
 title: "F1-01: Notification service MVP — in-app feed for auto-events"
 date: 2026-07-20
 status: done            # open | in-progress | done | superseded
-backlog-items: [F1-01]
+backlog: [F1-01]
 related:
   - ../backlog/FEATURES.md
   - ../sessions/2026-07-17-f105-scheduled-sync.md   # deferred reconsent/auto-sync notifications here

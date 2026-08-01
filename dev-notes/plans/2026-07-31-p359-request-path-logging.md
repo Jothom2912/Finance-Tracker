@@ -2,7 +2,7 @@
 title: P3-59 — de fem tavse services får et spor, valgt efter én admissionsregel
 date: 2026-07-31
 status: done
-backlog-items: [P3-59]
+backlog: [P3-59]
 related:
   - plans/2026-07-31-p357-api-logging-config.md
   - findings/2026-07-31-account-service-log-silenced-by-alembic.md

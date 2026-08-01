@@ -2,7 +2,7 @@
 title: P3-14 — Serialize bank-sync sagas per connection (in-flight claim)
 date: 2026-07-17
 status: done
-backlog-items: [P3-14]
+backlog: [P3-14]
 related:
   - ../patterns/saga-orchestration.md
   - ../decisions/2026-07-16-p209-dedup-semantics.md
