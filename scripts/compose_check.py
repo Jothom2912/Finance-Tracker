@@ -9,7 +9,9 @@ different files, and it is why this is a script rather than a review convention.
 build hygiene. Rule 4 reads ``services/*/`` on disk, not compose.)
 
 Rules 1-3 come from P3-40 (per-worker image staleness), rule 4 from P2-37
-(two install paths in one service), rule 6 from P2-21 (Compose/Kustomize drift).
+(two install paths in one service), rule 6 from P2-21 (Compose/Kustomize drift),
+rule 7 from P3-17 (migration ordering), and rule 8 from P3-28 (build-context
+and package-cache hygiene).
 
 Why rule 4 exists: budget-service's image ran ``pip install -r
 requirements.txt`` (FastAPI 0.115.0) while its tests and its mypy gate read
@@ -68,6 +70,11 @@ What it checks:
    have a resource reachable from ``k8s/kustomization.yaml``. Name aliases are
    explicit and migration one-shots are excluded because they are deployment
    phases, not long-running workloads.
+7. **Migration ordering** — every DB-backed API and worker waits for its one-shot
+   migration owner to complete successfully.
+8. **Lean build inputs and layers** — the shared root build context excludes Git,
+   local environments, host dependencies and common credential files, while every
+   Dockerfile that runs ``uv sync`` disables uv's download cache.
 
    Same shared symptom as rules 1-4, in a sharper form: three of the four
    failure modes were *measured* answering 200 during P3-43. A missing proxy
@@ -96,6 +103,7 @@ COMPOSE = REPO_ROOT / "docker-compose.yml"
 SERVICES = REPO_ROOT / "services"
 NGINX_CONF = SERVICES / "frontend" / "nginx.conf"
 KUSTOMIZATION = REPO_ROOT / "k8s" / "kustomization.yaml"
+DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 
 # This one root resource is deliberately gitignored; k8s-up.sh fails closed
 # with instructions to create it from the tracked example. A fresh CI checkout
@@ -133,6 +141,19 @@ MIGRATION_OWNERS = {
     "banking-service": "banking-migration",
     "saga-service": "saga-migration",
     "notification-service": "notification-migration",
+}
+
+# Each tuple is an OR-group. Dockerignore supports several equivalent spellings;
+# the repository chooses explicit recursive patterns for directory-local state and
+# root + recursive patterns for credentials.
+REQUIRED_DOCKERIGNORE_GROUPS = {
+    "Git metadata": (".git",),
+    "local Python environments": ("**/.venv",),
+    "host Node dependencies": ("**/node_modules",),
+    "root environment files": (".env",),
+    "nested environment files": ("**/.env",),
+    "private PEM files": ("*.pem", "**/*.pem"),
+    "private key files": ("*.key", "**/*.key"),
 }
 
 
@@ -636,6 +657,44 @@ def check_migration_ordering(services: list[Service], problems: list[str]) -> in
     return checked
 
 
+def check_build_context_hygiene(dockerignore: Path, services_dir: Path, problems: list[str]) -> tuple[int, int]:
+    """Rule 8: exclude local state and keep uv's download cache out of images."""
+    if not dockerignore.is_file():
+        problems.append(f"{dockerignore}: missing root .dockerignore although Compose builds use `context: .` (P3-28)")
+        patterns: set[str] = set()
+    else:
+        patterns = {
+            line.strip()
+            for line in dockerignore.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+
+    for purpose, alternatives in REQUIRED_DOCKERIGNORE_GROUPS.items():
+        if not any(pattern in patterns for pattern in alternatives):
+            rendered = " or ".join(f"`{pattern}`" for pattern in alternatives)
+            problems.append(f".dockerignore: missing {rendered} for {purpose} (P3-28)")
+
+    if ".env.*" not in patterns or "!.env.example" not in patterns:
+        problems.append(
+            ".dockerignore: require `.env.*` plus `!.env.example` so local environment files "
+            "are excluded without hiding the tracked example (P3-28)"
+        )
+
+    uv_dockerfiles = 0
+    for dockerfile in sorted(services_dir.glob("*/Dockerfile")):
+        text = dockerfile.read_text(encoding="utf-8")
+        if "uv sync" not in text:
+            continue
+        uv_dockerfiles += 1
+        if "UV_NO_CACHE=1" not in text and re.search(r"uv sync[^\n]*--no-cache", text) is None:
+            problems.append(
+                f"{dockerfile}: runs `uv sync` without `UV_NO_CACHE=1` or `--no-cache`; "
+                "the download cache would remain in the runtime layer (P3-28)"
+            )
+
+    return len(patterns), uv_dockerfiles
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--quiet", action="store_true", help="only print problems")
@@ -656,6 +715,7 @@ def main() -> int:
     locations, upstreams = check_nginx_perimeter(services, problems)
     k8s_required, k8s_names = check_k8s_parity(services, KUSTOMIZATION, problems)
     migration_consumers = check_migration_ordering(services, problems)
+    ignore_patterns, uv_dockerfiles = check_build_context_hygiene(DOCKERIGNORE, SERVICES, problems)
 
     if problems:
         print(f"compose-check: {len(problems)} problem(s)\n", file=sys.stderr)
@@ -667,7 +727,8 @@ def main() -> int:
             "dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md (rule 4), "
             "docs/adr/0005-nginx-as-security-perimeter.md (rule 5), "
             "dev-notes/findings/2026-07-25-k8s-manifest-drift.md (rule 6), "
-            "dev-notes/findings/2026-07-25-worker-migration-ordering.md (rule 7).",
+            "dev-notes/findings/2026-07-25-worker-migration-ordering.md (rule 7), "
+            "dev-notes/findings/2026-07-26-product-surface-sweep.md (rule 8).",
             file=sys.stderr,
         )
         return 1
@@ -682,7 +743,9 @@ def main() -> int:
             f"security-header inheritance guarded, "
             f"{len(NOT_BROWSER_FACING)} services explicitly not browser-facing; "
             f"{k8s_required} Compose resources represented among {k8s_names} Kubernetes names. "
-            f"{migration_consumers} DB-backed processes migration-gated. No problems."
+            f"{migration_consumers} DB-backed processes migration-gated; "
+            f"{ignore_patterns} ignore patterns and {uv_dockerfiles} cache-free uv Dockerfiles. "
+            "No problems."
         )
     return 0
 

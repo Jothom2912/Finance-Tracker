@@ -11,6 +11,7 @@ Service = compose_check.Service
 check_k8s_parity = compose_check.check_k8s_parity
 check_migration_ordering = compose_check.check_migration_ordering
 check_location_security_headers = compose_check.check_location_security_headers
+check_build_context_hygiene = compose_check.check_build_context_hygiene
 parse_nginx = compose_check.parse_nginx
 MIGRATION_OWNERS = compose_check.MIGRATION_OWNERS
 
@@ -70,6 +71,63 @@ server {
 """
 
     assert _header_problems(config) == []
+
+
+def test_build_context_hygiene_detects_missing_ignore_pattern(tmp_path: Path) -> None:
+    services = tmp_path / "services"
+    service = services / "example-service"
+    service.mkdir(parents=True)
+    (service / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    dockerignore = tmp_path / ".dockerignore"
+    dockerignore.write_text(
+        ".git\n.env\n.env.*\n!.env.example\n**/.env\n**/node_modules\n*.pem\n*.key\n",
+        encoding="utf-8",
+    )
+    problems: list[str] = []
+
+    _, uv_dockerfiles = check_build_context_hygiene(dockerignore, services, problems)
+
+    assert uv_dockerfiles == 0
+    assert len(problems) == 1
+    assert "**/.venv" in problems[0]
+
+
+def test_build_context_hygiene_detects_uv_cache_retention(tmp_path: Path) -> None:
+    services = tmp_path / "services"
+    service = services / "example-service"
+    service.mkdir(parents=True)
+    (service / "Dockerfile").write_text("FROM python:3.11\nRUN uv sync --frozen\n", encoding="utf-8")
+    dockerignore = tmp_path / ".dockerignore"
+    dockerignore.write_text(
+        ".git\n.env\n.env.*\n!.env.example\n**/.env\n**/.venv\n**/node_modules\n*.pem\n*.key\n",
+        encoding="utf-8",
+    )
+    problems: list[str] = []
+
+    _, uv_dockerfiles = check_build_context_hygiene(dockerignore, services, problems)
+
+    assert uv_dockerfiles == 1
+    assert len(problems) == 1
+    assert "UV_NO_CACHE=1" in problems[0]
+
+
+def test_build_context_hygiene_accepts_guarded_uv_build(tmp_path: Path) -> None:
+    services = tmp_path / "services"
+    service = services / "example-service"
+    service.mkdir(parents=True)
+    (service / "Dockerfile").write_text("FROM python:3.11\nENV UV_NO_CACHE=1\nRUN uv sync --frozen\n", encoding="utf-8")
+    dockerignore = tmp_path / ".dockerignore"
+    dockerignore.write_text(
+        ".git\n.env\n.env.*\n!.env.example\n**/.env\n**/.venv\n**/node_modules\n*.pem\n*.key\n",
+        encoding="utf-8",
+    )
+    problems: list[str] = []
+
+    patterns, uv_dockerfiles = check_build_context_hygiene(dockerignore, services, problems)
+
+    assert patterns == 9
+    assert uv_dockerfiles == 1
+    assert problems == []
 
 
 def test_k8s_parity_detects_missing_workload(tmp_path: Path) -> None:

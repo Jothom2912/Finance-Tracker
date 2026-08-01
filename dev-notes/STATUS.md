@@ -9,6 +9,9 @@ No active implementation plan.
 
 ## Recently shipped
 
+- **P3-28** — guarded root Docker context, cache-free uv images and safe gzip/immutable asset
+  delivery; representative goal image halved from 198.0 to 98.9 MB and live headers passed.
+  [Plan + Outcome](plans/2026-08-01-p328-build-image-hygiene.md#outcome-fill-in-when-done).
 - **P3-47** — `compose-check` now rejects location-local nginx headers that would silently
   shadow the perimeter's four security headers, with positive and negative parser controls.
   [Plan + Outcome](plans/2026-08-01-p347-nginx-header-inheritance-gate.md#outcome-fill-in-when-done).
@@ -34,7 +37,6 @@ No active implementation plan.
 
 ## Next candidates
 
-- **P3-28 after P3-47** — build/image hygiene, gzip and immutable asset caching.
 - **P3-46** — local Docker memory prevents end-to-end chat evidence with `qwen3:8b`.
 
 ## Blockers
