@@ -149,6 +149,13 @@ entire staged script recreated all nine Jobs with new pods, completed against al
 schemas, left every workload unchanged at zero restarts, and preserved the notification row.
 
 Final verification: `make compose-check`, all three `kubectl kustomize` entry points,
-`tests/unit/test_compose_check.py` (3 passed), account-service tests (44 passed), `git diff --check`,
+`tests/unit/test_compose_check.py` (4 passed), account-service tests (44 passed), `git diff --check`,
 and `make notes-check`. Compose containers and volumes remain preserved but stopped; the verified
 Kubernetes namespace remains running.
+
+CI closeout caught one fresh-checkout-only defect after the implementation commit `56999d6f`:
+the parity walker treated the deliberately gitignored `k8s/secrets.yaml` as manifest drift even
+though `k8s-up.sh` creates it from the tracked example. Commit `b1934214` makes only that explicit
+out-of-band resource optional and adds a negative-control test proving another missing manifest
+still fails. GitHub Actions run `30701279300` then completed green across repo-wide lint/parity,
+all service matrices, frontend, and E2E/system cooperation tests.
