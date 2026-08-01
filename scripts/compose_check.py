@@ -9,7 +9,7 @@ different files, and it is why this is a script rather than a review convention.
 build hygiene. Rule 4 reads ``services/*/`` on disk, not compose.)
 
 Rules 1-3 come from P3-40 (per-worker image staleness), rule 4 from P2-37
-(two install paths in one service).
+(two install paths in one service), rule 6 from P2-21 (Compose/Kustomize drift).
 
 Why rule 4 exists: budget-service's image ran ``pip install -r
 requirements.txt`` (FastAPI 0.115.0) while its tests and its mypy gate read
@@ -62,6 +62,10 @@ What it checks:
    no ``INTERNAL_API_KEY``-guarded prefix is published; and every built
    ``finance-tracker-*`` service either has a route or stands on
    ``NOT_BROWSER_FACING`` with a reason.
+6. **Kubernetes workload parity** — every Compose API, worker and datastore must
+   have a resource reachable from ``k8s/kustomization.yaml``. Name aliases are
+   explicit and migration one-shots are excluded because they are deployment
+   phases, not long-running workloads.
 
    Same shared symptom as rules 1-4, in a sharper form: three of the four
    failure modes were *measured* answering 200 during P3-43. A missing proxy
@@ -89,6 +93,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 COMPOSE = REPO_ROOT / "docker-compose.yml"
 SERVICES = REPO_ROOT / "services"
 NGINX_CONF = SERVICES / "frontend" / "nginx.conf"
+KUSTOMIZATION = REPO_ROOT / "k8s" / "kustomization.yaml"
 
 # Tags this repo builds itself, as opposed to `postgres:16` and friends.
 LOCAL_IMAGE_PREFIX = "finance-tracker-"
@@ -97,6 +102,31 @@ TOP_LEVEL_NAME = re.compile(r"^name:\s*(\S+)\s*$")
 SERVICE_NAME = re.compile(r"^  ([A-Za-z0-9._-]+):\s*$")
 SERVICE_KEY = re.compile(r"^    ([A-Za-z0-9._-]+):\s*(.*)$")
 PORT_ENTRY = re.compile(r"^      - (\S+)\s*$")
+DEPENDENCY_NAME = re.compile(r"^      ([A-Za-z0-9._-]+):\s*$")
+DEPENDENCY_CONDITION = re.compile(r"^        condition:\s*([A-Za-z0-9._-]+)\s*$")
+KUSTOMIZE_RESOURCE = re.compile(r"^\s{2}-\s+([^#]+?)\s*$")
+YAML_METADATA_NAME = re.compile(r"^  name:\s*([A-Za-z0-9._-]+)\s*$")
+
+# Compose and Kubernetes use different historical names for these resources.
+K8S_NAME_ALIASES = {
+    "ollama-pull": "ollama-pull-qwen3",
+}
+
+# One-shot migration services are verified by the migration-ordering rule. They
+# intentionally have no long-running Kubernetes workload counterpart.
+K8S_PARITY_EXCLUDED_SUFFIXES = ("-migration",)
+
+MIGRATION_OWNERS = {
+    "user-service": "user-migration",
+    "transaction-service": "transaction-migration",
+    "account-service": "account-migration",
+    "categorization-service": "categorization-migration",
+    "budget-service": "budget-migration",
+    "goal-service": "goal-migration",
+    "banking-service": "banking-migration",
+    "saga-service": "saga-migration",
+    "notification-service": "notification-migration",
+}
 
 
 class Service:
@@ -112,6 +142,7 @@ class Service:
         # Rule 5 compares `proxy_pass` against these, and the distinction is the
         # whole point: account-service publishes 8004 but *listens* on 8003.
         self.container_ports: set[str] = set()
+        self.depends_on: dict[str, str | None] = {}
 
 
 def parse(text: str) -> tuple[str | None, list[Service]]:
@@ -127,6 +158,8 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
     current: Service | None = None
     in_services = False
     in_ports = False
+    in_depends_on = False
+    current_dependency: str | None = None
 
     for number, raw in enumerate(text.splitlines(), start=1):
         line = raw.rstrip()
@@ -140,6 +173,8 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
             in_services = line.startswith("services:")
             current = None
             in_ports = False
+            in_depends_on = False
+            current_dependency = None
             continue
 
         if not in_services:
@@ -150,6 +185,8 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
             current = Service(match.group(1), number)
             services.append(current)
             in_ports = False
+            in_depends_on = False
+            current_dependency = None
             continue
 
         if current is None:
@@ -159,6 +196,8 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
         if match:
             key, value = match.group(1), match.group(2).strip()
             in_ports = key == "ports"
+            in_depends_on = key == "depends_on"
+            current_dependency = None
             if key == "build":
                 current.build = True
             elif key == "command":
@@ -166,6 +205,17 @@ def parse(text: str) -> tuple[str | None, list[Service]]:
             elif key == "image":
                 current.image = value
             continue
+
+        if in_depends_on:
+            match = DEPENDENCY_NAME.match(line)
+            if match:
+                current_dependency = match.group(1)
+                current.depends_on[current_dependency] = None
+                continue
+            match = DEPENDENCY_CONDITION.match(line)
+            if match and current_dependency is not None:
+                current.depends_on[current_dependency] = match.group(1)
+                continue
 
         if in_ports:
             match = PORT_ENTRY.match(line)
@@ -444,6 +494,99 @@ def check_nginx_perimeter(services: list[Service], problems: list[str]) -> tuple
     return len(locations), verified
 
 
+def collect_kustomize_names(kustomization: Path, problems: list[str]) -> set[str]:
+    """Collect top-level ``metadata.name`` values reachable from a Kustomization."""
+    if not kustomization.is_file():
+        problems.append(f"{kustomization}: missing Kustomization entry point (P2-21)")
+        return set()
+
+    names: set[str] = set()
+    in_resources = False
+    for raw in kustomization.read_text(encoding="utf-8").splitlines():
+        if raw and not raw.startswith(" "):
+            in_resources = raw.strip() == "resources:"
+            continue
+        if not in_resources:
+            continue
+        match = KUSTOMIZE_RESOURCE.match(raw)
+        if not match:
+            continue
+        target = (kustomization.parent / match.group(1)).resolve()
+        if target.is_dir():
+            nested = target / "kustomization.yaml"
+            names.update(collect_kustomize_names(nested, problems))
+            continue
+        if target.name == "kustomization.yaml":
+            names.update(collect_kustomize_names(target, problems))
+            continue
+        if not target.is_file():
+            problems.append(f"{kustomization.relative_to(REPO_ROOT)} references missing resource `{match.group(1)}`")
+            continue
+        for line in target.read_text(encoding="utf-8").splitlines():
+            name_match = YAML_METADATA_NAME.match(line)
+            if name_match:
+                names.add(name_match.group(1))
+    return names
+
+
+def check_k8s_parity(services: list[Service], kustomization: Path, problems: list[str]) -> tuple[int, int]:
+    """Rule 6: every deployable Compose workload has a Kustomize resource."""
+    names = collect_kustomize_names(kustomization, problems)
+    required = {
+        K8S_NAME_ALIASES.get(service.name, service.name)
+        for service in services
+        if not service.name.endswith(K8S_PARITY_EXCLUDED_SUFFIXES)
+    }
+    missing = sorted(required - names)
+    for name in missing:
+        compose_name = next(
+            (service.name for service in services if K8S_NAME_ALIASES.get(service.name, service.name) == name),
+            name,
+        )
+        problems.append(
+            f"docker-compose.yml service `{compose_name}` has no resource reachable from "
+            f"k8s/kustomization.yaml (expected metadata.name `{name}`; P2-21)"
+        )
+    return len(required), len(names)
+
+
+def check_migration_ordering(services: list[Service], problems: list[str]) -> int:
+    """Rule 7: DB-backed processes wait for one explicit migration owner."""
+    by_name = {service.name: service for service in services}
+    checked = 0
+    for owner_name, migration_name in MIGRATION_OWNERS.items():
+        owner = by_name.get(owner_name)
+        migration = by_name.get(migration_name)
+        if owner is None or migration is None:
+            problems.append(f"{owner_name}: expected one-shot `{migration_name}` migration service (P3-17)")
+            continue
+        if migration.image != owner.image:
+            problems.append(f"{migration_name}: image `{migration.image}` differs from owner `{owner.image}`")
+        if not migration.command:
+            problems.append(f"{migration_name}: migration service has no command override")
+        if not any(
+            dependency.startswith("postgres") and condition == "service_healthy"
+            for dependency, condition in migration.depends_on.items()
+        ):
+            problems.append(f"{migration_name}: must wait for its Postgres service to become healthy")
+
+        for consumer in services:
+            if consumer.name == migration_name or consumer.image != owner.image:
+                continue
+            checked += 1
+            condition = consumer.depends_on.get(migration_name)
+            if condition != "service_completed_successfully":
+                problems.append(
+                    f"{consumer.name}: uses `{owner.image}` but does not wait for "
+                    f"{migration_name} with `service_completed_successfully` (P3-17)"
+                )
+
+        dockerfile = SERVICES / owner_name / "Dockerfile"
+        if dockerfile.is_file() and "alembic upgrade head" in dockerfile.read_text(encoding="utf-8"):
+            problems.append(f"services/{owner_name}/Dockerfile still runs migrations as an API startup side effect")
+    return checked
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--quiet", action="store_true", help="only print problems")
@@ -462,6 +605,8 @@ def main() -> int:
     check(project, services, problems)
     inspected = check_install_paths(problems)
     locations, upstreams = check_nginx_perimeter(services, problems)
+    k8s_required, k8s_names = check_k8s_parity(services, KUSTOMIZATION, problems)
+    migration_consumers = check_migration_ordering(services, problems)
 
     if problems:
         print(f"compose-check: {len(problems)} problem(s)\n", file=sys.stderr)
@@ -471,7 +616,9 @@ def main() -> int:
             "\nWhy these rules exist: "
             "dev-notes/findings/2026-07-25-per-worker-image-staleness.md (rules 1-3), "
             "dev-notes/findings/2026-07-27-none-annotation-204-fastapi-split.md (rule 4), "
-            "docs/adr/0005-nginx-as-security-perimeter.md (rule 5).",
+            "docs/adr/0005-nginx-as-security-perimeter.md (rule 5), "
+            "dev-notes/findings/2026-07-25-k8s-manifest-drift.md (rule 6), "
+            "dev-notes/findings/2026-07-25-worker-migration-ordering.md (rule 7).",
             file=sys.stderr,
         )
         return 1
@@ -483,7 +630,9 @@ def main() -> int:
             f"compose-check: {len(services)} services, {images} built images, "
             f"{workers} workers sharing them; {inspected} service dirs with one install "
             f"path each; {locations} nginx locations, {upstreams} upstreams verified, "
-            f"{len(NOT_BROWSER_FACING)} services explicitly not browser-facing. No problems."
+            f"{len(NOT_BROWSER_FACING)} services explicitly not browser-facing; "
+            f"{k8s_required} Compose resources represented among {k8s_names} Kubernetes names. "
+            f"{migration_consumers} DB-backed processes migration-gated. No problems."
         )
     return 0
 

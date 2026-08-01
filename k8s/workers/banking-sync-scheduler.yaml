@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: banking-sync-scheduler
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: banking-sync-scheduler }
+  template:
+    metadata:
+      labels: { app: banking-sync-scheduler }
+    spec:
+      containers:
+        - name: banking-sync-scheduler
+          image: finance-tracker/banking-service:local
+          imagePullPolicy: Never
+          command: ["python", "-m", "app.workers.sync_scheduler"]
+          envFrom:
+            - configMapRef:
+                name: finance-tracker-config
+            - secretRef:
+                name: finance-tracker-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: DATABASE_URL_BANKING
+            - name: SYNC_SCHEDULER_INTERVAL_SECONDS
+              value: "3600"
+            - name: SYNC_EVERY_HOURS
+              value: "24"
+            - name: SYNC_CONSENT_WARN_DAYS
+              value: "7"
+          volumeMounts:
+            - name: enablebanking-pem
+              mountPath: /app/secrets
+              readOnly: true
+      volumes:
+        - name: enablebanking-pem
+          secret:
+            secretName: enablebanking-pem
+            items:
+              - key: enablebanking-sandbox.pem
+                path: enablebanking-sandbox.pem

@@ -59,7 +59,7 @@ help: ## Show available targets
 	@printf '    ci-status                 Latest CI run for this branch (exit 1 if red)\n'
 	@printf '    verify-typecheck-gate     Prove the mypy gate covers exactly its allowlist\n'
 	@printf '    notes-check               dev-notes index drift, dead links, frontmatter\n'
-	@printf '    compose-check             build hygiene: worker image drift + install paths\n'
+	@printf '    compose-check             deploy integrity: images, perimeter, k8s parity, migrations\n'
 	@printf '    compose-state-check       runtime: no container dead/restarting (stack must be up)\n'
 	@printf '    format                    Auto-format all Python services\n'
 	@printf '    format-check              Check formatting without changes\n'

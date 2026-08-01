@@ -150,6 +150,17 @@ services:
   #   Frontend cut over in 9b9ca782. Zero DEPRECATED warnings confirmed.
   #   Auth already independent (LoginPage/RegisterPage use user-service directly).
 
+  user-migration:
+    image: finance-tracker-user-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://user_service:user_service_pass@postgres:5432/users
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   user-service:
     build:
       context: .
@@ -169,8 +180,8 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
-      postgres:
-        condition: service_healthy
+      user-migration:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
 
@@ -190,6 +201,18 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+
+  goal-migration:
+    image: finance-tracker-goal-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://goal_service:goal_service_pass@postgres-goals:5432/goals
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
+    depends_on:
+      postgres-goals:
+        condition: service_healthy
 
   goal-service:
     build:
@@ -211,8 +234,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
-      postgres-goals:
-        condition: service_healthy
+      goal-migration:
+        condition: service_completed_successfully
       user-service:
         condition: service_healthy
       account-service:
@@ -232,6 +255,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      goal-migration:
+        condition: service_completed_successfully
       goal-service:
         condition: service_healthy
       rabbitmq:
@@ -249,6 +274,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      goal-migration:
+        condition: service_completed_successfully
       goal-service:
         condition: service_healthy
       rabbitmq:
@@ -264,6 +291,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      user-migration:
+        condition: service_completed_successfully
       user-service:
         condition: service_healthy
       rabbitmq:
@@ -293,6 +322,17 @@ services:
       retries: 10
       start_period: 10s
 
+  transaction-migration:
+    image: finance-tracker-transaction-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://transaction_service:transaction_service_pass@postgres-transactions:5432/transactions
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+    depends_on:
+      postgres-transactions:
+        condition: service_healthy
+
   transaction-service:
     build:
       context: .
@@ -313,9 +353,19 @@ services:
       CATEGORIZATION_TIMEOUT_S: "0.5"
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
     depends_on:
-      postgres-transactions:
-        condition: service_healthy
+      transaction-migration:
+        condition: service_completed_successfully
       rabbitmq:
+        condition: service_healthy
+
+  account-migration:
+    image: finance-tracker-account-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://account_user:account_password@postgres-account:5432/account_db
+    depends_on:
+      postgres-account:
         condition: service_healthy
 
   account-service:
@@ -335,8 +385,8 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       USER_SERVICE_URL: http://user-service:8001
     depends_on:
-      postgres-account:
-        condition: service_healthy
+      account-migration:
+        condition: service_completed_successfully
       user-service:
         condition: service_healthy
 
@@ -367,6 +417,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://account_user:account_password@postgres-account:5432/account_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     depends_on:
+      account-migration:
+        condition: service_completed_successfully
       postgres-account:
         condition: service_healthy
       rabbitmq:
@@ -382,6 +434,8 @@ services:
       USER_SERVICE_URL: http://user-service:8001
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
     depends_on:
+      account-migration:
+        condition: service_completed_successfully
       postgres-account:
         condition: service_healthy
       rabbitmq:
@@ -399,6 +453,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      transaction-migration:
+        condition: service_completed_successfully
       transaction-service:
         condition: service_healthy
       rabbitmq:
@@ -414,6 +470,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      transaction-migration:
+        condition: service_completed_successfully
       transaction-service:
         condition: service_healthy
       categorization-service:
@@ -431,6 +489,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      transaction-migration:
+        condition: service_completed_successfully
       transaction-service:
         condition: service_healthy
       categorization-service:
@@ -448,6 +508,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      transaction-migration:
+        condition: service_completed_successfully
       transaction-service:
         condition: service_healthy
       rabbitmq:
@@ -470,6 +532,17 @@ services:
       retries: 10
       start_period: 10s
 
+  categorization-migration:
+    image: finance-tracker-categorization-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://categorization_service:categorization_service_pass@postgres-categorization:5432/categorization
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+    depends_on:
+      postgres-categorization:
+        condition: service_healthy
+
   categorization-service:
     build:
       context: .
@@ -488,8 +561,8 @@ services:
       ENVIRONMENT: development
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
     depends_on:
-      postgres-categorization:
-        condition: service_healthy
+      categorization-migration:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
 
@@ -503,6 +576,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      categorization-migration:
+        condition: service_completed_successfully
       categorization-service:
         condition: service_healthy
       rabbitmq:
@@ -518,6 +593,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      categorization-migration:
+        condition: service_completed_successfully
       categorization-service:
         condition: service_healthy
       rabbitmq:
@@ -533,6 +610,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      categorization-migration:
+        condition: service_completed_successfully
       categorization-service:
         condition: service_healthy
       rabbitmq:
@@ -586,6 +665,17 @@ services:
       retries: 10
       start_period: 10s
 
+  budget-migration:
+    image: finance-tracker-budget-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://budget_service:budget_service_pass@postgres-budget:5432/budget_service
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+    depends_on:
+      postgres-budget:
+        condition: service_healthy
+
   budget-service:
     build:
       context: .
@@ -606,8 +696,8 @@ services:
       CATEGORY_SERVICE_URL: http://categorization-service:8005
       ANALYTICS_SERVICE_URL: http://analytics-service:8000
     depends_on:
-      postgres-budget:
-        condition: service_healthy
+      budget-migration:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       redis:
@@ -626,6 +716,8 @@ services:
       CATEGORY_SERVICE_URL: http://categorization-service:8005
       ENVIRONMENT: development
     depends_on:
+      budget-migration:
+        condition: service_completed_successfully
       budget-service:
         condition: service_healthy
       rabbitmq:
@@ -648,6 +740,8 @@ services:
       MONTH_CLOSE_INTERVAL_SECONDS: "3600"
       MONTH_CLOSE_DAY: "7"
     depends_on:
+      budget-migration:
+        condition: service_completed_successfully
       budget-service:
         condition: service_healthy
       rabbitmq:
@@ -673,6 +767,8 @@ services:
       BUDGET_ALERT_INTERVAL_SECONDS: "21600"
       BUDGET_ALERT_THRESHOLDS: "80,100"
     depends_on:
+      budget-migration:
+        condition: service_completed_successfully
       budget-service:
         condition: service_healthy
       rabbitmq:
@@ -697,6 +793,18 @@ services:
       retries: 10
       start_period: 10s
 
+  banking-migration:
+    image: finance-tracker-banking-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_service:banking_service_pass@postgres-banking:5432/banking_db
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
+    depends_on:
+      postgres-banking:
+        condition: service_healthy
+
   banking-service:
     build:
       context: .
@@ -719,8 +827,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     volumes: *enable-banking-volumes
     depends_on:
-      postgres-banking:
-        condition: service_healthy
+      banking-migration:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       transaction-service:
@@ -739,6 +847,8 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      banking-migration:
+        condition: service_completed_successfully
       banking-service:
         condition: service_healthy
       rabbitmq:
@@ -755,6 +865,8 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      banking-migration:
+        condition: service_completed_successfully
       banking-service:
         condition: service_healthy
       rabbitmq:
@@ -774,6 +886,8 @@ services:
       <<: *enable-banking-env
       ENVIRONMENT: development
     depends_on:
+      banking-migration:
+        condition: service_completed_successfully
       banking-service:
         condition: service_healthy
       rabbitmq:
@@ -800,6 +914,8 @@ services:
       SYNC_EVERY_HOURS: "24"
       SYNC_CONSENT_WARN_DAYS: "7"
     depends_on:
+      banking-migration:
+        condition: service_completed_successfully
       banking-service:
         condition: service_healthy
       rabbitmq:
@@ -909,6 +1025,17 @@ services:
       retries: 10
       start_period: 10s
 
+  saga-migration:
+    image: finance-tracker-saga-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://saga_service:saga_service_pass@postgres-saga:5432/saga
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+    depends_on:
+      postgres-saga:
+        condition: service_healthy
+
   saga-service:
     build:
       context: .
@@ -927,8 +1054,8 @@ services:
       ENVIRONMENT: development
       SAGA_TIMEOUT_SECONDS: 300
     depends_on:
-      postgres-saga:
-        condition: service_healthy
+      saga-migration:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
 
@@ -942,6 +1069,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      saga-migration:
+        condition: service_completed_successfully
       saga-service:
         condition: service_healthy
       rabbitmq:
@@ -957,6 +1086,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      saga-migration:
+        condition: service_completed_successfully
       saga-service:
         condition: service_healthy
       rabbitmq:
@@ -972,6 +1103,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      saga-migration:
+        condition: service_completed_successfully
       saga-service:
         condition: service_healthy
       rabbitmq:
@@ -989,6 +1122,8 @@ services:
       SAGA_TIMEOUT_SECONDS: 300
       TIMEOUT_CHECK_INTERVAL_SECONDS: 30
     depends_on:
+      saga-migration:
+        condition: service_completed_successfully
       saga-service:
         condition: service_healthy
 
@@ -1011,6 +1146,18 @@ services:
       retries: 10
       start_period: 10s
 
+  notification-migration:
+    image: finance-tracker-notification-service
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://notification_service:notification_service_pass@postgres-notifications:5432/notifications
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY mangler — kopiér example.env til .env og udfyld den}
+    depends_on:
+      postgres-notifications:
+        condition: service_healthy
+
   notification-service:
     build:
       context: .
@@ -1030,8 +1177,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
-      postgres-notifications:
-        condition: service_healthy
+      notification-migration:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
 
@@ -1047,6 +1194,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET mangler — kopiér example.env til .env og udfyld den}
       ENVIRONMENT: development
     depends_on:
+      notification-migration:
+        condition: service_completed_successfully
       notification-service:
         condition: service_healthy
       account-service:

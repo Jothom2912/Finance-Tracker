@@ -60,7 +60,67 @@ else
   echo "WARNING: $PEM_FILE not found in repo root — banking-service cannot reach Enable Banking until it is added (the file is gitignored)." >&2
 fi
 
-echo "Deploying Finance Tracker with kustomize..."
+echo "Applying configuration and infrastructure..."
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -k k8s/infra
+
+wait_for_postgres() {
+  deployment="$1"
+  user="$2"
+  echo "Waiting for $deployment..."
+  kubectl rollout status "deployment/$deployment" -n finance-tracker --timeout=180s
+  for attempt in $(seq 1 30); do
+    if kubectl exec -n finance-tracker "deployment/$deployment" -- pg_isready -U "$user" >/dev/null 2>&1; then
+      return 0
+    fi
+    if [ "$attempt" -eq 30 ]; then
+      echo "$deployment did not accept database connections within 150 seconds" >&2
+      return 1
+    fi
+    sleep 5
+  done
+}
+
+wait_for_postgres postgres user_service
+wait_for_postgres postgres-transactions transaction_service
+wait_for_postgres postgres-account account_user
+wait_for_postgres postgres-categorization categorization_service
+wait_for_postgres postgres-budget budget_service
+wait_for_postgres postgres-goals goal_service
+wait_for_postgres postgres-banking banking_service
+wait_for_postgres postgres-saga saga_service
+wait_for_postgres postgres-notifications notification_service
+
+echo "Running schema migrations as a separate deployment phase..."
+# Completed Job specs do not rerun when applied. Recreate them on every rollout,
+# then fail before creating application pods if any schema cannot reach head.
+kubectl delete -k k8s/migrations --ignore-not-found=true
+
+migration_jobs=(
+  user-migration
+  transaction-migration
+  account-migration
+  categorization-migration
+  budget-migration
+  goal-migration
+  banking-migration
+  saga-migration
+  notification-migration
+)
+for job in "${migration_jobs[@]}"; do
+  # Apply and await one Job at a time. Docker Desktop runs the Compose and
+  # Kubernetes stacks in the same VM; starting nine Python images together was
+  # measured OOM-killing first attempts on the 7.8 GiB local runtime (P3-17).
+  kubectl apply -f k8s/migrations/migration-jobs.yaml -l "app=$job"
+  if ! kubectl wait -n finance-tracker --for=condition=complete "job/$job" --timeout=180s; then
+    echo "Migration failed: $job" >&2
+    kubectl logs -n finance-tracker "job/$job" --all-containers=true >&2 || true
+    exit 1
+  fi
+done
+
+echo "Applying APIs, workers and the complete validated inventory..."
 kubectl apply -k k8s
 
 echo "Current pods:"

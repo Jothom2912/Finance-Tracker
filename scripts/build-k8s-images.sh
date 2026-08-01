@@ -11,6 +11,8 @@ docker build -t finance-tracker/ai-service:local -f services/ai-service/Dockerfi
 docker build -t finance-tracker/gateway-service:local -f services/gateway-service/Dockerfile .
 docker build -t finance-tracker/banking-service:local -f services/banking-service/Dockerfile .
 docker build -t finance-tracker/saga-service:local -f services/saga-service/Dockerfile .
+docker build -t finance-tracker/analytics-service:local -f services/analytics-service/Dockerfile .
+docker build -t finance-tracker/notification-service:local -f services/notification-service/Dockerfile .
 docker build -t finance-tracker/serverless-health-job:local -f services/serverless-health-job/Dockerfile .
 
 if [ -f services/frontend/Dockerfile ]; then

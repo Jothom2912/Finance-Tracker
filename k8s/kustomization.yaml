@@ -8,19 +8,11 @@ resources:
   - secrets.yaml
 
   # Infrastructure
-  - infra/rabbitmq.yaml
-  - infra/redis.yaml
-  - infra/postgres-user.yaml
-  - infra/postgres-transactions.yaml
-  - infra/postgres-account.yaml
-  - infra/postgres-banking.yaml
-  - infra/postgres-categorization.yaml
-  - infra/postgres-budget.yaml
-  - infra/postgres-goals.yaml
-  - infra/postgres-saga.yaml
-  - infra/ollama.yaml
-  - infra/ollama-model-pull-job.yaml
-  - infra/elasticsearch.yaml
+  - infra
+
+  # Explicit schema phase. scripts/k8s-up.sh applies and waits for these Jobs
+  # before it applies this complete inventory (P3-17).
+  - migrations
 
   # Backend/API applications
   - apps/user-service.yaml
@@ -34,6 +26,7 @@ resources:
   - apps/gateway-service.yaml
   - apps/saga-service.yaml
   - apps/analytics-service.yaml
+  - apps/notification-service.yaml
 
   # Frontend
   - apps/frontend.yaml
@@ -60,6 +53,11 @@ resources:
   - workers/saga-timeout-worker.yaml
   - workers/transaction-saga-command-consumer.yaml
   - workers/banking-saga-command-consumer.yaml
+  - workers/notification-consumer.yaml
+  - workers/banking-sync-scheduler.yaml
+  - workers/budget-month-close-scheduler.yaml
+  - workers/budget-alert-scheduler.yaml
+  - workers/analytics-embedding-consumer.yaml
 
   # KEDA serverless setup.
   # Note: KEDA itself must be installed first with Helm before this can be applied.

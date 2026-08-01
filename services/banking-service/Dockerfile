@@ -36,4 +36,4 @@ EXPOSE 8009
 # /app/.venv/bin/python. Dropping PATH here would leave all four on the system
 # interpreter with no dependencies installed — while this CMD's API still answers
 # 200, which is why the verification reads the workers' logs and not just /health.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8009"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8009"]

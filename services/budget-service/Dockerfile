@@ -34,4 +34,4 @@ EXPOSE 8003
 # The venv is on PATH, so the three workers' `command: ["python", "-m", ...]` in
 # docker-compose.yml resolve to /app/.venv/bin/python. Dropping PATH here would leave
 # them on the system interpreter with no dependencies installed.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8003"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]

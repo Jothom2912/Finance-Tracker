@@ -1,0 +1,215 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-migration
+  namespace: finance-tracker
+  labels: { app: user-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/user-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_USER } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: transaction-migration
+  namespace: finance-tracker
+  labels: { app: transaction-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/transaction-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_TRANSACTION } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: account-migration
+  namespace: finance-tracker
+  labels: { app: account-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/account-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_ACCOUNT_SYNC } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: categorization-migration
+  namespace: finance-tracker
+  labels: { app: categorization-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/categorization-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_CATEGORIZATION } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: budget-migration
+  namespace: finance-tracker
+  labels: { app: budget-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/budget-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_BUDGET } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: goal-migration
+  namespace: finance-tracker
+  labels: { app: goal-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/goal-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_GOAL } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: banking-migration
+  namespace: finance-tracker
+  labels: { app: banking-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/banking-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_BANKING } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: saga-migration
+  namespace: finance-tracker
+  labels: { app: saga-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/saga-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_SAGA } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: notification-migration
+  namespace: finance-tracker
+  labels: { app: notification-migration }
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker/notification-service:local
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: finance-tracker-config }
+            - secretRef: { name: finance-tracker-secrets }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: finance-tracker-secrets, key: DATABASE_URL_NOTIFICATION } }

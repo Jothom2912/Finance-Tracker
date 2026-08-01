@@ -112,6 +112,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [plans/2026-08-01-p365-codex-dev-notes-optimization.md](plans/2026-08-01-p365-codex-dev-notes-optimization.md) — P3-65: Codex-discovery, bounded dev-notes retrieval og gates mod ny kontekstdrift.
 - [plans/2026-08-01-f207-dashboard-period-budget-clarity.md](plans/2026-08-01-f207-dashboard-period-budget-clarity.md) — F2-07: samme budgetperiode på dashboard/kategoriside og dybe links fra navngivne overskridelser.
 - [plans/2026-08-01-p243-goal-status-integrity.md](plans/2026-08-01-p243-goal-status-integrity.md) — P2-43: API-validering, deterministisk datarens og DB-constraint.
+- [plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md](plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md) — P2-21 + P3-17: Kubernetes-paritet og migrations som eksplicit deployment-fase.
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue analytics.embeddings, partial-update of description_vector.
@@ -127,6 +128,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [decisions/2026-07-28-browser-automation-instrument.md](decisions/2026-07-28-browser-automation-instrument.md) — P2-39: repoet ejer et browser-lag (@playwright/test i services/frontend, kørt i det eksisterende e2e-tests-job).…
 - [decisions/2026-07-29-taxonomy-authorization.md](decisions/2026-07-29-taxonomy-authorization.md) — P2-28: taksonomi-mutationer er internal-only, ikke rollestyrede. En is_admin-rolle ville give samme praktiske resultat (out-of-band…
 - [decisions/2026-07-17-scheduler-pattern-worker-loop.md](decisions/2026-07-17-scheduler-pattern-worker-loop.md) — periodic jobs = in-service worker-loop containers (outbox-worker shape), not KEDA cron; idempotency mandatory, single…
+- [decisions/2026-08-01-explicit-migration-phases.md](decisions/2026-08-01-explicit-migration-phases.md) — P2-21 + P3-17: Compose one-shots og staged Kubernetes Jobs erstatter migration som API-startsideeffekt.
 
 ## Sessions
 - [sessions/00-SESSIONS.md](sessions/00-SESSIONS.md) — session-log index, newest first. Written after significant work; not part of the load-context path.

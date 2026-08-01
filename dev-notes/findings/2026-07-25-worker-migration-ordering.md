@@ -3,9 +3,9 @@ title: Workers depend on the API container to run migrations
 date: 2026-07-25
 severity: LOW
 area: infrastructure
-status: open
+status: resolved
 backlog: [P3-17]
-resolved-by: null
+resolved-by: ../plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md
 ---
 
 # Workers depend on the API container to run migrations

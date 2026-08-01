@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-notifications
+  namespace: finance-tracker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres-notifications }
+  template:
+    metadata:
+      labels: { app: postgres-notifications }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - name: POSTGRES_USER
+              value: notification_service
+            - name: POSTGRES_PASSWORD
+              value: notification_service_pass
+            - name: POSTGRES_DB
+              value: notifications
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-notifications-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-notifications-data
+  namespace: finance-tracker
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-notifications
+  namespace: finance-tracker
+spec:
+  selector: { app: postgres-notifications }
+  ports:
+    - port: 5432
+      targetPort: 5432

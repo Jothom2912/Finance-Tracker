@@ -3,9 +3,9 @@ title: k8s manifests have drifted 5 features behind docker-compose
 date: 2026-07-25
 severity: MEDIUM
 area: infrastructure
-status: open
+status: resolved
 backlog: [P2-21]
-resolved-by: null
+resolved-by: ../plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md
 ---
 
 # k8s manifests have drifted 5 features behind docker-compose

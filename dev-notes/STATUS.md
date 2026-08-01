@@ -5,10 +5,13 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Active
 
-- No active item.
+No active implementation plan.
 
 ## Recently shipped
 
+- **P2-21 + P3-17** — Kubernetes workload parity and explicit migration ordering; clean and
+  idempotent live rollout verified with zero workload restarts.
+  [Plan + Outcome](plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md#outcome).
 - **P2-43** — ugyldig goal-status afvises før write; migration 006 reparerer gamle værdier og
   håndhæver `active|paused` i databasen. [Plan + Outcome](plans/2026-08-01-p243-goal-status-integrity.md#outcome-fill-in-when-done).
 - **F2-07** — ens budgetperiode på dashboard/kategoriside samt navngivne, linkbare
@@ -24,8 +27,6 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Next candidates
 
-- **P2-43** — a client can persist an invalid goal status and make future reads return 500.
-- **P2-21** — Compose workloads and the Kubernetes manifests have drifted.
 - **P3-60** — goal/account collapse upstream failure into a non-retryable user error.
 - **P3-47** before **P3-28** — an nginx location-level `add_header` would silently remove the
   perimeter's security headers.
@@ -33,13 +34,12 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Blockers
 
-- None for the dev-notes/Codex setup; fresh-session discovery is verified.
+No active blocker.
 
 ## Open findings to route first
 
 - [Product-surface sweep](findings/2026-07-26-product-surface-sweep.md) — security, operations
   and UX follow-ups across the product.
-- [Kubernetes manifest drift](findings/2026-07-25-k8s-manifest-drift.md) — scheduled as P2-21.
 - [Outbox port declares a foreign entity](findings/2026-07-27-outbox-port-declares-foreign-entity.md) — P2-32.
 - [Goal has two runtime types](findings/2026-07-27-goal-entity-two-runtime-types.md) — P2-34 and
   the goal-service typecheck blocker.

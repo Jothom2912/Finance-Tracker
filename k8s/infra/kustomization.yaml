@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - rabbitmq.yaml
+  - redis.yaml
+  - postgres-user.yaml
+  - postgres-transactions.yaml
+  - postgres-account.yaml
+  - postgres-banking.yaml
+  - postgres-categorization.yaml
+  - postgres-budget.yaml
+  - postgres-goals.yaml
+  - postgres-saga.yaml
+  - postgres-notifications.yaml
+  - ollama.yaml
+  - ollama-model-pull-job.yaml
+  - elasticsearch.yaml
