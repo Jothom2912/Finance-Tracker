@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from app.domain.entities import GoalStatus
+from app.domain.entities import GoalStatus, StoredGoalStatus
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -12,7 +12,7 @@ class GoalBase(BaseModel):
     target_amount: float = Field(..., ge=0)
     current_amount: float = Field(default=0.0, ge=0)
     target_date: Optional[date] = None
-    status: Optional[str] = None
+    status: StoredGoalStatus = StoredGoalStatus.ACTIVE
 
     @field_validator("target_amount")
     @classmethod

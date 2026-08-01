@@ -108,6 +108,47 @@ def test_create_goal_returns_201() -> None:
     app.dependency_overrides.clear()
 
 
+def test_create_goal_rejects_invalid_stored_status_before_service_call() -> None:
+    service = DummyService()
+    client = client_with_service(service)
+
+    response = client.post(
+        "/api/v1/goals",
+        json={
+            "name": "Vacation",
+            "target_amount": 5000,
+            "current_amount": 1000,
+            "status": "bogus",
+            "Account_idAccount": 1,
+        },
+    )
+
+    assert response.status_code == 422
+    service.create_goal.assert_not_awaited()
+    app.dependency_overrides.clear()
+
+
+def test_create_goal_defaults_missing_status_to_active() -> None:
+    service = DummyService()
+    service.create_goal.return_value = _goal_response()
+    client = client_with_service(service)
+
+    response = client.post(
+        "/api/v1/goals",
+        json={
+            "name": "Vacation",
+            "target_amount": 5000,
+            "current_amount": 1000,
+            "Account_idAccount": 1,
+        },
+    )
+
+    assert response.status_code == 201
+    request = service.create_goal.await_args.args[0]
+    assert request.status == GoalStatus.ACTIVE
+    app.dependency_overrides.clear()
+
+
 def test_update_goal_and_delete_goal_routes() -> None:
     service = DummyService()
     service.update_goal.return_value = _goal_response(
@@ -136,6 +177,25 @@ def test_update_goal_and_delete_goal_routes() -> None:
     assert update_response.status_code == 200
     assert update_response.json()["name"] == "Vacation 2"
     assert delete_response.status_code == 204
+    app.dependency_overrides.clear()
+
+
+def test_update_goal_rejects_invalid_stored_status_before_service_call() -> None:
+    service = DummyService()
+    client = client_with_service(service)
+
+    response = client.put(
+        "/api/v1/goals/10",
+        json={
+            "name": "Vacation",
+            "target_amount": 5000,
+            "current_amount": 1000,
+            "status": "completed",
+        },
+    )
+
+    assert response.status_code == 422
+    service.update_goal.assert_not_awaited()
     app.dependency_overrides.clear()
 
 

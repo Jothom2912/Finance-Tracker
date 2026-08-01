@@ -9,6 +9,8 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Recently shipped
 
+- **P2-43** — ugyldig goal-status afvises før write; migration 006 reparerer gamle værdier og
+  håndhæver `active|paused` i databasen. [Plan + Outcome](plans/2026-08-01-p243-goal-status-integrity.md#outcome-fill-in-when-done).
 - **F2-07** — ens budgetperiode på dashboard/kategoriside samt navngivne, linkbare
   over-budget-kategorier. [Plan + Outcome](plans/2026-08-01-f207-dashboard-period-budget-clarity.md#outcome-fill-in-when-done).
 - **P3-65** — Codex discovery, bounded dev-notes retrieval and structural drift gates.

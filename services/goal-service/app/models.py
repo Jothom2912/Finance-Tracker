@@ -17,7 +17,7 @@ class GoalModel(Base):
     target_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     current_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, server_default="0")
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    status: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    status: Mapped[str] = mapped_column(String(45), nullable=False, server_default="active")
     Account_idAccount: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     is_default_savings_goal: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     # Soft-delete (P3-16): rækker med deleted_at bevarer allocation-audit-trailet;
@@ -27,6 +27,7 @@ class GoalModel(Base):
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
+        CheckConstraint("status IN ('active', 'paused')", name="ck_goals_status_stored"),
         Index(
             "ix_goals_one_default_per_account",
             "Account_idAccount",

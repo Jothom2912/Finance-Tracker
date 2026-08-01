@@ -12,6 +12,11 @@ class GoalStatus(str, enum.Enum):
     EXPIRED = "expired"
 
 
+class StoredGoalStatus(str, enum.Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+
+
 @dataclass
 class Goal:
     id: int | None
