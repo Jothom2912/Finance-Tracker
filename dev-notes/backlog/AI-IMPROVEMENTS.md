@@ -2,7 +2,7 @@
 
 Companion to [FEATURES.md](FEATURES.md) (F2-04 search UI, F2-06 chat intents) and [BACKLOG.md](BACKLOG.md) (P3-04 event-driven vector sync, M24 slot bugs). IDs `AI-xx` are stable.
 
-Current pipeline (see [architecture/services/categorization-and-ai-services.md](../architecture/services/categorization-and-ai-services.md)): router qwen3:4b (4 intents, constrained JSON) → dispatcher (gateway/tx/budget HTTP or ChromaDB search, bge-m3, user_id-filtered) → responder qwen3:8b (Danish prose, SSE). Known weaknesses on record (NOTES.md sanity checks): **aggregation questions unreliable** (vector search can't guarantee completeness), **noise after top results**, slots (`category`/`amount_*`) defined but never emitted by the router (unreachable filter code, audit M24).
+Current pipeline (see [architecture/services/categorization-and-ai-services.md](../architecture/services/categorization-and-ai-services.md)): router qwen3:4b (4 intents, constrained JSON) → dispatcher (analytics-service ES aggregations / budget summary / ES hybrid BM25+kNN search, bge-m3, JWT-scoped) → responder qwen3:8b (Danish prose, SSE). Known weaknesses: open-ended aggregation still cannot safely fall back to top-K search, trend/budget analysis lacks typed tools, and slots (`category`/`amount_*`) are defined but not fully activated/resolved to taxonomy ids.
 
 **Ground rule for all of this: build AI-01 (eval harness) first.** Every other item claims "better retrieval/answers" — without a golden set none of those claims are testable, and prompt/model tweaks will regress silently.
 
@@ -52,6 +52,7 @@ docs already exist. See [plans/2026-07-11-es-analytics-integration.md](../plans/
 | AI-19 | **Re-point structured intents to analytics-service** | `largest_expense` (200-row fetch + client-side sort, documented miss risk) → `/api/v1/analytics/transactions` ES sort; `category_breakdown` (gateway legacy in-memory REST agg) → `/api/v1/analytics/overview`. Implements AI-03's guard with exact aggregations AND removes ai-service's dependency on the legacy REST dashboard, unblocking ADR-0004 cleanup | `services/ai-service/app/adapters/outbound/analytics_client.py` is the single seam; analytics endpoints live | S | **done 2026-07-12** — analytics-service fik `sort=amount_desc` (på `amount_abs`); klient repointet + live-smoket i compose (135/287 ms); ADR-0004 §Oprydning opdateret: legacy REST-dashboard nu frit sletbar. Kategori-slot filtrerer stadig klient-side på navn indtil AI-21 |
 | AI-20 | **ES hybrid search backend for chat (replaces ChromaDB)** | Add bge-m3 `dense_vector` to the `transactions` mapping (`transactions_v2` behind the alias), populate via projector/embed-worker, implement `ISemanticSearchPort` with BM25 + kNN + RRF. Delivers AI-06 on shared infra, resolves AI-18 (multi-replica), and the event-synced index kills ghost-data/manual-full-re-ingest (AI-11, P3-04) as a side effect | `transactions` index already danish-analyzed + taxonomy-denormalized + event-synced; seam = `chromadb_search.py` adapter swap | M | **done 2026-07-14** — cutover udført (compose `SEARCH_BACKEND=es`): `transactions_v2` + embedding-consumer (decision 2026-07-13), hybrid-endpoint m. klient-side RRF, `EsSearch`-adapter. Eval: recall@3 0.971 (chroma 0.967), MRR 0.967 (0.981 — deltaet er én case). ChromaDB slettet 2026-07-17 efter bake (plan trin 12, commit f03a55a4) |
 | AI-21 | **Taxonomy-aware chat filters via ES `taxonomy` index** | Activate the dead slot→filter path (AI-02) and resolve router `category` slot text → `category_id`/`subcategory_id` via keyword+fuzzy match on the `taxonomy` index (ids are the grouping key per ADR-003, never names). Subcategory drilldown answers come free from denormalized transaction fields | AI-02's slot plumbing; `taxonomy` index live; combines with AI-20 filters | S | open |
+| AI-22 | **Category/budget trend tools before multi-hop** | Add typed analytics operations for category trends, period comparison, budget variance, recurring merchants and optimization candidates. Elasticsearch/Python owns buckets, sums, percentages and scenarios; the router emits a bounded analysis plan and qwen3:8b only explains a checked `FACTS` block. First capability: “category over time vs budget” with evidence transactions. This is the deterministic bridge to AI-10—not generic vector RAG or free-form ES queries | AI-21 canonical taxonomy ids + AI-05 numeric guardrail; budget definitions remain behind budget-service until event-projected | M | open |
 
 ML cross-links: `/analytics/top-merchants` + `description.raw` term aggs serve ML-02
 (merchant memory) and ML-15 (cross-user priors) without new infra; a `dense_vector` on
@@ -65,11 +66,14 @@ AI-01 eval harness  ──►  gate for everything below
 Wave A (activation, days):    AI-02, AI-03, AI-04, AI-05, AI-08, AI-13, AI-15
 Wave B (quality, per-item):   AI-06 → AI-07 → AI-09 → AI-11   (measure each against AI-01)
   └─ ES route (post-ADR-0004): AI-19 (S, anytime) → AI-20 (subsumes AI-06+AI-11+AI-18) → AI-21
-Wave C (capability):          AI-12 → AI-10 multi-hop (needs A-wave tools + B-wave retrieval)
+Wave C (capability):          AI-21 → AI-22 category/budget trend → AI-12 multi-turn → AI-10 bounded multi-hop
 Continuous:                   AI-16 feedback; AI-18 ADR before any multi-replica plan; AI-14 when latency hurts; AI-17 after F1-01
 ```
 
-Multi-hop (AI-10) deliberately comes late: hops multiply whatever retrieval quality you have — 3 hops over noisy retrieval compounds noise, 3 hops over AI-06/07/09-grade retrieval compounds signal.
+Multi-hop (AI-10) deliberately comes late: hops multiply whatever retrieval/tool quality you
+have. AI-22 must first make category/budget analysis an exact typed operation; then at most
+three hops can compose those facts with transaction evidence instead of asking an LLM to
+calculate from top-K documents.
 
 ## Parked (with reason)
 
