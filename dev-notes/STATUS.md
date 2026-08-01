@@ -9,6 +9,9 @@ No active implementation plan.
 
 ## Recently shipped
 
+- **P3-47** — `compose-check` now rejects location-local nginx headers that would silently
+  shadow the perimeter's four security headers, with positive and negative parser controls.
+  [Plan + Outcome](plans/2026-08-01-p347-nginx-header-inheritance-gate.md#outcome-fill-in-when-done).
 - **P3-60 + P3-62** — honest 404/503 split for account → user, explicit temporary frontend
   error and one account lookup per goal creation; live negative smoke proved 503 + zero write,
   and the restored 62-container stack is healthy.
@@ -31,8 +34,7 @@ No active implementation plan.
 
 ## Next candidates
 
-- **P3-47** before **P3-28** — an nginx location-level `add_header` would silently remove the
-  perimeter's security headers.
+- **P3-28 after P3-47** — build/image hygiene, gzip and immutable asset caching.
 - **P3-46** — local Docker memory prevents end-to-end chat evidence with `qwen3:8b`.
 
 ## Blockers

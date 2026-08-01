@@ -57,11 +57,13 @@ What it checks:
    service run", and nothing reconciles them.
 5. **The perimeter cannot drift** — ``services/frontend/nginx.conf`` is the
    security perimeter (ADR-0005, P3-43), and it was the one file nothing read.
-   Four assertions: upstreams resolve to a compose service on its *container*
+   Five assertions: upstreams resolve to a compose service on its *container*
    port; no proxying ``/api/`` catch-all but a denying one is required;
    no ``INTERNAL_API_KEY``-guarded prefix is published; and every built
    ``finance-tracker-*`` service either has a route or stands on
-   ``NOT_BROWSER_FACING`` with a reason.
+   ``NOT_BROWSER_FACING`` with a reason. A location with any local
+   ``add_header`` must also repeat all four server-level security headers,
+   because nginx otherwise drops the inherited set for that location.
 6. **Kubernetes workload parity** — every Compose API, worker and datastore must
    have a resource reachable from ``k8s/kustomization.yaml``. Name aliases are
    explicit and migration one-shots are excluded because they are deployment
@@ -316,6 +318,14 @@ NOT_BROWSER_FACING = {
 LOCATION = re.compile(r"^\s*location\s+(\S+)(?:\s+(\S+))?\s*\{")
 PROXY_PASS = re.compile(r"^\s*proxy_pass\s+http://([A-Za-z0-9._-]+):(\d+)\s*;")
 RETURN_CODE = re.compile(r"^\s*return\s+(\d{3})\b")
+ADD_HEADER = re.compile(r"^\s*add_header\s+([^\s;]+)\b", re.IGNORECASE)
+
+REQUIRED_SECURITY_HEADERS = (
+    "content-security-policy",
+    "x-content-type-options",
+    "x-frame-options",
+    "referrer-policy",
+)
 
 
 class Location:
@@ -327,6 +337,7 @@ class Location:
         self.modifier = modifier
         self.upstreams: list[tuple[str, str]] = []
         self.returns: str | None = None
+        self.headers: set[str] = set()
 
     @property
     def proxies(self) -> bool:
@@ -374,6 +385,9 @@ def parse_nginx(text: str, problems: list[str]) -> list[Location]:
             match = RETURN_CODE.search(line)
             if match:
                 current.returns = match.group(1)
+            match = ADD_HEADER.search(line)
+            if match:
+                current.headers.add(match.group(1).lower())
 
         for char in line:
             if char == "{":
@@ -384,10 +398,29 @@ def parse_nginx(text: str, problems: list[str]) -> list[Location]:
     return locations
 
 
+def check_location_security_headers(locations: list[Location], problems: list[str]) -> int:
+    """Reject location-local headers that shadow the inherited security set."""
+    checked = 0
+    required = set(REQUIRED_SECURITY_HEADERS)
+    for location in locations:
+        if not location.headers:
+            continue
+        checked += 1
+        missing = required - location.headers
+        if missing:
+            rendered = ", ".join(sorted(missing))
+            problems.append(
+                f"nginx.conf line {location.line}: `location {location.path}` has a local "
+                f"`add_header`, so nginx stops inheriting the server-level security headers; "
+                f"repeat the missing headers here: {rendered} (P3-47)"
+            )
+    return checked
+
+
 def check_nginx_perimeter(services: list[Service], problems: list[str]) -> tuple[int, int]:
     """Rule 5: ``services/frontend/nginx.conf`` is the security perimeter (P3-43, ADR-0005).
 
-    Four assertions, each with a failure mode it has been seen to fail on. Returns
+    Five assertions, each with a failure mode it has been seen to fail on. Returns
     (locations parsed, proxy_pass directives verified) for the summary line.
     """
     if not NGINX_CONF.is_file():
@@ -495,6 +528,11 @@ def check_nginx_perimeter(services: list[Service], problems: list[str]) -> tuple
                 "with the reason the browser never calls it (ADR-0005 point 4). Left undecided, "
                 "this fails in the browser instead of here."
             )
+
+    # 5. nginx replaces, rather than extends, inherited add_header directives
+    #    when a location declares one. A cache header must not silently remove
+    #    CSP, nosniff, frame protection and referrer policy from asset responses.
+    check_location_security_headers(locations, problems)
 
     return len(locations), verified
 
@@ -641,6 +679,7 @@ def main() -> int:
             f"compose-check: {len(services)} services, {images} built images, "
             f"{workers} workers sharing them; {inspected} service dirs with one install "
             f"path each; {locations} nginx locations, {upstreams} upstreams verified, "
+            f"security-header inheritance guarded, "
             f"{len(NOT_BROWSER_FACING)} services explicitly not browser-facing; "
             f"{k8s_required} Compose resources represented among {k8s_names} Kubernetes names. "
             f"{migration_consumers} DB-backed processes migration-gated. No problems."

@@ -114,6 +114,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [plans/2026-08-01-p243-goal-status-integrity.md](plans/2026-08-01-p243-goal-status-integrity.md) — P2-43: API-validering, deterministisk datarens og DB-constraint.
 - [plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md](plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md) — P2-21 + P3-17: Kubernetes-paritet og migrations som eksplicit deployment-fase.
 - [plans/2026-08-01-p360-p362-upstream-error-honesty.md](plans/2026-08-01-p360-p362-upstream-error-honesty.md) — P3-60 + P3-62: ærlig 404/503-opdeling i account-service og ét account-opslag ved måloprettelse.
+- [plans/2026-08-01-p347-nginx-header-inheritance-gate.md](plans/2026-08-01-p347-nginx-header-inheritance-gate.md) — P3-47: statisk gate mod nginx-locations, der tavst skygger perimeterens security headers.
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue analytics.embeddings, partial-update of description_vector.

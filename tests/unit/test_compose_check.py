@@ -10,11 +10,66 @@ SPEC.loader.exec_module(compose_check)
 Service = compose_check.Service
 check_k8s_parity = compose_check.check_k8s_parity
 check_migration_ordering = compose_check.check_migration_ordering
+check_location_security_headers = compose_check.check_location_security_headers
+parse_nginx = compose_check.parse_nginx
 MIGRATION_OWNERS = compose_check.MIGRATION_OWNERS
 
 
 def _service(name: str) -> object:
     return Service(name, 1)
+
+
+def _header_problems(config: str) -> list[str]:
+    problems: list[str] = []
+    locations = parse_nginx(config, problems)
+    check_location_security_headers(locations, problems)
+    return problems
+
+
+def test_location_without_local_headers_inherits_security_set() -> None:
+    config = """
+server {
+    add_header Content-Security-Policy "default-src 'self'" always;
+    location /assets/ {
+        try_files $uri =404;
+    }
+}
+"""
+
+    assert _header_problems(config) == []
+
+
+def test_location_cache_header_requires_repeated_security_set() -> None:
+    config = """
+server {
+    location /assets/ {
+        add_header Cache-Control "public, immutable";
+    }
+}
+"""
+
+    problems = _header_problems(config)
+
+    assert len(problems) == 1
+    assert "location /assets/" in problems[0]
+    for header in compose_check.REQUIRED_SECURITY_HEADERS:
+        assert header in problems[0]
+
+
+def test_location_accepts_cache_header_with_complete_security_set() -> None:
+    config = """
+server {
+    location /assets/ {
+        add_header Cache-Control "public, immutable";
+        add_header Content-Security-Policy "default-src 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "no-referrer" always;
+    }
+}
+"""
+
+    assert _header_problems(config) == []
 
 
 def test_k8s_parity_detects_missing_workload(tmp_path: Path) -> None:
