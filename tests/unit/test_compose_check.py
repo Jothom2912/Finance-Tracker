@@ -12,6 +12,7 @@ check_k8s_parity = compose_check.check_k8s_parity
 check_migration_ordering = compose_check.check_migration_ordering
 check_location_security_headers = compose_check.check_location_security_headers
 check_build_context_hygiene = compose_check.check_build_context_hygiene
+check_ai_model_pull_contract = compose_check.check_ai_model_pull_contract
 parse_nginx = compose_check.parse_nginx
 MIGRATION_OWNERS = compose_check.MIGRATION_OWNERS
 
@@ -127,6 +128,49 @@ def test_build_context_hygiene_accepts_guarded_uv_build(tmp_path: Path) -> None:
 
     assert patterns == 9
     assert uv_dockerfiles == 1
+    assert problems == []
+
+
+def test_ai_model_pull_contract_detects_missing_responder() -> None:
+    compose = """
+services:
+  ollama-pull:
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:4b && ollama pull bge-m3"]
+  ai-service:
+    image: finance-tracker-ai-service
+"""
+    config = """
+LLM_ROUTER_MODEL: str = "qwen3:4b"
+LLM_RESPONDER_MODEL: str = "qwen3:8b"
+EMBEDDING_MODEL: str = "bge-m3"
+"""
+    problems: list[str] = []
+
+    checked = check_ai_model_pull_contract(compose, config, problems)
+
+    assert checked == 3
+    assert len(problems) == 1
+    assert "qwen3:8b" in problems[0]
+
+
+def test_ai_model_pull_contract_accepts_all_configured_models() -> None:
+    compose = """
+services:
+  ollama-pull:
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:4b && ollama pull qwen3:8b && ollama pull bge-m3"]
+  ai-service:
+    image: finance-tracker-ai-service
+"""
+    config = """
+LLM_ROUTER_MODEL: str = "qwen3:4b"
+LLM_RESPONDER_MODEL: str = "qwen3:8b"
+EMBEDDING_MODEL: str = "bge-m3"
+"""
+    problems: list[str] = []
+
+    checked = check_ai_model_pull_contract(compose, config, problems)
+
+    assert checked == 3
     assert problems == []
 
 

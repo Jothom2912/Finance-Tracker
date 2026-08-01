@@ -10,8 +10,8 @@ build hygiene. Rule 4 reads ``services/*/`` on disk, not compose.)
 
 Rules 1-3 come from P3-40 (per-worker image staleness), rule 4 from P2-37
 (two install paths in one service), rule 6 from P2-21 (Compose/Kustomize drift),
-rule 7 from P3-17 (migration ordering), and rule 8 from P3-28 (build-context
-and package-cache hygiene).
+rule 7 from P3-17 (migration ordering), rule 8 from P3-28 (build-context
+and package-cache hygiene), and rule 9 from P3-46 (AI model pull parity).
 
 Why rule 4 exists: budget-service's image ran ``pip install -r
 requirements.txt`` (FastAPI 0.115.0) while its tests and its mypy gate read
@@ -75,6 +75,9 @@ What it checks:
 8. **Lean build inputs and layers** — the shared root build context excludes Git,
    local environments, host dependencies and common credential files, while every
    Dockerfile that runs ``uv sync`` disables uv's download cache.
+9. **AI model pull parity** — every model configured by ai-service must occur in
+   Compose's ``ollama-pull`` command. A persistent model volume must not hide a
+   fresh environment that cannot run the configured router, responder or embedder.
 
    Same shared symptom as rules 1-4, in a sharper form: three of the four
    failure modes were *measured* answering 200 during P3-43. A missing proxy
@@ -104,6 +107,7 @@ SERVICES = REPO_ROOT / "services"
 NGINX_CONF = SERVICES / "frontend" / "nginx.conf"
 KUSTOMIZATION = REPO_ROOT / "k8s" / "kustomization.yaml"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
+AI_CONFIG = SERVICES / "ai-service" / "app" / "config.py"
 
 # This one root resource is deliberately gitignored; k8s-up.sh fails closed
 # with instructions to create it from the tracked example. A fresh CI checkout
@@ -155,6 +159,31 @@ REQUIRED_DOCKERIGNORE_GROUPS = {
     "private PEM files": ("*.pem", "**/*.pem"),
     "private key files": ("*.key", "**/*.key"),
 }
+
+AI_MODEL_SETTING = re.compile(
+    r'^\s*(LLM_ROUTER_MODEL|LLM_RESPONDER_MODEL|EMBEDDING_MODEL):\s*str\s*=\s*["\']([^"\']+)["\']',
+    re.MULTILINE,
+)
+
+
+def check_ai_model_pull_contract(compose_text: str, config_text: str, problems: list[str]) -> int:
+    """Require Compose's init command to pull every ai-service default model."""
+    configured_models = {model for _, model in AI_MODEL_SETTING.findall(config_text)}
+    pull_block_match = re.search(
+        r"^  ollama-pull:\s*$([\s\S]*?)(?=^  [A-Za-z0-9._-]+:\s*$)",
+        compose_text,
+        re.MULTILINE,
+    )
+    pull_block = pull_block_match.group(1) if pull_block_match else ""
+
+    for model in sorted(configured_models):
+        if re.search(rf"\bollama\s+pull\s+{re.escape(model)}\b", pull_block) is None:
+            problems.append(
+                f"ollama-pull does not fetch ai-service's configured model `{model}`; "
+                "a persistent model volume would hide the broken fresh-start contract (P3-46)"
+            )
+
+    return len(configured_models)
 
 
 class Service:
@@ -716,6 +745,9 @@ def main() -> int:
     k8s_required, k8s_names = check_k8s_parity(services, KUSTOMIZATION, problems)
     migration_consumers = check_migration_ordering(services, problems)
     ignore_patterns, uv_dockerfiles = check_build_context_hygiene(DOCKERIGNORE, SERVICES, problems)
+    ai_models = check_ai_model_pull_contract(
+        COMPOSE.read_text(encoding="utf-8"), AI_CONFIG.read_text(encoding="utf-8"), problems
+    )
 
     if problems:
         print(f"compose-check: {len(problems)} problem(s)\n", file=sys.stderr)
@@ -728,7 +760,8 @@ def main() -> int:
             "docs/adr/0005-nginx-as-security-perimeter.md (rule 5), "
             "dev-notes/findings/2026-07-25-k8s-manifest-drift.md (rule 6), "
             "dev-notes/findings/2026-07-25-worker-migration-ordering.md (rule 7), "
-            "dev-notes/findings/2026-07-26-product-surface-sweep.md (rule 8).",
+            "dev-notes/findings/2026-07-26-product-surface-sweep.md (rule 8), "
+            "dev-notes/backlog/BACKLOG.md#p3-46 (rule 9).",
             file=sys.stderr,
         )
         return 1
@@ -745,6 +778,7 @@ def main() -> int:
             f"{k8s_required} Compose resources represented among {k8s_names} Kubernetes names. "
             f"{migration_consumers} DB-backed processes migration-gated; "
             f"{ignore_patterns} ignore patterns and {uv_dockerfiles} cache-free uv Dockerfiles. "
+            f"{ai_models} configured AI models pulled. "
             "No problems."
         )
     return 0

@@ -141,7 +141,7 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:4b && ollama pull bge-m3"]
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:4b && ollama pull qwen3:8b && ollama pull bge-m3"]
     restart: "no"
 
   # === Application services ===
@@ -630,7 +630,7 @@ services:
       <<: *api-healthcheck-defaults
     environment:
       # ai-service skal bruge compose-ollama (som ollama-pull fylder med
-      # qwen3:4b + bge-m3) — ikke en evt. Ollama på host-maskinen (P2-16 drift).
+      # qwen3:4b + qwen3:8b + bge-m3) — ikke en evt. Ollama på host-maskinen (P2-16 drift).
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_MODEL: bge-m3
       ANALYTICS_SERVICE_URL: http://analytics-service:8000

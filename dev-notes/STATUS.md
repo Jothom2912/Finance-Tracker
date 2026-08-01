@@ -9,6 +9,9 @@ No active implementation plan.
 
 ## Recently shipped
 
+- **P3-46** — alle tre AI-modeller pulls deterministisk; med 16 GB Docker-memory gennemfører
+  qwen3:8b-chatten rå SSE og Chromium-E2E uden OOM, med 62 stabile containere.
+  [Plan + Outcome](plans/2026-08-01-p346-qwen8b-chat-e2e.md#outcome-fill-in-when-done).
 - **P3-28** — guarded root Docker context, cache-free uv images and safe gzip/immutable asset
   delivery; representative goal image halved from 198.0 to 98.9 MB and live headers passed.
   [Plan + Outcome](plans/2026-08-01-p328-build-image-hygiene.md#outcome-fill-in-when-done).
@@ -37,7 +40,7 @@ No active implementation plan.
 
 ## Next candidates
 
-- **P3-46** — local Docker memory prevents end-to-end chat evidence with `qwen3:8b`.
+Ingen kandidat valgt efter P3-46 endnu.
 
 ## Blockers
 

@@ -17,7 +17,8 @@ docker compose up ollama ai-service -d
 # Available at http://localhost:8007
 ```
 
-Forudsætter at Ollama har `qwen3:4b`, `qwen3:8b` og `bge-m3` pulled. `ollama-pull` init containeren håndterer dette automatisk.
+Forudsætter at Ollama har `qwen3:4b`, `qwen3:8b` og `bge-m3` pulled. `ollama-pull`
+init-containeren henter alle tre automatisk, også på en frisk model-volume.
 
 ## Port
 

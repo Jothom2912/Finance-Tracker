@@ -116,6 +116,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [plans/2026-08-01-p360-p362-upstream-error-honesty.md](plans/2026-08-01-p360-p362-upstream-error-honesty.md) — P3-60 + P3-62: ærlig 404/503-opdeling i account-service og ét account-opslag ved måloprettelse.
 - [plans/2026-08-01-p347-nginx-header-inheritance-gate.md](plans/2026-08-01-p347-nginx-header-inheritance-gate.md) — P3-47: statisk gate mod nginx-locations, der tavst skygger perimeterens security headers.
 - [plans/2026-08-01-p328-build-image-hygiene.md](plans/2026-08-01-p328-build-image-hygiene.md) — P3-28: afgrænset Docker-context, cachefrie uv-images og sikre gzip/immutable frontend-assets.
+- [plans/2026-08-01-p346-qwen8b-chat-e2e.md](plans/2026-08-01-p346-qwen8b-chat-e2e.md) — P3-46: reproducerbar qwen3:8b-modelkontrakt og autentificeret chat-E2E gennem perimeter og browser.
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue analytics.embeddings, partial-update of description_vector.
