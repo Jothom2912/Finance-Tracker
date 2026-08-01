@@ -2,12 +2,6 @@ import { useMemo } from 'react';
 import { MONTH_OPTIONS, getYearOptions, getMonthLabel } from '../../lib/formatters';
 import './CategoryFilterPanel.css';
 
-const TYPE_LABELS = {
-  expense: 'Udgift',
-  income: 'Indtægt',
-  transfer: 'Overførsel',
-};
-
 // Sentinel-id for 'Ukategoriseret'-chippen (transaktioner uden kategori har
 // categoryId null i gateway-data; null kan ikke bruges som chip-værdi).
 const UNCATEGORIZED_FILTER_ID = 'uncategorized';
@@ -20,24 +14,20 @@ function CategoryFilterPanel({
   categories,
   selectedCategoryIds,
   setSelectedCategoryIds,
-  typeFilter,
-  setTypeFilter,
   includeUncategorized = false,
 }) {
   const yearOptions = useMemo(() => getYearOptions(3), []);
 
   const filteredCategories = useMemo(() => {
-    const base = typeFilter === 'all'
-      ? categories
-      : categories.filter((cat) => cat.type === typeFilter);
-    if (!includeUncategorized || typeFilter === 'income' || typeFilter === 'transfer') {
+    const base = categories.filter((cat) => cat.type === 'expense');
+    if (!includeUncategorized) {
       return base;
     }
     return [
       ...base,
       { id: UNCATEGORIZED_FILTER_ID, name: 'Ukategoriseret', type: 'expense' },
     ];
-  }, [categories, typeFilter, includeUncategorized]);
+  }, [categories, includeUncategorized]);
 
   const allSelected = filteredCategories.length > 0
     && filteredCategories.every((cat) => selectedCategoryIds.includes(cat.id));
@@ -85,20 +75,6 @@ function CategoryFilterPanel({
           </select>
         </div>
 
-        <div className="type-filter">
-          <label htmlFor="cf-type">Type:</label>
-          <select
-            id="cf-type"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="period-select"
-          >
-            <option value="expense">Udgifter</option>
-            <option value="income">Indtægter</option>
-            <option value="transfer">Overførsler</option>
-            <option value="all">Alle</option>
-          </select>
-        </div>
       </div>
 
       <div className="category-multi-select">
@@ -125,7 +101,7 @@ function CategoryFilterPanel({
                 type="button"
                 className={`category-chip ${isSelected ? 'selected' : ''} ${cat.type}`}
                 onClick={() => handleToggleCategory(catId)}
-                title={`${cat.name} (${TYPE_LABELS[cat.type] ?? cat.type})`}
+                title={cat.name}
               >
                 {cat.name}
               </button>

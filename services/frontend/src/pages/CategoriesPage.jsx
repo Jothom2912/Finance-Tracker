@@ -1,22 +1,42 @@
-import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { BarChart3 } from 'lucide-react';
 import CategoryFilterPanel from '../components/CategoryFilterPanel/CategoryFilterPanel';
 import CategorySpendingOverview from '../components/CategorySpendingOverview/CategorySpendingOverview';
 import { useCategories } from '../hooks/useCategories';
 import { usePeriodOverview } from '../hooks/usePeriodOverview';
+import { formatDate, getYearOptions } from '../lib/formatters';
 import './CategoriesPage.css';
+
+function initialPeriod(searchParams, now) {
+  const month = Number(searchParams.get('month'));
+  const year = Number(searchParams.get('year'));
+  const validYears = getYearOptions(3);
+  return {
+    month: month >= 1 && month <= 12 ? String(month).padStart(2, '0') : String(now.getMonth() + 1).padStart(2, '0'),
+    year: validYears.includes(year) ? String(year) : String(now.getFullYear()),
+  };
+}
 
 function CategoriesPage() {
   const { categories } = useCategories();
+  const [searchParams] = useSearchParams();
 
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(
-    () => String(now.getMonth() + 1).padStart(2, '0'),
+  const [initial] = useState(() => initialPeriod(searchParams, now));
+  const [selectedMonth, setSelectedMonth] = useState(initial.month);
+  const [selectedYear, setSelectedYear] = useState(initial.year);
+  const requestedCategoryId = Number(searchParams.get('category'));
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState(
+    Number.isInteger(requestedCategoryId) && requestedCategoryId > 0 ? [requestedCategoryId] : [],
   );
-  const [selectedYear, setSelectedYear] = useState(() => String(now.getFullYear()));
-  const [typeFilter, setTypeFilter] = useState('expense');
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+  const effectiveCategoryIds = useMemo(() => {
+    if (!categories.length) return selectedCategoryIds;
+    const expenseIds = new Set(
+      categories.filter((cat) => cat.type === 'expense').map((cat) => cat.id),
+    );
+    return selectedCategoryIds.filter((id) => expenseIds.has(id));
+  }, [categories, selectedCategoryIds]);
 
   const hasAccount = Boolean(localStorage.getItem('account_id'));
 
@@ -39,7 +59,14 @@ function CategoriesPage() {
   return (
     <div className="categories-page">
       <div className="categories-page-header">
-        <h2>Kategorioverblik</h2>
+        <div>
+          <h2>Udgifter og budgetter</h2>
+          {overview?.startDate && overview?.endDate && (
+            <p className="categories-period-range">
+              Budgetperiode: {formatDate(overview.startDate)} – {formatDate(overview.endDate)}
+            </p>
+          )}
+        </div>
       </div>
 
       <CategoryFilterPanel
@@ -48,10 +75,8 @@ function CategoriesPage() {
         selectedYear={selectedYear}
         setSelectedYear={setSelectedYear}
         categories={categories}
-        selectedCategoryIds={selectedCategoryIds}
+        selectedCategoryIds={effectiveCategoryIds}
         setSelectedCategoryIds={setSelectedCategoryIds}
-        typeFilter={typeFilter}
-        setTypeFilter={setTypeFilter}
         includeUncategorized
       />
 
@@ -73,7 +98,7 @@ function CategoriesPage() {
         <CategorySpendingOverview
           expensesByCategory={overview?.expensesByCategory}
           budgetSummary={budgetSummary}
-          selectedCategoryIds={selectedCategoryIds}
+          selectedCategoryIds={effectiveCategoryIds}
           loading={loading}
         />
       )}

@@ -60,6 +60,27 @@
   margin-bottom: 1rem;
 }
 
+.budget-warning-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.budget-warning-list li + li {
+  margin-top: 0.25rem;
+}
+
+.budget-warning-list a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.budget-warning-list a:hover,
+.budget-warning-list a:focus-visible {
+  color: var(--color-error-600);
+}
+
 /* ── Category list ── */
 
 .budget-progress-list {

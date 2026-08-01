@@ -9,6 +9,8 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Recently shipped
 
+- **F2-07** — ens budgetperiode på dashboard/kategoriside samt navngivne, linkbare
+  over-budget-kategorier. [Plan + Outcome](plans/2026-08-01-f207-dashboard-period-budget-clarity.md#outcome-fill-in-when-done).
 - **P3-65** — Codex discovery, bounded dev-notes retrieval and structural drift gates.
   [Plan + Outcome](plans/2026-08-01-p365-codex-dev-notes-optimization.md#outcome).
 - **P3-59** — request-path logging and the rejection admission rule across the five previously

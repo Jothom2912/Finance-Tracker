@@ -110,6 +110,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [plans/2026-07-31-p357-api-logging-config.md](plans/2026-07-31-p357-api-logging-config.md) — P3-57: ny shared/observability med én dictConfig der også overtager uvicorns tre loggere, kaldt fra alle 12 app/main.py. Planens vigtigste…
 - [plans/2026-07-31-p359-request-path-logging.md](plans/2026-07-31-p359-request-path-logging.md) — P3-59: de fem tavse services (account, user, goal, notification, saga) får et spor i request-stien. Planens egentlige produkt er en…
 - [plans/2026-08-01-p365-codex-dev-notes-optimization.md](plans/2026-08-01-p365-codex-dev-notes-optimization.md) — P3-65: Codex-discovery, bounded dev-notes retrieval og gates mod ny kontekstdrift.
+- [plans/2026-08-01-f207-dashboard-period-budget-clarity.md](plans/2026-08-01-f207-dashboard-period-budget-clarity.md) — F2-07: samme budgetperiode på dashboard/kategoriside og dybe links fra navngivne overskridelser.
 
 ## Decisions
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue analytics.embeddings, partial-update of description_vector.

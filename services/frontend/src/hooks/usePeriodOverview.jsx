@@ -2,13 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { gql } from 'graphql-request';
 import { gqlRequest } from '../api/graphqlClient';
 
-// Samlet read-side for en kalendermåned via gateway'ens GraphQL —
-// erstatter CategoriesPage's tidligere dobbelte REST-sti (snake_case
-// dashboard/overview + budget-service summary), så dashboard og
-// kategoriside læser samme felter fra samme kilde.
+// Samlet read-side for kontoens budgetmåned via gateway'ens GraphQL.
+// Både forbrug og budget bruger dermed samme start_day-aware interval.
 const PERIOD_OVERVIEW_QUERY = gql`
-  query PeriodOverview($month: Int!, $year: Int!, $startDate: Date!, $endDate: Date!) {
-    financialOverview(startDate: $startDate, endDate: $endDate) {
+  query PeriodOverview($month: Int!, $year: Int!) {
+    periodOverview(month: $month, year: $year) {
       startDate
       endDate
       totalIncome
@@ -51,18 +49,14 @@ export function periodOverviewQueryKey(accountId, month, year) {
 export function usePeriodOverview({ month, year, enabled = true }) {
   const accountId = localStorage.getItem('account_id');
 
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
   const query = useQuery({
     queryKey: periodOverviewQueryKey(accountId, month, year),
-    queryFn: () => gqlRequest(PERIOD_OVERVIEW_QUERY, { month, year, startDate, endDate }),
+    queryFn: () => gqlRequest(PERIOD_OVERVIEW_QUERY, { month, year }),
     enabled: enabled && !!accountId,
   });
 
   return {
-    overview: query.data?.financialOverview ?? null,
+    overview: query.data?.periodOverview ?? null,
     budgetSummary: query.data?.budgetSummary ?? null,
     loading: query.isLoading,
     error: query.error ? query.error.message || 'Kunne ikke hente data.' : null,

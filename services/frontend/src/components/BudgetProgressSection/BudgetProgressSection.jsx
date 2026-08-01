@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { formatAmount } from '../../lib/formatters';
 import './BudgetProgressSection.css';
 
@@ -69,9 +70,14 @@ function BudgetProgressSection({ budgetSummary }) {
   const sorted = [...itemsWithBudget].sort(
     (a, b) => b.percentageUsed - a.percentageUsed
   );
-  const hasMore = sorted.length > COLLAPSED_COUNT;
-  const visible = expanded ? sorted : sorted.slice(0, COLLAPSED_COUNT);
-  const hidden = sorted.slice(COLLAPSED_COUNT);
+  const overBudgetItems = sorted.filter((item) => item.remainingAmount < 0);
+  const withinBudgetItems = sorted.filter((item) => item.remainingAmount >= 0);
+  const collapsedWithinCount = Math.max(0, COLLAPSED_COUNT - overBudgetItems.length);
+  const visible = expanded
+    ? sorted
+    : [...overBudgetItems, ...withinBudgetItems.slice(0, collapsedWithinCount)];
+  const hidden = withinBudgetItems.slice(collapsedWithinCount);
+  const hasMore = hidden.length > 0;
 
   const usedPercent = budgetSummary.totalBudget > 0
     ? Math.round((budgetSummary.totalSpent / budgetSummary.totalBudget) * 100)
@@ -99,9 +105,22 @@ function BudgetProgressSection({ budgetSummary }) {
         </span>
       </div>
 
-      {budgetSummary.overBudgetCount > 0 && (
+      {overBudgetItems.length > 0 && (
         <div className="budget-warning">
-          {budgetSummary.overBudgetCount} kategori{budgetSummary.overBudgetCount > 1 ? 'er' : ''} over budget
+          <strong>
+            {overBudgetItems.length} kategori{overBudgetItems.length > 1 ? 'er' : ''} over budget
+          </strong>
+          <ul className="budget-warning-list">
+            {overBudgetItems.map((item) => (
+              <li key={item.categoryId}>
+                <Link
+                  to={`/categories?month=${budgetSummary.month}&year=${budgetSummary.year}&category=${item.categoryId}`}
+                >
+                  {item.categoryName} — {formatAmount(Math.abs(item.remainingAmount))} over budget
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
