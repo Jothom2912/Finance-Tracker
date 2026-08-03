@@ -57,8 +57,6 @@ class CategorizationService:
     def _run_pipeline(self, request: CategorizeRequestDTO) -> CategorizationResult:
         description = request.description
         amount = request.amount
-        desc_short = description[:40]
-
         evidence = (request.merchant, request.counterparty, request.provider, request.country)
         if any(value is not None for value in evidence):
             match_rule = partial(
@@ -72,7 +70,7 @@ class CategorizationService:
             )
         else:
             match_rule = partial(self._rule_engine.match, description, amount)
-        result = self._try_tier("rules", desc_short, match_rule)
+        result = self._try_tier("rules", match_rule)
         if result is not None:
             return result
 
@@ -84,7 +82,6 @@ class CategorizationService:
         if ml is not None:
             result = self._try_tier(
                 "ml",
-                desc_short,
                 lambda: ml.predict(description),
             )
             if result is not None:
@@ -94,34 +91,31 @@ class CategorizationService:
         if llm is not None:
             result = self._try_tier(
                 "llm",
-                desc_short,
                 lambda: llm.predict(description, amount),
             )
             if result is not None:
                 return result
 
-        logger.warning("All tiers exhausted for '%s'. Using fallback.", desc_short)
+        logger.warning("All categorization tiers exhausted; using fallback")
         return self._absolute_fallback()
 
     def _try_tier(
         self,
         tier_name: str,
-        context: str,
         fn: Callable[[], CategorizationResult | None],
     ) -> CategorizationResult | None:
         try:
             result = fn()
             if result is not None:
                 logger.debug(
-                    "Tier '%s' matched '%s' -> subcategory %d [%s]",
+                    "Tier '%s' matched subcategory %d [%s]",
                     tier_name,
-                    context,
                     result.subcategory_id,
                     result.confidence.value,
                 )
             return result
         except Exception:
-            logger.exception("Tier '%s' failed for '%s'", tier_name, context)
+            logger.exception("Categorization tier '%s' failed", tier_name)
             return None
 
     def _absolute_fallback(self) -> CategorizationResult:

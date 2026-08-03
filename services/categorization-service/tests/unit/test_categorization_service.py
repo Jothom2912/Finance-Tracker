@@ -99,6 +99,13 @@ class TestCategorizationPipeline:
         assert response.confidence == "low"
         assert response.needs_review is True
 
+    async def test_fallback_log_excludes_hostile_description(
+        self, service: CategorizationService, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        hostile = "private-bank-text-that-must-never-be-logged"
+        await service.categorize(CategorizeRequestDTO(description=hostile, amount=-10.0))
+        assert hostile not in caplog.text
+
     async def test_tier_failure_falls_through(self, failing_service: CategorizationService) -> None:
         request = CategorizeRequestDTO(description="Anything", amount=-50.0)
         response = await failing_service.categorize(request)
