@@ -35,7 +35,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [patterns/frontend-data-patterns.md](patterns/frontend-data-patterns.md) — TanStack Query + crudFactory house patterns; which CLAUDE.md bits are aspirational.
 
 ## Findings
-- [findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md](findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md) — nye importer havner på Shopping-fallback; 42 regler kan aldrig fyre (HIGH, → TAX-12/13).
+- [findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md](findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md) — kun 7 af 82 regler kan nås fra importstien (HIGH, → TAX-12/13/14).
 - [findings/2026-08-01-tax06-migration-collides-with-existing-category-ids.md](findings/2026-08-01-tax06-migration-collides-with-existing-category-ids.md) — TAX-06 ID-kollision på en rigtig snapshotkopi (HIGH, → P2-44).
 - [findings/2026-07-07-architecture-audit.md](findings/2026-07-07-architecture-audit.md) — full codebase audit: 10 CRITICAL, 27 HIGH, ~45 MEDIUM, ~40 LOW, with file:line evidence.
 - [findings/2026-07-12-goal-migration-004-sqlite.md](findings/2026-07-12-goal-migration-004-sqlite.md) — goal migration 004 Postgres-only + fixture migrated wrong DB; resolved 2026-07-17 (F1-04 wave 0).

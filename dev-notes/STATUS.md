@@ -70,7 +70,8 @@ No active data-store reconciliation blocker. Any taxonomy bulk write needs separ
 ## Open findings to route first
 
 - [Taxonomy activation breaks live categorization](findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md)
-  — every new import lands on the Shopping fallback; 42 of 82 rules cannot fire (HIGH, TAX-12/TAX-13).
+  — only 7 of 82 rules are reachable from the import path, so new rows read as Shopping
+  (HIGH, TAX-14 direction, TAX-12 merchant evidence, TAX-13 honest fallback).
 
 - [Product-surface sweep](findings/2026-07-26-product-surface-sweep.md) — security, operations
   and UX follow-ups across the product.
