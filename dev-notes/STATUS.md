@@ -5,14 +5,15 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Active
 
-- **TAX-10 (approved 2026-08-03; execution sequenced)** — rehearsal applied 307/220/29 references
-  and proved an idempotent second run; owner approved those hashes and a re-check confirmed the
-  evidence and unchanged source data. Active is categorization 007, transaction **014**, budget 004,
-  and the transaction read copy holds no semantic keys yet, so categorization upgrades and drains
-  before the transaction writer, with the stack up for convergence.
-  [Plan + re-check](plans/2026-08-01-tax10-approved-existing-data-reclassification.md#precondition-re-check--2026-08-03).
+No active implementation plan. TAX-10 shipped; the owner still owes a manual UI pass over the new
+categories, after which the retained pre-write snapshots can go.
 
 ## Recently shipped
+
+- **TAX-10** — applied 307/220/29 approved references to active data, each writer idempotent on a
+  second run and a wrong-hash control proving the gate blocks. 763↔763 Postgres/Elasticsearch with
+  identical hashes; totals, the 527 unresolved, 7 reviews and 6 protected references unchanged.
+  [Plan + Outcome](plans/2026-08-01-tax10-approved-existing-data-reclassification.md#outcome--executed-2026-08-03).
 
 - **TAX-07** — deterministic three-service read-only reclassification report over the reconciled
   749-row baseline; explicit evidence reasons, traced analytics deltas and approval packet with
@@ -61,8 +62,9 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Next candidates
 
-- **TAX-10** — execute the approved manifests once the three re-check preconditions are met.
-- **TAX-08** — sandbox persona fixtures after TAX-07 produces its reviewed approval packet.
+- **TAX-08** — sandbox persona fixtures, now that TAX-07/TAX-10 have shipped.
+- **Legacy taxonomy retirement** — 529 transaction and 43 budget references still point at legacy
+  rows, so removal needs measured zero-reference evidence, an ID in the taxonomy roadmap and a plan.
 
 ## Blockers
 

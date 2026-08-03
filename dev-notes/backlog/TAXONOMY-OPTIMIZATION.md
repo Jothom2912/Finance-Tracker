@@ -128,7 +128,7 @@ merchants should be removed from global defaults or moved into persona fixtures.
 | TAX-07 | Existing-data reclassification strategy | Dry-run/replay report, preservation of manual decisions, rule/budget remap, explicit approval before any bulk write | TAX-03, TAX-06 | done 2026-08-01 — [plan + Outcome](../plans/2026-08-01-tax07-existing-data-reclassification-dry-run.md#outcome-fill-in-when-done) |
 | TAX-08 | Sandbox persona fixtures | Bank/provider-separated synthetic personas, expected labels, dataset source/version and reset/reimport path | TAX-05, TAX-06 | open |
 | TAX-09 | Quality gate | Per-bank/category coverage, ambiguity cases and deterministic regression fixtures before labels are treated as training data | TAX-07, TAX-08; ML-01 | open |
-| TAX-10 | Existing-data reclassification execution | Hash-bound, idempotent service-owned writes, event-driven analytics convergence and verified rollback | TAX-07 | in progress — plan approved 2026-08-01 — [plan](../plans/2026-08-01-tax10-approved-existing-data-reclassification.md) |
+| TAX-10 | Existing-data reclassification execution | Hash-bound, idempotent service-owned writes, event-driven analytics convergence and verified rollback | TAX-07 | done 2026-08-03 — 307/220/29 applied, 763↔763 reconciled — [plan + Outcome](../plans/2026-08-01-tax10-approved-existing-data-reclassification.md#outcome--executed-2026-08-03) |
 
 ## Recommended sequencing with ML and AI work
 

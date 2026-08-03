@@ -1,7 +1,7 @@
 ---
 title: TAX-10 — approved existing-data reclassification execution
 date: 2026-08-01
-status: in-progress
+status: done
 backlog: [TAX-10]
 related:
   - plans/2026-08-01-tax07-existing-data-reclassification-dry-run.md
@@ -92,13 +92,13 @@ reviews and 6 protected references are outside this plan.
    explicitly. Set `writes_authorized=true` only in a separate operator approval file containing
    the newly reviewed summary and manifest hashes; stop before `--execute` until the owner approves
    those exact hashes.
-7. [ ] **Rehearse, execute and observe convergence.** Restore the fresh snapshots into disposable
+7. [x] **Rehearse, execute and observe convergence.** Restore the fresh snapshots into disposable
    databases, run each writer twice (first apply, second no-op), and verify exclusions, invariants,
    outbox events and Elasticsearch convergence. After approval, execute one service at a time on
    active data with before/after counters and retained audit artifacts. Keep workers running, wait
    for outbox/inbox drain, and require Postgres↔Elasticsearch reconciliation over all active
    transactions before declaring success. Do not manually patch Elasticsearch.
-8. [ ] **Verify and hand off frontend testing.** Add deterministic unit tests for selection,
+8. [x] **Verify and hand off frontend testing.** Add deterministic unit tests for selection,
    identity resolution, conflict/protection checks and idempotency; integration tests for atomic
    updates/outbox and rollback; aggregator negative controls for altered hashes and broadened scope;
    and a browser/API smoke showing new category/subcategory names on real migrated transactions.
@@ -203,8 +203,52 @@ Snapshots were deliberately **not** taken during this re-check: a snapshot taken
 starts would be stale for the write it is supposed to protect. Take them after the stack is up and
 quiet, immediately before the first writer.
 
-## Outcome (fill in when done)
+## Outcome — executed 2026-08-03
 
-Plan approved 2026-08-01; checkpoint content approved by the owner 2026-08-03. Implementation and
-disposable rehearsal completed successfully. Active data remains unchanged. Execution is sequenced
-behind the three preconditions recorded in the re-check above.
+Executed against active data after owner approval. Applied **307 categorization + 220 transaction +
+29 budget** references — exactly the approved manifest counts — and every writer's second run
+returned `already_applied` for the same counts, so idempotency holds on active data and not only in
+rehearsal. A negative control confirms the gate is load-bearing: the same command with a wrong
+summary hash aborts with `approval does not cover the supplied summary hash` and writes nothing.
+
+Preconditions. Verified custom-format snapshots of all three databases were taken first and proved
+restorable in a disposable PostgreSQL 16 container, where they reproduced live exactly: 793/134/007,
+749 active + 18 deleted/014, 72/64/004. The categorization migration gate was failing on the P2-44
+collision (`Key (id)=(11) already exists`), which had left 31 containers unstarted; the approved
+bootstrap installed 008 with `category_start=24 subcategory_start=109` — the same values the
+populated-snapshot test pins — and 009 followed. Categorization then held 24 categories (13 keyed),
+108 subcategories (67 keyed), 216 rules and 80 allocations. With the stack up, the taxonomy outbox
+drained fully (0 pending / 891 published) and the transaction read copy carried 13/67 semantic keys,
+which is what made the transaction writer able to resolve targets at all.
+
+Measured drift. Starting the stack ran the bank-sync scheduler, which imported **14 new
+transactions**. They were categorized straight into the new taxonomy (e.g. subcategory 139/164) and
+have **zero overlap** with the approved 220-row manifest, so the approved hashes still applied
+unchanged. The consequence is that the reconciliation target is **763** active transactions, not
+P3-21's 749. The next scheduled sync is 24h out, so the boundary held still during execution.
+
+Applied state. Categorization results moved 793→579 legacy and 14→228 new; system rules 134→41
+legacy and 82→175 new. That is 214 results + 93 rules = **307**, with all **4** user rules untouched.
+Transactions moved 749→**529** legacy, which is exactly the 527 unresolved plus 2 protected rows, and
+14→234 new; 763 active rows and DKK **603,760.78** are unchanged by the remap. The outbox holds
+**223** `transaction.updated` events (3 pre-existing + 220), all published. Budget lines moved
+72→43 legacy + 29 new at an unchanged 72 lines and DKK **203,420.00**, leaving the 7 reviews alone.
+
+Convergence. Every queue and all three outboxes drained to zero. The reconciler exited **0** with
+763↔763, no missing/extra IDs, no field mismatch, no group mismatch and
+`postgres_hash = elasticsearch_hash = df62af48f5cf9b00c238be9a9f73acc23005bf425cf1e0ca8bd575a7fb814322`,
+`report_hash = db2c7ab5874b485e4f9df19beb6e7adf75878461fe665b45423215feee808423`. Frontend-visible
+data checks out: migrated transaction 827 now reads category 26 `Transport` / subcategory 119
+`Offentlig transport` in the read model. Elasticsearch was never edited directly.
+
+Verification. categorization **188**, transaction **82 integration + 221 unit**, budget **56**,
+analytics **124**, `check` (ruff + format + mypy) green for all four, `compose-state-check` 64
+containers with nothing dead or restarting, plus `notes-check` and `git diff --check`. Rollback was
+not needed and was never invoked; the verified pre-write snapshots are retained under
+`/private/tmp/tax10-active-20260803` (mode 700) with the approval file
+`bb0dbb1fb27a0662792bf3602fde35c7cb7220b3815501b4421ed1ebe9c47693` until the owner has exercised the
+new categories in the UI.
+
+The 527 unresolved transactions, 7 budget reviews and 6 protected references are untouched by design
+and remain the open scope. Legacy taxonomy rows and integer compatibility fields were not removed;
+that still needs measured zero-reference evidence and a separate plan.
