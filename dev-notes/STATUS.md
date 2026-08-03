@@ -35,9 +35,6 @@ categories, after which the retained pre-write snapshots can go.
 - **TAX-01–03** — approved 13/67 purpose-first taxonomy, UUIDv7 + stable-key identity policy,
   complete 10/41 legacy mapping and executable baseline guard; no data migration performed.
   [Plan + Outcome](plans/2026-08-01-tax01-tax03-taxonomy-foundation.md#outcome-fill-in-when-done).
-- **P3-46** — alle tre AI-modeller pulls deterministisk; med 16 GB Docker-memory gennemfører
-  qwen3:8b-chatten rå SSE og Chromium-E2E uden OOM, med 62 stabile containere.
-  [Plan + Outcome](plans/2026-08-01-p346-qwen8b-chat-e2e.md#outcome-fill-in-when-done).
 - **P3-28** — guarded root Docker context, cache-free uv images and safe gzip/immutable asset
   delivery; representative goal image halved from 198.0 to 98.9 MB and live headers passed.
   [Plan + Outcome](plans/2026-08-01-p328-build-image-hygiene.md#outcome-fill-in-when-done).
@@ -71,6 +68,9 @@ categories, after which the retained pre-write snapshots can go.
 No active data-store reconciliation blocker. Any taxonomy bulk write needs separate approval and plan.
 
 ## Open findings to route first
+
+- [Taxonomy activation breaks live categorization](findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md)
+  — every new import lands on the Shopping fallback; 42 of 82 rules cannot fire (HIGH, TAX-12/TAX-13).
 
 - [Product-surface sweep](findings/2026-07-26-product-surface-sweep.md) — security, operations
   and UX follow-ups across the product.
