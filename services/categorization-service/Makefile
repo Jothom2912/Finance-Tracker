@@ -37,7 +37,11 @@ test-integration: ## Run integration tests only
 test-migrations: ## Run Alembic migration tests against a real Postgres via Testcontainers (requires Docker running).
 	uv run pytest tests/migrations/ -v
 
-test-all: test test-migrations ## Run every test target. Use before pushing.
+test-all: ## Run the whole tree in ONE pytest process, exactly as CI does. Use before pushing.
+	# Not `test test-migrations`: two invocations hide order-dependent failures,
+	# because a test that only passes in isolation still passes when its
+	# directory runs alone. CI runs `pytest tests`, so this must too.
+	uv run pytest tests
 
 lint: ## Run ruff linter
 	uv run ruff check .

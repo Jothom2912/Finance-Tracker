@@ -41,10 +41,6 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 - **TAX-01–03** — approved 13/67 purpose-first taxonomy, UUIDv7 + stable-key identity policy,
   complete 10/41 legacy mapping and executable baseline guard; no data migration performed.
   [Plan + Outcome](plans/2026-08-01-tax01-tax03-taxonomy-foundation.md#outcome-fill-in-when-done).
-- **P3-60 + P3-62** — honest 404/503 split for account → user, explicit temporary frontend
-  error and one account lookup per goal creation; live negative smoke proved 503 + zero write,
-  and the restored 62-container stack is healthy.
-  [Plan + Outcome](plans/2026-08-01-p360-p362-upstream-error-honesty.md#outcome-fill-in-when-done).
 - **P2-21 + P3-17** — Kubernetes workload parity and explicit migration ordering; clean and
   idempotent live rollout verified with zero workload restarts.
   [Plan + Outcome](plans/2026-08-01-p221-p317-k8s-parity-migration-ordering.md#outcome).
@@ -96,3 +92,6 @@ No active data-store reconciliation blocker. Any taxonomy bulk write needs separ
   dependencies. Start/import the affected API and worker modules.
 - `make notes-check` proves structure and retrieval budgets, not the truth of dated claims;
   verify those against current code.
+- A suite split across pytest invocations cannot catch order dependence. CI runs `pytest tests` in
+  one process, so `test-all` must too; see
+  [the isolation finding](findings/2026-08-03-migration-test-passes-only-in-isolation.md).

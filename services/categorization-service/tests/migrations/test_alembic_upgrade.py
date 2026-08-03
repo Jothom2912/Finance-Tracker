@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import time
 
 import pytest
@@ -15,6 +16,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 
@@ -24,11 +26,49 @@ def postgres():
         yield pg
 
 
+def _bind_app_session_factory_to(async_url: str):
+    """Point app code at the Testcontainer, whatever imported first.
+
+    ``app.database`` builds its engine at import time from settings, so setting
+    DATABASE_URL only works while nothing has imported it yet. Any test module
+    that imports ``app.main`` during collection — most of tests/integration —
+    freezes the factory on localhost:5432, and a test using app code then fails
+    only when run alongside them. Rebinding makes the outcome independent of
+    collection order instead of passing in isolation and failing in CI.
+    """
+    import app.database as app_database
+
+    previous_engine = app_database.engine
+    previous_factory = app_database.async_session_factory
+    container_engine = create_async_engine(async_url, echo=False)
+    container_factory = async_sessionmaker(container_engine, class_=AsyncSession, expire_on_commit=False)
+    app_database.engine = container_engine
+    app_database.async_session_factory = container_factory
+
+    # Modules that already did ``from app.database import async_session_factory``
+    # hold their own binding, so patch those too.
+    rebound = []
+    for name, module in list(sys.modules.items()):
+        if name.startswith("app.") and getattr(module, "async_session_factory", None) is previous_factory:
+            module.async_session_factory = container_factory
+            rebound.append(module)
+
+    def restore() -> None:
+        for module in rebound:
+            module.async_session_factory = previous_factory
+        app_database.engine = previous_engine
+        app_database.async_session_factory = previous_factory
+        asyncio.run(container_engine.dispose())
+
+    return restore
+
+
 @pytest.fixture(scope="module")
 def engine(postgres):
     url = postgres.get_connection_url()
     async_url = url.replace("postgresql://", "postgresql+asyncpg://").replace("psycopg2", "asyncpg")
     os.environ["DATABASE_URL"] = async_url
+    restore_app_session_factory = _bind_app_session_factory_to(async_url)
 
     eng = create_engine(url)
 
@@ -49,6 +89,7 @@ def engine(postgres):
     try:
         yield eng
     finally:
+        restore_app_session_factory()
         eng.dispose()
 
 
