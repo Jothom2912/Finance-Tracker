@@ -21,6 +21,7 @@ from app.adapters.inbound.internal_auth import require_internal_api_key
 from app.application.dto import CategorizeRequestDTO, CategorizeResponseDTO
 from app.config import settings
 from app.dependencies import build_categorization_service
+from app.rule_engine_provider import rule_engine_provider
 
 # Same ceiling as transaction-service's BulkCreateTransactionDTO, which is
 # the only producer of batches — an unbounded list would be a cheap way to
@@ -43,15 +44,19 @@ categorize_router = APIRouter(
 @categorize_router.post(
     "/",
     response_model=CategorizeResponseDTO,
+    response_model_exclude_none=True,
 )
 async def categorize_single(body: CategorizeRequestDTO) -> CategorizeResponseDTO:
     service = await build_categorization_service(user_id=None)
-    return await service.categorize(body)
+    result = await service.categorize(body)
+    result.target_key = rule_engine_provider.semantic_key_for(result.subcategory_id)
+    return result
 
 
 @categorize_router.post(
     "/batch",
     response_model=list[CategorizeResponseDTO],
+    response_model_exclude_none=True,
 )
 async def categorize_batch(
     body: Annotated[
@@ -60,4 +65,7 @@ async def categorize_batch(
     ],
 ) -> list[CategorizeResponseDTO]:
     service = await build_categorization_service(user_id=None)
-    return await service.categorize_batch(body)
+    results = await service.categorize_batch(body)
+    for result in results:
+        result.target_key = rule_engine_provider.semantic_key_for(result.subcategory_id)
+    return results

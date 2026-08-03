@@ -316,6 +316,9 @@ class CategoryService:
             name=category.name,
             type=category.type.value,
             display_order=category.display_order,
+            public_id=category.public_id,
+            semantic_key=category.semantic_key,
+            lifecycle=category.lifecycle,
         )
 
     @staticmethod
@@ -325,4 +328,7 @@ class CategoryService:
             name=sub.name,
             category_id=sub.category_id,
             is_default=sub.is_default,
+            public_id=sub.public_id,
+            semantic_key=sub.semantic_key,
+            lifecycle=sub.lifecycle,
         )

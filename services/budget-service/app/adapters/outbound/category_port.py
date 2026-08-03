@@ -49,3 +49,23 @@ class CategoryPort(ICategoryPort):
         except httpx.HTTPError:
             logger.warning("category_port: get_all_names fejlede")
         return {}
+
+    async def resolve_identity(self, semantic_key: str, public_id: str) -> int | None:
+        url = f"{settings.CATEGORY_SERVICE_URL}/api/v1/categories/"
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                response = await client.get(url, headers=make_service_auth_header())
+                response.raise_for_status()
+                matches = [
+                    int(category["id"])
+                    for category in response.json()
+                    if category.get("semantic_key") == semantic_key
+                    and category.get("public_id") == public_id
+                    and category.get("lifecycle") == "active"
+                ]
+                if len(matches) != 1:
+                    return None
+                return matches[0]
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            logger.warning("category_port: stable identity resolution failed for key %s", semantic_key)
+            return None

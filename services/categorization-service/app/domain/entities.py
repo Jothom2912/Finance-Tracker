@@ -19,6 +19,9 @@ class Category:
     name: str
     type: CategoryType
     display_order: int = 0
+    public_id: str | None = None
+    semantic_key: str | None = None
+    lifecycle: str = "active"
 
 
 @dataclass
@@ -27,6 +30,9 @@ class SubCategory:
     name: str
     category_id: int
     is_default: bool = True
+    public_id: str | None = None
+    semantic_key: str | None = None
+    lifecycle: str = "active"
 
     @staticmethod
     def create(name: str, category_id: int, *, is_default: bool = True) -> SubCategory:

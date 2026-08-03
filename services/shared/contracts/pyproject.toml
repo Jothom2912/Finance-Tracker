@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "finans-tracker-contracts"
-version = "0.2.0"
+version = "0.4.0"
 description = "Shared event contracts for inter-service communication"
 requires-python = ">=3.11"
 dependencies = [

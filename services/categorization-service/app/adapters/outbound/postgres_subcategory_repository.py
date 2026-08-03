@@ -92,4 +92,7 @@ class PostgresSubCategoryRepository(ISubCategoryRepository):
             name=model.name,
             category_id=model.category_id,
             is_default=model.is_default,
+            public_id=model.public_id,
+            semantic_key=model.semantic_key,
+            lifecycle=model.lifecycle,
         )

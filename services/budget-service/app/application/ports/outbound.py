@@ -37,6 +37,9 @@ class ICategoryPort(ABC):
     @abstractmethod
     async def get_all_names(self) -> dict[int, str]: ...
 
+    @abstractmethod
+    async def resolve_identity(self, semantic_key: str, public_id: str) -> int | None: ...
+
 
 class IMonthlyBudgetRepository(ABC):
     @abstractmethod

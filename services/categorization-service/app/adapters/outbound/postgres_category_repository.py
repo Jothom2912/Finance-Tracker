@@ -82,4 +82,7 @@ class PostgresCategoryRepository(ICategoryRepository):
             name=model.name,
             type=CategoryType(model.type),
             display_order=model.display_order,
+            public_id=model.public_id,
+            semantic_key=model.semantic_key,
+            lifecycle=model.lifecycle,
         )

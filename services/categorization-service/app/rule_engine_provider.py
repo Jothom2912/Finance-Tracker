@@ -55,6 +55,7 @@ class RuleEngineProvider:
         self._lock = asyncio.Lock()
         self._subcategory_lookup: dict[str, tuple[int, int]] = {}
         self._subcategory_name_by_id: dict[int, str] = {}
+        self._subcategory_key_by_id: dict[int, str] = {}
         self._user_engines: dict[int, tuple[list[RuleEngine], datetime]] = {}
 
     @property
@@ -64,6 +65,10 @@ class RuleEngineProvider:
     @property
     def fallback_category_id(self) -> int:
         return self._fallback_category_id
+
+    def semantic_key_for(self, subcategory_id: int) -> str | None:
+        """Resolve an environment-local surrogate to its stable taxonomy key."""
+        return self._subcategory_key_by_id.get(subcategory_id)
 
     async def warmup(self) -> None:
         """Call at startup to preload engine and warm DB pool."""
@@ -162,8 +167,11 @@ class RuleEngineProvider:
 
             subcategory_lookup: dict[str, tuple[int, int]] = {}
             subcategory_name_by_id: dict[int, str] = {}
+            subcategory_key_by_id: dict[int, str] = {}
             for sub in subs:
                 subcategory_name_by_id[sub.id] = sub.name
+                if sub.semantic_key is not None:
+                    subcategory_key_by_id[sub.id] = sub.semantic_key
                 if sub.category_id in cat_ids:
                     subcategory_lookup[sub.name] = (sub.id, sub.category_id)
 
@@ -203,6 +211,7 @@ class RuleEngineProvider:
         self._engine = ConstrainedRuleEngine(constrained)
         self._subcategory_lookup = subcategory_lookup
         self._subcategory_name_by_id = subcategory_name_by_id
+        self._subcategory_key_by_id = subcategory_key_by_id
         # Taxonomy maps changed — cached user overlays reference the old
         # lookup, so rebuild them lazily on next use.
         self._user_engines.clear()

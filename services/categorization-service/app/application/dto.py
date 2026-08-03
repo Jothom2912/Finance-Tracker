@@ -33,6 +33,7 @@ class CategorizeResponseDTO(BaseModel):
     tier: str
     confidence: str
     needs_review: bool = False
+    target_key: str | None = None
 
 
 class CreateCategoryDTO(BaseModel):
@@ -63,6 +64,9 @@ class CategoryResponseDTO(BaseModel):
     name: str
     type: str
     display_order: int = 0
+    public_id: str | None = None
+    semantic_key: str | None = None
+    lifecycle: str = "active"
 
 
 class SubCategoryResponseDTO(BaseModel):
@@ -70,6 +74,9 @@ class SubCategoryResponseDTO(BaseModel):
     name: str
     category_id: int
     is_default: bool = True
+    public_id: str | None = None
+    semantic_key: str | None = None
+    lifecycle: str = "active"
 
 
 class CreateRuleDTO(BaseModel):

@@ -10,6 +10,7 @@ categorization-service will pick it up via the transaction.created event.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import httpx
@@ -26,6 +27,7 @@ class CategorizationResult:
     merchant_id: int | None
     tier: str
     confidence: str
+    target_key: str | None = None
 
 
 class CategorizationClient:
@@ -56,6 +58,7 @@ class CategorizationClient:
                     merchant_id=data.get("merchant_id"),
                     tier=data["tier"],
                     confidence=data["confidence"],
+                    target_key=data.get("target_key"),
                 )
         except httpx.TimeoutException:
             logger.warning(
@@ -75,7 +78,7 @@ class CategorizationClient:
     async def categorize_batch(
         self,
         items: list[dict],
-    ) -> list[CategorizationResult | None]:
+    ) -> Sequence[CategorizationResult | None]:
         try:
             async with httpx.AsyncClient(timeout=self._timeout * 3) as client:
                 payload = [{"description": item["description"], "amount": item["amount"]} for item in items]
@@ -93,6 +96,7 @@ class CategorizationClient:
                         merchant_id=r.get("merchant_id"),
                         tier=r["tier"],
                         confidence=r["confidence"],
+                        target_key=r.get("target_key"),
                     )
                     for r in results
                 ]
