@@ -13,6 +13,7 @@ help: ## Show available targets
 	@printf '  format-check        Check code formatting\n'
 	@printf '  check               Run all quality checks\n'
 	@printf '  clean               Remove generated artifacts\n'
+	@printf '  eval-up             Start isolated analytics eval read-side\n'
 
 install-deps: ## Install all dependencies (prod + dev)
 	uv sync --dev
@@ -29,8 +30,11 @@ test-unit: ## Run unit tests only
 test-eval: ## Run the AI-01 quality eval (needs live Ollama with bge-m3 + qwen3:4b, e.g. OLLAMA_BASE_URL=http://localhost:11435)
 	uv run pytest tests/eval/ -v -m eval -s
 
-test-eval-retrieval: ## Retrieval-eval alene mod ES-hybrid (kræver compose-stakken + seed — se tests/eval/es_seed.py)
-	uv run pytest tests/eval/test_retrieval_eval.py -v -m eval -s
+test-eval-retrieval: ## Retrieval-eval mod den isolerede eval analytics-service på localhost:8013
+	EVAL_ANALYTICS_SERVICE_URL=$${EVAL_ANALYTICS_SERVICE_URL:-http://localhost:8013} EVAL_ES_INDEX=$${EVAL_ES_INDEX:-eval_transactions} uv run pytest tests/eval/test_retrieval_eval.py -v -m eval -s
+
+eval-up: ## Start isolated eval analytics-service and prefixed ES indices
+	docker compose -f ../../docker-compose.yml -f ../../docker-compose.eval.yml up -d analytics-eval-service
 
 lint: ## Run ruff linter
 	uv run ruff check .

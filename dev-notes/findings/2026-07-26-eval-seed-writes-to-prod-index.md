@@ -3,9 +3,9 @@ title: ai-service's eval seed writes 66 fixture documents into the production ES
 date: 2026-07-26
 severity: LOW
 area: ai, analytics, tests
-status: open
+status: resolved
 backlog: [P3-21]
-resolved-by: null
+resolved-by: ../plans/2026-08-01-p321-elasticsearch-eval-isolation-and-reconciliation.md
 ---
 
 # ai-service's eval seed writes 66 fixture documents into the production ES index
@@ -60,3 +60,9 @@ Postgres rows must be empty.** That converts the P3-20 class of bug from
 "found by accident during an unrelated investigation" into a check.
 
 Tracked as P3-21.
+
+Resolved 2026-08-01 by the
+[P3-21 isolation and reconciliation plan](../plans/2026-08-01-p321-elasticsearch-eval-isolation-and-reconciliation.md#outcome-fill-in-when-done):
+fixtures now seed only the guarded `eval_transactions` alias, the 66 fixtures plus one classified
+orphan were removed from the live index, and the id-set diff shipped as the reusable reconciler that
+measured 749↔749.

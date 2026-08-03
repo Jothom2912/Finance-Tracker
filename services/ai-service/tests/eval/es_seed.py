@@ -3,7 +3,7 @@
 Flow (fra services/ai-service, med compose-stakken oppe)::
 
     1. uv run python -m tests.eval.es_seed
-    2. (fra repo-roden) docker compose run --rm analytics-service \\
+    2. (fra repo-roden) docker compose run --rm -e ES_INDEX_PREFIX=eval_ analytics-service \\
            python -m app.tools.backfill_embeddings --user-id 9001 --user-id 9002
     3. make test-eval-retrieval
 
@@ -29,22 +29,33 @@ import httpx
 from .fixtures import EVAL_TRANSACTIONS, EVAL_USER_ID, OTHER_USER_ID, OTHER_USER_TRANSACTIONS
 
 ES_URL = os.getenv("ES_URL", "http://localhost:9200")
+EVAL_INDEX_ALIAS = os.getenv("EVAL_ES_INDEX", "eval_transactions")
 ES_ID_OFFSET = 9_000_000
 # Fast, fortidig event-ts: et evt. rigtigt live-event ville vinde guards.
 SEED_TS = int(datetime(2026, 7, 1, tzinfo=UTC).timestamp() * 1000)
 
 
+def validate_eval_index(index_alias: str) -> str:
+    normalized = index_alias.strip().lower()
+    if not normalized or normalized in {"transactions", "transactions_v2"}:
+        raise ValueError("eval seed refuses the live transaction alias/index")
+    if not normalized.startswith("eval_"):
+        raise ValueError("eval index alias must start with 'eval_'")
+    return normalized
+
+
 def seed() -> None:
+    index_alias = validate_eval_index(EVAL_INDEX_ALIAS)
     with httpx.Client(base_url=ES_URL, timeout=30.0) as es:
         es.post(
-            "/transactions/_delete_by_query?refresh=true&conflicts=proceed",
+            f"/{index_alias}/_delete_by_query?refresh=true&conflicts=proceed",
             json={"query": {"terms": {"user_id": [EVAL_USER_ID, OTHER_USER_ID]}}},
         ).raise_for_status()
 
         lines: list[str] = []
         for txn in [*EVAL_TRANSACTIONS, *OTHER_USER_TRANSACTIONS]:
             es_id = txn.id + ES_ID_OFFSET
-            lines.append(f'{{"index": {{"_index": "transactions", "_id": "{es_id}"}}}}')
+            lines.append(f'{{"index": {{"_index": "{index_alias}", "_id": "{es_id}"}}}}')
             doc = {
                 "transaction_id": es_id,
                 "account_id": txn.account_id,
@@ -78,9 +89,10 @@ def seed() -> None:
             raise SystemExit(f"Bulk-indexering fejlede for {len(failed)} docs: {failed[:3]}")
 
     total = len(EVAL_TRANSACTIONS) + len(OTHER_USER_TRANSACTIONS)
-    print(f"Seedede {total} eval-docs (id-offset {ES_ID_OFFSET}) i {ES_URL}/transactions")
+    print(f"Seedede {total} eval-docs (id-offset {ES_ID_OFFSET}) i {ES_URL}/{index_alias}")
     print(
-        "Næste skridt: docker compose run --rm analytics-service python -m app.tools.backfill_embeddings --user-id 9001 --user-id 9002"
+        "Næste skridt: docker compose run --rm -e ES_INDEX_PREFIX=eval_ analytics-service "
+        "python -m app.tools.backfill_embeddings --user-id 9001 --user-id 9002"
     )
 
 

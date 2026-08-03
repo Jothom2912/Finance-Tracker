@@ -26,7 +26,7 @@ import pytest
 from app.application.ports.semantic_search_port import ISemanticSearchPort
 from app.config import settings
 
-from .es_seed import ES_ID_OFFSET
+from .es_seed import ES_ID_OFFSET, EVAL_INDEX_ALIAS, validate_eval_index
 from .fixtures import EVAL_USER_ID
 
 
@@ -104,6 +104,13 @@ class _OffsetSearch:
 def _es_search_factory(request: pytest.FixtureRequest) -> Callable[[int], ISemanticSearchPort]:
     from app.adapters.outbound.es_search import EsSearch
 
+    eval_analytics_url = os.getenv("EVAL_ANALYTICS_SERVICE_URL", "http://localhost:8013")
+    if eval_analytics_url.rstrip("/") == "http://localhost:8012":
+        pytest.fail("retrieval eval refuses the live analytics-service endpoint")
+    previous_url = settings.ANALYTICS_SERVICE_URL
+    settings.ANALYTICS_SERVICE_URL = eval_analytics_url
+    request.addfinalizer(lambda: setattr(settings, "ANALYTICS_SERVICE_URL", previous_url))
+
     probe = EsSearch(user_id=EVAL_USER_ID, token=_make_eval_jwt(EVAL_USER_ID))
     if probe._embed_query("probe") is None:
         # Uden query-vektor ville evalen tavst måle BM25-only — skip højlydt.
@@ -117,7 +124,7 @@ def _es_search_factory(request: pytest.FixtureRequest) -> Callable[[int], ISeman
 
     es_url = os.getenv("ES_URL", "http://localhost:9200")
     count = httpx.post(
-        f"{es_url}/transactions/_count",
+        f"{es_url}/{validate_eval_index(EVAL_INDEX_ALIAS)}/_count",
         json={
             "query": {
                 "bool": {
@@ -132,7 +139,8 @@ def _es_search_factory(request: pytest.FixtureRequest) -> Callable[[int], ISeman
     ).json()["count"]
     if count == 0:
         pytest.skip(
-            "Eval-docs mangler embeddings — kør: docker compose run --rm analytics-service "
+            "Eval-docs mangler embeddings — kør: docker compose run --rm -e ES_INDEX_PREFIX=eval_ "
+            "analytics-service "
             "python -m app.tools.backfill_embeddings --user-id 9001 --user-id 9002"
         )
 

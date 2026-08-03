@@ -1,0 +1,22 @@
+services:
+  # P3-21: opt-in retrieval-eval read-side. Prefixet gør isolation strukturel;
+  # filen er en lokal eval-override og er bevidst ikke del af deploy-topologien.
+  analytics-eval-service:
+    image: finance-tracker-analytics-service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8013:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ES_INDEX_PREFIX: eval_
+      JWT_SECRET: ${EVAL_JWT_SECRET:-eval-retrieval-only-secret}
+      ENVIRONMENT: evaluation
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
