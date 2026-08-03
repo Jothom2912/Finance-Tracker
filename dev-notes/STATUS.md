@@ -5,10 +5,24 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Active
 
-No active implementation plan.
+- **TAX-10 (active-write approval required)** — implementation and disposable rehearsal applied
+  307 categorization + 220 transaction + 29 budget references, then proved a complete idempotent
+  second run. Active databases remain 007/013/004; approve the exact checkpoint hashes before
+  rollout. [Plan + checkpoint](plans/2026-08-01-tax10-approved-existing-data-reclassification.md#active-data-approval-checkpoint--2026-08-01).
 
 ## Recently shipped
 
+- **TAX-07** — deterministic three-service read-only reclassification report over the reconciled
+  749-row baseline; explicit evidence reasons, traced analytics deltas and approval packet with
+  `writes_authorized=false`. [Plan + Outcome](plans/2026-08-01-tax07-existing-data-reclassification-dry-run.md#outcome-fill-in-when-done).
+- **P3-21** — eval fixtures structurally isolated under `eval_`; 66 fixtures plus the classified
+  category-1 orphan removed from the live read model after disposable proof and explicit approval.
+  Postgres↔ES now reconciles exactly 749↔749 with identical ID/field/group/amount hashes.
+  [Plan + Outcome](plans/2026-08-01-p321-elasticsearch-eval-isolation-and-reconciliation.md#outcome-fill-in-when-done).
+- **P2-44** — published migration 008 preserved; an idempotent pre-008 bootstrap plus forward
+  revision 009 allocated collision-free environment-local surrogates and preserved every measured
+  legacy row/reference hash on the actual snapshot copy.
+  [Plan + Outcome](plans/2026-08-01-p244-tax06-surrogate-id-repair.md#outcome-fill-in-when-done).
 - **TAX-06** — additive 13/67 UUIDv7 taxonomy, 82 constrained rules, backward-compatible v3
   events and idempotent transaction/analytics read-copy repair; legacy assignments remain for
   TAX-07. [Plan + Outcome](plans/2026-08-01-tax06-additive-taxonomy-migration.md#outcome-fill-in-when-done).
@@ -49,12 +63,13 @@ No active implementation plan.
 
 ## Next candidates
 
-- **TAX-07** — dry-run existing-data reclassification after TAX-06; preserve manual decisions
-  and require separate approval before any bulk write.
+- **TAX-10** — complete implementation/rehearsal, then approve the fresh pre-write hashes before
+  active-data execution.
+- **TAX-08** — sandbox persona fixtures after TAX-07 produces its reviewed approval packet.
 
 ## Blockers
 
-No active blocker.
+No active data-store reconciliation blocker. Any taxonomy bulk write needs separate approval and plan.
 
 ## Open findings to route first
 

@@ -125,9 +125,10 @@ merchants should be removed from global defaults or moved into persona fixtures.
 | TAX-04 | Separate seed concepts | Schema/domain design for taxonomy definitions, merchant aliases and constrained categorization rules | TAX-01, TAX-02 | done 2026-08-01 — [contracts + Outcome](../plans/2026-08-01-tax04-tax05-seed-model-and-audit.md#outcome-fill-in-when-done) |
 | TAX-05 | Seed quality audit | Review all 130 mappings; remove personal/ambiguous entries, add safe Danish merchants and direction constraints, document provenance | TAX-04 | done 2026-08-01 — [130-row audit + Outcome](../plans/2026-08-01-tax04-tax05-seed-model-and-audit.md#outcome-fill-in-when-done) |
 | TAX-06 | Additive migration and event repair | New migration(s), deterministic full-state events, read-copy updates and rollback/repair procedure; never edit old migrations | TAX-02–05 | done 2026-08-01 — [plan + Outcome](../plans/2026-08-01-tax06-additive-taxonomy-migration.md#outcome-fill-in-when-done) |
-| TAX-07 | Existing-data reclassification strategy | Dry-run/replay report, preservation of manual decisions, rule/budget remap, explicit approval before any bulk write | TAX-03, TAX-06 | open |
+| TAX-07 | Existing-data reclassification strategy | Dry-run/replay report, preservation of manual decisions, rule/budget remap, explicit approval before any bulk write | TAX-03, TAX-06 | done 2026-08-01 — [plan + Outcome](../plans/2026-08-01-tax07-existing-data-reclassification-dry-run.md#outcome-fill-in-when-done) |
 | TAX-08 | Sandbox persona fixtures | Bank/provider-separated synthetic personas, expected labels, dataset source/version and reset/reimport path | TAX-05, TAX-06 | open |
 | TAX-09 | Quality gate | Per-bank/category coverage, ambiguity cases and deterministic regression fixtures before labels are treated as training data | TAX-07, TAX-08; ML-01 | open |
+| TAX-10 | Existing-data reclassification execution | Hash-bound, idempotent service-owned writes, event-driven analytics convergence and verified rollback | TAX-07 | in progress — plan approved 2026-08-01 — [plan](../plans/2026-08-01-tax10-approved-existing-data-reclassification.md) |
 
 ## Recommended sequencing with ML and AI work
 

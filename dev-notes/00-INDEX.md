@@ -35,6 +35,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [patterns/frontend-data-patterns.md](patterns/frontend-data-patterns.md) — TanStack Query + crudFactory house patterns; which CLAUDE.md bits are aspirational.
 
 ## Findings
+- [findings/2026-08-01-tax06-migration-collides-with-existing-category-ids.md](findings/2026-08-01-tax06-migration-collides-with-existing-category-ids.md) — TAX-06 ID-kollision på en rigtig snapshotkopi (HIGH, → P2-44).
 - [findings/2026-07-07-architecture-audit.md](findings/2026-07-07-architecture-audit.md) — full codebase audit: 10 CRITICAL, 27 HIGH, ~45 MEDIUM, ~40 LOW, with file:line evidence.
 - [findings/2026-07-12-goal-migration-004-sqlite.md](findings/2026-07-12-goal-migration-004-sqlite.md) — goal migration 004 Postgres-only + fixture migrated wrong DB; resolved 2026-07-17 (F1-04 wave 0).
 - [findings/2026-07-17-goal-delete-fk-500.md](findings/2026-07-17-goal-delete-fk-500.md) — goal hard-delete with allocation history → FK 500 (LOW); resolved 2026-07-17 by P3-16 soft-delete.
@@ -78,6 +79,10 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [plans/2026-08-01-tax01-tax03-taxonomy-foundation.md](plans/2026-08-01-tax01-tax03-taxonomy-foundation.md) — approval-gated TAX-01–03 plan for category definitions, stable semantic identity and complete current-to-target mapping.
 - [plans/2026-08-01-tax04-tax05-seed-model-and-audit.md](plans/2026-08-01-tax04-tax05-seed-model-and-audit.md) — approval-gated TAX-04–05 plan for separated seed contracts and an executable audit of all 130 global mappings.
 - [plans/2026-08-01-tax06-additive-taxonomy-migration.md](plans/2026-08-01-tax06-additive-taxonomy-migration.md) — approval-gated TAX-06 plan for additive UUIDv7 taxonomy activation, constrained rules and versioned read-copy repair.
+- [plans/2026-08-01-tax07-existing-data-reclassification-dry-run.md](plans/2026-08-01-tax07-existing-data-reclassification-dry-run.md) — TAX-07 read-only legacy-reference proposals and reconciled approval report.
+- [plans/2026-08-01-tax10-approved-existing-data-reclassification.md](plans/2026-08-01-tax10-approved-existing-data-reclassification.md) — TAX-10 hash-bound, service-owned execution of approved taxonomy remaps.
+- [plans/2026-08-01-p244-tax06-surrogate-id-repair.md](plans/2026-08-01-p244-tax06-surrogate-id-repair.md) — P2-44 collision-safe TAX-06 bootstrap, forward repair revision and populated-snapshot proof.
+- [plans/2026-08-01-p321-elasticsearch-eval-isolation-and-reconciliation.md](plans/2026-08-01-p321-elasticsearch-eval-isolation-and-reconciliation.md) — P3-21 eval-index isolation and exact 749↔749 Postgres/Elasticsearch reconciliation.
 - [decisions/2026-08-01-taxonomy-semantics-and-identity.md](decisions/2026-08-01-taxonomy-semantics-and-identity.md) — purpose-first 13/67 taxonomy; UUIDv7 protocol identity, flat stable keys, explicit fallbacks and soft lifecycle.
 - [decisions/2026-08-01-seed-evidence-and-rule-confidence.md](decisions/2026-08-01-seed-evidence-and-rule-confidence.md) — aliases identify merchants but rules own targets; structured evidence gates confidence and explicit sign semantics.
 - [plans/2026-07-07-refactoring-roadmap.md](plans/2026-07-07-refactoring-roadmap.md) — 4-phase execution strategy for the technical backlog, with verification approach.
@@ -125,6 +130,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [plans/2026-08-01-p346-qwen8b-chat-e2e.md](plans/2026-08-01-p346-qwen8b-chat-e2e.md) — P3-46: reproducerbar qwen3:8b-modelkontrakt og autentificeret chat-E2E gennem perimeter og browser.
 
 ## Decisions
+- [decisions/2026-08-01-p244-pre008-bootstrap.md](decisions/2026-08-01-p244-pre008-bootstrap.md) — P2-44 preserves published 008 via a fail-closed pre-008 bootstrap and forward revision 009.
 - [decisions/2026-07-13-embed-worker-placement.md](decisions/2026-07-13-embed-worker-placement.md) — AI-20 embedding writer: separate consumer in analytics-service on own queue analytics.embeddings, partial-update of description_vector.
 - [decisions/2026-07-16-p209-dedup-semantics.md](decisions/2026-07-16-p209-dedup-semantics.md) — P2-09: three-way dedup rule (external_id + in-batch set + NULL-scoped fuzzy fallback), IntegrityError-as-honest-saga-failure, event_version…
 - [decisions/2026-07-17-learned-corrections-as-rules.md](decisions/2026-07-17-learned-corrections-as-rules.md) — F1-03: corrections stored as auto-managed user rules (priority ladder 10/50/100), not merchant rows; is_user_confirmed…
