@@ -5,14 +5,17 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Active
 
-- **TAX-14 (plan awaiting approval)** — only 7 of 82 rules are reachable because direction is
-  inferred from a sign no producer sends; four call paths plus the TAX-07 evidence derivation are
-  affected. [Plan](plans/2026-08-03-tax14-explicit-categorization-direction.md), then
-  [TAX-13](plans/2026-08-03-tax13-honest-unknown-fallback.md). TAX-10 shipped; a manual UI pass is
+- **TAX-13 (plan awaiting approval)** — typed unknown buckets so the fallback stops reading as
+  Shopping; TAX-14 has landed, so the direction it branches on is now real.
+  [Plan](plans/2026-08-03-tax13-honest-unknown-fallback.md). TAX-10 shipped; a manual UI pass is
   still owed before the retained pre-write snapshots go.
 
 ## Recently shipped
 
+- **TAX-14** — direction is an explicit required field instead of inferred from a sign no producer
+  sends; 54 of 529 legacy rows become rule-matchable, 0 lost, and the 10 evidence rows TAX-10 wrote
+  were accidentally right.
+  [Plan + Outcome](plans/2026-08-03-tax14-explicit-categorization-direction.md#outcome--implemented-2026-08-03).
 - **TAX-10** — applied 307/220/29 approved references to active data, each writer idempotent on a
   second run and a wrong-hash control proving the gate blocks. 763↔763 Postgres/Elasticsearch with
   identical hashes; totals, the 527 unresolved, 7 reviews and 6 protected references unchanged.
@@ -38,9 +41,6 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 - **TAX-01–03** — approved 13/67 purpose-first taxonomy, UUIDv7 + stable-key identity policy,
   complete 10/41 legacy mapping and executable baseline guard; no data migration performed.
   [Plan + Outcome](plans/2026-08-01-tax01-tax03-taxonomy-foundation.md#outcome-fill-in-when-done).
-- **P3-28** — guarded root Docker context, cache-free uv images and safe gzip/immutable asset
-  delivery; representative goal image halved from 198.0 to 98.9 MB and live headers passed.
-  [Plan + Outcome](plans/2026-08-01-p328-build-image-hygiene.md#outcome-fill-in-when-done).
 - **P3-60 + P3-62** — honest 404/503 split for account → user, explicit temporary frontend
   error and one account lookup per goal creation; live negative smoke proved 503 + zero write,
   and the restored 62-container stack is healthy.

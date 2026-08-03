@@ -3,9 +3,9 @@ title: Only 7 of 82 active rules are reachable from the import path, so new tran
 date: 2026-08-03
 severity: HIGH
 area: categorization-service, transaction-service, banking-service, taxonomy
-status: open
+status: in-progress
 backlog: [TAX-12, TAX-13, TAX-14]
-resolved-by: null
+resolved-by: null  # cause 1 fixed by plans/2026-08-03-tax14-explicit-categorization-direction.md; causes 2-3 open (TAX-12, TAX-13)
 ---
 
 # Only 7 of 82 active rules are reachable from the import path
@@ -21,7 +21,7 @@ import path:
 
 | Rules | Constraint | Reachable? |
 |---|---|---|
-| 33 | `match_field='description'`, `direction='outgoing'` | **No** — direction never matches |
+| 33 | `match_field='description'`, `direction='outgoing'` | **Fixed 2026-08-03 by TAX-14** |
 | 42 | `match_field='merchant'`, `direction='outgoing'` | **No** — no merchant field exists |
 | 7 | `match_field='description'`, `direction='incoming'` | Yes |
 

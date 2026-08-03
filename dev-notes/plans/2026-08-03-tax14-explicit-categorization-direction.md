@@ -1,7 +1,7 @@
 ---
 title: TAX-14 — make categorization direction explicit instead of inferred from a sign
 date: 2026-08-03
-status: open
+status: done
 backlog: [TAX-14]
 related:
   - ../findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md
@@ -72,25 +72,25 @@ alongside `amount` — the consumer simply ignores it.
 
 ## Steps
 
-1. [ ] **Put direction in the contract as a required field.** Add
+1. [x] **Put direction in the contract as a required field.** Add
    `direction: Literal["incoming", "outgoing"]` to `CategorizeRequestDTO` in
    `categorization-service/app/application/dto.py`. Required, not optional-with-sign-fallback: an
    optional field that silently degrades to the old inference is how this defect survived, and the
    endpoint is internal-only (`require_internal_api_key`) with four in-repo callers, so a required
    field is a compile-and-test-time break rather than a production surprise. Reject a request whose
    direction contradicts a non-zero signed amount, so a caller cannot pass both inconsistently.
-2. [ ] **Stop inferring in the engine.** In
+2. [x] **Stop inferring in the engine.** In
    `categorization-service/app/adapters/outbound/rule_engine.py`, take direction as a parameter
    instead of deriving it at line 163. Keep `absolute_amount` derived from `abs(amount)` for the
    min/max constraints — that part was always sign-independent. Thread it through
    `CategorizationService._run_pipeline`, both `match` overloads and the user-overlay engine.
-3. [ ] **Update all four producers.** `service.py:80` and `service.py:530` derive direction from
+3. [x] **Update all four producers.** `service.py:80` and `service.py:530` derive direction from
    `dto.transaction_type` / the batch item's type; `transaction_consumer.py` reads the
    `transaction_type` already present in the event payload; `reclassification.py:269` sends the
    explicit direction and `:277` stops recomputing it from the unsigned amount. Extend
    `CategorizationClient.categorize`/`categorize_batch` and the `EvidenceCategorizerPort` protocol so
    the type system forces every call site to supply it.
-4. [ ] **Test through the real boundary, not a mock.** The gap survived because the seed audit counted
+4. [x] **Test through the real boundary, not a mock.** The gap survived because the seed audit counted
    rules in a table and the client was mocked. Add: an integration test that drives
    `CategorizationClient` against the real categorize router for both directions; a unit test per
    producer asserting the direction it sends for an expense and an income row; and a reachability
@@ -100,12 +100,12 @@ alongside `amount` — the consumer simply ignores it.
    `OPENAI *CHATGPT SUBSCR`, `MobilePay Telenor …`, `MobilePay Adam Fischer Duffus`,
    `Fra INGER KRISTENSEN` — noting that the three chains stay on fallback until TAX-12, which is the
    expected and documented split between the two plans.
-5. [ ] **Measure, then report the historical delta.** With direction correct, re-run the TAX-07
+5. [x] **Measure, then report the historical delta.** With direction correct, re-run the TAX-07
    scanners read-only against a disposable copy and diff the dispositions against the retained
    `tax10-20260801-prewrite` manifests: how many of the 527 unresolved now resolve, and whether any of
    the 10 evidence-derived rows TAX-10 wrote would now get a different target. Record the counts in
    this plan's Outcome and, if the delta is non-empty, open a follow-up item. Do not write.
-6. [ ] **Verification.** `make -C services/categorization-service test check`,
+6. [x] **Verification.** `make -C services/categorization-service test check`,
    `make -C services/transaction-service test check`, focused analytics projection tests,
    `make compose-check`, `make notes-check`, `git diff --check`. Then live: import or re-categorize a
    known outgoing transaction through the running stack and confirm it lands on a rule tier, and
@@ -129,4 +129,51 @@ alongside `amount` — the consumer simply ignores it.
 - **Rollback.** Code-only change with no migration and no data write, so revert the commit. Nothing in
   this plan mutates a database; step 5 runs against a disposable copy.
 
-## Outcome (fill in when done)
+## Outcome — implemented 2026-08-03
+
+Completed. `direction` is a required field on `CategorizeRequestDTO`, the engine takes it as a
+parameter and no longer derives it from a sign, and all four producers supply it from
+`transaction_type`. Live proof through the real `CategorizationClient` against the running service,
+no writes: `MobilePay Telenor … / expense → outgoing → rule person_transfer`,
+`Boligstøtte / income → incoming → rule public_benefits`,
+`TORVEGADENS KIOSK … / expense → outgoing → rule kiosk`, and the batch path returned three rule
+tiers. Before this change every one of those fell back.
+
+**Measured effect on real data (read-only).** Across all **529** legacy-referenced active
+transactions, asking as the old code effectively did (everything incoming) produced **529 fallback,
+0 rule**. Asking with the real direction produces **475 fallback, 54 rule** — **54 rows newly
+rule-matched, 0 rule matches lost**, resolving to `person_transfer`, `kiosk`, `culture_events` and
+`own_accounts_savings`. The three grocery chains and the OpenAI subscription stay on fallback, which
+is the documented TAX-12 boundary, not a defect in this change.
+
+**The 10 evidence-derived rows TAX-10 wrote were accidentally right.** All ten are `Fra Opsparing`
+with `transaction_type=income`, so they were genuinely incoming — exactly what the broken code
+assumed for everything. Re-derived under the corrected direction, **0 of 10** would get a different
+target, so TAX-10's writes need no repair. Right by luck rather than by method: had any of the ten
+been an outgoing row, the same code path would have mislabelled it and the approval hashes would have
+covered the error.
+
+**Two deviations from the plan.** First, step 1's cross-check rejecting a direction that contradicts
+a signed amount was dropped: the pre-implementation measurement found **all 781 rows positive**
+(634 expense, 147 income), so the amount carries no direction information and `+257.50 / outgoing` is
+the normal case. Such a check would have rejected legitimate traffic. Second, the plan asked for one
+test driving the client against the real router; that exists as a live run and as two halves in CI —
+a categorization-service integration test posting to the real router with a real
+`ConstrainedRuleEngine`, and a transaction-service test pinning what the client puts on the wire.
+Nothing in CI runs both services in one process.
+
+**Verification.** categorization **207** tests (19 new), transaction **230 unit + 82 integration**
+(9 new), analytics **124**, `check` green for both services, `compose-check`, `compose-state-check`
+63 containers healthy, `notes-check`, `git diff --check`. The 33 pre-existing call sites that relied
+on sign inference were updated to pass the direction matching their amount's sign, preserving each
+test's original assertion.
+
+**Both new test files were mutation-tested rather than trusted.** Swapping the
+`transaction_type → direction` mapping fails 5 producer tests; re-introducing sign inference in the
+engine fails 4 tests including `test_the_sign_of_the_amount_no_longer_decides_anything`. A guard test
+also locks the 42 merchant-only rules to their measured count, so landing TAX-12 forces that number
+down and a new unreachable rule fails the suite instead of shipping as coverage.
+
+**Follow-up opened:** the 54 newly matchable legacy rows are an opportunity, not a regression. They
+were never written under TAX-10's approval and must not be — repairing them is a taxonomy bulk write
+needing its own approved plan and fresh hashes.
