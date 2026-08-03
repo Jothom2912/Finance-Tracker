@@ -1,14 +1,16 @@
-# Status — 2026-08-01
+# Status — 2026-08-03
 
 This is the bounded entry point for current work. The backlog owns priority and status; plan
 outcomes own shipping narratives; findings and decisions own their durable facts.
 
 ## Active
 
-- **TAX-10 (active-write approval required)** — implementation and disposable rehearsal applied
-  307 categorization + 220 transaction + 29 budget references, then proved a complete idempotent
-  second run. Active databases remain 007/013/004; approve the exact checkpoint hashes before
-  rollout. [Plan + checkpoint](plans/2026-08-01-tax10-approved-existing-data-reclassification.md#active-data-approval-checkpoint--2026-08-01).
+- **TAX-10 (approved 2026-08-03; execution sequenced)** — rehearsal applied 307/220/29 references
+  and proved an idempotent second run; owner approved those hashes and a re-check confirmed the
+  evidence and unchanged source data. Active is categorization 007, transaction **014**, budget 004,
+  and the transaction read copy holds no semantic keys yet, so categorization upgrades and drains
+  before the transaction writer, with the stack up for convergence.
+  [Plan + re-check](plans/2026-08-01-tax10-approved-existing-data-reclassification.md#precondition-re-check--2026-08-03).
 
 ## Recently shipped
 
@@ -56,15 +58,10 @@ outcomes own shipping narratives; findings and decisions own their durable facts
   [Plan + Outcome](plans/2026-08-01-p365-codex-dev-notes-optimization.md#outcome).
 - **P3-59** — request-path logging and the rejection admission rule across the five previously
   silent API services. [Plan + Outcome](plans/2026-07-31-p359-request-path-logging.md#outcome-2026-07-31).
-- **P3-57 + P3-58** — shared logging configuration in all API processes, including the
-  account/Alembic reconfiguration trap. [Plan + Outcome](plans/2026-07-31-p357-api-logging-config.md#outcome).
-- **F2-08** — user profile/password/username write path and frontend profile UI.
-  [Plan + Outcome](plans/2026-07-29-f208-user-profile-write-path.md#outcome).
 
 ## Next candidates
 
-- **TAX-10** — complete implementation/rehearsal, then approve the fresh pre-write hashes before
-  active-data execution.
+- **TAX-10** — execute the approved manifests once the three re-check preconditions are met.
 - **TAX-08** — sandbox persona fixtures after TAX-07 produces its reviewed approval packet.
 
 ## Blockers

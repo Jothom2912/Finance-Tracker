@@ -168,7 +168,43 @@ this exact checkpoint. Active execution will first re-check these hashes and sou
 apply categorization 007→009 plus transaction 013→014, run the three service writers, allow normal
 outbox projection, reconcile Postgres↔Elasticsearch and then remove the disposable resources.
 
+## Precondition re-check — 2026-08-03
+
+Owner approved the checkpoint content on 2026-08-03. A read-only re-check of the retained evidence
+and the active databases confirms the approved artifacts and finds three preconditions that the
+checkpoint above no longer describes correctly.
+
+Evidence intact. The retained rehearsal directory still hashes to exactly the recorded values:
+summary `abd5c0f5…` for both runs, manifests `c2c8a2ac…`/`b865bc12…`/`4227da2f…`, boundary
+`2026-08-01T21:18:00Z`, candidate/exclusion counts 307/620, 220/529 and 29/7.
+
+Source data unchanged, so the approved hashes still apply. Active transactions are **749** active
+plus 18 soft-deleted (the boundary counted the 749), latest `created_at` is 2026-08-01 16:32 with no
+write since, budget is exactly 72 lines/64 monthly/0 legacy, and categorization holds 793 results.
+Live `categorization_rules` is **134** (130 system + 4 user); the boundary's 216 is that same 134
+plus the 82 constrained rules that exist only after the 009 upgrade, so it is not drift.
+
+Three corrections to the checkpoint:
+
+1. **Transaction is already at 014, not 013.** Migration `014_add_taxonomy_identity_read_copy` has
+   been applied to the active database — migration-gated startup ran it. The planned 013→014 step is
+   therefore already complete and must not be re-planned as pending work.
+2. **The transaction read copy has schema but no identity data.** 0 of 11 categories and 0 of 41
+   subcategories carry a `semantic_key`, because the owner is still at 007 and no v3 full-state
+   taxonomy event has been emitted. Transaction-service's writer resolves target keys against this
+   read copy, so all 220 rows would abort until categorization is upgraded **and** its full-state
+   events have drained. This fixes the execution order: categorization 007→009, drain, verify the
+   read copy carries 13/67 keys, and only then run the transaction writer.
+3. **The stack is not running.** 31 containers are `created` and 10 `exited`; only 26 run. Without
+   consumers there is no outbox drain and no Elasticsearch convergence, so step 7's completion
+   condition cannot be met until the stack is up and quiesced.
+
+Snapshots were deliberately **not** taken during this re-check: a snapshot taken before the stack
+starts would be stale for the write it is supposed to protect. Take them after the stack is up and
+quiet, immediately before the first writer.
+
 ## Outcome (fill in when done)
 
-Plan approved 2026-08-01. Implementation and disposable rehearsal completed successfully; active
-data remains unchanged and execution is blocked on approval of the exact hashes recorded above.
+Plan approved 2026-08-01; checkpoint content approved by the owner 2026-08-03. Implementation and
+disposable rehearsal completed successfully. Active data remains unchanged. Execution is sequenced
+behind the three preconditions recorded in the re-check above.
