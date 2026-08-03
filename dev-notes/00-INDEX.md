@@ -35,6 +35,7 @@ here. Session logs are indexed separately in [sessions/00-SESSIONS.md](sessions/
 - [patterns/frontend-data-patterns.md](patterns/frontend-data-patterns.md) — TanStack Query + crudFactory house patterns; which CLAUDE.md bits are aspirational.
 
 ## Findings
+- [findings/2026-08-03-async-categorization-overwrites-caller-category.md](findings/2026-08-03-async-categorization-overwrites-caller-category.md) — async overskriver kaldervalgt kategori (MEDIUM, → TAX-16).
 - [findings/2026-08-03-migration-test-passes-only-in-isolation.md](findings/2026-08-03-migration-test-passes-only-in-isolation.md) — test bestod alene, fejlede i CI; intet lokalt target kørte træet i én proces (MEDIUM, løst).
 - [findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md](findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md) — kun 7 af 82 regler kan nås fra importstien (HIGH, → TAX-12/13/14).
 - [findings/2026-08-01-tax06-migration-collides-with-existing-category-ids.md](findings/2026-08-01-tax06-migration-collides-with-existing-category-ids.md) — TAX-06 ID-kollision på en rigtig snapshotkopi (HIGH, → P2-44).

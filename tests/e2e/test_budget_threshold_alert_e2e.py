@@ -48,10 +48,22 @@ EXPECTED_DAYS_REMAINING = 13
 
 # Every seed description embeds this keyword so the *rule* tier decides the
 # category. Without it the descriptions match nothing, all tiers are exhausted,
-# and the fallback tier rewrites the rows to "Diverse" — asynchronously, which
-# is what made this suite flaky. Keep the keyword and the category in sync;
-# both come from the global (user_id IS NULL) taxonomy seeded by cat-service.
-RULE_KEYWORD = "REMA1000"
+# and the fallback tier rewrites the rows to the unspecified bucket —
+# asynchronously, which is what made this suite flaky. Keep the keyword and the
+# category in sync; both come from the global (user_id IS NULL) taxonomy.
+#
+# The keyword MUST come from a rule whose ``match_field`` is ``description`` and
+# whose ``direction`` is ``outgoing``. Two constraints, both learned the hard
+# way:
+#   - This was ``REMA1000`` until the TAX-06 taxonomy activation deactivated the
+#     legacy keyword rules and replaced them with ``match_field='merchant'``
+#     ones. transactions has no merchant column, so those rules can never fire
+#     from the import path and this suite broke. See dev-notes finding
+#     2026-08-03-taxonomy-activation-breaks-live-categorization (TAX-12).
+#   - ``bager`` also only matches because TAX-14 made the direction explicit;
+#     while direction was inferred from an unsigned amount, every row read as
+#     incoming and no outgoing rule could match either.
+RULE_KEYWORD = "BAGER"
 RULE_CATEGORY_NAME = "Mad & drikke"
 
 pytestmark = pytest.mark.e2e

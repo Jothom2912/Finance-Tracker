@@ -63,6 +63,8 @@ No active data-store reconciliation blocker. Any taxonomy bulk write needs separ
 
 ## Open findings to route first
 
+- [Async categorization overwrites a caller's category](findings/2026-08-03-async-categorization-overwrites-caller-category.md)
+  — sync protects it, async does not; broke the budget-alert E2E twice (MEDIUM, TAX-16).
 - [Taxonomy activation breaks live categorization](findings/2026-08-03-taxonomy-activation-breaks-live-categorization.md)
   — only 7 of 82 rules are reachable from the import path, so new rows read as Shopping
   (HIGH, TAX-14 direction, TAX-12 merchant evidence, TAX-13 honest fallback).
