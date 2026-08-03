@@ -5,8 +5,11 @@ outcomes own shipping narratives; findings and decisions own their durable facts
 
 ## Active
 
-No active implementation plan. TAX-10 shipped; the owner still owes a manual UI pass over the new
-categories, after which the retained pre-write snapshots can go.
+- **TAX-14 (plan awaiting approval)** — only 7 of 82 rules are reachable because direction is
+  inferred from a sign no producer sends; four call paths plus the TAX-07 evidence derivation are
+  affected. [Plan](plans/2026-08-03-tax14-explicit-categorization-direction.md), then
+  [TAX-13](plans/2026-08-03-tax13-honest-unknown-fallback.md). TAX-10 shipped; a manual UI pass is
+  still owed before the retained pre-write snapshots go.
 
 ## Recently shipped
 
@@ -38,9 +41,6 @@ categories, after which the retained pre-write snapshots can go.
 - **P3-28** — guarded root Docker context, cache-free uv images and safe gzip/immutable asset
   delivery; representative goal image halved from 198.0 to 98.9 MB and live headers passed.
   [Plan + Outcome](plans/2026-08-01-p328-build-image-hygiene.md#outcome-fill-in-when-done).
-- **P3-47** — `compose-check` now rejects location-local nginx headers that would silently
-  shadow the perimeter's four security headers, with positive and negative parser controls.
-  [Plan + Outcome](plans/2026-08-01-p347-nginx-header-inheritance-gate.md#outcome-fill-in-when-done).
 - **P3-60 + P3-62** — honest 404/503 split for account → user, explicit temporary frontend
   error and one account lookup per goal creation; live negative smoke proved 503 + zero write,
   and the restored 62-container stack is healthy.
@@ -52,8 +52,6 @@ categories, after which the retained pre-write snapshots can go.
   håndhæver `active|paused` i databasen. [Plan + Outcome](plans/2026-08-01-p243-goal-status-integrity.md#outcome-fill-in-when-done).
 - **F2-07** — ens budgetperiode på dashboard/kategoriside samt navngivne, linkbare
   over-budget-kategorier. [Plan + Outcome](plans/2026-08-01-f207-dashboard-period-budget-clarity.md#outcome-fill-in-when-done).
-- **P3-65** — Codex discovery, bounded dev-notes retrieval and structural drift gates.
-  [Plan + Outcome](plans/2026-08-01-p365-codex-dev-notes-optimization.md#outcome).
 - **P3-59** — request-path logging and the rejection admission rule across the five previously
   silent API services. [Plan + Outcome](plans/2026-07-31-p359-request-path-logging.md#outcome-2026-07-31).
 
