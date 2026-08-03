@@ -51,7 +51,7 @@ def engine(
 
 class TestBasicMatching:
     def test_exact_keyword_match(self, engine: RuleEngine) -> None:
-        result = engine.match("Netto Nordhavn", -150.0)
+        result = engine.match("Netto Nordhavn", -150.0, direction="outgoing")
         assert result is not None
         assert result.subcategory_id == 1
         assert result.category_id == 1
@@ -59,38 +59,38 @@ class TestBasicMatching:
         assert result.confidence == Confidence.HIGH
 
     def test_no_match_returns_none(self, engine: RuleEngine) -> None:
-        result = engine.match("Unknown merchant XYZ", -50.0)
+        result = engine.match("Unknown merchant XYZ", -50.0, direction="outgoing")
         assert result is None
 
     def test_case_insensitive(self, engine: RuleEngine) -> None:
-        result = engine.match("NETTO CITY", -100.0)
+        result = engine.match("NETTO CITY", -100.0, direction="outgoing")
         assert result is not None
         assert result.subcategory_id == 1
 
 
 class TestLongestMatchFirst:
     def test_dsb_7eleven_beats_dsb(self, engine: RuleEngine) -> None:
-        result = engine.match("DSB 7-Eleven Koebenhavn H", -45.0)
+        result = engine.match("DSB 7-Eleven Koebenhavn H", -45.0, direction="outgoing")
         assert result is not None
         assert result.subcategory_id == 3  # Kiosk, not Offentlig transport
 
     def test_plain_dsb_matches_transport(self, engine: RuleEngine) -> None:
-        result = engine.match("DSB Billet", -89.0)
+        result = engine.match("DSB Billet", -89.0, direction="outgoing")
         assert result is not None
         assert result.subcategory_id == 4  # Offentlig transport
 
 
 class TestLegacyRulesHaveNoHiddenDirectionOverride:
     def test_amount_sign_does_not_retarget_a_user_keyword(self, engine: RuleEngine) -> None:
-        positive = engine.match("Renter tilskrevet", 12.50)
-        negative = engine.match("Renter beregnet", -8.25)
+        positive = engine.match("Renter tilskrevet", 12.50, direction="incoming")
+        negative = engine.match("Renter beregnet", -8.25, direction="outgoing")
         assert positive is not None and negative is not None
         assert positive.subcategory_id == negative.subcategory_id == 5
 
 
 class TestDanishNormalization:
     def test_oe_normalization(self, engine: RuleEngine) -> None:
-        result = engine.match("Køb hos Netto", -75.0)
+        result = engine.match("Køb hos Netto", -75.0, direction="outgoing")
         assert result is not None
         assert result.subcategory_id == 1
 
@@ -108,7 +108,7 @@ class TestTieredRuleEngine:
         global_tier = RuleEngine([("netto vesterbro", "Dagligvarer")], subcategory_lookup)
         tiered = TieredRuleEngine([user_tier, global_tier])
 
-        result = tiered.match("Netto Vesterbro", -100.0)
+        result = tiered.match("Netto Vesterbro", -100.0, direction="outgoing")
 
         assert result is not None
         assert result.subcategory_id == 2  # Restaurant — user tier won
@@ -121,7 +121,7 @@ class TestTieredRuleEngine:
         global_tier = RuleEngine([("netto", "Dagligvarer")], subcategory_lookup)
         tiered = TieredRuleEngine([user_tier, global_tier])
 
-        result = tiered.match("Netto Vesterbro", -100.0)
+        result = tiered.match("Netto Vesterbro", -100.0, direction="outgoing")
 
         assert result is not None
         assert result.subcategory_id == 1  # Dagligvarer — global fallthrough
@@ -136,7 +136,7 @@ class TestTieredRuleEngine:
         )
         tiered = TieredRuleEngine([user_tier])
 
-        result = tiered.match("DSB 7-Eleven Hovedbanen", -45.0)
+        result = tiered.match("DSB 7-Eleven Hovedbanen", -45.0, direction="outgoing")
 
         assert result is not None
         assert result.subcategory_id == 3  # Kiosk — longest match in tier
@@ -147,10 +147,10 @@ class TestTieredRuleEngine:
     ) -> None:
         tiered = TieredRuleEngine([RuleEngine([("netto", "Dagligvarer")], subcategory_lookup)])
 
-        assert tiered.match("Ukendt butik", -10.0) is None
+        assert tiered.match("Ukendt butik", -10.0, direction="outgoing") is None
 
     def test_empty_engine_list_returns_none(self) -> None:
-        assert TieredRuleEngine([]).match("Netto", -10.0) is None
+        assert TieredRuleEngine([]).match("Netto", -10.0, direction="outgoing") is None
 
 
 class TestConstrainedRuleEngine:
@@ -169,9 +169,9 @@ class TestConstrainedRuleEngine:
         )
         engine = ConstrainedRuleEngine([rule])
 
-        assert engine.match("NETTO", -100, country="DK") is None
-        assert engine.match("NETTO", 100, merchant="netto", country="DK") is None
-        result = engine.match("card purchase", -100, merchant="NETTO", country="DK")
+        assert engine.match("NETTO", -100, direction="outgoing", country="DK") is None
+        assert engine.match("NETTO", 100, direction="incoming", merchant="netto", country="DK") is None
+        result = engine.match("card purchase", -100, direction="outgoing", merchant="NETTO", country="DK")
         assert result is not None
         assert (result.category_id, result.subcategory_id, result.merchant_id) == (11, 42, 501)
 
@@ -189,7 +189,7 @@ class TestConstrainedRuleEngine:
         )
         engine = ConstrainedRuleEngine([rule])
 
-        assert engine.match("PIZZERIA", -49.99) is None
-        assert engine.match("PIZZERIA", -50) is not None
-        assert engine.match("PIZZERIA", -200) is not None
-        assert engine.match("PIZZERIA", -200.01) is None
+        assert engine.match("PIZZERIA", -49.99, direction="outgoing") is None
+        assert engine.match("PIZZERIA", -50, direction="outgoing") is not None
+        assert engine.match("PIZZERIA", -200, direction="outgoing") is not None
+        assert engine.match("PIZZERIA", -200.01, direction="outgoing") is None

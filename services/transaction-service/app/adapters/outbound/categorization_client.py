@@ -12,12 +12,18 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import httpx
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Direction is sent explicitly: our amount is an unsigned magnitude, so the
+# categorizer cannot infer it from the sign without reading every row as
+# incoming and skipping the outgoing rules (TAX-14).
+Direction = Literal["incoming", "outgoing"]
 
 
 @dataclass(frozen=True)
@@ -42,12 +48,13 @@ class CategorizationClient:
         self,
         description: str,
         amount: float,
+        direction: Direction,
     ) -> CategorizationResult | None:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
                     f"{self._base_url}/api/v1/categorize/",
-                    json={"description": description, "amount": amount},
+                    json={"description": description, "amount": amount, "direction": direction},
                     headers=self._headers,
                 )
                 response.raise_for_status()
@@ -81,7 +88,14 @@ class CategorizationClient:
     ) -> Sequence[CategorizationResult | None]:
         try:
             async with httpx.AsyncClient(timeout=self._timeout * 3) as client:
-                payload = [{"description": item["description"], "amount": item["amount"]} for item in items]
+                payload = [
+                    {
+                        "description": item["description"],
+                        "amount": item["amount"],
+                        "direction": item["direction"],
+                    }
+                    for item in items
+                ]
                 response = await client.post(
                     f"{self._base_url}/api/v1/categorize/batch",
                     json=payload,

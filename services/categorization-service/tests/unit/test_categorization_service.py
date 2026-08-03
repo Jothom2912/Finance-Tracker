@@ -11,7 +11,7 @@ from app.domain.value_objects import CategorizationResult, CategorizationTier, C
 class FakeRuleEngine:
     """Fake that matches 'netto' -> subcategory 1, category 1."""
 
-    def match(self, description: str, amount: float) -> CategorizationResult | None:
+    def match(self, description: str, amount: float, **kwargs: object) -> CategorizationResult | None:
         if "netto" in description.lower():
             return CategorizationResult(
                 category_id=1,
@@ -25,7 +25,7 @@ class FakeRuleEngine:
 class FailingRuleEngine:
     """Fake that always raises."""
 
-    def match(self, description: str, amount: float) -> CategorizationResult | None:
+    def match(self, description: str, amount: float, **kwargs: object) -> CategorizationResult | None:
         raise RuntimeError("Rule engine exploded")
 
 
@@ -82,7 +82,7 @@ def failing_service() -> CategorizationService:
 
 class TestCategorizationPipeline:
     async def test_rule_engine_hit(self, service: CategorizationService) -> None:
-        request = CategorizeRequestDTO(description="Netto Nordhavn", amount=-150.0)
+        request = CategorizeRequestDTO(description="Netto Nordhavn", amount=-150.0, direction="outgoing")
         response = await service.categorize(request)
         assert response.category_id == 1
         assert response.subcategory_id == 1
@@ -91,7 +91,7 @@ class TestCategorizationPipeline:
         assert response.needs_review is False
 
     async def test_fallback_when_no_match(self, service: CategorizationService) -> None:
-        request = CategorizeRequestDTO(description="Unknown merchant", amount=-50.0)
+        request = CategorizeRequestDTO(description="Unknown merchant", amount=-50.0, direction="outgoing")
         response = await service.categorize(request)
         assert response.category_id == 8
         assert response.subcategory_id == 99
@@ -103,19 +103,19 @@ class TestCategorizationPipeline:
         self, service: CategorizationService, caplog: pytest.LogCaptureFixture
     ) -> None:
         hostile = "private-bank-text-that-must-never-be-logged"
-        await service.categorize(CategorizeRequestDTO(description=hostile, amount=-10.0))
+        await service.categorize(CategorizeRequestDTO(description=hostile, amount=-10.0, direction="outgoing"))
         assert hostile not in caplog.text
 
     async def test_tier_failure_falls_through(self, failing_service: CategorizationService) -> None:
-        request = CategorizeRequestDTO(description="Anything", amount=-50.0)
+        request = CategorizeRequestDTO(description="Anything", amount=-50.0, direction="outgoing")
         response = await failing_service.categorize(request)
         assert response.tier == "fallback"
         assert response.confidence == "low"
 
     async def test_batch_categorization(self, service: CategorizationService) -> None:
         requests = [
-            CategorizeRequestDTO(description="Netto City", amount=-100.0),
-            CategorizeRequestDTO(description="Unknown shop", amount=-50.0),
+            CategorizeRequestDTO(description="Netto City", amount=-100.0, direction="outgoing"),
+            CategorizeRequestDTO(description="Unknown shop", amount=-50.0, direction="outgoing"),
         ]
         responses = await service.categorize_batch(requests)
         assert len(responses) == 2
@@ -144,28 +144,38 @@ class TestOptionalTiers:
 
     async def test_rules_win_over_ml(self) -> None:
         svc = self._service(ml=FakeMlCategorizer())
-        response = await svc.categorize(CategorizeRequestDTO(description="Netto Irma", amount=-10.0))
+        response = await svc.categorize(
+            CategorizeRequestDTO(description="Netto Irma", amount=-10.0, direction="outgoing")
+        )
         assert response.tier == "rule"
 
     async def test_ml_runs_when_rules_miss(self) -> None:
         svc = self._service(ml=FakeMlCategorizer())
-        response = await svc.categorize(CategorizeRequestDTO(description="Irma Torvehallerne", amount=-10.0))
+        response = await svc.categorize(
+            CategorizeRequestDTO(description="Irma Torvehallerne", amount=-10.0, direction="outgoing")
+        )
         assert response.tier == "ml"
         assert response.category_id == 2
 
     async def test_llm_runs_when_ml_misses(self) -> None:
         svc = self._service(ml=FakeMlCategorizer(), llm=FakeLlmCategorizer())
-        response = await svc.categorize(CategorizeRequestDTO(description="Føtex Amager", amount=-10.0))
+        response = await svc.categorize(
+            CategorizeRequestDTO(description="Føtex Amager", amount=-10.0, direction="outgoing")
+        )
         assert response.tier == "llm"
         assert response.category_id == 3
 
     async def test_ml_raising_falls_through_to_llm(self) -> None:
         svc = self._service(ml=FailingMlCategorizer(), llm=FakeLlmCategorizer())
-        response = await svc.categorize(CategorizeRequestDTO(description="Føtex Amager", amount=-10.0))
+        response = await svc.categorize(
+            CategorizeRequestDTO(description="Føtex Amager", amount=-10.0, direction="outgoing")
+        )
         assert response.tier == "llm"
 
     async def test_all_tiers_miss_reaches_fallback(self) -> None:
         svc = self._service(ml=FakeMlCategorizer(), llm=FakeLlmCategorizer())
-        response = await svc.categorize(CategorizeRequestDTO(description="Ukendt butik", amount=-10.0))
+        response = await svc.categorize(
+            CategorizeRequestDTO(description="Ukendt butik", amount=-10.0, direction="outgoing")
+        )
         assert response.tier == "fallback"
         assert response.needs_review is True

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 
 class CategoryType(Enum):
@@ -67,3 +67,27 @@ class CategorizationResult:
     @property
     def needs_review(self) -> bool:
         return self.confidence == Confidence.LOW
+
+
+Direction = Literal["incoming", "outgoing"]
+
+# transaction-service stores an unsigned amount and keeps the direction in
+# ``transaction_type``, so this mapping — not the sign of the amount — is the
+# only honest source of direction for rule constraints (TAX-14).
+_DIRECTION_BY_TRANSACTION_TYPE: dict[str, Direction] = {
+    "income": "incoming",
+    "expense": "outgoing",
+}
+
+
+def direction_from_transaction_type(transaction_type: str | None) -> Direction:
+    """Map a transaction type to a rule direction, or raise.
+
+    Raising beats defaulting: a missing type makes the message retry and land
+    in the DLQ, where it is visible, whereas a default would silently file the
+    transaction under the wrong direction and match the wrong rules.
+    """
+    direction = _DIRECTION_BY_TRANSACTION_TYPE.get(str(transaction_type or "").lower())
+    if direction is None:
+        raise ValueError(f"cannot derive categorization direction from transaction_type {transaction_type!r}")
+    return direction

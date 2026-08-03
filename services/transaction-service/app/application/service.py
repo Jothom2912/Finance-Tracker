@@ -31,7 +31,7 @@ from app.application.ports.outbound import (
     ICategorizationClient,
     IUnitOfWork,
 )
-from app.domain.entities import PlannedTransaction, Transaction
+from app.domain.entities import PlannedTransaction, Transaction, direction_of
 from app.domain.exceptions import (
     CSVImportException,
     PlannedTransactionNotFoundException,
@@ -80,6 +80,7 @@ class TransactionService(ITransactionService):
             cat_result = await self._cat_client.categorize(
                 description=dto.description or "",
                 amount=float(dto.amount),
+                direction=direction_of(dto.transaction_type),
             )
             if cat_result is not None:
                 # Accept the categorizer's subcategory only when it doesn't
@@ -524,6 +525,7 @@ class TransactionService(ITransactionService):
                 {
                     "description": rows_to_create[i].get("description") or "",
                     "amount": float(rows_to_create[i]["amount"]),
+                    "direction": direction_of(rows_to_create[i]["transaction_type"]),
                 }
                 for i in uncategorized
             ]

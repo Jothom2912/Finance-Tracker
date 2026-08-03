@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.outbound.outbox_adapter import TransactionOutboxAdapter
+from app.domain.entities import direction_of
 from app.models import (
     CategoryModel,
     OutboxEventModel,
@@ -266,7 +267,18 @@ async def _resolve_evidence(
     ]
     if not candidates or categorizer is None:
         return {}
-    inputs = [{"description": model.description or "", "amount": float(model.amount)} for model in candidates]
+    # Direction comes from transaction_type, not the sign of the stored amount:
+    # the TAX-07 dry run derived both this call and its recorded direction
+    # reason code from an unsigned amount, so every evidence row was resolved
+    # as if incoming (TAX-14).
+    inputs = [
+        {
+            "description": model.description or "",
+            "amount": float(model.amount),
+            "direction": direction_of(model.transaction_type),
+        }
+        for model in candidates
+    ]
     results: list[CategorizationResultPort | None] = []
     for offset in range(0, len(inputs), EVIDENCE_BATCH_SIZE):
         results.extend(await categorizer.categorize_batch(inputs[offset : offset + EVIDENCE_BATCH_SIZE]))
@@ -274,7 +286,7 @@ async def _resolve_evidence(
         raise ValueError("categorization evidence result count mismatch")
     resolutions: dict[int, EvidenceResolution] = {}
     for model, result in zip(candidates, results, strict=True):
-        direction = "incoming" if model.amount > 0 else "outgoing" if model.amount < 0 else "zero"
+        direction = direction_of(model.transaction_type)
         if result is None:
             resolutions[model.id] = EvidenceResolution(
                 None,

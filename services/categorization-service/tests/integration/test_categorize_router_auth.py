@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 
 KEY = "internal-key-for-tests"
 
-BODY = {"description": "SHOP N PLAY", "amount": -249.0}
+BODY = {"description": "SHOP N PLAY", "amount": -249.0, "direction": "outgoing"}
 
 
 class _StubService:

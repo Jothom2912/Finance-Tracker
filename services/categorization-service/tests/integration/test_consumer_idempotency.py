@@ -130,6 +130,7 @@ class TestSequentialIdempotency:
             "transaction_id": 42,
             "description": "Netto Nordhavn",
             "amount": "-150.00",
+            "transaction_type": "expense",
         }
         msg1 = _make_message(payload, message_id)
         msg2 = _make_message(payload, message_id)
@@ -161,11 +162,23 @@ class TestSequentialIdempotency:
         from app.models import CategorizationResultModel
 
         msg_a = _make_message(
-            {"transaction_id": 100, "description": "Netto", "amount": "-50.00", "event_type": "transaction.created"},
+            {
+                "transaction_id": 100,
+                "description": "Netto",
+                "amount": "-50.00",
+                "transaction_type": "expense",
+                "event_type": "transaction.created",
+            },
             str(uuid4()),
         )
         msg_b = _make_message(
-            {"transaction_id": 200, "description": "Lidl", "amount": "-30.00", "event_type": "transaction.created"},
+            {
+                "transaction_id": 200,
+                "description": "Lidl",
+                "amount": "-30.00",
+                "transaction_type": "expense",
+                "event_type": "transaction.created",
+            },
             str(uuid4()),
         )
 
@@ -190,6 +203,7 @@ class TestConcurrentRaceCondition:
             "transaction_id": 99,
             "description": "Netto City",
             "amount": "-100.00",
+            "transaction_type": "expense",
         }
         msg1 = _make_message(payload, message_id)
         msg2 = _make_message(payload, message_id)

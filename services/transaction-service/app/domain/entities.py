@@ -4,6 +4,7 @@ import enum
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 
 class TransactionType(str, enum.Enum):
@@ -93,3 +94,25 @@ class OutboxEntry:
     attempts: int
     next_attempt_at: datetime
     created_at: datetime
+
+
+# ``amount`` is stored as an unsigned magnitude, so the categorizer cannot
+# derive direction from its sign; ``transaction_type`` is the only source and
+# must be sent explicitly (TAX-14).
+_DIRECTION_BY_TYPE: dict[str, Literal["incoming", "outgoing"]] = {
+    TransactionType.INCOME.value: "incoming",
+    TransactionType.EXPENSE.value: "outgoing",
+}
+
+
+def direction_of(transaction_type: TransactionType | str | None) -> Literal["incoming", "outgoing"]:
+    """Map a transaction type to the categorizer's direction, or raise.
+
+    Raising beats defaulting: an unknown type is a bug we want to see, while a
+    default would quietly match the wrong half of the rule set.
+    """
+    raw = transaction_type.value if isinstance(transaction_type, TransactionType) else str(transaction_type or "")
+    direction = _DIRECTION_BY_TYPE.get(raw.lower())
+    if direction is None:
+        raise ValueError(f"cannot derive categorization direction from transaction_type {transaction_type!r}")
+    return direction

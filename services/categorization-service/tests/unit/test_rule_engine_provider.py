@@ -73,7 +73,7 @@ class TestUserOverlay:
         with ctx:
             engine = await provider.get(user_id=7)
 
-        result = engine.match("Netto Vesterbro", -100.0)
+        result = engine.match("Netto Vesterbro", -100.0, direction="outgoing")
         assert result is not None
         assert result.subcategory_id == 2  # user's Restaurant rule won
 
@@ -115,7 +115,7 @@ class TestUserOverlay:
         with ctx:
             engine = await provider.get(user_id=7)
 
-        result = engine.match("Netto", -50.0)
+        result = engine.match("Netto", -50.0, direction="outgoing")
         assert result is not None
         assert result.subcategory_id == 1  # learned tier won
 

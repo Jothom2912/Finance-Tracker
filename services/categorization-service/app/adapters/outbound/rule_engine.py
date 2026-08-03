@@ -16,6 +16,7 @@ from app.domain.value_objects import (
     CategorizationResult,
     CategorizationTier,
     Confidence,
+    Direction,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class RuleEngine:
         description: str,
         amount: float,
         *,
+        direction: Direction,
         merchant: str | None = None,
         counterparty: str | None = None,
         provider: str | None = None,
@@ -101,6 +103,7 @@ class TieredRuleEngine:
         description: str,
         amount: float,
         *,
+        direction: Direction,
         merchant: str | None = None,
         counterparty: str | None = None,
         provider: str | None = None,
@@ -110,6 +113,7 @@ class TieredRuleEngine:
             result = engine.match(
                 description,
                 amount,
+                direction=direction,
                 merchant=merchant,
                 counterparty=counterparty,
                 provider=provider,
@@ -150,6 +154,7 @@ class ConstrainedRuleEngine:
         description: str,
         amount: float,
         *,
+        direction: Direction,
         merchant: str | None = None,
         counterparty: str | None = None,
         provider: str | None = None,
@@ -160,7 +165,9 @@ class ConstrainedRuleEngine:
             "merchant": merchant,
             "counterparty": counterparty,
         }
-        direction = "incoming" if amount > 0 else "outgoing" if amount < 0 else "any"
+        # Direction is supplied, never inferred: the amount carries only
+        # magnitude on this path, so guessing from its sign classified every
+        # transaction as incoming and skipped all 75 outgoing rules (TAX-14).
         absolute_amount = Decimal(str(abs(amount)))
         for rule in self._rules:
             raw = evidence.get(rule.match_field)

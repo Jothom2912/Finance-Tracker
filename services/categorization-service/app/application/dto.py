@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.domain.value_objects import Direction
+
 
 class CategorizeRequestDTO(BaseModel):
     """Input for sync /categorize endpoint.
@@ -18,6 +20,12 @@ class CategorizeRequestDTO(BaseModel):
     transaction_id: int | None = None
     description: str
     amount: float
+    # Required, and deliberately not derived from the sign of ``amount``.
+    # transaction-service stores an unsigned magnitude with the direction in
+    # ``transaction_type``, so a sign-based guess reads every row as incoming
+    # and silently skips every outgoing rule (TAX-14). No default: a caller
+    # that forgets it must fail, not get a plausible wrong answer.
+    direction: Direction
     merchant: str | None = Field(default=None, max_length=200)
     counterparty: str | None = Field(default=None, max_length=200)
     provider: str | None = Field(default=None, max_length=50)

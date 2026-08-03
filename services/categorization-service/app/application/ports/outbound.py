@@ -20,7 +20,7 @@ from app.domain.entities import (
     OutboxEntry,
     SubCategory,
 )
-from app.domain.value_objects import CategorizationResult, CategoryType, PatternType
+from app.domain.value_objects import CategorizationResult, CategoryType, Direction, PatternType
 
 
 class ICategoryRepository(ABC):
@@ -178,6 +178,7 @@ class IRuleEngine(Protocol):
         description: str,
         amount: float,
         *,
+        direction: Direction,
         merchant: str | None = None,
         counterparty: str | None = None,
         provider: str | None = None,

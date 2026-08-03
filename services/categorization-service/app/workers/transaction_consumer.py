@@ -48,7 +48,13 @@ from app.application.dto import CategorizeRequestDTO
 from app.config import settings
 from app.database import async_session_factory
 from app.domain.entities import CategorizationResultRecord
-from app.domain.value_objects import CategorizationResult, CategorizationTier, Confidence
+from app.domain.value_objects import (
+    CategorizationResult,
+    CategorizationTier,
+    Confidence,
+    Direction,
+    direction_from_transaction_type,
+)
 from app.models import CategoryModel, OutboxEventModel, ProcessedEventModel, SubCategoryModel
 from app.rule_engine_provider import RuleEngineProvider, rule_engine_provider
 
@@ -119,8 +125,11 @@ class TransactionCreatedConsumer(ConsumerBase):
         amount_str = event_data.get("amount", "0")
         amount = float(amount_str)
         user_id = event_data.get("user_id")
+        # The event already carries transaction_type; amount is an unsigned
+        # magnitude, so this is the only honest direction source (TAX-14).
+        direction = direction_from_transaction_type(event_data.get("transaction_type"))
 
-        result = await self._categorize(description, amount, user_id)
+        result = await self._categorize(description, amount, direction, user_id)
 
         subcategory_name = ""
         if result.subcategory_id:
@@ -175,7 +184,13 @@ class TransactionCreatedConsumer(ConsumerBase):
             result.confidence.value,
         )
 
-    async def _categorize(self, description: str, amount: float, user_id: int | None = None) -> CategorizationResult:
+    async def _categorize(
+        self,
+        description: str,
+        amount: float,
+        direction: Direction,
+        user_id: int | None = None,
+    ) -> CategorizationResult:
         """Run the full pipeline through ``CategorizationService``, built
         from the shared provider (cached under the hood, TTL-refreshed).
         With user_id, the user's own rules overlay the global engine."""
@@ -185,7 +200,9 @@ class TransactionCreatedConsumer(ConsumerBase):
             fallback_subcategory_id=self._rule_engine_provider.fallback_subcategory_id,
             fallback_category_id=self._rule_engine_provider.fallback_category_id,
         )
-        response = await service.categorize(CategorizeRequestDTO(description=description, amount=amount))
+        response = await service.categorize(
+            CategorizeRequestDTO(description=description, amount=amount, direction=direction)
+        )
         return CategorizationResult(
             category_id=response.category_id,
             subcategory_id=response.subcategory_id,

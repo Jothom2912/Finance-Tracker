@@ -63,13 +63,14 @@ class CategorizationService:
                 self._rule_engine.match,
                 description,
                 amount,
+                direction=request.direction,
                 merchant=request.merchant,
                 counterparty=request.counterparty,
                 provider=request.provider,
                 country=request.country,
             )
         else:
-            match_rule = partial(self._rule_engine.match, description, amount)
+            match_rule = partial(self._rule_engine.match, description, amount, direction=request.direction)
         result = self._try_tier("rules", match_rule)
         if result is not None:
             return result

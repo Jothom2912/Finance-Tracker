@@ -28,7 +28,7 @@ class TestGracefulDegradation:
             mock_instance.post.side_effect = httpx.TimeoutException("timeout")
             mock_cls.return_value = mock_instance
 
-            result = await client.categorize("Netto Nordhavn", -150.0)
+            result = await client.categorize("Netto Nordhavn", -150.0, "outgoing")
             assert result is None
 
     async def test_returns_none_on_connection_error(self, client: CategorizationClient) -> None:
@@ -41,7 +41,7 @@ class TestGracefulDegradation:
             mock_instance.post.side_effect = httpx.ConnectError("connection refused")
             mock_cls.return_value = mock_instance
 
-            result = await client.categorize("Netto Nordhavn", -150.0)
+            result = await client.categorize("Netto Nordhavn", -150.0, "outgoing")
             assert result is None
 
     async def test_batch_returns_nones_on_failure(self, client: CategorizationClient) -> None:
@@ -55,8 +55,8 @@ class TestGracefulDegradation:
             mock_cls.return_value = mock_instance
 
             items = [
-                {"description": "Netto", "amount": -100.0},
-                {"description": "DSB", "amount": -89.0},
+                {"description": "Netto", "amount": -100.0, "direction": "outgoing"},
+                {"description": "DSB", "amount": -89.0, "direction": "outgoing"},
             ]
             results = await client.categorize_batch(items)
             assert results == [None, None]
@@ -91,7 +91,7 @@ class TestInternalApiKeyHeader:
         with patch("app.adapters.outbound.categorization_client.httpx.AsyncClient") as mock_cls:
             mock_instance = self._mock_client()
             mock_cls.return_value = mock_instance
-            await client.categorize("Netto", -100.0)
+            await client.categorize("Netto", -100.0, "outgoing")
 
         assert mock_instance.post.await_args.kwargs["headers"] == {"X-Internal-API-Key": "s3cret"}
 
@@ -105,7 +105,7 @@ class TestInternalApiKeyHeader:
         with patch("app.adapters.outbound.categorization_client.httpx.AsyncClient") as mock_cls:
             mock_instance = self._mock_client()
             mock_cls.return_value = mock_instance
-            await client.categorize_batch([{"description": "Netto", "amount": -100.0}])
+            await client.categorize_batch([{"description": "Netto", "amount": -100.0, "direction": "outgoing"}])
 
         assert mock_instance.post.await_args.kwargs["headers"] == {"X-Internal-API-Key": "s3cret"}
 
@@ -121,6 +121,6 @@ class TestInternalApiKeyHeader:
         with patch("app.adapters.outbound.categorization_client.httpx.AsyncClient") as mock_cls:
             mock_instance = self._mock_client()
             mock_cls.return_value = mock_instance
-            await client.categorize("Netto", -100.0)
+            await client.categorize("Netto", -100.0, "outgoing")
 
         assert mock_instance.post.await_args.kwargs["headers"] == {}

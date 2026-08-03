@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Protocol, Self
+from typing import Any, Literal, Protocol, Self
 
 from contracts.base import BaseEvent
 
@@ -243,6 +243,7 @@ class ICategorizationClient(Protocol):
         self,
         description: str,
         amount: float,
+        direction: Literal["incoming", "outgoing"],
     ) -> CategorizationOutcome | None: ...
 
     # Sequence return for the same invariance reason as add_batch above: the
