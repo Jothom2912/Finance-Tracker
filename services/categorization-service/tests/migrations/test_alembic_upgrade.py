@@ -87,6 +87,16 @@ class TestCategorySeed:
             next_val = conn.execute(text("SELECT nextval('categories_id_seq')")).scalar()
             assert next_val > 10, f"Sequence should be >10 after seed, got {next_val}"
 
+    def test_taxonomy_surrogate_ledger_is_complete(self, engine) -> None:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT node_kind,COUNT(*) FROM taxonomy_surrogate_allocations "
+                    "GROUP BY node_kind ORDER BY node_kind"
+                )
+            ).fetchall()
+            assert rows == [("category", 13), ("subcategory", 67)]
+
     def test_display_order_matches_canonical_seed(self, engine) -> None:
         """Migration 006 heals display_order=0 drift left by the old
         CategorySyncConsumer — after upgrade the canonical ordering from
@@ -322,3 +332,91 @@ class TestTaxonomyRepair:
                 )
             ).one()
             assert counts == (13, 67, 82)
+
+
+def test_populated_007_collision_bootstrap_preserves_existing_references() -> None:
+    with PostgresContainer("postgres:16") as pg:
+        url = pg.get_connection_url()
+        async_url = url.replace("postgresql://", "postgresql+asyncpg://").replace("psycopg2", "asyncpg")
+        os.environ["DATABASE_URL"] = async_url
+        engine = create_engine(url)
+        config = Config("alembic.ini")
+        config.set_main_option("sqlalchemy.url", url)
+        command.upgrade(config, "007")
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO categories (id,name,type,display_order) VALUES (11,'Snapshot category','expense',99)")
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO subcategories (id,name,category_id,is_default) "
+                    "VALUES (42,'Snapshot subcategory',11,true)"
+                )
+            )
+            merchant_id = conn.execute(
+                text(
+                    "INSERT INTO merchants (normalized_name,display_name,subcategory_id) "
+                    "VALUES ('snapshot merchant','Snapshot merchant',42) RETURNING id"
+                )
+            ).scalar_one()
+            rule_id = conn.execute(
+                text(
+                    "INSERT INTO categorization_rules "
+                    "(user_id,priority,pattern_type,pattern_value,matches_subcategory_id,active) "
+                    "VALUES (1234,50,'keyword','snapshot rule',42,true) RETURNING id"
+                )
+            ).scalar_one()
+            result_id = conn.execute(
+                text(
+                    "INSERT INTO categorization_results "
+                    "(transaction_id,category_id,subcategory_id,merchant_id,tier,confidence,model_version) "
+                    "VALUES (999,11,42,:merchant_id,'manual','high','snapshot') RETURNING id"
+                ),
+                {"merchant_id": merchant_id},
+            ).scalar_one()
+
+        from app.tools.tax06_collision_bootstrap import bootstrap
+
+        starts = bootstrap(engine, "p244-populated-snapshot")
+        assert starts == (24, 109)
+        assert bootstrap(engine, "p244-populated-snapshot") == starts
+        with pytest.raises(RuntimeError, match="does not own existing allocation ledger"):
+            bootstrap(engine, "different-change")
+        command.upgrade(config, "head")
+
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT name,type,display_order FROM categories WHERE id=11")).one() == (
+                "Snapshot category",
+                "expense",
+                99,
+            )
+            assert conn.execute(text("SELECT name,category_id,is_default FROM subcategories WHERE id=42")).one() == (
+                "Snapshot subcategory",
+                11,
+                True,
+            )
+            assert (
+                conn.execute(
+                    text("SELECT subcategory_id FROM merchants WHERE id=:id"), {"id": merchant_id}
+                ).scalar_one()
+                == 42
+            )
+            assert (
+                conn.execute(
+                    text("SELECT matches_subcategory_id FROM categorization_rules WHERE id=:id"), {"id": rule_id}
+                ).scalar_one()
+                == 42
+            )
+            assert conn.execute(
+                text("SELECT category_id,subcategory_id,merchant_id FROM categorization_results WHERE id=:id"),
+                {"id": result_id},
+            ).one() == (11, 42, merchant_id)
+            assert conn.execute(
+                text(
+                    "SELECT "
+                    "(SELECT COUNT(*) FROM categories WHERE semantic_key IS NOT NULL),"
+                    "(SELECT COUNT(*) FROM subcategories WHERE semantic_key IS NOT NULL),"
+                    "(SELECT COUNT(*) FROM taxonomy_surrogate_allocations)"
+                )
+            ).one() == (13, 67, 80)
+        engine.dispose()
